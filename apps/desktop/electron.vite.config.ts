@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import dotenv from 'dotenv';
 import { defineConfig } from 'electron-vite';
 import type { PluginOption, ViteDevServer } from 'vite';
+import { loadEnv } from 'vite';
 
 import {
   sharedOptimizeDeps,
@@ -33,8 +34,11 @@ function electronDesktopHtmlPlugin(): PluginOption {
 dotenv.config();
 
 const isDev = process.env.NODE_ENV === 'development';
-const updateChannel = process.env.UPDATE_CHANNEL;
 const ROOT_DIR = resolve(__dirname, '../..');
+const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
+
+Object.assign(process.env, loadEnv(mode, ROOT_DIR, ''));
+const updateChannel = process.env.UPDATE_CHANNEL;
 
 console.info(`[electron-vite.config.ts] Detected UPDATE_CHANNEL: ${updateChannel}`);
 

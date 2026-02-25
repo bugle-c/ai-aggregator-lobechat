@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 
 import type { PluginOption } from 'vite';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import {
@@ -12,6 +12,9 @@ import {
 } from './plugins/vite/sharedRendererConfig';
 
 const isMobile = process.env.MOBILE === 'true';
+const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
+
+Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
 
 const isDev = process.env.NODE_ENV !== 'production';
 const platform = isMobile ? 'mobile' : 'web';

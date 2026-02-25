@@ -119,10 +119,15 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
 }
 
 export function sharedRendererDefine(options: { isElectron: boolean; isMobile: boolean }) {
+  const nextPublicEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key.toUpperCase().startsWith('NEXT_PUBLIC_')),
+  );
+
   return {
     '__ELECTRON__': JSON.stringify(options.isElectron),
     '__MOBILE__': JSON.stringify(options.isMobile),
-    'process.env': '{}',
+    // Keep browser-side env exposure minimal while preserving Next.js public env compatibility.
+    'process.env': JSON.stringify(nextPublicEnv),
   };
 }
 
