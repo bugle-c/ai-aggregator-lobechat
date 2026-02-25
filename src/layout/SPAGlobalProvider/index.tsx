@@ -3,7 +3,7 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { ContextMenuHost, ModalHost, ToastHost, TooltipGroup } from '@lobehub/ui';
 import { domMax, LazyMotion } from 'motion/react';
-import { type PropsWithChildren } from 'react';
+import { type PropsWithChildren, useLayoutEffect } from 'react';
 import { memo, Suspense } from 'react';
 
 import { ReferralProvider } from '@/business/client/ReferralProvider';
@@ -25,6 +25,10 @@ import type { SPAServerConfig } from '@/types/spaServerConfig';
 import Locale from './Locale';
 
 const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
+  useLayoutEffect(() => {
+    document.getElementById('loading-screen')?.remove();
+  }, []);
+
   const serverConfig: SPAServerConfig | undefined = window.__SERVER_CONFIG__;
 
   const locale = document.documentElement.lang || 'en-US';
