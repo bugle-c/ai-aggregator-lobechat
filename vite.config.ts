@@ -24,10 +24,6 @@ export default defineConfig({
   build: {
     outDir: isMobile ? 'dist/mobile' : 'dist/desktop',
     rollupOptions: {
-      external: [
-        // Server-only / optional provider deps not needed in SPA bundle (resolve fails in Docker otherwise)
-        '@aws-sdk/client-bedrock-runtime',
-      ],
       input: resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
       output: sharedRollupOutput,
     },
