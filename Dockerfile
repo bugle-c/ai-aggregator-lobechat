@@ -94,6 +94,9 @@ RUN set -e && \
 
 COPY . .
 
+# Prebuild: remove desktop-only code for Docker (web-only build)
+RUN rm -rf src/app/desktop "src/app/(backend)/trpc/desktop"
+
 # run build standalone for docker version
 RUN npm run build:docker
 
