@@ -23,7 +23,7 @@
     "promptfoo": "^0.120.17"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^4",
+    "@lobehub/ui": "^4.38.4",
     "antd-style": "*",
     "lucide-react": "*",
     "react": "*",

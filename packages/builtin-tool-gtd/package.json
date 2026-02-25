@@ -15,9 +15,9 @@
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/editor": "^3",
-    "@lobehub/ui": "^4",
-    "antd": "^6",
+    "@lobehub/editor": "^3.16.1",
+    "@lobehub/ui": "^4.38.4",
+    "antd": "^6.3.1",
     "antd-style": "*",
     "lucide-react": "*",
     "react": "*"
