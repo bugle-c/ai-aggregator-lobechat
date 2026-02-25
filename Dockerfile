@@ -94,7 +94,8 @@ RUN set -e && \
 
 COPY . .
 
-# Prebuild: remove desktop-only code for Docker (web-only build)
+# Prebuild: env checks (checkDeprecatedAuth, checkRequiredEnvVars, printEnvInfo) then remove desktop-only code
+RUN pnpm exec tsx scripts/dockerPrebuild.mts
 RUN rm -rf src/app/desktop "src/app/(backend)/trpc/desktop"
 
 # run build standalone for docker version

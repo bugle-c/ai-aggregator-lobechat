@@ -352,6 +352,8 @@ export function defineConfig(config: CustomNextConfig) {
       'pdfkit',
       '@napi-rs/canvas',
       'pdfjs-dist',
+
+      'ajv',
     ],
 
     transpilePackages: ['mermaid', 'better-auth-harmony'],
