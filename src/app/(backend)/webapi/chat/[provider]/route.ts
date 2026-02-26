@@ -31,6 +31,17 @@ export const POST = checkAuth(
 
       const data = (await req.json()) as ChatStreamPayload;
 
+      // ============  2a. check usage limit  ============ //
+      const { checkUsageLimit } = await import('@/server/modules/billing/checkUsageLimit');
+      const limitResult = await checkUsageLimit(serverDB, userId);
+      if (!limitResult.allowed) {
+        return createErrorResponse(ChatErrorType.InternalServerError, {
+          error: { message: limitResult.message },
+          errorMessage: limitResult.message,
+          provider,
+        });
+      }
+
       const tracePayload = getTracePayload(req);
 
       let traceOptions = {};
