@@ -18,11 +18,11 @@ export const BRANDING_URL = {
 };
 
 export const SOCIAL_URL = {
-  discord: undefined,
-  github: undefined,
-  medium: undefined,
-  x: undefined,
-  youtube: undefined,
+  discord: 'https://t.me/gptwebrubot',
+  github: 'https://github.com/bugle-c/ai-aggregator-lobechat',
+  medium: 'https://gptweb.ru/blog',
+  x: 'https://gptweb.ru',
+  youtube: 'https://gptweb.ru',
 };
 
 export const FILE_URL = {

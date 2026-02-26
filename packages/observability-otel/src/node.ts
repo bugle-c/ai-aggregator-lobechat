@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { env } from 'node:process';
 
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
@@ -11,7 +10,9 @@ import type { DetectedResourceAttributes } from '@opentelemetry/resources';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
-import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
+
+const ATTR_SERVICE_NAME = 'service.name';
+const ATTR_SERVICE_VERSION = 'service.version';
 
 export function attributesForVercel(): DetectedResourceAttributes {
   return {
