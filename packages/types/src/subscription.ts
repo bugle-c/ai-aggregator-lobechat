@@ -1,7 +1,5 @@
 export enum Plans {
+  Basic = 'basic',
   Free = 'free',
-  Hobby = 'hobby',
-  Premium = 'premium',
-  Starter = 'starter',
-  Ultimate = 'ultimate',
+  Pro = 'pro',
 }
