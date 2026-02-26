@@ -79,6 +79,30 @@ Fork of LobeChat (`lobehub/lobe-chat`) customized for ask.gptweb.ru with YooKass
 - **No Drizzle relations** defined — use direct `db.select().from()` queries
 - **Dynamic import** for billing in chat route to avoid circular dependencies
 
+## Phase 7: Full Rebrand (2026-02-26)
+
+### What was done
+
+- Replaced ALL "LobeChat/LobeHub/Lobe AI" → "WebGPT" in \~70 files
+- Categories: locale files (src/locales/default/_.ts + locales/en-US/_.json + locales/ru-RU/\*.json), components, email templates, OIDC config, JSON-LD, copyright, manifest
+- Logos: copied from webgpt-landing (logo.png 1080x1080), resized for favicon, apple-touch-icon, PWA icons
+- BRANDING_LOGO_URL changed from /logo.svg to /logo.png
+
+### Key branding files
+
+- `packages/business/const/src/branding.ts` — BRANDING_NAME, LOGO_URL, ORG_NAME, SOCIAL_URL, BRANDING_EMAIL
+- `packages/const/src/url.ts` — OFFICIAL_URL, OFFICIAL_SITE, FEEDBACK
+- `src/server/ld.ts` — JSON-LD Organization (Russian description)
+- `src/libs/better-auth/email-templates/` — email branding
+- `src/libs/oidc-provider/config.ts` — OIDC client names
+
+### What was NOT changed (intentionally)
+
+- Import paths (@lobechat/_, @lobehub/_) — library references
+- Internal type names (LobeChatDatabase, etc.)
+- Desktop/Electron app files — not used
+- Variable/function names (handleAskLobeAI, etc.)
+
 ## Pitfalls
 
 - **drizzle-kit push is interactive** — use raw SQL for migrations, not `drizzle-kit push`
@@ -88,22 +112,26 @@ Fork of LobeChat (`lobehub/lobe-chat`) customized for ask.gptweb.ru with YooKass
 - **tRPC endpoints are at `/trpc/lambda/...`** not `/trpc/...`
 - **`@/database/server`** is the correct import for server-side DB, not `@/database/core/db-adaptor`
 - **pnpm** for deps, **bun/bunx** for running scripts
+- **@opentelemetry/semantic-conventions** — doesn't resolve in Docker build, constants inlined
+- **SOCIAL_URL values** — MUST be strings (not undefined), \~10 components expect string href
+- **Dev lock file** — `rm -f .next/dev/lock` if dev server won't start
+- **Port 3100** — taken by Docker network, use 3300 for dev
 
 ## Build & Deploy
 
 ```bash
-# Build custom Docker image
+# === Dev mode (instant hot reload) ===
 cd /home/deploy/projects/ai-aggregator-lobechat
-docker build -t lobechat-custom:latest .
+npx next dev -p 3300
+# Open http://194.113.209.247:3300
 
-# Deploy
-cd /opt/lobechat
-docker compose up -d lobe
-
-# Check logs
+# === Prod build & deploy ===
+cd /home/deploy/projects/ai-aggregator-lobechat
+docker build -t lobechat-custom:latest . # ~5-8 min
+cd /opt/lobechat && docker compose up -d lobe
 docker logs lobehub --tail 50
 
-# Test webhook
+# === Test webhook ===
 curl -X POST http://localhost:3210/api/billing/webhook \
   -H "Content-Type: application/json" \
   -d '{"type":"notification","event":"payment.succeeded","object":{"id":"test"}}'
