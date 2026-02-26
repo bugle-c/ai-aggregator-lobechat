@@ -22,7 +22,7 @@ Fork of LobeChat (`lobehub/lobe-chat`) customized for ask.gptweb.ru with YooKass
 | 1. Deploy  | Done    | Docker stack, Caddy, DNS                                |
 | 2. Auth    | Done    | Better Auth, user migration (4 users, bcrypt)           |
 | 3. Billing | Done    | YooKassa payments, plans (Free/Basic/Pro), usage limits |
-| 4. Bot     | Pending | Rewrite @gptwebrubot on LobeChat tRPC API               |
+| 4. Bot     | Done    | Standalone gptwebrubot (Bun+grammY) → LobeChat webapi   |
 | 5. UI      | Pending | Russian localization, custom branding                   |
 | 6. Cleanup | Pending | Remove old VPS #2 stack                                 |
 
