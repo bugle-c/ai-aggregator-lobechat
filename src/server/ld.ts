@@ -27,8 +27,8 @@ export const AUTHOR_LIST = {
   lobehub: {
     avatar: 'https://avatars.githubusercontent.com/u/131470832?v=4',
     desc: 'Official Account',
-    name: 'LobeHub',
-    url: 'https://github.com/lobehub',
+    name: 'WebGPT',
+    url: 'https://gptweb.ru',
   },
 };
 
@@ -255,7 +255,7 @@ export class Ld {
         '@id': this.getId(fixedUrl, '#primaryimage'),
       },
       'inLanguage': locale,
-      'keywords': tags?.join(' ') || 'LobeHub',
+      'keywords': tags?.join(' ') || 'WebGPT',
       'mainEntityOfPage': fixedUrl,
       'name': title,
       'publisher': {

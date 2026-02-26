@@ -26,7 +26,7 @@ const SelectWithTTSPreview = ({
   const [error, setError] = useState<ChatMessageError>();
   const [voice, setVoice] = useState<string>(value);
   const { t } = useTranslation('welcome');
-  const PREVIEW_TEXT = ['Lobe Chat', t('slogan.title'), t('slogan.desc1')].join('. ');
+  const PREVIEW_TEXT = ['WebGPT', t('slogan.title'), t('slogan.desc1')].join('. ');
 
   const setDefaultError = useCallback(
     (err?: any) => {

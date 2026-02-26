@@ -19,10 +19,10 @@ export const COMFYUI_DEFAULTS = {
  */
 export const FLUX_MODEL_CONFIG = {
   FILENAME_PREFIXES: {
-    DEV: 'LobeChat/%year%-%month%-%day%/FLUX_Dev',
-    KONTEXT: 'LobeChat/%year%-%month%-%day%/FLUX_Kontext',
-    KREA: 'LobeChat/%year%-%month%-%day%/FLUX_Krea',
-    SCHNELL: 'LobeChat/%year%-%month%-%day%/FLUX_Schnell',
+    DEV: 'WebGPT/%year%-%month%-%day%/FLUX_Dev',
+    KONTEXT: 'WebGPT/%year%-%month%-%day%/FLUX_Kontext',
+    KREA: 'WebGPT/%year%-%month%-%day%/FLUX_Krea',
+    SCHNELL: 'WebGPT/%year%-%month%-%day%/FLUX_Schnell',
   },
 } as const;
 
@@ -32,10 +32,10 @@ export const FLUX_MODEL_CONFIG = {
  */
 export const SD_MODEL_CONFIG = {
   FILENAME_PREFIXES: {
-    CUSTOM: 'LobeChat/%year%-%month%-%day%/CustomSD',
-    SD15: 'LobeChat/%year%-%month%-%day%/SD15',
-    SD35: 'LobeChat/%year%-%month%-%day%/SD35',
-    SDXL: 'LobeChat/%year%-%month%-%day%/SDXL',
+    CUSTOM: 'WebGPT/%year%-%month%-%day%/CustomSD',
+    SD15: 'WebGPT/%year%-%month%-%day%/SD15',
+    SD35: 'WebGPT/%year%-%month%-%day%/SD35',
+    SDXL: 'WebGPT/%year%-%month%-%day%/SDXL',
   },
 } as const;
 

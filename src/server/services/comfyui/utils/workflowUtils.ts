@@ -53,7 +53,7 @@ export function getWorkflowFilenamePrefix(workflowName: string, variant?: string
       : WORKFLOW_DEFAULT_TYPE[workflowName];
 
   if (!type) {
-    return 'LobeChat/%year%-%month%-%day%/Unknown';
+    return 'WebGPT/%year%-%month%-%day%/Unknown';
   }
 
   // 2. Get filename prefix based on type
@@ -69,5 +69,5 @@ export function getWorkflowFilenamePrefix(workflowName: string, variant?: string
     ];
   }
 
-  return 'LobeChat/%year%-%month%-%day%/Unknown';
+  return 'WebGPT/%year%-%month%-%day%/Unknown';
 }

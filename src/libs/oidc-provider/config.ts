@@ -12,7 +12,7 @@ export const defaultClients: ClientMetadata[] = [
   {
     application_type: 'web',
     client_id: 'lobehub-desktop',
-    client_name: 'LobeHub Desktop',
+    client_name: 'WebGPT Desktop',
     // Only supports authorization code flow
     grant_types: ['authorization_code', 'refresh_token'],
 
@@ -41,7 +41,7 @@ export const defaultClients: ClientMetadata[] = [
   {
     application_type: 'native', // Mobile uses native type
     client_id: 'lobehub-mobile',
-    client_name: 'LobeHub Mobile',
+    client_name: 'WebGPT Mobile',
     // Supports authorization code flow and refresh token
     grant_types: ['authorization_code', 'refresh_token'],
     logo_uri: 'https://hub-apac-1.lobeobjects.space/docs/73f69adfa1b802a0e250f6ff9d62f70b.png',
@@ -57,7 +57,7 @@ export const defaultClients: ClientMetadata[] = [
   {
     application_type: 'web',
     client_id: 'lobehub-market',
-    client_name: 'LobeHub Marketplace',
+    client_name: 'WebGPT Marketplace',
     grant_types: ['authorization_code', 'refresh_token'],
     logo_uri: 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png',
     post_logout_redirect_uris: [

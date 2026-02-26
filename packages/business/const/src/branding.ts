@@ -5,7 +5,7 @@
 export const LOBE_CHAT_CLOUD = 'WebGPT Cloud';
 
 export const BRANDING_NAME = 'WebGPT';
-export const BRANDING_LOGO_URL = '/logo.svg';
+export const BRANDING_LOGO_URL = '/logo.png';
 
 export const ORG_NAME = 'WebGPT';
 

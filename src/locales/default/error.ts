@@ -86,7 +86,7 @@ export default {
   'response.524':
     'We apologize, the server timed out while waiting for a response, possibly due to a slow reply. Please try again later.',
   'response.AgentRuntimeError':
-    'Lobe language model runtime execution error. Please troubleshoot or retry based on the following information.',
+    'Language model runtime execution error. Please troubleshoot or retry based on the following information.',
   'response.ComfyUIBizError':
     'An error occurred while requesting the ComfyUI service. Please troubleshoot using the information below or try again.',
   'response.ComfyUIEmptyResult':

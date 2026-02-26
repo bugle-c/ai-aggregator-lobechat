@@ -31,7 +31,7 @@ export class GithubCopilotOAuthService extends OAuthDeviceFlowService {
       headers: {
         'Accept': 'application/json',
         'Authorization': `token ${oauthToken}`,
-        'User-Agent': 'LobeChat/1.0',
+        'User-Agent': 'WebGPT/1.0',
       },
       method: 'GET',
     });
@@ -56,7 +56,7 @@ export class GithubCopilotOAuthService extends OAuthDeviceFlowService {
       headers: {
         'Accept': 'application/json',
         'Authorization': `token ${oauthToken}`,
-        'User-Agent': 'LobeChat/1.0',
+        'User-Agent': 'WebGPT/1.0',
       },
       method: 'GET',
     });
