@@ -160,6 +160,7 @@ export function defineConfig() {
     // backend api
     '/api/auth(.*)',
     '/api/webhooks(.*)',
+    '/api/billing(.*)',
     '/api/workflows(.*)',
     '/api/agent(.*)',
     '/api/dev(.*)',
