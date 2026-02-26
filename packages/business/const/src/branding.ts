@@ -19,7 +19,7 @@ export const BRANDING_URL = {
 
 export const SOCIAL_URL = {
   discord: 'https://t.me/gptwebrubot',
-  github: 'https://github.com/bugle-c/ai-aggregator-lobechat',
+  github: 'https://t.me/gptwebrubot',
   medium: 'https://gptweb.ru/blog',
   x: 'https://gptweb.ru',
   youtube: 'https://gptweb.ru',

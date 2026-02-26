@@ -87,17 +87,16 @@ export class Ld {
     return {
       '@id': this.getId(OFFICIAL_URL, '#organization'),
       '@type': 'Organization',
-      'alternateName': 'LobeHub',
+      'alternateName': BRANDING_NAME,
       'contactPoint': {
         '@type': 'ContactPoint',
         'contactType': 'customer support',
         'email': BRANDING_EMAIL.support,
       },
       'description':
-        'Agent teammates that grow with you\n' +
-        'LobeHub is a work-and-lifestyle space to find, build, and collaborate with agent teams that grow with you.',
+        'AI-ассистент с доступом к GPT, Claude, Gemini и другим моделям. ' +
+        'Веб-поиск, загрузка файлов, ассистенты и плагины.',
       'email': BRANDING_EMAIL.business,
-      'founders': [this.getAuthors(['arvinxx']), this.getAuthors(['canisminor'])],
       'image': urlJoin(OFFICIAL_SITE, '/icon-512x512.png'),
       'logo': {
         '@type': 'ImageObject',
@@ -105,7 +104,7 @@ export class Ld {
         'url': urlJoin(OFFICIAL_SITE, '/icon-512x512.png'),
         'width': 512,
       },
-      'name': 'LobeHub',
+      'name': BRANDING_NAME,
       'sameAs': [SOCIAL_URL.x, SOCIAL_URL.github, SOCIAL_URL.medium, SOCIAL_URL.youtube],
       'url': OFFICIAL_SITE,
     };
