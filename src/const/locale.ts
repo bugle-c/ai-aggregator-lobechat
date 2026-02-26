@@ -1,6 +1,6 @@
 import { supportLocales } from '@/locales/resources';
 
-export const DEFAULT_LANG = 'en-US';
+export const DEFAULT_LANG = 'ru-RU';
 export const LOBE_LOCALE_COOKIE = 'LOBE_LOCALE';
 
 /**
