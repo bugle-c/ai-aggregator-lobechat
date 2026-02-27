@@ -10,7 +10,7 @@ import {
   MicrosoftEntra,
   Zitadel,
 } from '@lobehub/ui/icons';
-import { User } from 'lucide-react';
+import { Send, User } from 'lucide-react';
 
 const iconComponents: { [key: string]: any } = {
   'apple': Apple,
@@ -26,6 +26,7 @@ const iconComponents: { [key: string]: any } = {
   'microsoft': Microsoft.Color,
   'microsoft-entra-id': MicrosoftEntra.Color,
   'zitadel': Zitadel.Color,
+  'telegram': Send,
 };
 
 /**

@@ -21,6 +21,7 @@ import Keycloak from './providers/keycloak';
 import Logto from './providers/logto';
 import Microsoft from './providers/microsoft';
 import Okta from './providers/okta';
+import Telegram from './providers/telegram';
 import Wechat from './providers/wechat';
 import Zitadel from './providers/zitadel';
 
@@ -42,6 +43,7 @@ const providerDefinitions = [
   Zitadel,
   Feishu,
   Wechat,
+  Telegram,
 ] as const;
 
 const builtInProviderIds = new Set(BUILTIN_BETTER_AUTH_PROVIDERS);
@@ -114,6 +116,6 @@ export const initBetterAuthSSOProviders = () => {
 
   return {
     genericOAuthProviders,
-    socialProviders: socialProviders,
+    socialProviders,
   };
 };

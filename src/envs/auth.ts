@@ -6,92 +6,86 @@ declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace NodeJS {
     interface ProcessEnv {
-      // ===== Better Auth ===== //
-      AUTH_SECRET?: string;
-      AUTH_EMAIL_VERIFICATION?: string;
-      AUTH_ENABLE_MAGIC_LINK?: string;
-      AUTH_SSO_PROVIDERS?: string;
-      AUTH_TRUSTED_ORIGINS?: string;
       AUTH_ALLOWED_EMAILS?: string;
-      AUTH_DISABLE_EMAIL_PASSWORD?: string;
-
-      // ===== Auth Provider Credentials ===== //
-      AUTH_GOOGLE_ID?: string;
-      AUTH_GOOGLE_SECRET?: string;
-
+      AUTH_APPLE_APP_BUNDLE_IDENTIFIER?: string;
       AUTH_APPLE_CLIENT_ID?: string;
       AUTH_APPLE_CLIENT_SECRET?: string;
-      AUTH_APPLE_APP_BUNDLE_IDENTIFIER?: string;
-
-      AUTH_GITHUB_ID?: string;
-      AUTH_GITHUB_SECRET?: string;
-
-      AUTH_COGNITO_ID?: string;
-      AUTH_COGNITO_SECRET?: string;
-      AUTH_COGNITO_ISSUER?: string;
-      AUTH_COGNITO_DOMAIN?: string;
-      AUTH_COGNITO_REGION?: string;
-      AUTH_COGNITO_USERPOOL_ID?: string;
-
-      AUTH_MICROSOFT_AUTHORITY_URL?: string;
-      AUTH_MICROSOFT_ID?: string;
-      AUTH_MICROSOFT_SECRET?: string;
-      AUTH_MICROSOFT_TENANT_ID?: string;
-
       AUTH_AUTH0_ID?: string;
-      AUTH_AUTH0_SECRET?: string;
       AUTH_AUTH0_ISSUER?: string;
+      AUTH_AUTH0_SECRET?: string;
 
       AUTH_AUTHELIA_ID?: string;
-      AUTH_AUTHELIA_SECRET?: string;
       AUTH_AUTHELIA_ISSUER?: string;
 
+      AUTH_AUTHELIA_SECRET?: string;
       AUTH_AUTHENTIK_ID?: string;
-      AUTH_AUTHENTIK_SECRET?: string;
       AUTH_AUTHENTIK_ISSUER?: string;
 
+      AUTH_AUTHENTIK_SECRET?: string;
       AUTH_CASDOOR_ID?: string;
-      AUTH_CASDOOR_SECRET?: string;
+
       AUTH_CASDOOR_ISSUER?: string;
-
+      AUTH_CASDOOR_SECRET?: string;
       AUTH_CLOUDFLARE_ZERO_TRUST_ID?: string;
-      AUTH_CLOUDFLARE_ZERO_TRUST_SECRET?: string;
       AUTH_CLOUDFLARE_ZERO_TRUST_ISSUER?: string;
+      AUTH_CLOUDFLARE_ZERO_TRUST_SECRET?: string;
+      AUTH_COGNITO_DOMAIN?: string;
 
+      AUTH_COGNITO_ID?: string;
+      AUTH_COGNITO_ISSUER?: string;
+      AUTH_COGNITO_REGION?: string;
+      AUTH_COGNITO_SECRET?: string;
+
+      AUTH_COGNITO_USERPOOL_ID?: string;
+      AUTH_DISABLE_EMAIL_PASSWORD?: string;
+      AUTH_EMAIL_VERIFICATION?: string;
+
+      AUTH_ENABLE_MAGIC_LINK?: string;
       AUTH_FEISHU_APP_ID?: string;
       AUTH_FEISHU_APP_SECRET?: string;
 
       AUTH_GENERIC_OIDC_ID?: string;
-      AUTH_GENERIC_OIDC_SECRET?: string;
       AUTH_GENERIC_OIDC_ISSUER?: string;
+      AUTH_GENERIC_OIDC_SECRET?: string;
 
+      AUTH_GITHUB_ID?: string;
+      AUTH_GITHUB_SECRET?: string;
+      // ===== Auth Provider Credentials ===== //
+      AUTH_GOOGLE_ID?: string;
+
+      AUTH_GOOGLE_SECRET?: string;
       AUTH_KEYCLOAK_ID?: string;
-      AUTH_KEYCLOAK_SECRET?: string;
       AUTH_KEYCLOAK_ISSUER?: string;
 
+      AUTH_KEYCLOAK_SECRET?: string;
       AUTH_LOGTO_ID?: string;
-      AUTH_LOGTO_SECRET?: string;
+
       AUTH_LOGTO_ISSUER?: string;
+      AUTH_LOGTO_SECRET?: string;
+      AUTH_MICROSOFT_AUTHORITY_URL?: string;
+
+      AUTH_MICROSOFT_ID?: string;
+      AUTH_MICROSOFT_SECRET?: string;
+      AUTH_MICROSOFT_TENANT_ID?: string;
 
       AUTH_OKTA_ID?: string;
-      AUTH_OKTA_SECRET?: string;
       AUTH_OKTA_ISSUER?: string;
+      AUTH_OKTA_SECRET?: string;
+
+      // ===== Better Auth ===== //
+      AUTH_SECRET?: string;
+      AUTH_SSO_PROVIDERS?: string;
+      AUTH_TELEGRAM_BOT_TOKEN?: string;
+
+      AUTH_TELEGRAM_BOT_USERNAME?: string;
+      AUTH_TRUSTED_ORIGINS?: string;
 
       AUTH_WECHAT_ID?: string;
       AUTH_WECHAT_SECRET?: string;
 
       AUTH_ZITADEL_ID?: string;
-      AUTH_ZITADEL_SECRET?: string;
       AUTH_ZITADEL_ISSUER?: string;
-
-      // ===== JWKS Key ===== //
-      /**
-       * Generic JWKS key for signing/verifying JWTs.
-       * Used for internal service authentication and other cryptographic operations.
-       * Must be a JWKS JSON string containing an RS256 RSA key pair.
-       * Can be generated using `node scripts/generate-oidc-jwk.mjs`.
-       */
-      JWKS_KEY?: string;
+      AUTH_ZITADEL_SECRET?: string;
 
       /**
        * Internal JWT expiration time for lambda → async calls.
@@ -101,6 +95,15 @@ declare global {
        * @default '30s'
        */
       INTERNAL_JWT_EXPIRATION?: string;
+
+      // ===== JWKS Key ===== //
+      /**
+       * Generic JWKS key for signing/verifying JWTs.
+       * Used for internal service authentication and other cryptographic operations.
+       * Must be a JWKS JSON string containing an RS256 RSA key pair.
+       * Can be generated using `node scripts/generate-oidc-jwk.mjs`.
+       */
+      JWKS_KEY?: string;
     }
   }
 }
@@ -180,6 +183,9 @@ export const getAuthConfig = () => {
 
       AUTH_WECHAT_ID: z.string().optional(),
       AUTH_WECHAT_SECRET: z.string().optional(),
+
+      AUTH_TELEGRAM_BOT_TOKEN: z.string().optional(),
+      AUTH_TELEGRAM_BOT_USERNAME: z.string().optional(),
 
       AUTH_ZITADEL_ID: z.string().optional(),
       AUTH_ZITADEL_SECRET: z.string().optional(),
@@ -273,6 +279,9 @@ export const getAuthConfig = () => {
 
       AUTH_WECHAT_ID: process.env.AUTH_WECHAT_ID,
       AUTH_WECHAT_SECRET: process.env.AUTH_WECHAT_SECRET,
+
+      AUTH_TELEGRAM_BOT_TOKEN: process.env.AUTH_TELEGRAM_BOT_TOKEN,
+      AUTH_TELEGRAM_BOT_USERNAME: process.env.AUTH_TELEGRAM_BOT_USERNAME,
 
       AUTH_ZITADEL_ID: process.env.AUTH_ZITADEL_ID,
       AUTH_ZITADEL_SECRET: process.env.AUTH_ZITADEL_SECRET,
