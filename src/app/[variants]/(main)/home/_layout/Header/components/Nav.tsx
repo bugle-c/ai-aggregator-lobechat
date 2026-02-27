@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Tag } from '@lobehub/ui';
-import { HomeIcon, SearchIcon } from 'lucide-react';
+import { HomeIcon, SearchIcon, ShieldCheckIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -15,6 +15,8 @@ import {
   serverConfigSelectors,
   useServerConfigStore,
 } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { type NavItemProps } from '../../../../../../../features/NavPanel/components/NavItem';
 import NavItem from '../../../../../../../features/NavPanel/components/NavItem';
@@ -36,6 +38,9 @@ const Nav = memo(() => {
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const { showMarket, showAiImage } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const adminEmails = useServerConfigStore(serverConfigSelectors.adminEmails);
+  const userEmail = useUserStore(userProfileSelectors.email);
+  const isAdmin = userEmail ? adminEmails.includes(userEmail.toLowerCase()) : false;
 
   const items: Item[] = useMemo(
     () => [
@@ -81,8 +86,17 @@ const Nav = memo(() => {
         title: t('tab.community'),
         url: '/community',
       },
+      {
+        hidden: !isAdmin,
+        icon: ShieldCheckIcon,
+        key: 'admin',
+        onClick: () => {
+          window.location.href = '/admin/';
+        },
+        title: t('tab.admin', { defaultValue: 'Admin' }),
+      },
     ],
-    [t],
+    [t, isAdmin],
   );
 
   const newBadge = (

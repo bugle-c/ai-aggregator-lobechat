@@ -29,7 +29,12 @@ const getBetterAuthSSOProviders = () => {
 export const getServerGlobalConfig = async () => {
   const { DEFAULT_AGENT_CONFIG } = getAppConfig();
 
+  const adminEmails = process.env.ADMIN_EMAILS
+    ? process.env.ADMIN_EMAILS.split(',').map((e) => e.trim().toLowerCase())
+    : [];
+
   const config: GlobalServerConfig = {
+    adminEmails: adminEmails.length > 0 ? adminEmails : undefined,
     aiProvider: await genServerAiProvidersConfig({
       ...(ENABLE_BUSINESS_FEATURES
         ? {
