@@ -103,8 +103,23 @@ Fork of LobeChat (`lobehub/lobe-chat`) customized for ask.gptweb.ru with YooKass
 - Desktop/Electron app files — not used
 - Variable/function names (handleAskLobeAI, etc.)
 
+## Phase 8: Admin Panel Integration (2026-02-27)
+
+### What was done
+
+- Added `adminEmails` field to `GlobalServerConfig` type (`packages/types/src/serverConfig.ts`)
+- Server-side parsing of `ADMIN_EMAILS` env var in `src/server/globalConfig/index.ts`
+- Selector `adminEmails` in `src/store/serverConfig/selectors.ts`
+- Admin tab (ShieldCheckIcon) in sidebar Nav.tsx — visible only for users in ADMIN_EMAILS list
+- Click navigates to `/admin/` (webgpt-admin app, served on same domain via Caddy)
+- Fixed Docker build: `tsgo --noEmit` fails on `@aws-sdk/client-bedrock-runtime` resolution in workspace — `build:docker` now skips type-check
+
+### Key env var
+- `ADMIN_EMAILS` — comma-separated emails (already in `/opt/lobechat/.env`)
+
 ## Pitfalls
 
+- **tsgo vs tsc in Docker** — `tsgo` has stricter module resolution, fails on workspace deps not hoisted to root in Docker. `build:docker` uses `lint:ts + lint:style` only (no type-check)
 - **drizzle-kit push is interactive** — use raw SQL for migrations, not `drizzle-kit push`
 - **Better Auth middleware blocks webhooks** — must add routes to `isPublicRoute` in `define-config.ts`
 - **PlanIcon references plan names directly** — when changing Plans enum, update PlanIcon themes + locale keys
