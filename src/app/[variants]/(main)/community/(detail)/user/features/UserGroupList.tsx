@@ -67,25 +67,25 @@ const UserGroupList = memo<UserGroupListProps>(({ rows = 4, pageSize = 8 }) => {
 
   return (
     <Flexbox gap={16}>
-      <Flexbox align={'center'} gap={8} horizontal justify={'space-between'}>
-        <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+        <Flexbox horizontal align={'center'} gap={8}>
           <Text fontSize={16} weight={500}>
             {t('user.publishedGroups', { defaultValue: '创作的群组' })}
           </Text>
           {groupCount > 0 && <Tag>{filteredGroups.length}</Tag>}
         </Flexbox>
         {isOwner && (
-          <Flexbox align={'center'} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} gap={8}>
             <Input.Search
               allowClear
-              onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t('user.searchPlaceholder')}
               style={{ width: 200 }}
               value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
             <StatusFilter
-              onChange={(value) => setStatusFilter(value)}
               value={statusFilter}
+              onChange={(value) => setStatusFilter(value)}
             />
           </Flexbox>
         )}
@@ -99,10 +99,10 @@ const UserGroupList = memo<UserGroupListProps>(({ rows = 4, pageSize = 8 }) => {
         <Flexbox align={'center'} justify={'center'}>
           <Pagination
             current={currentPage}
-            onChange={(page) => setCurrentPage(page)}
             pageSize={pageSize}
             showSizeChanger={false}
             total={filteredGroups.length}
+            onChange={(page) => setCurrentPage(page)}
           />
         </Flexbox>
       )}

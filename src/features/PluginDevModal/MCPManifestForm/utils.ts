@@ -90,7 +90,7 @@ export const parseMcpInput = (value: string): ParseResult => {
         // mcpConfig is invalid or not an object
         return {
           errorCode: McpParseErrorCode.InvalidMcpStructure,
-          identifier: identifier,
+          identifier,
           status: 'error',
         };
       } else {

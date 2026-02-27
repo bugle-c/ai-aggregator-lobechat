@@ -74,7 +74,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
         // 自定义插件：先测试连接获取真实的 manifest
         const testParams: McpConnectionParams = {
           connection: finalConfig,
-          identifier: identifier,
+          identifier,
           metadata: {
             avatar: schema.icon,
             description: schema.description,

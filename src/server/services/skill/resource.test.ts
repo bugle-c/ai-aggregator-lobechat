@@ -7,7 +7,7 @@ const mockCreateGlobalFile = vi.fn().mockResolvedValue({ fileHash: 'mock-file-ha
 const mockGetFileContentByHash = vi.fn().mockResolvedValue('file content');
 const mockGetFileByteArrayByHash = vi
   .fn()
-  .mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+  .mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4E, 0x47]));
 const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
 
 // Mock FileService only (no longer need FileModel)
@@ -227,7 +227,7 @@ describe('SkillResourceService', () => {
     it('should read binary resource content with base64 encoding', async () => {
       const service = new SkillResourceService({} as any, 'user-1');
       const resources = { 'image.png': { fileHash: 'binaryFileHash', size: 1024 } };
-      const binaryData = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+      const binaryData = new Uint8Array([0x89, 0x50, 0x4E, 0x47]);
       mockGetFileByteArrayByHash.mockResolvedValue(binaryData);
 
       const result = await service.readResource(resources, 'image.png');

@@ -25,10 +25,10 @@ const StatusFilter = memo<StatusFilterProps>(({ value, onChange }) => {
 
   return (
     <Select
-      onChange={onChange}
       options={options}
       style={{ minWidth: 120 }}
       value={value}
+      onChange={onChange}
     />
   );
 });

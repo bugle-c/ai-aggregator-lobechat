@@ -58,17 +58,17 @@ export class SearchService {
 
   async webSearch({ query, searchCategories, searchEngines, searchTimeRange }: SearchQuery) {
     let data = await this.query(query, {
-      searchCategories: searchCategories,
-      searchEngines: searchEngines,
-      searchTimeRange: searchTimeRange,
+      searchCategories,
+      searchEngines,
+      searchTimeRange,
     });
 
     // First retry: remove search engine restrictions if no results found
     if (data.results.length === 0 && searchEngines && searchEngines?.length > 0) {
       const paramsExcludeSearchEngines = {
-        searchCategories: searchCategories,
+        searchCategories,
         searchEngines: undefined,
-        searchTimeRange: searchTimeRange,
+        searchTimeRange,
       };
       data = await this.query(query, paramsExcludeSearchEngines);
     }

@@ -7,10 +7,10 @@ import {
   Block,
   Flexbox,
   Icon,
+  stopPropagation,
   Tag,
   Text,
   Tooltip,
-  stopPropagation,
 } from '@lobehub/ui';
 import { Spotlight } from '@lobehub/ui/awesome';
 import { createStaticStyles, cssVar } from 'antd-style';

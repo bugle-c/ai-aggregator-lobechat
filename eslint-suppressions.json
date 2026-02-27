@@ -308,11 +308,6 @@
       "count": 1
     }
   },
-  "src/libs/observability/traceparent.test.ts": {
-    "import/first": {
-      "count": 1
-    }
-  },
   "src/libs/oidc-provider/http-adapter.ts": {
     "@typescript-eslint/ban-types": {
       "count": 1
@@ -331,27 +326,12 @@
       "count": 1
     }
   },
-  "src/libs/trpc/middleware/openTelemetry.test.ts": {
-    "import/first": {
-      "count": 1
-    }
-  },
   "src/locales/default/welcome.ts": {
     "sort-keys-fix/sort-keys-fix": {
       "count": 1
     },
     "typescript-sort-keys/interface": {
       "count": 1
-    }
-  },
-  "src/server/manifest.ts": {
-    "object-shorthand": {
-      "count": 3
-    }
-  },
-  "src/server/modules/KeyVaultsEncrypt/index.ts": {
-    "object-shorthand": {
-      "count": 2
     }
   },
   "src/server/modules/ModelRuntime/apiKeyManager.test.ts": {

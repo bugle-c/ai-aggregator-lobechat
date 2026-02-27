@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { StreamingHandler } from '../StreamingHandler';
-import type { StreamChunk, StreamingCallbacks, StreamingContext } from '../types/streaming';
+import type { StreamingCallbacks, StreamingContext } from '../types/streaming';
 
 // Helper to create a mock streaming context
 const createContext = (overrides: Partial<StreamingContext> = {}): StreamingContext => ({

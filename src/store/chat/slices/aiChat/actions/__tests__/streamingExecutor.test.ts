@@ -458,8 +458,8 @@ describe('StreamingExecutor actions', () => {
           type: 'execAgentRuntime',
           context: {
             agentId: supervisorAgentId,
-            subAgentId: subAgentId,
-            groupId: groupId, // groupId present = group orchestration
+            subAgentId,
+            groupId, // groupId present = group orchestration
             topicId: TEST_IDS.TOPIC_ID,
             messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
           },
@@ -509,8 +509,8 @@ describe('StreamingExecutor actions', () => {
         const { operationId } = result.current.startOperation({
           type: 'execAgentRuntime',
           context: {
-            agentId: agentId,
-            subAgentId: subAgentId, // subAgentId present but no groupId
+            agentId,
+            subAgentId, // subAgentId present but no groupId
             topicId: TEST_IDS.TOPIC_ID,
             messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
           },
@@ -554,7 +554,7 @@ describe('StreamingExecutor actions', () => {
         const { operationId } = result.current.startOperation({
           type: 'execAgentRuntime',
           context: {
-            agentId: agentId,
+            agentId,
             // No subAgentId
             topicId: TEST_IDS.TOPIC_ID,
             messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
@@ -583,7 +583,7 @@ describe('StreamingExecutor actions', () => {
         expect(streamSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             params: expect.objectContaining({
-              agentId: agentId, // Should be agentId since no subAgentId
+              agentId, // Should be agentId since no subAgentId
             }),
           }),
         );
@@ -603,8 +603,8 @@ describe('StreamingExecutor actions', () => {
           type: 'execAgentRuntime',
           context: {
             agentId: supervisorAgentId, // The supervisor/session ID
-            subAgentId: subAgentId, // The actual speaking agent
-            groupId: groupId,
+            subAgentId, // The actual speaking agent
+            groupId,
             topicId: TEST_IDS.TOPIC_ID,
             messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
             scope: 'group',

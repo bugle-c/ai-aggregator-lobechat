@@ -155,7 +155,7 @@ export class FirecrawlImpl implements SearchServiceImpl {
 
       return {
         costTime,
-        query: query,
+        query,
         resultNumbers: allResults.length,
         results: allResults,
       };

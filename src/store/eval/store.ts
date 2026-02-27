@@ -5,9 +5,9 @@ import type { StateCreator } from 'zustand/vanilla';
 import { createDevtools } from '../middleware/createDevtools';
 import { type EvalStoreState, initialState } from './initialState';
 import { type BenchmarkAction, createBenchmarkSlice } from './slices/benchmark/action';
-import { type DatasetAction, createDatasetSlice } from './slices/dataset/action';
-import { type RunAction, createRunSlice } from './slices/run/action';
-import { type TestCaseAction, createTestCaseSlice } from './slices/testCase/action';
+import { createDatasetSlice,type DatasetAction } from './slices/dataset/action';
+import { createRunSlice,type RunAction } from './slices/run/action';
+import { createTestCaseSlice,type TestCaseAction } from './slices/testCase/action';
 
 export type EvalStore = EvalStoreState &
   BenchmarkAction &

@@ -108,7 +108,7 @@ export class SessionActionImpl {
     if (!session) return;
     const title = sessionMetaSelectors.getTitle(session.meta);
 
-    const newTitle = t('duplicateSession.title', { ns: 'chat', title: title });
+    const newTitle = t('duplicateSession.title', { ns: 'chat', title });
 
     const messageLoadingKey = 'duplicateSession.loading';
 

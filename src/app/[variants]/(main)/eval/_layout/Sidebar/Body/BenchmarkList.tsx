@@ -34,7 +34,7 @@ const BenchmarkList = memo<BenchmarkListProps>(({ activeKey, itemKey }) => {
       paddingBlock={4}
       paddingInline={'8px 4px'}
       title={
-        <Flexbox align="center" gap={4} horizontal>
+        <Flexbox horizontal align="center" gap={4}>
           <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
             {t('sidebar.benchmarks')}
           </Text>
@@ -53,11 +53,11 @@ const BenchmarkList = memo<BenchmarkListProps>(({ activeKey, itemKey }) => {
           benchmarkList.map((b: any) => (
             <Link
               key={b.id}
+              to={`/eval/bench/${b.id}`}
               onClick={(e) => {
                 e.preventDefault();
                 navigate(`/eval/bench/${b.id}`);
               }}
-              to={`/eval/bench/${b.id}`}
             >
               <NavItem
                 active={activeKey === `bench-${b.id}`}

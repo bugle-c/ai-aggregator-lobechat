@@ -6,10 +6,10 @@ import {
   Flexbox,
   Grid,
   Icon,
+  stopPropagation,
   Tag,
   Text,
   Tooltip,
-  stopPropagation,
 } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';

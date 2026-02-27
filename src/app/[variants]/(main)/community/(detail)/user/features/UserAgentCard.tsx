@@ -6,12 +6,12 @@ import {
   DropdownMenu,
   Flexbox,
   Icon,
+  stopPropagation,
   Tag as AntTag,
   Tag,
   Text,
   Tooltip,
   TooltipGroup,
-  stopPropagation,
 } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';

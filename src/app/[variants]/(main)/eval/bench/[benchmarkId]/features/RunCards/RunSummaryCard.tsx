@@ -32,14 +32,14 @@ const RunSummaryCard = memo<RunSummaryCardProps>(
       >
         <Card hoverable size="small">
           <Flexbox gap={8}>
-            <Flexbox align="center" horizontal justify="space-between">
+            <Flexbox horizontal align="center" justify="space-between">
               <Typography.Text strong>{name || id.slice(0, 8)}</Typography.Text>
               <StatusBadge status={status} />
             </Flexbox>
             {!isActive && metrics && (
               <Flexbox gap={4}>
                 {metrics.passRate !== undefined && (
-                  <Flexbox align="center" gap={8} horizontal>
+                  <Flexbox horizontal align="center" gap={8}>
                     <Typography.Text style={{ fontSize: 12 }} type="secondary">
                       {t('run.metrics.passRate')}
                     </Typography.Text>

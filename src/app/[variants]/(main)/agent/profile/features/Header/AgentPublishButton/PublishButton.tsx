@@ -144,6 +144,9 @@ const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess
       <Popconfirm
         arrow={false}
         okButtonProps={{ type: 'primary' }}
+        open={confirmOpened}
+        placement="bottomRight"
+        title={t('marketPublish.validation.confirmPublish')}
         onCancel={() => setConfirmOpened(false)}
         onConfirm={handleConfirmPublish}
         onOpenChange={(open) => {
@@ -151,25 +154,22 @@ const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess
             setConfirmOpened(false);
           }
         }}
-        open={confirmOpened}
-        placement="bottomRight"
-        title={t('marketPublish.validation.confirmPublish')}
       >
         <Button
           icon={ShapesUploadIcon}
           loading={loading}
-          onClick={handleButtonClick}
           title={buttonTitle}
+          onClick={handleButtonClick}
         >
           {t('publishToCommunity')}
         </Button>
       </Popconfirm>
       <ForkConfirmModal
         loading={isPublishing}
-        onCancel={handleForkCancel}
-        onConfirm={handleForkConfirm}
         open={showForkModal}
         originalAgent={originalAgentInfo}
+        onCancel={handleForkCancel}
+        onConfirm={handleForkConfirm}
       />
     </>
   );

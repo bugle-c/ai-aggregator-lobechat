@@ -79,7 +79,7 @@ export class FileUploadActionImpl {
       hash,
       metadata,
       name: metadata.filename,
-      size: size,
+      size,
       url: metadata.path,
     });
     return { ...res, dimensions, filename: metadata.filename };

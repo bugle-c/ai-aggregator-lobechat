@@ -130,7 +130,7 @@ export const validateOIDCJWT = async (token: string) => {
       clientId,
       payload,
       tokenData: {
-        aud: aud,
+        aud,
         client_id: clientId,
         exp: payload.exp,
         iat: payload.iat,

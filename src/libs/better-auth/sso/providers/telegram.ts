@@ -1,4 +1,4 @@
-import { createHash, createHmac } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
@@ -18,8 +18,8 @@ import { type GenericProviderDefinition } from '../types';
  * 6. Custom getUserInfo() extracts profile → synthetic email tg_{id}@bot.gptweb.ru
  */
 
-const REDIS_KEY_PREFIX = 'tg-auth:';
-const CODE_TTL_SECONDS = 300; // 5 minutes
+export const REDIS_KEY_PREFIX = 'tg-auth:';
+export const CODE_TTL_SECONDS = 300; // 5 minutes
 
 type TelegramUserData = {
   auth_date: number;
@@ -31,7 +31,7 @@ type TelegramUserData = {
   username?: string;
 };
 
-const getRedis = async () => {
+export const getRedis = async () => {
   const redisConfig = getRedisConfig();
   if (!isRedisEnabled(redisConfig)) {
     throw new Error('[Telegram Auth] Redis is required for Telegram OAuth');
@@ -63,7 +63,10 @@ export const verifyTelegramAuth = (data: Record<string, string>, botToken: strin
   // 3. Compute HMAC-SHA256(secret_key, data_check_string)
   const hmac = createHmac('sha256', secretKey).update(checkString).digest('hex');
 
-  return hmac === hash;
+  const hmacBuf = Buffer.from(hmac, 'hex');
+  const hashBuf = Buffer.from(hash, 'hex');
+  if (hmacBuf.length !== hashBuf.length) return false;
+  return timingSafeEqual(hmacBuf, hashBuf);
 };
 
 const provider: GenericProviderDefinition<{
@@ -84,14 +87,17 @@ const provider: GenericProviderDefinition<{
       getToken: async ({ code }) => {
         const redis = await getRedis();
         const key = `${REDIS_KEY_PREFIX}${code}`;
-        const raw = await redis.get(key);
+
+        // Atomic get-and-delete to prevent code reuse
+        const raw = (await redis.eval(
+          "local v = redis.call('GET', KEYS[1]); if v then redis.call('DEL', KEYS[1]); end; return v;",
+          1,
+          key,
+        )) as string | null;
 
         if (!raw) {
           throw new Error('[Telegram Auth] Invalid or expired auth code');
         }
-
-        // One-time use: delete after reading
-        await redis.del(key);
 
         const userData = JSON.parse(raw) as TelegramUserData;
 

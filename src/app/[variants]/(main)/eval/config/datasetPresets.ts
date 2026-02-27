@@ -4,20 +4,10 @@ import { Database, Globe } from 'lucide-react';
 export type PresetCategory = 'qa' | 'research' | 'tool-use' | 'memory' | 'reference' | 'custom';
 
 export interface DatasetPreset {
-  id: string;
   category: PresetCategory;
-  name: string;
   description: string;
-  icon: LucideIcon;
-
-  // 格式说明
-  formatDescription: string;
-  requiredFields: string[];
-  optionalFields: string[];
-
   // 示例文件
   exampleFileUrl?: string;
-
   // 自动推断配置
   fieldInference: {
     input: string[];
@@ -26,6 +16,16 @@ export interface DatasetPreset {
     category: string[];
     sortOrder?: string[];
   };
+  // 格式说明
+  formatDescription: string;
+
+  icon: LucideIcon;
+  id: string;
+  name: string;
+
+  optionalFields: string[];
+
+  requiredFields: string[];
 
   // 验证规则
   validation?: {

@@ -287,7 +287,7 @@ export const createContextForInteractionDetails = async (
       has: (name: string) => cookieStore.has(name),
     },
     geo: {},
-    headers: headers,
+    headers,
     ip: '127.0.0.1',
     method: 'GET',
     nextUrl: new URL(interactionUrl),

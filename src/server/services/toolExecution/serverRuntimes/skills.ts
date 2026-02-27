@@ -109,7 +109,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
     try {
       // Look up skill zipUrl if config is provided (same logic as market.ts)
-      let enhancedParams: any = {
+      const enhancedParams: any = {
         command,
         config,
         description,

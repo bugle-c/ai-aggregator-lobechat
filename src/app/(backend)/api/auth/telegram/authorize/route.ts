@@ -2,26 +2,20 @@ import { randomBytes } from 'node:crypto';
 
 import { type NextRequest, NextResponse } from 'next/server';
 
+import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
-import { getRedisConfig } from '@/envs/redis';
-import { verifyTelegramAuth } from '@/libs/better-auth/sso/providers/telegram';
-import { initializeRedis, isRedisEnabled } from '@/libs/redis';
+import {
+  CODE_TTL_SECONDS,
+  getRedis,
+  REDIS_KEY_PREFIX,
+  verifyTelegramAuth,
+} from '@/libs/better-auth/sso/providers/telegram';
 
-const REDIS_KEY_PREFIX = 'tg-auth:';
-const CODE_TTL_SECONDS = 300;
 const AUTH_DATE_MAX_AGE_SECONDS = 300;
 
-const getRedis = async () => {
-  const redisConfig = getRedisConfig();
-  if (!isRedisEnabled(redisConfig)) {
-    throw new Error('[Telegram Auth] Redis is required');
-  }
-  const client = await initializeRedis(redisConfig);
-  if (!client) {
-    throw new Error('[Telegram Auth] Failed to initialize Redis');
-  }
-  return client;
-};
+/** Escape values for safe embedding inside `<script>` tags. */
+const safeJsonEmbed = (value: string) =>
+  JSON.stringify(value).replaceAll('</', '<\\/').replaceAll('<!--', '<\\!--');
 
 /**
  * GET: Serve HTML page with Telegram Login Widget.
@@ -75,7 +69,7 @@ export const GET = async (req: NextRequest) => {
   <div class="container">
     <h2>Вход через Telegram</h2>
     <script async src="https://telegram.org/js/telegram-widget.js?22"
-      data-telegram-login="${botUsername}"
+      data-telegram-login="${botUsername.replaceAll(/[&"'<>]/g, '')}"
       data-size="large"
       data-radius="8"
       data-onauth="onTelegramAuth(user)"
@@ -89,8 +83,8 @@ export const GET = async (req: NextRequest) => {
         form.method = 'POST';
         form.action = window.location.pathname;
         var fields = Object.assign({}, user, {
-          state: ${JSON.stringify(state)},
-          redirect_uri: ${JSON.stringify(redirectUri)}
+          state: ${safeJsonEmbed(state)},
+          redirect_uri: ${safeJsonEmbed(redirectUri)}
         });
         Object.keys(fields).forEach(function(key) {
           var input = document.createElement('input');
@@ -130,6 +124,18 @@ export const POST = async (req: NextRequest) => {
 
   const { state, redirect_uri: redirectUri, ...telegramData } = data;
 
+  // 0. Validate required parameters early (before any crypto or Redis work)
+  if (!redirectUri || !state) {
+    return NextResponse.json({ error: 'Missing state or redirect_uri' }, { status: 400 });
+  }
+
+  // 0b. Prevent open redirect — redirect_uri must point to our own origin
+  const appOrigin = new URL(appEnv.APP_URL).origin;
+  const callbackUrl = new URL(redirectUri);
+  if (callbackUrl.origin !== appOrigin) {
+    return NextResponse.json({ error: 'Invalid redirect_uri' }, { status: 400 });
+  }
+
   // 1. Verify HMAC-SHA256 signature
   if (!verifyTelegramAuth(telegramData, botToken)) {
     return NextResponse.json({ error: 'Invalid Telegram auth data' }, { status: 403 });
@@ -149,11 +155,6 @@ export const POST = async (req: NextRequest) => {
   });
 
   // 4. Redirect to Better Auth's genericOAuth callback
-  if (!redirectUri || !state) {
-    return NextResponse.json({ error: 'Missing state or redirect_uri' }, { status: 400 });
-  }
-
-  const callbackUrl = new URL(redirectUri);
   callbackUrl.searchParams.set('code', code);
   callbackUrl.searchParams.set('state', state);
 

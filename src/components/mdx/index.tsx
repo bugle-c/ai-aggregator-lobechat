@@ -34,7 +34,7 @@ export const CustomMDX: FC<MDXRemoteProps & { mobile?: boolean }> = ({ mobile, .
   const list: any = {};
   Object.entries({
     ...mdxComponents,
-    Image: Image,
+    Image,
     a: Link,
     pre: CodeBlock,
     ...rest.components,

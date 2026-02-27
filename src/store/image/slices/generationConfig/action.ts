@@ -99,7 +99,7 @@ export class GenerationConfigActionImpl {
           parameters,
           isAspectRatioLocked,
           activeAspectRatio,
-          parametersSchema: parametersSchema,
+          parametersSchema,
         } = state;
 
         const newParams = { ...parameters, width };
@@ -130,7 +130,7 @@ export class GenerationConfigActionImpl {
           parameters,
           isAspectRatioLocked,
           activeAspectRatio,
-          parametersSchema: parametersSchema,
+          parametersSchema,
         } = state;
         const newParams = { ...parameters, height };
 
@@ -161,7 +161,7 @@ export class GenerationConfigActionImpl {
           isAspectRatioLocked,
           activeAspectRatio,
           parameters,
-          parametersSchema: parametersSchema,
+          parametersSchema,
         } = state;
         const newLockState = !isAspectRatioLocked;
 
@@ -227,7 +227,7 @@ export class GenerationConfigActionImpl {
   };
 
   setAspectRatio = (aspectRatio: string): void => {
-    const { parameters, parametersSchema: parametersSchema } = this.#get();
+    const { parameters, parametersSchema } = this.#get();
     if (!parameters || !parametersSchema) return;
 
     const defaultValues = extractDefaultValues(parametersSchema);
@@ -302,7 +302,7 @@ export class GenerationConfigActionImpl {
         model,
         provider,
         parameters: { ...defaultValues, ...settings },
-        parametersSchema: parametersSchema,
+        parametersSchema,
       }),
       false,
       `reuseSettings/${model}/${provider}`,

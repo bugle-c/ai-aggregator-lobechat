@@ -7,10 +7,10 @@ import {
   Button,
   Flexbox,
   Icon,
+  stopPropagation,
   Tag,
   Text,
   Tooltip,
-  stopPropagation,
 } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';

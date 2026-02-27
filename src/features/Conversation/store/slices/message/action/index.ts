@@ -59,7 +59,7 @@ export const messageSlice: StateCreator<
     const parentId = displayMessages.length > 0 ? displayMessages.at(-1)?.id : undefined;
 
     const id = await state.createMessage({
-      agentId: agentId,
+      agentId,
       content,
       parentId,
       role: 'assistant',
