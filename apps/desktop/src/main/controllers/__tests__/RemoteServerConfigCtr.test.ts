@@ -33,7 +33,7 @@ vi.mock('electron', () => ({
 
 // Mock @/const/env
 vi.mock('@/const/env', () => ({
-  OFFICIAL_CLOUD_SERVER: 'https://cloud.lobehub.com',
+  OFFICIAL_CLOUD_SERVER: 'https://ask.gptweb.ru',
 }));
 
 // Mock storeManager
@@ -718,7 +718,7 @@ describe('RemoteServerConfigCtr', () => {
 
       const result = await controller.getRemoteServerUrl();
 
-      expect(result).toBe('https://cloud.lobehub.com');
+      expect(result).toBe('https://ask.gptweb.ru');
     });
 
     it('should return custom URL for selfHost mode', async () => {

@@ -91,7 +91,7 @@
   "header.desc": "Quản lý sử dụng và đăng ký",
   "header.title": "Thanh toán",
   "keyMissMatch.button": "Khôi phục sử dụng và tiếp tục trò chuyện",
-  "keyMissMatch.description": "Do lỗi hệ thống tạm thời, việc sử dụng đăng ký hiện tại của bạn đang bị gián đoạn. Vui lòng nhấn nút bên dưới để khôi phục và tiếp tục trò chuyện. Nếu lỗi này xảy ra nhiều lần, vui lòng liên hệ chúng tôi qua email (support@lobehub.com)",
+  "keyMissMatch.description": "Do lỗi hệ thống tạm thời, việc sử dụng đăng ký hiện tại của bạn đang bị gián đoạn. Vui lòng nhấn nút bên dưới để khôi phục và tiếp tục trò chuyện. Nếu lỗi này xảy ra nhiều lần, vui lòng liên hệ chúng tôi qua email (support@gptweb.ru)",
   "keyMissMatch.title": "Khôi phục sử dụng đăng ký ngay",
   "limitation.chat.success.action": "Tiếp tục trò chuyện",
   "limitation.chat.success.desc": "Gói đăng ký {{plan}} của bạn đã được nâng cấp thành công. Hãy tận hưởng trò chuyện AI. Gói hiện tại của bạn bao gồm:",

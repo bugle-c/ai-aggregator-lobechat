@@ -245,7 +245,7 @@ const config = {
       CFBundleIconName: 'AppIcon',
       CFBundleURLTypes: [
         {
-          CFBundleURLName: 'LobeHub Protocol',
+          CFBundleURLName: 'WebGPT Protocol',
           CFBundleURLSchemes: [protocolScheme],
         },
       ],
@@ -283,7 +283,7 @@ const config = {
   },
   protocols: [
     {
-      name: 'LobeHub Protocol',
+      name: 'WebGPT Protocol',
       schemes: [protocolScheme],
     },
   ],
@@ -297,7 +297,7 @@ const config = {
   },
 
   win: {
-    executableName: 'LobeHub',
+    executableName: 'WebGPT',
   },
 };
 

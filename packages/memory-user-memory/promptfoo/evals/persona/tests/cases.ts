@@ -33,7 +33,7 @@ export default [
     assert: [{ type: 'is-valid-openai-tools-call' }, toolCallAssert, rubric],
     description: 'Generates a persona with baseline and events',
     vars: {
-      existingPersona: '# About User\n- Loves TypeScript\n- Works on LobeHub',
+      existingPersona: '# About User\n- Loves TypeScript\n- Works on WebGPT',
       language: '简体中文',
       personaNotes: '- Keep concise',
       recentEvents: '- Shipped memory feature\n- Joined community call',

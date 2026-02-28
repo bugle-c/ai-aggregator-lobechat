@@ -46,8 +46,8 @@ export interface LobehubSkillProviderType {
  */
 export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
   {
-    author: 'LobeHub',
-    authorUrl: 'https://lobehub.com',
+    author: 'WebGPT',
+    authorUrl: 'https://gptweb.ru',
     defaultVisible: true,
     description:
       'Linear is a modern issue tracking and project management tool designed for high-performance teams to build better software faster',
@@ -58,8 +58,8 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
     label: 'Linear',
   },
   {
-    author: 'LobeHub',
-    authorUrl: 'https://lobehub.com',
+    author: 'WebGPT',
+    authorUrl: 'https://gptweb.ru',
     defaultVisible: true,
     description:
       'Outlook Calendar is an integrated scheduling tool within Microsoft Outlook that enables users to create appointments, organize meetings with others, and manage their time and events effectively.',
@@ -70,8 +70,8 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
     label: 'Outlook Calendar',
   },
   {
-    author: 'LobeHub',
-    authorUrl: 'https://lobehub.com',
+    author: 'WebGPT',
+    authorUrl: 'https://gptweb.ru',
     defaultVisible: true,
     description:
       'X (Twitter) is a social media platform for sharing real-time updates, news, and engaging with your audience through posts, replies, and direct messages.',

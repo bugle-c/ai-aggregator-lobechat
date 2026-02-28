@@ -272,7 +272,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       }),
       passkey({
         rpName: 'WebGPT',
-        // Extract rpID from auth URL (e.g., 'lobehub.com' from 'https://lobehub.com')
+        // Extract rpID from auth URL (e.g., 'gptweb.ru' from 'https://gptweb.ru')
         // Returns undefined if AUTH_URL is not set (e.g., in e2e tests)
         rpID: getPasskeyRpID(),
         // Support multiple origins: web + Android APK key hashes

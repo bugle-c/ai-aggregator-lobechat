@@ -14,7 +14,7 @@ vi.mock('@/config/db', () => ({
 
 vi.mock('@/envs/app', () => ({
   appEnv: {
-    APP_URL: 'https://lobehub.com',
+    APP_URL: 'https://gptweb.ru',
   },
 }));
 
@@ -274,7 +274,7 @@ describe('FileService', () => {
 
       expect(result).toEqual({
         fileId: 'new-file-id',
-        url: 'https://lobehub.com/f/new-file-id',
+        url: 'https://gptweb.ru/f/new-file-id',
       });
     });
 
@@ -293,7 +293,7 @@ describe('FileService', () => {
 
       expect(result).toEqual({
         fileId: 'custom-id',
-        url: 'https://lobehub.com/f/custom-id',
+        url: 'https://gptweb.ru/f/custom-id',
       });
     });
 

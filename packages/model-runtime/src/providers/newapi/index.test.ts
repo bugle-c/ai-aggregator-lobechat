@@ -667,7 +667,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     it('should export params with correct defaultHeaders', () => {
       expect(params.defaultHeaders).toEqual({
-        'X-Client': 'LobeHub',
+        'X-Client': 'WebGPT',
       });
     });
 

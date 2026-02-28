@@ -91,7 +91,7 @@
   "header.desc": "Gerenciamento de uso e assinatura",
   "header.title": "Cobrança",
   "keyMissMatch.button": "Restaurar uso e continuar conversa",
-  "keyMissMatch.description": "Devido a uma falha ocasional do sistema, o uso da sua assinatura atual está temporariamente inativo. Clique no botão abaixo para restaurar o uso e continuar a conversa. Se isso acontecer repetidamente, entre em contato conosco por e-mail (support@lobehub.com)",
+  "keyMissMatch.description": "Devido a uma falha ocasional do sistema, o uso da sua assinatura atual está temporariamente inativo. Clique no botão abaixo para restaurar o uso e continuar a conversa. Se isso acontecer repetidamente, entre em contato conosco por e-mail (support@gptweb.ru)",
   "keyMissMatch.title": "Restaurar Uso da Assinatura Agora",
   "limitation.chat.success.action": "Continuar Conversando",
   "limitation.chat.success.desc": "Sua assinatura {{plan}} foi atualizada com sucesso. Aproveite as conversas com IA. Seu plano atual inclui:",

@@ -3,7 +3,7 @@ import urlJoin from 'url-join';
 
 import { appEnv } from '@/envs/app';
 
-const marketBaseUrl = new URL(appEnv.MARKET_BASE_URL ?? 'https://market.lobehub.com').origin;
+const marketBaseUrl = new URL(appEnv.MARKET_BASE_URL ?? 'https://market.gptweb.ru').origin;
 
 /**
  * Default OIDC client configuration

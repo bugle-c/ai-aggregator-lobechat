@@ -134,7 +134,7 @@ export const SkillsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Search for skills in the LobeHub Market. Use this to discover available skills that can extend Claude's capabilities. Search across skill names, descriptions, and summaries. Results can be filtered and sorted by various criteria (stars, downloads, etc).",
+        "Search for skills in the WebGPT Market. Use this to discover available skills that can extend Claude's capabilities. Search across skill names, descriptions, and summaries. Results can be filtered and sorted by various criteria (stars, downloads, etc).",
       name: SkillsApiName.searchSkill,
       parameters: {
         properties: {
@@ -181,7 +181,7 @@ export const SkillsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Import/install a skill directly from the LobeHub Market using its identifier. This is the recommended way to install skills from the market after searching with searchSkill. The skill will be downloaded and installed automatically. Requires user confirmation before installation.',
+        'Import/install a skill directly from the WebGPT Market using its identifier. This is the recommended way to install skills from the market after searching with searchSkill. The skill will be downloaded and installed automatically. Requires user confirmation before installation.',
       humanIntervention: 'required',
       name: SkillsApiName.importFromMarket,
       parameters: {

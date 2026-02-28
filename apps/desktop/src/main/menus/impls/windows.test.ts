@@ -12,7 +12,7 @@ vi.mock('electron', () => ({
     setApplicationMenu: vi.fn(),
   },
   app: {
-    getName: vi.fn(() => 'LobeChat'),
+    getName: vi.fn(() => 'WebGPT'),
   },
   shell: {
     openExternal: vi.fn(),
@@ -228,7 +228,7 @@ describe('WindowsMenu', () => {
 
       expect(visitWebsiteItem).toBeDefined();
       await visitWebsiteItem.click();
-      expect(shell.openExternal).toHaveBeenCalledWith('https://lobehub.com');
+      expect(shell.openExternal).toHaveBeenCalledWith('https://gptweb.ru');
     });
 
     it('should handle github repo click', async () => {

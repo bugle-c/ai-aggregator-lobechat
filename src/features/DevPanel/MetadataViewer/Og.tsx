@@ -48,7 +48,7 @@ const MetaData = memo(() => {
                   zIndex: 10,
                 }}
               >
-                lobehub.com
+                gptweb.ru
               </div>
               <Image
                 fill

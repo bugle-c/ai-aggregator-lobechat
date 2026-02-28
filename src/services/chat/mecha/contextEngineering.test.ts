@@ -457,13 +457,13 @@ describe('contextEngineering', () => {
             associatedSubjects: [],
             createdAt: new Date('2024-01-01T00:00:00.000Z'),
             currentStatus: 'active',
-            description: 'Weekly syncs for LobeHub',
+            description: 'Weekly syncs for WebGPT',
             id: 'ctx-1',
             metadata: {},
             scoreImpact: 0.8,
             scoreUrgency: 0.5,
             tags: ['project'],
-            title: 'LobeHub',
+            title: 'WebGPT',
             type: 'project',
             updatedAt: new Date('2024-01-02T00:00:00.000Z'),
             userMemoryIds: ['mem-1'],
@@ -496,7 +496,7 @@ describe('contextEngineering', () => {
       expect(injection!.role).toBe('user');
       expect(injection!.content).toContain('<user_memory>');
       expect(injection!.content).toContain('<contexts count="1">');
-      expect(injection!.content).toContain('<context id="ctx-1" title="LobeHub">');
+      expect(injection!.content).toContain('<context id="ctx-1" title="WebGPT">');
     });
 
     it('should handle missing placeholder variables gracefully', async () => {

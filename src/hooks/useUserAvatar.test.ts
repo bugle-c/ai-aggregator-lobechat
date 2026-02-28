@@ -20,7 +20,7 @@ vi.mock('@lobechat/const', async (importOriginal) => {
       return mockIsDesktop;
     },
     DEFAULT_USER_AVATAR: 'default-avatar.png',
-    OFFICIAL_URL: 'https://app.lobehub.com',
+    OFFICIAL_URL: 'https://ask.gptweb.ru',
   };
 });
 
@@ -127,7 +127,7 @@ describe('useUserAvatar', () => {
     const { result } = renderHook(() => useUserAvatar());
 
     // In cloud mode, selector returns OFFICIAL_URL regardless of remoteServerUrl config
-    expect(result.current).toBe('https://app.lobehub.com/api/avatar.png');
+    expect(result.current).toBe('https://ask.gptweb.ru/api/avatar.png');
   });
 
   it('should return original avatar when storageMode is selfHost but no URL configured', () => {

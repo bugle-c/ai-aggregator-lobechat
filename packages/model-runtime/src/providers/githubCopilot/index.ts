@@ -63,7 +63,7 @@ class CopilotTokenManager {
       headers: {
         'Accept': 'application/json',
         'Authorization': `Token ${githubToken}`,
-        'User-Agent': 'LobeChat/1.0',
+        'User-Agent': 'WebGPT/1.0',
       },
       method: 'GET',
     });
@@ -159,8 +159,8 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         baseURL: COPILOT_BASE_URL,
         defaultHeaders: {
           'Copilot-Integration-Id': 'vscode-chat',
-          'Editor-Plugin-Version': 'LobeChat/1.0',
-          'Editor-Version': 'LobeChat/1.0',
+          'Editor-Plugin-Version': 'WebGPT/1.0',
+          'Editor-Version': 'WebGPT/1.0',
         },
       });
 
@@ -191,8 +191,8 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           'Accept': 'application/json',
           'Authorization': `Bearer ${bearerToken}`,
           'Copilot-Integration-Id': 'vscode-chat',
-          'Editor-Plugin-Version': 'LobeChat/1.0',
-          'Editor-Version': 'LobeChat/1.0',
+          'Editor-Plugin-Version': 'WebGPT/1.0',
+          'Editor-Version': 'WebGPT/1.0',
         },
         method: 'GET',
       });

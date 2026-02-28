@@ -19,7 +19,7 @@ export interface SSRFOptions {
  * @param url - The URL to fetch
  * @param options - Standard fetch options
  * @param ssrfOptions - Optional per-call SSRF configuration overrides
- * @see https://lobehub.com/docs/self-hosting/environment-variables/basic#ssrf-allow-private-ip-address
+ * @see https://gptweb.ru/docs/self-hosting/environment-variables/basic#ssrf-allow-private-ip-address
  */
 export const ssrfSafeFetch = async (
   url: string,
@@ -64,7 +64,7 @@ export const ssrfSafeFetch = async (
     console.error('SSRF-safe fetch error:', error);
     throw new Error(
       `SSRF-safe fetch failed: ${error instanceof Error ? error.message : String(error)}. ` +
-        'See: https://lobehub.com/docs/self-hosting/environment-variables/basic#ssrf-allow-private-ip-address',
+        'See: https://gptweb.ru/docs/self-hosting/environment-variables/basic#ssrf-allow-private-ip-address',
     );
   }
 };

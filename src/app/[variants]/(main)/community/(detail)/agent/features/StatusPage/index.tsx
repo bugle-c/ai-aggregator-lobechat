@@ -45,7 +45,7 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
                 i18nKey="assistants.status.unpublished.subtitle"
                 ns="discover"
                 components={{
-                  email: <a href="mailto:support@lobehub.com">support@lobehub.com</a>,
+                  email: <a href="mailto:support@gptweb.ru">support@gptweb.ru</a>,
                 }}
               />
             </Text>
@@ -100,7 +100,7 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
                 i18nKey="assistants.status.support"
                 ns="discover"
                 components={{
-                  email: <a href="mailto:support@lobehub.com">support@lobehub.com</a>,
+                  email: <a href="mailto:support@gptweb.ru">support@gptweb.ru</a>,
                 }}
               />
             </p>

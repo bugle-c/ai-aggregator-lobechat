@@ -12,7 +12,7 @@ const dialog = {
   'error.message': 'An error occurred',
   'error.title': 'Error',
   'fullDiskAccess.message':
-    'LobeHub needs Full Disk Access to read files and enable knowledge base features. Please grant access in System Settings.',
+    'WebGPT needs Full Disk Access to read files and enable knowledge base features. Please grant access in System Settings.',
   'fullDiskAccess.openSettings': 'Open Settings',
   'fullDiskAccess.skip': 'Later',
   'fullDiskAccess.title': 'Full Disk Access Required',

@@ -1,5 +1,5 @@
 /**
- * This file contains the root router of Lobe Chat tRPC-backend for Mobile App
+ * This file contains the root router of WebGPT tRPC-backend for Mobile App
  * Only includes routers that are actually used by the mobile client
  */
 import { publicProcedure, router } from '@/libs/trpc/lambda';

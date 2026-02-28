@@ -47,7 +47,7 @@ export interface GroupOfficialToolItem {
   installed?: boolean;
   /** Tool display name */
   name: string;
-  /** Tool type: 'builtin' for built-in tools, 'klavis' for LobeHub Mcp servers, 'lobehub-skill' for LobeHub Skill providers */
+  /** Tool type: 'builtin' for built-in tools, 'klavis' for WebGPT MCP servers, 'lobehub-skill' for WebGPT Skill providers */
   type: 'builtin' | 'klavis' | 'lobehub-skill';
 }
 

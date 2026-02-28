@@ -115,7 +115,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
     marketAccessToken,
     userAgent,
   };
-  log('LobeChat Authorization header: %s', authorization ? 'exists' : 'not found');
+  log('WebGPT Authorization header: %s', authorization ? 'exists' : 'not found');
 
   let userId;
   let oidcAuth = null;

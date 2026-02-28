@@ -37,7 +37,7 @@ const BrandWatermark = memo<Omit<FlexboxProps, 'children'>>(({ style, ...rest })
       ) : (
         <a
           className={styles.logoLink}
-          href={`https://lobehub.com?utm_source=${UTM_SOURCE}&utm_content=brand_watermark`}
+          href={`https://gptweb.ru?utm_source=${UTM_SOURCE}&utm_content=brand_watermark`}
           rel="noreferrer"
           target="_blank"
         >

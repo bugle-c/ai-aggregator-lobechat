@@ -127,7 +127,7 @@ export const useMarketGroupPublish = ({ action, onSuccess }: UseMarketGroupPubli
         name: agent.title || 'Untitled Agent',
         role: agent.isSupervisor ? ('supervisor' as const) : ('participant' as const),
         // TODO: Construct proper A2A URL for the agent
-        url: `https://api.lobehub.com/a2a/agents/${agent.id}`,
+        url: `https://api.gptweb.ru/a2a/agents/${agent.id}`,
       }));
 
       // Use tRPC publishOrCreate

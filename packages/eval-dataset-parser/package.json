@@ -12,7 +12,7 @@
     "type": "git",
     "url": "https://github.com/lobehub/lobehub.git"
   },
-  "author": "LobeHub <i@lobehub.com>",
+  "author": "WebGPT <support@gptweb.ru>",
   "sideEffects": false,
   "main": "./src/index.ts",
   "scripts": {

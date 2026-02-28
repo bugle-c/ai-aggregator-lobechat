@@ -58,7 +58,7 @@ export const klavisRouter = router({
         identifier,
         meta: {
           avatar: '🔌',
-          description: `LobeHub Mcp Server: ${serverName}`,
+          description: `WebGPT MCP Server: ${serverName}`,
           title: serverName,
         },
         type: 'default',
@@ -241,7 +241,7 @@ export const klavisRouter = router({
         identifier,
         meta: existingPlugin?.manifest?.meta || {
           avatar: '🔌',
-          description: `LobeHub Mcp Server: ${serverName}`,
+          description: `WebGPT MCP Server: ${serverName}`,
           title: serverName,
         },
         type: 'default',

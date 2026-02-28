@@ -78,8 +78,8 @@ export const params = {
   },
   constructorOptions: {
     defaultHeaders: {
-      'http-referer': 'https://lobehub.com',
-      'x-title': 'LobeHub',
+      'http-referer': 'https://gptweb.ru',
+      'x-title': 'WebGPT',
     },
   },
   debug: {

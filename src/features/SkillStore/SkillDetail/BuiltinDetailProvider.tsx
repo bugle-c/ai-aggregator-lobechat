@@ -58,7 +58,7 @@ export const BuiltinDetailProvider = ({ children, identifier }: BuiltinDetailPro
 
   const value: DetailContextValue = {
     author: 'WebGPT',
-    authorUrl: 'https://lobehub.com',
+    authorUrl: 'https://gptweb.ru',
     config: null as any, // Builtin tools don't have provider config
     description: meta?.description || '',
     icon: meta?.avatar || '',

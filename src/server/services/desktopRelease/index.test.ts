@@ -6,20 +6,20 @@ import { resolveDesktopDownload, resolveDesktopDownloadFromUrls } from './index'
 const mockRelease = {
   assets: [
     {
-      browser_download_url: 'https://example.com/LobeHub-2.0.0-arm64.dmg',
-      name: 'LobeHub-2.0.0-arm64.dmg',
+      browser_download_url: 'https://example.com/WebGPT-2.0.0-arm64.dmg',
+      name: 'WebGPT-2.0.0-arm64.dmg',
     },
     {
-      browser_download_url: 'https://example.com/LobeHub-2.0.0-x64.dmg',
-      name: 'LobeHub-2.0.0-x64.dmg',
+      browser_download_url: 'https://example.com/WebGPT-2.0.0-x64.dmg',
+      name: 'WebGPT-2.0.0-x64.dmg',
     },
     {
-      browser_download_url: 'https://example.com/LobeHub-2.0.0-setup.exe',
-      name: 'LobeHub-2.0.0-setup.exe',
+      browser_download_url: 'https://example.com/WebGPT-2.0.0-setup.exe',
+      name: 'WebGPT-2.0.0-setup.exe',
     },
     {
-      browser_download_url: 'https://example.com/LobeHub-2.0.0.AppImage',
-      name: 'LobeHub-2.0.0.AppImage',
+      browser_download_url: 'https://example.com/WebGPT-2.0.0.AppImage',
+      name: 'WebGPT-2.0.0.AppImage',
     },
   ],
   published_at: '2026-01-01T00:00:00.000Z',
@@ -28,10 +28,10 @@ const mockRelease = {
 
 describe('desktopRelease', () => {
   it.each([
-    ['mac-arm', 'LobeHub-2.0.0-arm64.dmg'],
-    ['mac-intel', 'LobeHub-2.0.0-x64.dmg'],
-    ['windows', 'LobeHub-2.0.0-setup.exe'],
-    ['linux', 'LobeHub-2.0.0.AppImage'],
+    ['mac-arm', 'WebGPT-2.0.0-arm64.dmg'],
+    ['mac-intel', 'WebGPT-2.0.0-x64.dmg'],
+    ['windows', 'WebGPT-2.0.0-setup.exe'],
+    ['linux', 'WebGPT-2.0.0.AppImage'],
   ] as Array<[DesktopDownloadType, string]>)(
     'resolveDesktopDownload(%s)',
     (type, expectedAssetName) => {
@@ -50,13 +50,13 @@ describe('desktopRelease', () => {
       tag: 'v2.0.0',
       type: 'windows',
       urls: [
-        'https://releases.example.com/stable/2.0.0/LobeHub-2.0.0-setup.exe?download=1',
-        'https://releases.example.com/stable/2.0.0/LobeHub-2.0.0-x64.dmg',
+        'https://releases.example.com/stable/2.0.0/WebGPT-2.0.0-setup.exe?download=1',
+        'https://releases.example.com/stable/2.0.0/WebGPT-2.0.0-x64.dmg',
       ],
       version: '2.0.0',
     });
 
-    expect(resolved?.assetName).toBe('LobeHub-2.0.0-setup.exe');
+    expect(resolved?.assetName).toBe('WebGPT-2.0.0-setup.exe');
     expect(resolved?.url).toContain('setup.exe');
   });
 });

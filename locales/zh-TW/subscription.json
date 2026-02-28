@@ -91,7 +91,7 @@
   "header.desc": "使用與訂閱管理",
   "header.title": "帳單",
   "keyMissMatch.button": "恢復使用並繼續對話",
-  "keyMissMatch.description": "由於系統偶發錯誤，您的訂閱使用暫時失效。請點擊下方按鈕恢復使用並繼續對話。如多次發生，請透過電子郵件聯繫我們（support@lobehub.com）",
+  "keyMissMatch.description": "由於系統偶發錯誤，您的訂閱使用暫時失效。請點擊下方按鈕恢復使用並繼續對話。如多次發生，請透過電子郵件聯繫我們（support@gptweb.ru）",
   "keyMissMatch.title": "立即恢復訂閱使用",
   "limitation.chat.success.action": "繼續對話",
   "limitation.chat.success.desc": "您的 {{plan}} 訂閱已成功升級，享受 AI 對話體驗。您目前的方案包含：",

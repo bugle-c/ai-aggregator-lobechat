@@ -9,8 +9,8 @@ export const params = {
   baseURL: 'https://api.together.xyz/v1',
   constructorOptions: {
     defaultHeaders: {
-      'HTTP-Referer': 'https://chat-preview.lobehub.com',
-      'X-Title': 'Lobe Chat',
+      'HTTP-Referer': 'https://ask.gptweb.ru',
+      'X-Title': 'WebGPT',
     },
   },
   debug: {

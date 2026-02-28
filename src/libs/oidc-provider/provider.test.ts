@@ -42,7 +42,7 @@ describe('OIDC Provider - Market Client Integration', () => {
       vi.doMock('@/envs/app', () => ({
         appEnv: {
           APP_URL: 'https://example.com',
-          MARKET_BASE_URL: 'https://market.lobehub.com',
+          MARKET_BASE_URL: 'https://market.gptweb.ru',
         },
       }));
 
@@ -51,7 +51,7 @@ describe('OIDC Provider - Market Client Integration', () => {
 
       expect(marketClient).toBeDefined();
       expect(marketClient?.client_id).toBe('lobehub-market');
-      expect(marketClient?.client_name).toBe('LobeHub Marketplace');
+      expect(marketClient?.client_name).toBe('WebGPT Marketplace');
 
       vi.doUnmock('@/envs/app');
     });

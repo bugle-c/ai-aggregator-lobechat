@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import Statistic from '../../../../../components/Statistic';
 
-const DEFAULT_DOC_URL = 'https://lobehub.com/docs/usage/agents/model';
+const DEFAULT_DOC_URL = 'https://gptweb.ru/docs/usage/agents/model';
 
 export interface ParameterItemProps {
   defaultValue: string | number;

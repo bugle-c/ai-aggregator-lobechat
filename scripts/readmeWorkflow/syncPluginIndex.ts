@@ -23,7 +23,7 @@ const genPluginTable = (data: DataItem[], lang?: string) => {
       [
         genLink(
           item.meta.title.replaceAll('|', ','),
-          urlJoin('https://lobechat.com/discover/plugin', item.identifier),
+          urlJoin('https://gptweb.ru/discover/plugin', item.identifier),
         ),
         `<sup>By **${item.author}** on **${item.createdAt}**</sup>`,
       ].join('<br/>'),
@@ -42,7 +42,7 @@ const runPluginTable = async (lang?: string) => {
     md,
     [
       mdTable,
-      `> 📊 Total plugins: ${genLink(`<kbd>**${data.length}**</kbd>`, 'https://lobechat.com/discover/plugins')}`,
+      `> 📊 Total plugins: ${genLink(`<kbd>**${data.length}**</kbd>`, 'https://gptweb.ru/discover/plugins')}`,
     ].join('\n\n'),
   );
   writeReadme(newMd, lang);

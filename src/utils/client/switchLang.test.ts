@@ -2,7 +2,7 @@ import { setCookie } from '@lobechat/utils';
 import { changeLanguage } from 'i18next';
 import { describe, expect, it, vi } from 'vitest';
 
-import { LOBE_LOCALE_COOKIE } from '@/const/locale';
+import { DEFAULT_LANG, LOBE_LOCALE_COOKIE } from '@/const/locale';
 import { type LocaleMode } from '@/types/locale';
 
 import { switchLang } from './switchLang';
@@ -29,14 +29,11 @@ describe('switchLang', () => {
     expect(setCookie).toHaveBeenCalledWith(LOBE_LOCALE_COOKIE, locale, 365);
   });
 
-  it('should change language based on navigator.language when locale is "auto"', () => {
-    const navigatorLanguage = 'fr';
-    vi.spyOn(navigator, 'language', 'get').mockReturnValue(navigatorLanguage);
-
+  it('should change language to DEFAULT_LANG when locale is "auto"', () => {
     switchLang('auto');
 
-    expect(changeLanguage).toHaveBeenCalledWith(navigatorLanguage);
-    expect(document.documentElement.lang).toBe(navigatorLanguage);
+    expect(changeLanguage).toHaveBeenCalledWith(DEFAULT_LANG);
+    expect(document.documentElement.lang).toBe(DEFAULT_LANG);
     expect(setCookie).toHaveBeenCalledWith(LOBE_LOCALE_COOKIE, undefined, 365);
   });
 });

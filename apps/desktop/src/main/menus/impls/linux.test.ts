@@ -12,7 +12,7 @@ vi.mock('electron', () => ({
     setApplicationMenu: vi.fn(),
   },
   app: {
-    getName: vi.fn(() => 'LobeChat'),
+    getName: vi.fn(() => 'WebGPT'),
     getVersion: vi.fn(() => '1.0.0'),
   },
   shell: {
@@ -253,7 +253,7 @@ describe('LinuxMenu', () => {
 
       expect(visitWebsiteItem).toBeDefined();
       await visitWebsiteItem.click();
-      expect(shell.openExternal).toHaveBeenCalledWith('https://lobehub.com');
+      expect(shell.openExternal).toHaveBeenCalledWith('https://gptweb.ru');
     });
 
     it('should handle github repo click', async () => {
@@ -517,7 +517,7 @@ describe('LinuxMenu', () => {
       aboutItem.click();
 
       const callArgs = (dialog.showMessageBox as any).mock.calls[0][0];
-      expect(callArgs.message).toContain('LobeChat');
+      expect(callArgs.message).toContain('WebGPT');
       expect(callArgs.message).toContain('1.0.0');
     });
   });

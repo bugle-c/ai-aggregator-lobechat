@@ -15,7 +15,7 @@ import type {
 export const mockAssistantList: AssistantListResponse = {
   items: [
     {
-      author: 'LobeHub',
+      author: 'WebGPT',
       avatar: '🤖',
       backgroundColor: '#1890ff',
       category: 'general',
@@ -30,7 +30,7 @@ export const mockAssistantList: AssistantListResponse = {
       userName: 'lobehub',
     },
     {
-      author: 'LobeHub',
+      author: 'WebGPT',
       avatar: '💻',
       backgroundColor: '#52c41a',
       category: 'programming',
@@ -45,7 +45,7 @@ export const mockAssistantList: AssistantListResponse = {
       userName: 'lobehub',
     },
     {
-      author: 'LobeHub',
+      author: 'WebGPT',
       avatar: '✍️',
       backgroundColor: '#722ed1',
       category: 'copywriting',
@@ -166,7 +166,7 @@ export const mockProviderList: ProviderListResponse = {
 export const mockMcpList: McpListResponse = {
   items: [
     {
-      author: 'LobeHub',
+      author: 'WebGPT',
       avatar: '🔍',
       category: 'search',
       createdAt: '2024-01-01T00:00:00.000Z',
@@ -176,7 +176,7 @@ export const mockMcpList: McpListResponse = {
       title: 'Web Search',
     },
     {
-      author: 'LobeHub',
+      author: 'WebGPT',
       avatar: '📁',
       category: 'file',
       createdAt: '2024-01-02T00:00:00.000Z',
@@ -186,7 +186,7 @@ export const mockMcpList: McpListResponse = {
       title: 'File Manager',
     },
     {
-      author: 'LobeHub',
+      author: 'WebGPT',
       avatar: '🗄️',
       category: 'database',
       createdAt: '2024-01-03T00:00:00.000Z',

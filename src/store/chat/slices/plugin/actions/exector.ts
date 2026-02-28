@@ -69,7 +69,7 @@ export const lobehubSkillExecutor: RemoteToolExecutor = async (p: any) => {
   // Parse arguments
   const args = safeParseJSON(p.arguments) || {};
 
-  // Call LobeHub Skill tool via store action
+  // Call WebGPT Skill tool via store action
   const result = await useToolStore.getState().callLobehubSkillTool({
     args,
     provider,
@@ -78,7 +78,7 @@ export const lobehubSkillExecutor: RemoteToolExecutor = async (p: any) => {
 
   if (!result.success) {
     return createFailedResult(
-      result.error || `LobeHub Skill tool ${provider} ${p.apiName} execution failed`,
+      result.error || `WebGPT Skill tool ${provider} ${p.apiName} execution failed`,
     );
   }
 

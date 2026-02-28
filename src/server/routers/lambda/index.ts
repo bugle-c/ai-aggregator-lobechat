@@ -1,5 +1,5 @@
 /**
- * This file contains the root router of Lobe Chat tRPC-backend
+ * This file contains the root router of WebGPT tRPC-backend
  */
 import { accountDeletionRouter } from '@/business/server/lambda-routers/accountDeletion';
 import { referralRouter } from '@/business/server/lambda-routers/referral';

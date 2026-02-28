@@ -11,7 +11,7 @@
   "import.incompatible.title": "バージョン非互換",
   "inviteCode.continue": "続行",
   "inviteCode.currentEmail": "現在のアカウント：{{email}}",
-  "inviteCode.desc": "LobeHub にアクセスするには招待コードが必要です。有効な招待コードを入力してください。",
+  "inviteCode.desc": "WebGPT にアクセスするには招待コードが必要です。有効な招待コードを入力してください。",
   "inviteCode.friends": "友達",
   "inviteCode.joinUsOn": "に参加しよう",
   "inviteCode.lookingForInvite": "招待をお探しですか？",

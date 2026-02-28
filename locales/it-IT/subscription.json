@@ -91,7 +91,7 @@
   "header.desc": "Gestione utilizzo e abbonamenti",
   "header.title": "Fatturazione",
   "keyMissMatch.button": "Ripristina l'utilizzo e continua la conversazione",
-  "keyMissMatch.description": "A causa di un guasto occasionale del sistema, l'utilizzo del tuo abbonamento è temporaneamente inattivo. Clicca sul pulsante qui sotto per ripristinare l'utilizzo e continuare la conversazione. Se il problema si ripete, contattaci via email (support@lobehub.com)",
+  "keyMissMatch.description": "A causa di un guasto occasionale del sistema, l'utilizzo del tuo abbonamento è temporaneamente inattivo. Clicca sul pulsante qui sotto per ripristinare l'utilizzo e continuare la conversazione. Se il problema si ripete, contattaci via email (support@gptweb.ru)",
   "keyMissMatch.title": "Ripristina subito l'utilizzo dell'abbonamento",
   "limitation.chat.success.action": "Continua a chattare",
   "limitation.chat.success.desc": "Il tuo abbonamento {{plan}} è stato aggiornato con successo. Goditi le conversazioni con l'IA. Il tuo piano attuale include:",

@@ -90,7 +90,7 @@ const buildCloudMcpManifest = (params: {
   if (lobeChatApi) {
     // Already in LobeChat format, use directly
     apiArray = lobeChatApi;
-    log('[Cloud MCP] Using existing LobeChat API format');
+    log('[Cloud MCP] Using existing WebGPT API format');
   } else if (mcpTools && Array.isArray(mcpTools)) {
     // Convert MCP tools format to LobeChat api format
     apiArray = mcpTools.map((tool: any) => ({
@@ -98,7 +98,7 @@ const buildCloudMcpManifest = (params: {
       name: tool.name,
       parameters: tool.inputSchema || {},
     }));
-    log('[Cloud MCP] Converted %d MCP tools to LobeChat API format', apiArray.length);
+    log('[Cloud MCP] Converted %d MCP tools to WebGPT API format', apiArray.length);
   } else {
     console.warn('[Cloud MCP] No tools or api found in manifest data');
   }
@@ -234,7 +234,7 @@ export class PluginMCPStoreActionImpl {
     let data: any;
     let result: CheckMcpInstallResult | undefined;
     let connection: any;
-    const userAgent = `LobeHub Desktop/${CURRENT_VERSION}`;
+    const userAgent = `WebGPT Desktop/${CURRENT_VERSION}`;
 
     try {
       // Check if already cancelled

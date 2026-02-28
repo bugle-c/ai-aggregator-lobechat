@@ -91,7 +91,7 @@
   "header.desc": "사용량 및 구독 관리",
   "header.title": "청구",
   "keyMissMatch.button": "사용량 복원 및 대화 계속하기",
-  "keyMissMatch.description": "일시적인 시스템 오류로 인해 현재 구독 사용량이 비활성화되었습니다. 아래 버튼을 클릭하여 사용량을 복원하고 대화를 계속하세요. 이 문제가 반복되면 이메일(support@lobehub.com)로 문의해 주세요.",
+  "keyMissMatch.description": "일시적인 시스템 오류로 인해 현재 구독 사용량이 비활성화되었습니다. 아래 버튼을 클릭하여 사용량을 복원하고 대화를 계속하세요. 이 문제가 반복되면 이메일(support@gptweb.ru)로 문의해 주세요.",
   "keyMissMatch.title": "지금 구독 사용량 복원하기",
   "limitation.chat.success.action": "대화 계속하기",
   "limitation.chat.success.desc": "{{plan}} 구독이 성공적으로 업그레이드되었습니다. AI 대화를 즐기세요. 현재 플랜에는 다음이 포함됩니다:",

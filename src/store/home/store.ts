@@ -56,7 +56,7 @@ const devtools = createDevtools('home');
 export const useHomeStore = createWithEqualityFn<HomeStore>()(
   subscribeWithSelector(
     devtools(createStore, {
-      name: 'LobeChat_Home' + (isDev ? '_DEV' : ''),
+      name: 'WebGPT_Home' + (isDev ? '_DEV' : ''),
     }),
   ),
   shallow,

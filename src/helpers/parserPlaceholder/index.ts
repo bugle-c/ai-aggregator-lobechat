@@ -55,9 +55,9 @@ export const VARIABLE_GENERATORS = {
    *
    * | Value | Example |
    * |-------|---------|
-   * | `{{email}}` | demo@lobehub.com |
+   * | `{{email}}` | demo@gptweb.ru |
    * | `{{nickname}}` | Community User |
-   * | `{{username}}` | LobeChat |
+   * | `{{username}}` | WebGPT |
    *
    */
   email: () => userProfileSelectors.email(useUserStore.getState()) ?? '',
@@ -141,7 +141,7 @@ export const VARIABLE_GENERATORS = {
    * | `{{musicPath}}` | /Users/username/Music |
    * | `{{picturesPath}}` | /Users/username/Pictures |
    * | `{{videosPath}}` | /Users/username/Videos |
-   * | `{{userDataPath}}` | /Users/username/Library/Application Support/LobeChat |
+   * | `{{userDataPath}}` | /Users/username/Library/Application Support/WebGPT |
    * | `{{workingDirectory}}` | /Users/username/Projects/my-project |
    *
    */

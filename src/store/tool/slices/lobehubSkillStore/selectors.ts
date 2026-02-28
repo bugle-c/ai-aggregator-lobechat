@@ -95,12 +95,12 @@ export const lobehubSkillStoreSelectors = {
           identifier: server.identifier,
           manifest: {
             api: apis,
-            author: 'LobeHub Market',
-            homepage: 'https://lobehub.com/market',
+            author: 'WebGPT Market',
+            homepage: 'https://gptweb.ru/market',
             identifier: server.identifier,
             meta: {
               avatar: server.icon || '🔗',
-              description: `LobeHub Skill: ${server.name}`,
+              description: `WebGPT Skill: ${server.name}`,
               tags: ['lobehub-skill', server.identifier],
               title: server.name,
             },
@@ -128,7 +128,7 @@ export const lobehubSkillStoreSelectors = {
         identifier: server.identifier,
         meta: {
           avatar: server.icon || '🔗',
-          description: `LobeHub Skill: ${server.name}`,
+          description: `WebGPT Skill: ${server.name}`,
           title: server.name,
         },
       }));

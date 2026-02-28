@@ -8,7 +8,7 @@ import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/l
 
 const log = debug('lobe-server:market-service');
 
-const MARKET_BASE_URL = process.env.NEXT_PUBLIC_MARKET_BASE_URL || 'https://market.lobehub.com';
+const MARKET_BASE_URL = process.env.NEXT_PUBLIC_MARKET_BASE_URL || 'https://market.gptweb.ru';
 
 // ============================== Helper Functions ==============================
 
@@ -537,7 +537,7 @@ export class MarketService {
             identifier: providerId,
             meta: {
               avatar: icon || '🔗',
-              description: `LobeHub Skill: ${providerName}`,
+              description: `WebGPT Skill: ${providerName}`,
               tags: ['lobehub-skill', providerId],
               title: providerName,
             },

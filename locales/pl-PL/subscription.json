@@ -91,7 +91,7 @@
   "header.desc": "Zarządzanie użyciem i subskrypcją",
   "header.title": "Rozliczenia",
   "keyMissMatch.button": "Przywróć użycie i kontynuuj rozmowę",
-  "keyMissMatch.description": "Z powodu sporadycznej awarii systemu, Twoje bieżące użycie subskrypcji jest tymczasowo nieaktywne. Kliknij przycisk poniżej, aby przywrócić użycie i kontynuować rozmowę. Jeśli problem się powtarza, skontaktuj się z nami przez e-mail (support@lobehub.com)",
+  "keyMissMatch.description": "Z powodu sporadycznej awarii systemu, Twoje bieżące użycie subskrypcji jest tymczasowo nieaktywne. Kliknij przycisk poniżej, aby przywrócić użycie i kontynuować rozmowę. Jeśli problem się powtarza, skontaktuj się z nami przez e-mail (support@gptweb.ru)",
   "keyMissMatch.title": "Przywróć użycie subskrypcji teraz",
   "limitation.chat.success.action": "Kontynuuj rozmowę",
   "limitation.chat.success.desc": "Twoja subskrypcja {{plan}} została pomyślnie zaktualizowana. Ciesz się rozmowami z AI. Twój obecny plan zawiera:",

@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 
 // Test user credentials - these are used for e2e testing only
 export const TEST_USER = {
-  email: 'e2e-test@lobehub.com',
+  email: 'e2e-test@gptweb.ru',
   fullName: 'E2E Test User',
   id: 'user_e2e_test_user_001',
   password: 'TestPassword123!',

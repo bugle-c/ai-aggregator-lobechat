@@ -40,7 +40,7 @@ export const BuiltinAgentSkillDetailProvider = ({
 
   const value: DetailContextValue = {
     author: 'WebGPT',
-    authorUrl: 'https://lobehub.com',
+    authorUrl: 'https://gptweb.ru',
     config: null as any,
     description: skill.description,
     icon: skill.avatar || '',
