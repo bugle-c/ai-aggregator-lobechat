@@ -28,7 +28,7 @@ vi.mock('@/env', () => ({
     DESKTOP_RENDERER_STATIC: false,
     UPDATE_CHANNEL: undefined,
     MCP_TOOL_TIMEOUT: 60000,
-    OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
+    OFFICIAL_CLOUD_SERVER: 'https://ask.gptweb.ru',
   }),
 }));
 
@@ -45,7 +45,7 @@ describe('logger', () => {
       DESKTOP_RENDERER_STATIC: false,
       UPDATE_CHANNEL: undefined,
       MCP_TOOL_TIMEOUT: 60000,
-      OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
+      OFFICIAL_CLOUD_SERVER: 'https://ask.gptweb.ru',
     });
     vi.clearAllMocks();
   });
@@ -58,7 +58,7 @@ describe('logger', () => {
       DESKTOP_RENDERER_STATIC: false,
       UPDATE_CHANNEL: undefined,
       MCP_TOOL_TIMEOUT: 60000,
-      OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
+      OFFICIAL_CLOUD_SERVER: 'https://ask.gptweb.ru',
     });
   });
 
@@ -110,7 +110,7 @@ describe('logger', () => {
         DESKTOP_RENDERER_STATIC: false,
         UPDATE_CHANNEL: undefined,
         MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
+        OFFICIAL_CLOUD_SERVER: 'https://ask.gptweb.ru',
       });
       const logger = createLogger('test:error');
       logger.error('error message', { error: 'details' });
@@ -126,7 +126,7 @@ describe('logger', () => {
         DESKTOP_RENDERER_STATIC: false,
         UPDATE_CHANNEL: undefined,
         MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
+        OFFICIAL_CLOUD_SERVER: 'https://ask.gptweb.ru',
       });
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const logger = createLogger('test:error');
@@ -145,7 +145,7 @@ describe('logger', () => {
         DESKTOP_RENDERER_STATIC: false,
         UPDATE_CHANNEL: undefined,
         MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
+        OFFICIAL_CLOUD_SERVER: 'https://ask.gptweb.ru',
       });
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const logger = createLogger('test:error');
@@ -166,7 +166,7 @@ describe('logger', () => {
         DESKTOP_RENDERER_STATIC: false,
         UPDATE_CHANNEL: undefined,
         MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
+        OFFICIAL_CLOUD_SERVER: 'https://ask.gptweb.ru',
       });
       const logger = createLogger('test:info');
       logger.info('info message', { data: 'value' });
@@ -184,7 +184,7 @@ describe('logger', () => {
         DESKTOP_RENDERER_STATIC: false,
         UPDATE_CHANNEL: undefined,
         MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
+        OFFICIAL_CLOUD_SERVER: 'https://ask.gptweb.ru',
       });
       const logger = createLogger('test:info');
       logger.info('info message', { data: 'value' });
@@ -216,7 +216,7 @@ describe('logger', () => {
         DESKTOP_RENDERER_STATIC: false,
         UPDATE_CHANNEL: undefined,
         MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
+        OFFICIAL_CLOUD_SERVER: 'https://ask.gptweb.ru',
       });
       const logger = createLogger('test:verbose');
       logger.verbose('verbose message', { data: 'value' });
@@ -242,7 +242,7 @@ describe('logger', () => {
         DESKTOP_RENDERER_STATIC: false,
         UPDATE_CHANNEL: undefined,
         MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
+        OFFICIAL_CLOUD_SERVER: 'https://ask.gptweb.ru',
       });
       const logger = createLogger('test:warn');
       logger.warn('warn message', { warning: 'details' });
@@ -258,7 +258,7 @@ describe('logger', () => {
         DESKTOP_RENDERER_STATIC: false,
         UPDATE_CHANNEL: undefined,
         MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
+        OFFICIAL_CLOUD_SERVER: 'https://ask.gptweb.ru',
       });
       const logger = createLogger('test:warn');
       logger.warn('warn message');

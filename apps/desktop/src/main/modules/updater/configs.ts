@@ -8,7 +8,7 @@ export const UPDATE_CHANNEL = getDesktopEnv().UPDATE_CHANNEL || 'stable';
 export const isStableChannel = UPDATE_CHANNEL === 'stable' || !UPDATE_CHANNEL;
 
 // Custom update server URL (for stable channel)
-// e.g., https://releases.lobehub.com/stable
+// e.g., https://releases.gptweb.ru/stable
 export const UPDATE_SERVER_URL = getDesktopEnv().UPDATE_SERVER_URL;
 
 // GitHub configuration (for beta/nightly channels, or as fallback)
