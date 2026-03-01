@@ -69,15 +69,7 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = ModelNavKey.Over
         </a>
         <a
           className={styles.link}
-          href="https://github.com/lobehub/lobe-chat/tree/main/src/config/aiModels"
-          rel="noreferrer"
-          target="_blank"
-        >
-          {t('mcp.details.nav.viewSourceCode')}
-        </a>
-        <a
-          className={styles.link}
-          href="https://github.com/lobehub/lobe-chat/issues/new/choose"
+          href="https://t.me/gptwebrubot"
           rel="noreferrer"
           target="_blank"
         >

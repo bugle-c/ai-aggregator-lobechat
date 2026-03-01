@@ -65,6 +65,7 @@ import { cloneDeep, countBy, isString, merge, uniq, uniqBy } from 'es-toolkit/co
 import matter from 'gray-matter';
 import urlJoin from 'url-join';
 
+import { WEBGPT_AGENTS } from '@/const/webgpt-agents';
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { normalizeLocale } from '@/locales/resources';
 import { AssistantStore } from '@/server/modules/AssistantStore';
@@ -549,6 +550,31 @@ export class DiscoverService {
     const { locale, identifier, version } = rest;
     const normalizedLocale = normalizeLocale(locale);
 
+    // Check if this is a WebGPT custom agent
+    if (identifier.startsWith('webgpt-')) {
+      // WEBGPT_AGENTS imported at top of file
+      const agent = WEBGPT_AGENTS.find((a) => a.identifier === identifier);
+      if (agent) {
+        log('getAssistantDetail: returning WebGPT custom agent %s', identifier);
+        const related = await this.getAssistantList({
+          category: agent.category,
+          includeAgentGroup: true,
+          locale,
+          page: 1,
+          pageSize: 7,
+          source,
+        });
+        return {
+          ...agent,
+          currentVersion: '1.0.0',
+          examples: [],
+          related: related.items.filter((item) => item.identifier !== identifier).slice(0, 6),
+          summary: agent.description,
+          versions: [{ createdAt: agent.createdAt, isLatest: true, version: '1.0.0' }],
+        };
+      }
+    }
+
     try {
       // @ts-ignore
       const data = await this.market.agents.getAgentDetail(identifier, {
@@ -751,19 +777,32 @@ export class DiscoverService {
         };
       });
 
+      // Prepend WebGPT custom agents on first page when not searching
+      let finalItems = transformedItems;
+      if (page === 1 && !q && !ownerId) {
+        const filteredCustom = (shouldOmitCategory || !category)
+          ? WEBGPT_AGENTS
+          : WEBGPT_AGENTS.filter((a) => a.category === category);
+
+        if (filteredCustom.length > 0) {
+          finalItems = [...filteredCustom, ...transformedItems];
+        }
+      }
+
       const result: AssistantListResponse = {
         currentPage: data.currentPage || page,
-        items: transformedItems,
+        items: finalItems,
         pageSize: data.pageSize || pageSize,
-        totalCount: data.totalCount || 0,
+        totalCount: (data.totalCount || 0) + (finalItems.length - transformedItems.length),
         totalPages: data.totalPages || 0,
       };
 
       log(
-        'getAssistantList: returning page %d/%d with %d items from market SDK',
+        'getAssistantList: returning page %d/%d with %d items (%d custom) from market SDK',
         result.currentPage,
         result.totalPages,
         result.items.length,
+        result.items.length - transformedItems.length,
       );
       return result;
     } catch (error) {

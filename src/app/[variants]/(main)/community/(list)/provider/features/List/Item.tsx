@@ -87,14 +87,6 @@ const ProviderItem = memo<DiscoverProviderItem>(
             <a href={url} rel="noopener noreferrer" target={'_blank'} onClick={stopPropagation}>
               <ActionIcon color={cssVar.colorTextDescription} icon={GlobeIcon} />
             </a>
-            <a
-              href={`https://github.com/lobehub/lobe-chat/blob/main/src/config/modelProviders/${identifier}.ts`}
-              rel="noopener noreferrer"
-              target={'_blank'}
-              onClick={stopPropagation}
-            >
-              <ActionIcon fill={cssVar.colorTextDescription} icon={Github} />
-            </a>
           </Flexbox>
         </Flexbox>
         <Flexbox flex={1} gap={12} paddingInline={16}>
