@@ -6,6 +6,7 @@ import { createStaticStyles } from 'antd-style';
 import { BookOpenIcon, BrainCircuitIcon, ListIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
 import { ProviderNavKey } from '@/types/discover';
 
 import { useDetailContext } from '../DetailProvider';

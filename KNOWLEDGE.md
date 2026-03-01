@@ -152,6 +152,39 @@ curl -X POST http://localhost:3210/api/billing/webhook \
   -d '{"type":"notification","event":"payment.succeeded","object":{"id":"test"}}'
 ```
 
+## Phase 9: Billing UI for Web (2026-03-01)
+
+### What was done
+
+- Flipped `ENABLE_BUSINESS_FEATURES = true` in `packages/business/const/src/index.ts`
+- Rewrote 5 desktop-only iframe components into native React components:
+  - `Plans.tsx` — plan cards, usage progress, topup packages (tRPC: subscription.getPlans, getBillingState, createPayment; topUp.getPackages, createPayment)
+  - `Usage.tsx` — usage summary with progress bar and statistics (tRPC: spend.getUsageSummary)
+  - `Billing.tsx` — payment history table with success banner on `?payment=success` (tRPC: subscription.getPayments)
+  - `Funds.tsx` — balance display + topup packages (tRPC: spend.getUsageSummary, topUp.getPackages, createPayment)
+  - `Referral.tsx` — placeholder "coming soon" (referralRouter is empty)
+- Deleted `SubscriptionIframeWrapper.tsx` (161 lines of Electron-only code)
+
+### Key decisions
+
+- **No FormGroup/Form wrapper** — used antd Card + Flexbox + Grid pattern (simpler, matches the non-form nature of these pages)
+- **`lambdaQuery` hooks** — `useQuery()` for data fetching, `useMutation()` for payments
+- **Payment flow** — `createPayment.mutate()` → `window.location.href = paymentUrl` (hard redirect to YooKassa)
+- **Success detection** — `?payment=success` URL param checked via `useMemo` + `URLSearchParams`
+- **i18n** — `useTranslation('subscription')` namespace, all keys already existed in `locales/ru-RU/subscription.json`
+
+### Files changed
+
+| File | Action |
+|------|--------|
+| `packages/business/const/src/index.ts` | `ENABLE_BUSINESS_FEATURES = true` |
+| `src/business/client/BusinessSettingPages/Plans.tsx` | Rewritten |
+| `src/business/client/BusinessSettingPages/Usage.tsx` | Rewritten |
+| `src/business/client/BusinessSettingPages/Billing.tsx` | Rewritten |
+| `src/business/client/BusinessSettingPages/Funds.tsx` | Rewritten |
+| `src/business/client/BusinessSettingPages/Referral.tsx` | Rewritten |
+| `src/business/client/BusinessSettingPages/SubscriptionIframeWrapper.tsx` | Deleted |
+
 ## Env Vars (in /opt/lobechat/.env)
 
 - `YOOKASSA_SHOP_ID` — YooKassa shop ID (empty = billing disabled)

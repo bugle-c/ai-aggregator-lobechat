@@ -1,4 +1,4 @@
-import { Github, ModelTag, ProviderCombine } from '@lobehub/icons';
+import { ModelTag, ProviderCombine } from '@lobehub/icons';
 import { ActionIcon, Block, Flexbox, MaskShadow, stopPropagation,Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { GlobeIcon } from 'lucide-react';
