@@ -35,7 +35,7 @@ const CreditWidget = memo(() => {
         borderTop: '1px solid var(--lobe-color-border)',
         cursor: 'pointer',
       }}
-      onClick={() => navigate('/settings/subscription/plans')}
+      onClick={() => navigate('/settings/plans')}
     >
       <Flexbox horizontal align="center" gap={6} justify="space-between">
         <Flexbox horizontal align="center" gap={4}>
