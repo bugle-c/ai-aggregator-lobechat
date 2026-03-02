@@ -88,6 +88,13 @@ const Nav = memo(() => {
         url: '/community',
       },
       {
+        hidden: !enableBusinessFeatures,
+        icon: CreditCard,
+        key: 'plans',
+        title: tSub('sidebar.plans'),
+        url: '/settings/plans',
+      },
+      {
         hidden: !isAdmin,
         icon: ShieldCheckIcon,
         key: 'admin',
@@ -97,7 +104,7 @@ const Nav = memo(() => {
         title: t('tab.admin', { defaultValue: 'Admin' }),
       },
     ],
-    [t, isAdmin],
+    [t, tSub, isAdmin],
   );
 
   const newBadge = (
