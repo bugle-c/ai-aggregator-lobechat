@@ -20,5 +20,14 @@ export const getListItemKey = (item: ListItem): string => {
     case 'no-provider': {
       return 'no-provider';
     }
+    case 'recommended-header': {
+      return 'recommended-header';
+    }
+    case 'recommended-model': {
+      return `recommended-${item.model.id}`;
+    }
+    case 'show-all-toggle': {
+      return 'show-all-toggle';
+    }
   }
 };
