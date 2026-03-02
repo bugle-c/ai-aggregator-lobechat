@@ -4,6 +4,7 @@ import { billingEnv } from '@/envs/billing';
 
 interface CreatePaymentParams {
   amountRub: number;
+  customerEmail?: string;
   description: string;
   metadata?: Record<string, string>;
   returnUrl: string;
@@ -25,7 +26,7 @@ export async function createYookassaPayment(
   const idempotenceKey = crypto.randomUUID();
   const auth = Buffer.from(`${shopId}:${secretKey}`).toString('base64');
 
-  const body = {
+  const body: Record<string, unknown> = {
     amount: {
       currency: 'RUB',
       value: params.amountRub.toFixed(2),
@@ -37,6 +38,24 @@ export async function createYookassaPayment(
     },
     description: params.description,
     metadata: params.metadata || {},
+    receipt: {
+      customer: {
+        email: params.customerEmail || 'noreply@gptweb.ru',
+      },
+      items: [
+        {
+          amount: {
+            currency: 'RUB',
+            value: params.amountRub.toFixed(2),
+          },
+          description: params.description.slice(0, 128),
+          payment_mode: 'full_payment',
+          payment_subject: 'service',
+          quantity: '1.00',
+          vat_code: 1,
+        },
+      ],
+    },
   };
 
   const res = await fetch('https://api.yookassa.ru/v3/payments', {

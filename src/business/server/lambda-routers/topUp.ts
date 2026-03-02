@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { UserModel } from '@/database/models/user';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getTopupPackage, TOPUP_PACKAGES } from '@/server/modules/billing/constants';
@@ -28,8 +29,11 @@ export const topUpRouter = router({
 
       const returnUrl = `${process.env.APP_URL || 'https://ask.gptweb.ru'}/settings/billing?payment=success`;
 
+      const user = await UserModel.findById(ctx.serverDB, ctx.userId);
+
       const { paymentId, paymentUrl } = await createYookassaPayment({
         amountRub: pkg.amountRub,
+        customerEmail: user?.email || undefined,
         description: `Пополнение ${pkg.label} — WebGPT`,
         metadata: { payment_id: payment.id, type: 'topup' },
         returnUrl,

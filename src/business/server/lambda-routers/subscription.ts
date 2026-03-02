@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { UserModel } from '@/database/models/user';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createYookassaPayment } from '@/server/modules/billing/yookassa';
@@ -32,8 +33,11 @@ export const subscriptionRouter = router({
 
       const returnUrl = `${process.env.APP_URL || 'https://ask.gptweb.ru'}/settings/billing?payment=success`;
 
+      const user = await UserModel.findById(ctx.serverDB, ctx.userId);
+
       const { paymentId, paymentUrl } = await createYookassaPayment({
         amountRub: plan.priceRub,
+        customerEmail: user?.email || undefined,
         description: `Подписка ${plan.name} — WebGPT`,
         metadata: { payment_id: payment.id, type: 'subscription' },
         returnUrl,
