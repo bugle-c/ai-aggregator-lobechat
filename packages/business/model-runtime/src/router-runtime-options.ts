@@ -24,6 +24,7 @@ interface RouterInstance {
         region?: string;
         sessionToken?: string;
       }[];
+  transformModel?: (model: string) => string;
 }
 
 interface LobehubRouterRuntimeOptions {
@@ -31,11 +32,7 @@ interface LobehubRouterRuntimeOptions {
   routers: (options: any, runtimeContext: { model?: string }) => Promise<RouterInstance[]>;
 }
 
-// Model ID prefixes for each provider
-const ANTHROPIC_PREFIXES = ['claude-'];
-const OPENAI_PREFIXES = ['gpt-', 'o3', 'o4-', 'chatgpt-'];
-
-// Models that must go through OpenRouter (with provider prefix mapping)
+// Models that go through OpenRouter need provider prefix mapping
 const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'deepseek-chat': 'deepseek/deepseek-chat',
   'deepseek-reasoner': 'deepseek/deepseek-reasoner',
@@ -56,12 +53,6 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'MiniMax-M2.5-highspeed': 'minimax/MiniMax-M2.5-highspeed',
 };
 
-function getProviderForModel(modelId: string): 'anthropic' | 'openai' | 'openrouter' {
-  if (ANTHROPIC_PREFIXES.some((p) => modelId.startsWith(p))) return 'anthropic';
-  if (OPENAI_PREFIXES.some((p) => modelId.startsWith(p))) return 'openai';
-  return 'openrouter';
-}
-
 export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
   id: 'lobehub',
 
@@ -72,7 +63,7 @@ export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
     const openaiKey = process.env.OPENAI_API_KEY;
     const openrouterKey = process.env.OPENROUTER_API_KEY;
 
-    // Anthropic router for Claude models
+    // Anthropic router for Claude models (direct API)
     if (anthropicKey) {
       routers.push({
         apiType: 'anthropic',
@@ -92,7 +83,7 @@ export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
       });
     }
 
-    // OpenAI router for GPT/o-series models
+    // OpenAI router for GPT/o-series models (direct API)
     if (openaiKey) {
       routers.push({
         apiType: 'openai',
@@ -126,11 +117,10 @@ export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
           apiKey: openrouterKey,
           baseURL: 'https://openrouter.ai/api/v1',
         },
+        transformModel: (model: string) => OPENROUTER_MODEL_MAP[model] || model,
       });
     }
 
     return routers;
   },
 };
-
-export { getProviderForModel, OPENROUTER_MODEL_MAP };
