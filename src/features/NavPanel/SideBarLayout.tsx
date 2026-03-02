@@ -3,6 +3,7 @@ import { type ReactNode } from 'react';
 import { memo, Suspense } from 'react';
 
 import Footer from '@/app/[variants]/(main)/home/_layout/Footer';
+import CreditWidget from '@/components/CreditWidget';
 import SkeletonList, { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
 
 interface SidebarLayoutProps {
@@ -20,6 +21,9 @@ const SideBarLayout = memo<SidebarLayoutProps>(({ header, body, footer }) => {
           <Suspense fallback={<SkeletonList paddingBlock={8} />}>{body}</Suspense>
         </TooltipGroup>
       </ScrollShadow>
+      <Suspense>
+        <CreditWidget />
+      </Suspense>
       <Suspense>{footer || <Footer />}</Suspense>
     </Flexbox>
   );
