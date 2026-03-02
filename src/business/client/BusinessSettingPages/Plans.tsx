@@ -155,7 +155,7 @@ const Plans = memo(() => {
                   {features.map((featureKey) => (
                     <Flexbox horizontal align="center" gap={6} key={featureKey}>
                       <Check size={14} style={{ color: '#52c41a', flexShrink: 0 }} />
-                      <Text style={{ fontSize: 12 }}>{t(featureKey)}</Text>
+                      <Text style={{ fontSize: 12 }}>{t(featureKey as any)}</Text>
                     </Flexbox>
                   ))}
                 </Flexbox>
