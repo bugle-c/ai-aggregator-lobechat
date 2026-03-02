@@ -12,35 +12,8 @@ interface LobehubRouterRuntimeOptions {
   routers: (options: any, runtimeContext: { model?: string }) => Promise<RouterInstance[]>;
 }
 
-// Map lobehub short model IDs to OpenRouter format (provider/model)
+// Models that go through OpenRouter need provider prefix mapping
 const OPENROUTER_MODEL_MAP: Record<string, string> = {
-  // Anthropic
-  'claude-sonnet-4-6': 'anthropic/claude-sonnet-4-6',
-  'claude-sonnet-4-5-20250929': 'anthropic/claude-sonnet-4-5-20250929',
-  'claude-sonnet-4-20250514': 'anthropic/claude-sonnet-4-20250514',
-  'claude-3-7-sonnet-20250219': 'anthropic/claude-3.7-sonnet',
-  'claude-opus-4-6': 'anthropic/claude-opus-4-6',
-  'claude-opus-4-5-20251101': 'anthropic/claude-opus-4-5-20251101',
-  'claude-opus-4-1-20250805': 'anthropic/claude-opus-4-1-20250805',
-  'claude-opus-4-20250514': 'anthropic/claude-opus-4-20250514',
-  'claude-haiku-4-5-20251001': 'anthropic/claude-haiku-4-5-20251001',
-  'claude-3-5-haiku-20241022': 'anthropic/claude-3-5-haiku-20241022',
-  // OpenAI
-  'gpt-5.2': 'openai/gpt-5.2',
-  'gpt-5.1': 'openai/gpt-5.1',
-  'gpt-5': 'openai/gpt-5',
-  'gpt-5-mini': 'openai/gpt-5-mini',
-  'gpt-5-nano': 'openai/gpt-5-nano',
-  'gpt-5-chat-latest': 'openai/gpt-5-chat-latest',
-  'gpt-4.1': 'openai/gpt-4.1',
-  'gpt-4.1-mini': 'openai/gpt-4.1-mini',
-  'gpt-4.1-nano': 'openai/gpt-4.1-nano',
-  'gpt-4o-mini': 'openai/gpt-4o-mini',
-  'gpt-4o': 'openai/gpt-4o',
-  'chatgpt-4o-latest': 'openai/chatgpt-4o-latest',
-  'gpt-4-turbo': 'openai/gpt-4-turbo',
-  'o3': 'openai/o3',
-  'o4-mini': 'openai/o4-mini',
   // Google
   'gemini-3.1-pro-preview': 'google/gemini-3.1-pro-preview',
   'gemini-3-pro-preview': 'google/gemini-3-pro-preview',
@@ -69,18 +42,70 @@ export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
   id: 'lobehub',
 
   routers: async (_options, { model: _model }) => {
-    const openrouterKey = process.env.OPENROUTER_API_KEY;
-    if (!openrouterKey) return [];
+    const routers: RouterInstance[] = [];
 
-    return [
-      {
-        apiType: 'openai' as const,
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY;
+    const openrouterKey = process.env.OPENROUTER_API_KEY;
+
+    // Anthropic router for Claude models (direct API)
+    if (anthropicKey) {
+      routers.push({
+        apiType: 'anthropic',
+        models: [
+          'claude-sonnet-4-6',
+          'claude-sonnet-4-5-20250929',
+          'claude-sonnet-4-20250514',
+          'claude-3-7-sonnet-20250219',
+          'claude-opus-4-6',
+          'claude-opus-4-5-20251101',
+          'claude-opus-4-1-20250805',
+          'claude-opus-4-20250514',
+          'claude-haiku-4-5-20251001',
+          'claude-3-5-haiku-20241022',
+        ],
+        options: { apiKey: anthropicKey },
+      });
+    }
+
+    // OpenAI router for GPT/o-series models (direct API)
+    if (openaiKey) {
+      routers.push({
+        apiType: 'openai',
+        models: [
+          'gpt-5.2',
+          'gpt-5.1',
+          'gpt-5',
+          'gpt-5-mini',
+          'gpt-5-nano',
+          'gpt-5-chat-latest',
+          'gpt-4.1',
+          'gpt-4.1-mini',
+          'gpt-4.1-nano',
+          'gpt-4o-mini',
+          'gpt-4o',
+          'chatgpt-4o-latest',
+          'gpt-4-turbo',
+          'o3',
+          'o4-mini',
+        ],
+        options: { apiKey: openaiKey },
+      });
+    }
+
+    // OpenRouter for all other models (Gemini, DeepSeek, Grok, etc.)
+    if (openrouterKey) {
+      routers.push({
+        apiType: 'openai',
+        models: Object.keys(OPENROUTER_MODEL_MAP),
         options: {
           apiKey: openrouterKey,
           baseURL: 'https://openrouter.ai/api/v1',
         },
         transformModel: (model: string) => OPENROUTER_MODEL_MAP[model] || model,
-      },
-    ];
+      });
+    }
+
+    return routers;
   },
 };
