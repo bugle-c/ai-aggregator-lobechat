@@ -431,4 +431,32 @@ export default {
   'zarinpal.infoModal.phone.rule': 'Please enter a valid phone number',
   'zarinpal.infoModal.submit': 'Purchase',
   'zarinpal.infoModal.title': 'Fill in Required Information',
+
+  // Credit widget (sidebar)
+  'widget.upgrade': 'Улучшить план →',
+
+  // Low balance warning
+  'warning.lowBalance': 'Осталось {{remaining}} кредитов',
+  'warning.topup': 'Пополнить',
+  'warning.upgrade': 'Улучшить план',
+
+  // Credits exhausted modal
+  'modal.exhausted.title': 'Кредиты закончились',
+  'modal.exhausted.desc': 'Ваш план {{plan}}: {{credits}} кредитов/мес',
+  'modal.exhausted.resetIn': 'Кредиты обновятся через {{days}} дн.',
+  'modal.exhausted.select': 'Выбрать',
+  'modal.exhausted.topup': 'Пополнить от {{price}} ₽',
+
+  // Updated plan display
+  'plans.credits': '{{count}} кредитов/мес',
+  'plans.creditsHint': '~{{count}} сообщений',
+  'plans.popular': 'Популярный',
+  'plans.features.allModels': 'Все AI модели',
+  'plans.features.priority': 'Приоритетный доступ',
+  'plans.features.earlyAccess': 'Ранний доступ к новым функциям',
+
+  // Welcome screen
+  'welcome.creditInfo': '{{plan}}: {{remaining}} / {{total}} кредитов',
+  'welcome.upgradeHint': 'Перейдите на {{plan}} за {{price}} ₽ и получите {{credits}} кредитов/мес',
+  'welcome.learnMore': 'Подробнее',
 };
