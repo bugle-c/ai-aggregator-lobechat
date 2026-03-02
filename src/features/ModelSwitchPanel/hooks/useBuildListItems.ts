@@ -40,6 +40,7 @@ export const useBuildListItems = (
           const found = provider.children.find((m) => m.id === rec.modelId);
           if (found) {
             recModels.push({
+              creditCost: rec.creditCost,
               description: rec.description,
               model: found,
               providerId: provider.id,

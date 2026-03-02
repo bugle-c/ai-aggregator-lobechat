@@ -1,7 +1,7 @@
 import { type LobeChatDatabase } from '@/database/type';
 import { BillingService } from '@/server/services/billing';
 
-import { tokensToCredits } from './constants';
+import { calculateCredits } from './model-rates';
 
 export interface UsageLimitResult {
   allowed: boolean;
@@ -42,12 +42,24 @@ export async function recordTokenUsage(
   db: LobeChatDatabase,
   userId: string,
   tokensUsed: number,
+  modelId?: string,
+  outputTokens?: number,
 ): Promise<void> {
-  if (tokensUsed <= 0) return;
+  if (tokensUsed <= 0 && (!outputTokens || outputTokens <= 0)) return;
   try {
-    const credits = tokensToCredits(tokensUsed);
+    let credits: number;
+    if (modelId && outputTokens !== undefined) {
+      // Per-model pricing: calculate from actual input/output tokens
+      credits = calculateCredits(modelId, tokensUsed, outputTokens);
+    } else {
+      // Legacy fallback: flat rate (for image/video that still use total tokens)
+      credits = Math.max(1, Math.ceil(tokensUsed / 2500));
+    }
     const billingService = new BillingService(db, userId);
     await billingService.incrementTokensUsed(credits);
+    console.log(
+      `[billing] charged ${credits} credits: user=${userId} model=${modelId || 'unknown'} in=${tokensUsed} out=${outputTokens || 0}`,
+    );
   } catch (error) {
     console.error('[billing] recordTokenUsage error:', error);
   }

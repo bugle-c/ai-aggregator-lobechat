@@ -266,7 +266,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   paddingInlineStart: 2,
                 }}
               >
-                {item.description}
+                {item.description} · ~{item.creditCost} кр.
               </span>
             </Block>
           </Flexbox>
