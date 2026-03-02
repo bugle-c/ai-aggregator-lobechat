@@ -73,6 +73,7 @@ interface RouterInstance {
   models?: string[];
   options: RouterOptions;
   runtime?: RuntimeClass;
+  transformModel?: (model: string) => string;
 }
 
 type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T;
@@ -300,7 +301,7 @@ export const createRouterRuntime = ({
 
     private async runWithFallback<T>(
       model: string,
-      requestHandler: (runtime: LobeRuntimeAI) => Promise<T>,
+      requestHandler: (runtime: LobeRuntimeAI, transformedModel?: string) => Promise<T>,
     ): Promise<T> {
       const matchedRouter = await this.resolveMatchedRouter(model);
       const routerOptions = this.normalizeRouterOptions(matchedRouter);
@@ -326,7 +327,8 @@ export const createRouterRuntime = ({
         } = await this.createRuntimeFromOption(matchedRouter, optionItem);
 
         try {
-          const result = await requestHandler(runtime);
+          const transformedModel = matchedRouter.transformModel?.(model);
+          const result = await requestHandler(runtime, transformedModel);
 
           if (totalOptions > 1 && attempt > 1) {
             log(
@@ -439,8 +441,11 @@ export const createRouterRuntime = ({
      */
     async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
       try {
-        return await this.runWithFallback(payload.model, (runtime) =>
-          runtime.chat!(payload, options),
+        return await this.runWithFallback(payload.model, (runtime, transformedModel) =>
+          runtime.chat!(
+            transformedModel ? { ...payload, model: transformedModel } : payload,
+            options,
+          ),
         );
       } catch (e) {
         if (params.chatCompletion?.handleError) {
