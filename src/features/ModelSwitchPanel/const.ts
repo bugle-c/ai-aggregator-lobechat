@@ -15,6 +15,9 @@ export const ITEM_HEIGHT = {
   'group-header': 32,
   'model-item': 32,
   'no-provider': 32,
+  'recommended-header': 32,
+  'recommended-model': 52,
+  'show-all-toggle': 40,
 } as const;
 
 export const ENABLE_RESIZING = {

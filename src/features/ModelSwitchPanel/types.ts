@@ -41,6 +41,19 @@ export type ListItem =
     }
   | {
       type: 'no-provider';
+    }
+  | {
+      description: string;
+      model: AiModelForSelect;
+      providerId: string;
+      type: 'recommended-model';
+    }
+  | {
+      type: 'recommended-header';
+    }
+  | {
+      count: number;
+      type: 'show-all-toggle';
     };
 
 export type DropdownPlacement = DropdownMenuPlacement;

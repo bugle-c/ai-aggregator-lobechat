@@ -21,8 +21,10 @@ interface ListProps {
   model?: string;
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
   onOpenChange?: (open: boolean) => void;
+  onToggleShowAll?: () => void;
   provider?: string;
   searchKeyword?: string;
+  showAll?: boolean;
 }
 
 export const List: FC<ListProps> = ({
@@ -31,8 +33,10 @@ export const List: FC<ListProps> = ({
   model: modelProp,
   onModelChange: onModelChangeProp,
   onOpenChange,
+  onToggleShowAll,
   provider: providerProp,
   searchKeyword = '',
+  showAll = false,
 }) => {
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
@@ -44,7 +48,7 @@ export const List: FC<ListProps> = ({
     onModelChange: onModelChangeProp,
     onOpenChange,
   });
-  const listItems = useBuildListItems(enabledList, groupMode, searchKeyword);
+  const listItems = useBuildListItems(enabledList, groupMode, searchKeyword, showAll);
 
   const panelHeight = useMemo(
     () =>
@@ -72,10 +76,20 @@ export const List: FC<ListProps> = ({
           newLabel={newLabel}
           onClose={handleClose}
           onModelChange={handleModelChange}
+          onToggleShowAll={onToggleShowAll}
         />
       );
     },
-    [activeKey, extraControls, handleClose, handleModelChange, isScrolling, listItems, newLabel],
+    [
+      activeKey,
+      extraControls,
+      handleClose,
+      handleModelChange,
+      isScrolling,
+      listItems,
+      newLabel,
+      onToggleShowAll,
+    ],
   );
 
   const listHeight = panelHeight - TOOLBAR_HEIGHT - FOOTER_HEIGHT;

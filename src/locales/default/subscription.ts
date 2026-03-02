@@ -462,4 +462,8 @@ export default {
 
   // Sidebar navigation
   'sidebar.plans': 'Тарифы',
+
+  // Model picker
+  'modelPicker.recommended': 'Рекомендованные',
+  'modelPicker.showAll': 'Все модели',
 };

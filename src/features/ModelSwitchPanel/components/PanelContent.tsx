@@ -29,6 +29,7 @@ export const PanelContent: FC<PanelContentProps> = ({
 }) => {
   const enabledList = useEnabledChatModels();
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [showAll, setShowAll] = useState(false);
   const { groupMode, handleGroupModeChange } = usePanelState();
   const { panelHeight, panelWidth, handlePanelWidthChange } = usePanelSize(enabledList.length);
   const { handleClose } = usePanelHandlers({
@@ -61,8 +62,10 @@ export const PanelContent: FC<PanelContentProps> = ({
         model={modelProp}
         provider={providerProp}
         searchKeyword={searchKeyword}
+        showAll={showAll}
         onModelChange={onModelChangeProp}
         onOpenChange={onOpenChange}
+        onToggleShowAll={() => setShowAll((prev) => !prev)}
       />
       <Footer onClose={handleClose} />
     </Rnd>

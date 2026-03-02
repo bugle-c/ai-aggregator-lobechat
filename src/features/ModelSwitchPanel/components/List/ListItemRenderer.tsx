@@ -11,7 +11,7 @@ import {
   menuSharedStyles,
 } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
-import { LucideArrowRight, LucideBolt } from 'lucide-react';
+import { ChevronDown, LucideArrowRight, LucideBolt, Star } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,10 +35,20 @@ interface ListItemRendererProps {
   newLabel: string;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => Promise<void>;
+  onToggleShowAll?: () => void;
 }
 
 export const ListItemRenderer = memo<ListItemRendererProps>(
-  ({ activeKey, extraControls, isScrolling, item, newLabel, onModelChange, onClose }) => {
+  ({
+    activeKey,
+    extraControls,
+    isScrolling,
+    item,
+    newLabel,
+    onModelChange,
+    onClose,
+    onToggleShowAll,
+  }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const [detailOpen, setDetailOpen] = useState(false);
@@ -204,6 +214,80 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               onClose={onClose}
               onModelChange={onModelChange}
             />
+          </Flexbox>
+        );
+      }
+
+      case 'recommended-header': {
+        return (
+          <Flexbox
+            horizontal
+            align="center"
+            gap={6}
+            key="recommended-header"
+            paddingBlock={'8px 4px'}
+            paddingInline={12}
+            style={{ color: cssVar.colorTextSecondary }}
+          >
+            <Icon icon={Star} size={14} />
+            <span style={{ fontSize: 12, fontWeight: 600 }}>Рекомендованные</span>
+          </Flexbox>
+        );
+      }
+
+      case 'recommended-model': {
+        const recKey = menuKey(item.providerId, item.model.id);
+        const isActive = recKey === activeKey;
+
+        return (
+          <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
+            <Block
+              clickable
+              className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
+              gap={2}
+              style={{ paddingBlock: 6, paddingInline: 8 }}
+              variant={'borderless'}
+              onClick={async () => {
+                onModelChange(item.model.id, item.providerId);
+                onClose();
+              }}
+            >
+              <ModelItemRender
+                {...item.model}
+                {...item.model.abilities}
+                showInfoTag
+                newBadgeLabel={newLabel}
+              />
+              <span
+                style={{
+                  color: cssVar.colorTextTertiary,
+                  fontSize: 11,
+                  lineHeight: '14px',
+                  paddingInlineStart: 2,
+                }}
+              >
+                {item.description}
+              </span>
+            </Block>
+          </Flexbox>
+        );
+      }
+
+      case 'show-all-toggle': {
+        return (
+          <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
+            <Block
+              clickable
+              horizontal
+              className={styles.menuItem}
+              gap={6}
+              style={{ color: cssVar.colorTextSecondary, justifyContent: 'center' }}
+              variant={'borderless'}
+              onClick={() => onToggleShowAll?.()}
+            >
+              <span style={{ fontSize: 12 }}>Все модели ({item.count})</span>
+              <Icon icon={ChevronDown} size={14} />
+            </Block>
           </Flexbox>
         );
       }
