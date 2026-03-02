@@ -459,4 +459,7 @@ export default {
   'welcome.creditInfo': '{{plan}}: {{remaining}} / {{total}} кредитов',
   'welcome.upgradeHint': 'Перейдите на {{plan}} за {{price}} ₽ и получите {{credits}} кредитов/мес',
   'welcome.learnMore': 'Подробнее',
+
+  // Sidebar navigation
+  'sidebar.plans': 'Тарифы',
 };

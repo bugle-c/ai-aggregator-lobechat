@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Tag } from '@lobehub/ui';
-import { HomeIcon, SearchIcon, ShieldCheckIcon } from 'lucide-react';
+import { CreditCard, HomeIcon, SearchIcon, ShieldCheckIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -35,6 +35,7 @@ const Nav = memo(() => {
   const tab = useActiveTabKey();
   const navigate = useNavigate();
   const { t } = useTranslation('common');
+  const { t: tSub } = useTranslation('subscription');
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const { showMarket, showAiImage } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
