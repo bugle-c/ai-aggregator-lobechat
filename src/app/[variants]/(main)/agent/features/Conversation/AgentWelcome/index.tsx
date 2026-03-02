@@ -1,12 +1,15 @@
 'use client';
 
 import { Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
+import { Button, Progress } from 'antd';
 import isEqual from 'fast-deep-equal';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { lambdaQuery } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
@@ -18,6 +21,8 @@ import ToolAuthAlert from './ToolAuthAlert';
 const InboxWelcome = memo(() => {
   const { t } = useTranslation(['welcome', 'chat']);
   const mobile = useIsMobile();
+  const { data: creditState } = lambdaQuery.spend.getCreditState.useQuery();
+  const navigate = useNavigate();
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const openingQuestions = useAgentStore(agentSelectors.openingQuestions, isEqual);
   const fontSize = useUserStore(userGeneralSettingsSelectors.fontSize);
@@ -60,6 +65,48 @@ const InboxWelcome = memo(() => {
             {isInbox ? t('guide.defaultMessageWithoutCreate', { appName: 'WebGPT' }) : message}
           </Markdown>
         </Flexbox>
+        {creditState && (
+          <Flexbox
+            gap={8}
+            padding={16}
+            style={{
+              background: 'var(--lobe-color-fill-secondary)',
+              borderRadius: 12,
+              maxWidth: 400,
+            }}
+          >
+            <Flexbox horizontal align="center" justify="space-between">
+              <Text style={{ fontSize: 13 }}>
+                {creditState.planName}:{' '}
+                {Math.max(0, creditState.totalAvailable - creditState.creditsUsed)} /{' '}
+                {creditState.totalAvailable} кредитов
+              </Text>
+            </Flexbox>
+            <Progress
+              percent={creditState.usagePercent}
+              showInfo={false}
+              size="small"
+              strokeColor={
+                creditState.usagePercent > 90
+                  ? '#ff4d4f'
+                  : creditState.usagePercent > 70
+                    ? '#faad14'
+                    : '#1677ff'
+              }
+            />
+            {creditState.nextPlanName && (
+              <Flexbox horizontal align="center" gap={8}>
+                <Text style={{ fontSize: 12 }} type="secondary">
+                  {creditState.nextPlanName} за {creditState.nextPlanPrice} ₽ —{' '}
+                  {creditState.nextPlanCredits} кредитов/мес
+                </Text>
+                <Button size="small" onClick={() => navigate('/settings/subscription/plans')}>
+                  Подробнее
+                </Button>
+              </Flexbox>
+            )}
+          </Flexbox>
+        )}
         {openingQuestions.length > 0 && (
           <OpeningQuestions mobile={mobile} questions={openingQuestions} />
         )}
