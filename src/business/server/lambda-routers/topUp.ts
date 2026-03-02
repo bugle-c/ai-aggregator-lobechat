@@ -22,7 +22,7 @@ export const topUpRouter = router({
 
       const payment = await ctx.billingService.createPayment({
         amountRub: pkg.amountRub,
-        tokensAmount: pkg.tokens,
+        tokensAmount: pkg.credits,
         type: 'topup',
       });
 

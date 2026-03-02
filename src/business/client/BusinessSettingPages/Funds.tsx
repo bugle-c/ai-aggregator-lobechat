@@ -55,12 +55,9 @@ const Funds = memo(() => {
         <Flexbox horizontal gap={16} wrap="wrap">
           <Statistic
             title={t('balance.creditBalance')}
-            value={formatTokens(usage?.tokenBalance || 0)}
+            value={formatTokens(usage?.creditBalance || 0)}
           />
-          <Statistic
-            title={t('usage.used')}
-            value={formatTokens(usage?.tokensUsedMonth || 0)}
-          />
+          <Statistic title={t('usage.used')} value={formatTokens(usage?.creditsUsed || 0)} />
         </Flexbox>
       </Card>
 

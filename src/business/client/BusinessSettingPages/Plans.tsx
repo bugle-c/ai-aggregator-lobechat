@@ -54,11 +54,11 @@ const Plans = memo(() => {
   }
 
   const currentPlan = billing?.plan;
-  const tokenLimit = billing?.tokenLimit || 0;
-  const tokensUsed = billing?.tokensUsedMonth || 0;
-  const tokenBalance = billing?.tokenBalance || 0;
-  const totalAvailable = tokenLimit + tokenBalance;
-  const usagePercent = totalAvailable > 0 ? Math.round((tokensUsed / totalAvailable) * 100) : 0;
+  const creditLimit = billing?.creditLimit || 0;
+  const creditsUsed = billing?.creditsUsed || 0;
+  const creditBalance = billing?.creditBalance || 0;
+  const totalAvailable = creditLimit + creditBalance;
+  const usagePercent = totalAvailable > 0 ? Math.round((creditsUsed / totalAvailable) * 100) : 0;
 
   return (
     <>
@@ -84,13 +84,13 @@ const Plans = memo(() => {
             )}
           </Flexbox>
           <Progress
-            format={() => `${formatTokens(tokensUsed)} / ${formatTokens(totalAvailable)}`}
+            format={() => `${formatTokens(creditsUsed)} / ${formatTokens(totalAvailable)}`}
             percent={Math.min(usagePercent, 100)}
             strokeColor={usagePercent > 90 ? '#ff4d4f' : undefined}
           />
           <Text type="secondary">
-            {t('usage.credit.subscription.used')}: {formatTokens(tokenLimit)} |{' '}
-            {t('usage.credit.addon.used')}: {formatTokens(tokenBalance)}
+            {t('usage.credit.subscription.used')}: {formatTokens(creditLimit)} |{' '}
+            {t('usage.credit.addon.used')}: {formatTokens(creditBalance)}
           </Text>
         </Flexbox>
       </Card>
@@ -118,7 +118,7 @@ const Plans = memo(() => {
                   <Text style={{ fontSize: 20 }}>
                     {plan.priceRub === 0 ? t('plans.free') : `${plan.priceRub} ₽/мес`}
                   </Text>
-                  <Text type="secondary">{formatTokens(plan.tokenLimit)} токенов/мес</Text>
+                  <Text type="secondary">{formatTokens(plan.tokenLimit)} кредитов/мес</Text>
                   {isCurrent ? (
                     <Tag color="blue">{t('plans.current')}</Tag>
                   ) : plan.priceRub > 0 ? (

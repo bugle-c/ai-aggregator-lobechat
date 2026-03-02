@@ -48,11 +48,11 @@ export const subscriptionRouter = router({
     const billing = await ctx.billingService.getOrResetUserBilling();
     const plan = await ctx.billingService.getPlanById(billing.planId);
     return {
+      creditBalance: billing.tokenBalance,
+      creditLimit: plan?.tokenLimit || 50,
+      creditsUsed: billing.tokensUsedMonth,
       plan: plan || null,
       subscriptionExpiresAt: billing.subscriptionExpiresAt,
-      tokenBalance: billing.tokenBalance,
-      tokenLimit: plan?.tokenLimit || 50000,
-      tokensUsedMonth: billing.tokensUsedMonth,
     };
   }),
 

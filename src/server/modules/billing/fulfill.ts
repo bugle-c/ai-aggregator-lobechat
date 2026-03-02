@@ -26,7 +26,7 @@ export async function fulfillPayment(
     await billingService.getOrCreateUserBilling();
     await billingService.addTokenBalance(payment.tokensAmount);
     console.info(
-      `[billing] Topup fulfilled: user=${payment.userId} tokens=${payment.tokensAmount}`,
+      `[billing] Topup fulfilled: user=${payment.userId} credits=${payment.tokensAmount}`,
     );
   }
 }

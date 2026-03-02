@@ -33,9 +33,9 @@ const Usage = memo(() => {
   }
 
   const plan = data?.plan || 'Free';
-  const tokenLimit = data?.tokenLimit || 0;
-  const tokenBalance = data?.tokenBalance || 0;
-  const tokensUsed = data?.tokensUsedMonth || 0;
+  const creditLimit = data?.creditLimit || 0;
+  const creditBalance = data?.creditBalance || 0;
+  const creditsUsed = data?.creditsUsed || 0;
   const totalAvailable = data?.totalAvailable || 0;
   const usagePercent = data?.usagePercent || 0;
 
@@ -49,7 +49,7 @@ const Usage = memo(() => {
         </Title>
 
         <Progress
-          format={() => `${formatTokens(tokensUsed)} / ${formatTokens(totalAvailable)}`}
+          format={() => `${formatTokens(creditsUsed)} / ${formatTokens(totalAvailable)}`}
           percent={usagePercent}
           strokeColor={usagePercent > 90 ? '#ff4d4f' : usagePercent > 70 ? '#faad14' : undefined}
           style={{ marginBottom: 24 }}
@@ -59,10 +59,10 @@ const Usage = memo(() => {
           <Statistic title={t('currentPlan.title')} value={plan} />
           <Statistic
             title={t('usage.credit.subscription.used')}
-            value={formatTokens(tokenLimit)}
+            value={formatTokens(creditLimit)}
           />
-          <Statistic title={t('usage.credit.addon.used')} value={formatTokens(tokenBalance)} />
-          <Statistic title={t('usage.used')} value={formatTokens(tokensUsed)} />
+          <Statistic title={t('usage.credit.addon.used')} value={formatTokens(creditBalance)} />
+          <Statistic title={t('usage.used')} value={formatTokens(creditsUsed)} />
         </Flexbox>
 
         <Flexbox horizontal gap={8} style={{ marginTop: 24 }}>

@@ -1,10 +1,12 @@
 import { type LobeChatDatabase } from '@/database/type';
 import { BillingService } from '@/server/services/billing';
 
+import { tokensToCredits } from './constants';
+
 export interface UsageLimitResult {
   allowed: boolean;
+  creditsRemaining?: number;
   message?: string;
-  remainingTokens?: number;
 }
 
 export async function checkUsageLimit(
@@ -15,20 +17,20 @@ export async function checkUsageLimit(
     const billingService = new BillingService(db, userId);
     const billing = await billingService.getOrResetUserBilling();
     const plan = await billingService.getPlanById(billing.planId);
-    const tokenLimit = plan?.tokenLimit || 50000;
-    const totalAvailable = tokenLimit + billing.tokenBalance;
+    const creditLimit = plan?.tokenLimit || 50;
+    const totalAvailable = creditLimit + billing.tokenBalance;
 
     if (billing.tokensUsedMonth >= totalAvailable) {
       return {
         allowed: false,
-        message: 'Лимит токенов исчерпан. Пополните баланс или обновите план.',
-        remainingTokens: 0,
+        creditsRemaining: 0,
+        message: 'Кредиты закончились. Пополните баланс или обновите план.',
       };
     }
 
     return {
       allowed: true,
-      remainingTokens: totalAvailable - billing.tokensUsedMonth,
+      creditsRemaining: totalAvailable - billing.tokensUsedMonth,
     };
   } catch (error) {
     console.error('[billing] checkUsageLimit error:', error);
@@ -43,8 +45,9 @@ export async function recordTokenUsage(
 ): Promise<void> {
   if (tokensUsed <= 0) return;
   try {
+    const credits = tokensToCredits(tokensUsed);
     const billingService = new BillingService(db, userId);
-    await billingService.incrementTokensUsed(tokensUsed);
+    await billingService.incrementTokensUsed(credits);
   } catch (error) {
     console.error('[billing] recordTokenUsage error:', error);
   }
