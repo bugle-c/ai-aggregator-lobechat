@@ -5,9 +5,11 @@ import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { type MenuProps } from '@lobehub/ui';
 import { Alert, Flexbox } from '@lobehub/ui';
 import { type ReactNode } from 'react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import CreditsExhaustedModal from '@/components/CreditsExhaustedModal';
+import LowBalanceWarning from '@/components/LowBalanceWarning';
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import {
@@ -117,6 +119,16 @@ const ChatInput = memo<ChatInputProps>(
     const sendMessageErrorMsg = useConversationStore(messageStateSelectors.sendMessageError);
     const clearSendMessageError = useChatStore((s) => s.clearSendMessageError);
 
+    // Credits exhausted modal state
+    const [showExhaustedModal, setShowExhaustedModal] = useState(false);
+
+    // Show modal when sendMessageError contains credit exhaustion message
+    useEffect(() => {
+      if (sendMessageErrorMsg && sendMessageErrorMsg.includes('Кредиты закончились')) {
+        setShowExhaustedModal(true);
+      }
+    }, [sendMessageErrorMsg]);
+
     // File store - for UI state only (disabled button, etc.)
     const fileList = useFileStore(fileChatSelectors.chatUploadFileList);
     const contextList = useFileStore(fileChatSelectors.chatContextSelections);
@@ -170,6 +182,7 @@ const ChatInput = memo<ChatInputProps>(
 
     const defaultContent = (
       <WideScreenContainer style={skipScrollMarginWithList ? { marginTop: -12 } : undefined}>
+        <LowBalanceWarning />
         {sendMessageErrorMsg && (
           <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
             <Alert
@@ -191,25 +204,31 @@ const ChatInput = memo<ChatInputProps>(
     );
 
     return (
-      <ChatInputProvider
-        agentId={agentId}
-        allowExpand={allowExpand}
-        leftActions={leftActions}
-        mentionItems={mentionItems}
-        rightActions={rightActions}
-        sendButtonProps={sendButtonProps}
-        sendMenu={sendMenu}
-        chatInputEditorRef={(instance) => {
-          if (instance) {
-            setEditor(instance);
-            onEditorReady?.(instance);
-          }
-        }}
-        onMarkdownContentChange={updateInputMessage}
-        onSend={handleSend}
-      >
-        {children ?? defaultContent}
-      </ChatInputProvider>
+      <>
+        <ChatInputProvider
+          agentId={agentId}
+          allowExpand={allowExpand}
+          leftActions={leftActions}
+          mentionItems={mentionItems}
+          rightActions={rightActions}
+          sendButtonProps={sendButtonProps}
+          sendMenu={sendMenu}
+          chatInputEditorRef={(instance) => {
+            if (instance) {
+              setEditor(instance);
+              onEditorReady?.(instance);
+            }
+          }}
+          onMarkdownContentChange={updateInputMessage}
+          onSend={handleSend}
+        >
+          {children ?? defaultContent}
+        </ChatInputProvider>
+        <CreditsExhaustedModal
+          open={showExhaustedModal}
+          onClose={() => setShowExhaustedModal(false)}
+        />
+      </>
     );
   },
 );
