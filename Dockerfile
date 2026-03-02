@@ -95,7 +95,8 @@ RUN set -e && \
 COPY . .
 
 # run build standalone for docker version (mount cache for incremental builds)
-RUN --mount=type=cache,target=/app/.next/cache npm run build:docker
+RUN --mount=type=cache,target=/app/.next/cache \
+    NODE_OPTIONS=--max-old-space-size=8192 DOCKER=true npx next build --webpack
 
 # Prepare desktop export assets for Electron packaging (if generated)
 RUN set -e && \
