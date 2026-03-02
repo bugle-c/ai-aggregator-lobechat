@@ -1,7 +1,8 @@
 'use client';
 
 import { Flexbox, Grid } from '@lobehub/ui';
-import { Button, Card, Progress, Spin, Tag, Typography } from 'antd';
+import { Button, Card, Divider, Progress, Spin, Tag, Typography } from 'antd';
+import { Check } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,10 +11,17 @@ import { lambdaQuery } from '@/libs/trpc/client';
 
 const { Text, Title } = Typography;
 
-const formatTokens = (n: number) => {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return String(n);
+// Approximate messages per credit (1 credit ≈ 1 message)
+const MESSAGES_HINT: Record<string, string> = {
+  basic: '~33 сообщений/день',
+  free: '~50 сообщений',
+  pro: '~330 сообщений/день',
+};
+
+const PLAN_FEATURES: Record<string, string[]> = {
+  basic: ['plans.features.allModels', 'plans.features.priority'],
+  free: ['plans.features.allModels'],
+  pro: ['plans.features.allModels', 'plans.features.priority', 'plans.features.earlyAccess'],
 };
 
 const Plans = memo(() => {
@@ -26,17 +34,13 @@ const Plans = memo(() => {
 
   const subscribeMutation = lambdaQuery.subscription.createPayment.useMutation({
     onSuccess: (data) => {
-      if (data.paymentUrl) {
-        window.location.href = data.paymentUrl;
-      }
+      if (data.paymentUrl) window.location.href = data.paymentUrl;
     },
   });
 
   const topUpMutation = lambdaQuery.topUp.createPayment.useMutation({
     onSuccess: (data) => {
-      if (data.paymentUrl) {
-        window.location.href = data.paymentUrl;
-      }
+      if (data.paymentUrl) window.location.href = data.paymentUrl;
     },
   });
 
@@ -64,94 +68,135 @@ const Plans = memo(() => {
     <>
       <SettingHeader title={t('tab.plans')} />
 
-      {/* Current plan */}
+      {/* Current usage */}
       <Card style={{ marginTop: 16 }}>
-        <Title level={5} style={{ marginBottom: 16, marginTop: 0 }}>
-          {t('currentPlan.title')}
-        </Title>
-        <Flexbox gap={8}>
-          <Flexbox horizontal align="center" justify="space-between">
-            <Text>
-              {currentPlan?.name || 'Free'}{' '}
-              {currentPlan && currentPlan.priceRub > 0 && (
-                <Tag color="blue">{currentPlan.priceRub} ₽/мес</Tag>
-              )}
-            </Text>
-            {billing?.subscriptionExpiresAt && (
-              <Text type="secondary">
-                до {new Date(billing.subscriptionExpiresAt).toLocaleDateString('ru-RU')}
-              </Text>
+        <Flexbox horizontal align="center" justify="space-between" style={{ marginBottom: 12 }}>
+          <Title level={5} style={{ margin: 0 }}>
+            {currentPlan?.name || 'Старт'}
+            {currentPlan && currentPlan.priceRub > 0 && (
+              <Tag color="blue" style={{ marginLeft: 8 }}>
+                {currentPlan.priceRub} ₽/мес
+              </Tag>
             )}
-          </Flexbox>
-          <Progress
-            format={() => `${formatTokens(creditsUsed)} / ${formatTokens(totalAvailable)}`}
-            percent={Math.min(usagePercent, 100)}
-            strokeColor={usagePercent > 90 ? '#ff4d4f' : undefined}
-          />
-          <Text type="secondary">
-            {t('usage.credit.subscription.used')}: {formatTokens(creditLimit)} |{' '}
-            {t('usage.credit.addon.used')}: {formatTokens(creditBalance)}
-          </Text>
+          </Title>
+          {billing?.subscriptionExpiresAt && (
+            <Text type="secondary">
+              до {new Date(billing.subscriptionExpiresAt).toLocaleDateString('ru-RU')}
+            </Text>
+          )}
         </Flexbox>
+        <Progress
+          format={() => `${creditsUsed} / ${totalAvailable} кредитов`}
+          percent={Math.min(usagePercent, 100)}
+          strokeColor={usagePercent > 90 ? '#ff4d4f' : usagePercent > 70 ? '#faad14' : undefined}
+        />
+        <Text style={{ marginTop: 4 }} type="secondary">
+          План: {creditLimit} кредитов | Пополнения: {creditBalance} кредитов
+        </Text>
       </Card>
 
-      {/* Choose plan */}
-      <Card style={{ marginTop: 16 }}>
-        <Title level={5} style={{ marginBottom: 16, marginTop: 0 }}>
-          {t('plans.changePlan')}
-        </Title>
-        <Grid gap={16} maxItemWidth={200} rows={3}>
-          {plans?.map((plan) => {
-            const isCurrent = currentPlan?.id === plan.id;
-            return (
-              <Card
-                key={plan.id}
-                size="small"
-                style={{
-                  border: isCurrent ? '2px solid #1677ff' : undefined,
-                }}
-              >
-                <Flexbox align="center" gap={12}>
-                  <Title level={5} style={{ margin: 0 }}>
-                    {plan.name}
-                  </Title>
-                  <Text style={{ fontSize: 20 }}>
-                    {plan.priceRub === 0 ? t('plans.free') : `${plan.priceRub} ₽/мес`}
+      {/* Plan comparison */}
+      <Title level={5} style={{ marginBottom: 0, marginTop: 24 }}>
+        Выберите подходящий план
+      </Title>
+      <Grid gap={16} maxItemWidth={220} rows={3} style={{ marginTop: 12 }}>
+        {plans?.map((plan) => {
+          const isCurrent = currentPlan?.id === plan.id;
+          const isPopular = plan.slug === 'basic';
+          const features = PLAN_FEATURES[plan.slug] || PLAN_FEATURES.free;
+          const hint = MESSAGES_HINT[plan.slug] || '';
+
+          return (
+            <Card
+              key={plan.id}
+              size="small"
+              style={{
+                border: isCurrent
+                  ? '2px solid #52c41a'
+                  : isPopular
+                    ? '2px solid #1677ff'
+                    : undefined,
+                position: 'relative',
+              }}
+            >
+              {isPopular && !isCurrent && (
+                <Tag
+                  color="blue"
+                  style={{
+                    left: '50%',
+                    position: 'absolute',
+                    top: -12,
+                    transform: 'translateX(-50%)',
+                  }}
+                >
+                  {t('plans.popular')}
+                </Tag>
+              )}
+              <Flexbox align="center" gap={8} style={{ paddingTop: isPopular ? 8 : 0 }}>
+                <Title level={5} style={{ margin: 0 }}>
+                  {plan.name}
+                </Title>
+                <Text style={{ fontSize: 24, fontWeight: 600 }}>
+                  {plan.priceRub === 0 ? t('plans.free') : `${plan.priceRub} ₽`}
+                </Text>
+                {plan.priceRub > 0 && (
+                  <Text style={{ marginTop: -6 }} type="secondary">
+                    в месяц
                   </Text>
-                  <Text type="secondary">{formatTokens(plan.tokenLimit)} кредитов/мес</Text>
+                )}
+                <Divider style={{ margin: '4px 0' }} />
+                <Text strong>{plan.tokenLimit} кредитов/мес</Text>
+                {hint && (
+                  <Text style={{ fontSize: 12 }} type="secondary">
+                    {hint}
+                  </Text>
+                )}
+                <Flexbox gap={4} style={{ marginTop: 4, width: '100%' }}>
+                  {features.map((featureKey) => (
+                    <Flexbox horizontal align="center" gap={6} key={featureKey}>
+                      <Check size={14} style={{ color: '#52c41a', flexShrink: 0 }} />
+                      <Text style={{ fontSize: 12 }}>{t(featureKey)}</Text>
+                    </Flexbox>
+                  ))}
+                </Flexbox>
+                <div style={{ marginTop: 8, width: '100%' }}>
                   {isCurrent ? (
-                    <Tag color="blue">{t('plans.current')}</Tag>
+                    <Button block disabled>
+                      {t('plans.current')}
+                    </Button>
                   ) : plan.priceRub > 0 ? (
                     <Button
+                      block
                       loading={subscribeMutation.isPending}
-                      type="primary"
+                      type={isPopular ? 'primary' : 'default'}
                       onClick={() => subscribeMutation.mutate({ planId: plan.id })}
                     >
                       {t('plans.subscribe')}
                     </Button>
                   ) : null}
-                </Flexbox>
-              </Card>
-            );
-          })}
-        </Grid>
-      </Card>
+                </div>
+              </Flexbox>
+            </Card>
+          );
+        })}
+      </Grid>
 
       {/* Top up */}
       {packages && packages.length > 0 && (
-        <Card style={{ marginTop: 16 }}>
-          <Title level={5} style={{ marginBottom: 16, marginTop: 0 }}>
+        <>
+          <Title level={5} style={{ marginBottom: 0, marginTop: 24 }}>
             {t('funds.topUp.title')}
           </Title>
-          <Grid gap={16} maxItemWidth={200} rows={3}>
+          <Grid gap={16} maxItemWidth={200} rows={3} style={{ marginTop: 12 }}>
             {packages.map((pkg) => (
               <Card key={pkg.amountRub} size="small">
-                <Flexbox align="center" gap={12}>
+                <Flexbox align="center" gap={8}>
                   <Title level={5} style={{ margin: 0 }}>
                     {pkg.label}
                   </Title>
                   <Text style={{ fontSize: 20 }}>{pkg.amountRub} ₽</Text>
                   <Button
+                    block
                     loading={topUpMutation.isPending}
                     onClick={() => topUpMutation.mutate({ amountRub: pkg.amountRub })}
                   >
@@ -161,7 +206,7 @@ const Plans = memo(() => {
               </Card>
             ))}
           </Grid>
-        </Card>
+        </>
       )}
     </>
   );
