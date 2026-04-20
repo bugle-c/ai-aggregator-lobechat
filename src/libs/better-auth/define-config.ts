@@ -193,7 +193,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     databaseHooks: {
       user: {
         create: {
-          after: async (user) => {
+          after: async (user, ctx) => {
             const userService = new UserService(serverDB);
             await userService.initUser({
               email: user.email,
@@ -202,6 +202,35 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
               createdAt: user.createdAt,
               // TODO: if add phone plugin, we should fill phone here
             });
+
+            // Write UTM attribution (non-blocking on error)
+            try {
+              const { writeAttribution } = await import(
+                '@/server/modules/analytics/writeAttribution'
+              );
+              const req = ctx?.request;
+              const cookieHeader = req?.headers.get('cookie') || '';
+              const parseJSON = (raw: string | undefined) => {
+                if (!raw) return null;
+                try {
+                  return JSON.parse(decodeURIComponent(raw));
+                } catch {
+                  return null;
+                }
+              };
+              const readCookie = (name: string) => {
+                const match = cookieHeader.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+                return match ? parseJSON(match[1]) : null;
+              };
+              await writeAttribution(serverDB, {
+                userId: user.id,
+                firstCookie: readCookie('utm_attribution_first'),
+                lastCookie: readCookie('utm_attribution_last'),
+                rawReferrer: req?.headers.get('referer') || null,
+              });
+            } catch (error) {
+              console.error('[analytics] attribution hook error:', error);
+            }
           },
         },
       },

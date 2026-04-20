@@ -43,6 +43,7 @@ export type ListItem =
       type: 'no-provider';
     }
   | {
+      creditCost: number;
       description: string;
       model: AiModelForSelect;
       providerId: string;
