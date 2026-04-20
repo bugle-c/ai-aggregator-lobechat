@@ -42,6 +42,28 @@ export const POST = checkAuth(
         });
       }
 
+      // ============  2b. check model tier vs plan  ============ //
+      const modelId = data.model;
+      if (modelId) {
+        const { isModelAllowedForPlan, getRequiredPlanForModel } =
+          await import('@/server/modules/billing/model-tiers');
+        const { BillingService } = await import('@/server/services/billing');
+        const billingService = new BillingService(serverDB, userId);
+        const planSlug = await billingService.getUserPlanSlug();
+        if (!isModelAllowedForPlan(modelId, planSlug)) {
+          const requiredPlan = getRequiredPlanForModel(modelId);
+          return new Response(
+            JSON.stringify({
+              currentPlan: planSlug,
+              errorType: 'PlanLimitExceeded',
+              message: `Модель ${modelId} недоступна на тарифе «${planSlug}». Обновите подписку до «${requiredPlan}».`,
+              requiredPlan,
+            }),
+            { headers: { 'Content-Type': 'application/json' }, status: 403 },
+          );
+        }
+      }
+
       const tracePayload = getTracePayload(req);
 
       let traceOptions = {};
@@ -61,9 +83,7 @@ export const POST = checkAuth(
         const clonedResponse = response.clone();
         (async () => {
           try {
-            const { recordTokenUsage } = await import(
-              '@/server/modules/billing/checkUsageLimit'
-            );
+            const { recordTokenUsage } = await import('@/server/modules/billing/checkUsageLimit');
             const reader = clonedResponse.body?.getReader();
             if (!reader) return;
 

@@ -90,6 +90,12 @@ export class BillingService {
     return billing;
   };
 
+  getUserPlanSlug = async (): Promise<string> => {
+    const billing = await this.getOrResetUserBilling();
+    const plan = await this.getPlanById(billing.planId);
+    return plan?.slug || 'free';
+  };
+
   updatePlan = async (planId: number, expiresAt: Date | null): Promise<void> => {
     await this.db
       .update(userBilling)
