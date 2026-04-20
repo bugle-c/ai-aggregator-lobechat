@@ -44,6 +44,7 @@ export async function recordTokenUsage(
   tokensUsed: number,
   modelId?: string,
   outputTokens?: number,
+  opts?: { provider?: string; kind?: 'chat' | 'image' | 'video' },
 ): Promise<void> {
   if (tokensUsed <= 0 && (!outputTokens || outputTokens <= 0)) return;
   try {
@@ -57,6 +58,19 @@ export async function recordTokenUsage(
     }
     const billingService = new BillingService(db, userId);
     await billingService.incrementTokensUsed(credits);
+
+    // Also log the raw request for v3 analytics (non-blocking on error).
+    const { writeUsageLog } = await import('@/server/modules/analytics/writeUsageLog');
+    await writeUsageLog(db, {
+      userId,
+      model: modelId || 'unknown',
+      provider: opts?.provider || 'unknown',
+      inputTokens: tokensUsed,
+      outputTokens: outputTokens ?? 0,
+      creditsCharged: credits,
+      kind: opts?.kind || 'chat',
+    });
+
     console.log(
       `[billing] charged ${credits} credits: user=${userId} model=${modelId || 'unknown'} in=${tokensUsed} out=${outputTokens || 0}`,
     );

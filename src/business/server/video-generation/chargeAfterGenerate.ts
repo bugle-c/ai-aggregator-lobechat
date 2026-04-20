@@ -25,6 +25,9 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
   const totalTokens = params.usage?.totalTokens || 0;
   if (totalTokens > 0) {
     const db = await getServerDB();
-    await recordTokenUsage(db, params.userId, totalTokens);
+    await recordTokenUsage(db, params.userId, totalTokens, params.metadata.modelId, 0, {
+      provider: params.provider || 'unknown',
+      kind: 'video',
+    });
   }
 }

@@ -100,6 +100,7 @@ export const POST = checkAuth(
                 usageData.input || 0,
                 data.model,
                 usageData.output || 0,
+                { provider, kind: 'chat' },
               );
             } else {
               // Fallback: estimate from message content length
@@ -110,6 +111,7 @@ export const POST = checkAuth(
                 Math.max(100, Math.round(estimatedInput)),
                 data.model,
                 200,
+                { provider, kind: 'chat' },
               );
             }
           } catch (e) {
