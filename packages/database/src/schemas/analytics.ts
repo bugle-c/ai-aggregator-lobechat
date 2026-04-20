@@ -68,3 +68,35 @@ export const usageDailyRollup = pgTable(
 
 export type UsageDailyRollupItem = typeof usageDailyRollup.$inferSelect;
 export type NewUsageDailyRollup = typeof usageDailyRollup.$inferInsert;
+
+// ============ User Attribution (first + last touch UTM) ============ //
+
+export const userAttribution = pgTable(
+  'user_attribution',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    firstUtmSource: text('first_utm_source'),
+    firstUtmMedium: text('first_utm_medium'),
+    firstUtmCampaign: text('first_utm_campaign'),
+    firstUtmContent: text('first_utm_content'),
+    firstReferrer: text('first_referrer'),
+    firstLandingPage: text('first_landing_page'),
+    firstSeenAt: timestamptz('first_seen_at'),
+    lastUtmSource: text('last_utm_source'),
+    lastUtmMedium: text('last_utm_medium'),
+    lastUtmCampaign: text('last_utm_campaign'),
+    lastUtmContent: text('last_utm_content'),
+    lastReferrer: text('last_referrer'),
+    lastLandingPage: text('last_landing_page'),
+    registeredAt: timestamptz('registered_at').notNull().defaultNow(),
+  },
+  (table) => [
+    index('user_attribution_first_source_idx').on(table.firstUtmSource),
+    index('user_attribution_last_source_idx').on(table.lastUtmSource),
+  ],
+);
+
+export type UserAttributionItem = typeof userAttribution.$inferSelect;
+export type NewUserAttribution = typeof userAttribution.$inferInsert;
