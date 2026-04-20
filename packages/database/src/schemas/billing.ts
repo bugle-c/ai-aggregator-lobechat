@@ -21,6 +21,7 @@ export const billingPlans = pgTable('billing_plans', {
   slug: varchar('slug', { length: 32 }).notNull().unique(),
   priceRub: integer('price_rub').notNull().default(0),
   tokenLimit: integer('token_limit').notNull().default(50000),
+  dailyCreditLimit: integer('daily_credit_limit'),
   isActive: boolean('is_active').notNull().default(true),
   ...timestamps,
 });

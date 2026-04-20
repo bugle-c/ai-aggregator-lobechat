@@ -1,3 +1,6 @@
+import { and, eq, gte, sql } from 'drizzle-orm';
+
+import { usageLogs } from '@/database/schemas/analytics';
 import { type LobeChatDatabase } from '@/database/type';
 import { BillingService } from '@/server/services/billing';
 
@@ -19,6 +22,25 @@ export async function checkUsageLimit(
     const plan = await billingService.getPlanById(billing.planId);
     const creditLimit = plan?.tokenLimit || 50;
     const totalAvailable = creditLimit + billing.tokenBalance;
+
+    // Daily rate limit: guard against runaway spend on a single day.
+    if (plan?.dailyCreditLimit != null) {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const rows = await db
+        .select({
+          used: sql<number>`coalesce(sum(${usageLogs.creditsCharged}), 0)::int`,
+        })
+        .from(usageLogs)
+        .where(and(eq(usageLogs.userId, userId), gte(usageLogs.createdAt, since)));
+      const dayUsed = rows[0]?.used ?? 0;
+      if (dayUsed >= plan.dailyCreditLimit) {
+        return {
+          allowed: false,
+          creditsRemaining: 0,
+          message: `Дневной лимит достигнут (${plan.dailyCreditLimit} кредитов / 24ч). Попробуйте завтра или обновите тариф.`,
+        };
+      }
+    }
 
     if (billing.tokensUsedMonth >= totalAvailable) {
       return {
@@ -71,7 +93,7 @@ export async function recordTokenUsage(
       kind: opts?.kind || 'chat',
     });
 
-    console.log(
+    console.info(
       `[billing] charged ${credits} credits: user=${userId} model=${modelId || 'unknown'} in=${tokensUsed} out=${outputTokens || 0}`,
     );
   } catch (error) {

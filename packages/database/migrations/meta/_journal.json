@@ -623,6 +623,13 @@
       "when": 1776698284327,
       "tag": "0088_unique_invaders",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1776716513699,
+      "tag": "0089_dashing_big_bertha",
+      "breakpoints": true
     }
   ],
   "version": "6"

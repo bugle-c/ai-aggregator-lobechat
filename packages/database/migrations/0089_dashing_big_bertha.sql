@@ -1,0 +1,1 @@
+ALTER TABLE "billing_plans" ADD COLUMN "daily_credit_limit" integer;
