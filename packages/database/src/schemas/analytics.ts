@@ -1,4 +1,14 @@
-import { index, integer, numeric, pgTable, text, uuid, varchar } from 'drizzle-orm/pg-core';
+import {
+  date,
+  index,
+  integer,
+  numeric,
+  pgTable,
+  primaryKey,
+  text,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core';
 
 import { timestamptz } from './_helpers';
 import { users } from './user';
@@ -33,3 +43,28 @@ export const usageLogs = pgTable(
 
 export type UsageLogItem = typeof usageLogs.$inferSelect;
 export type NewUsageLog = typeof usageLogs.$inferInsert;
+
+// ============ Usage Daily Rollup (per user × day × model) ============ //
+
+export const usageDailyRollup = pgTable(
+  'usage_daily_rollup',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    model: text('model').notNull(),
+    requests: integer('requests').notNull().default(0),
+    inputTokens: integer('input_tokens').notNull().default(0),
+    outputTokens: integer('output_tokens').notNull().default(0),
+    creditsCharged: integer('credits_charged').notNull().default(0),
+    costRub: numeric('cost_rub', { precision: 14, scale: 4 }).notNull().default('0'),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.day, table.model] }),
+    index('usage_daily_rollup_day_idx').on(table.day),
+  ],
+);
+
+export type UsageDailyRollupItem = typeof usageDailyRollup.$inferSelect;
+export type NewUsageDailyRollup = typeof usageDailyRollup.$inferInsert;
