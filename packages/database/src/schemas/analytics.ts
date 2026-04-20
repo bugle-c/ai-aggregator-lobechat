@@ -11,6 +11,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { timestamptz } from './_helpers';
+import { billingPayments, billingPlans } from './billing';
 import { users } from './user';
 
 // ============ Usage Logs (raw per-request cost log) ============ //
@@ -100,3 +101,29 @@ export const userAttribution = pgTable(
 
 export type UserAttributionItem = typeof userAttribution.$inferSelect;
 export type NewUserAttribution = typeof userAttribution.$inferInsert;
+
+// ============ Billing Subscription Events (MRR movements) ============ //
+
+export const billingSubscriptionEvents = pgTable(
+  'billing_subscription_events',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    eventType: varchar('event_type', { length: 32 }).notNull(),
+    fromPlanId: integer('from_plan_id').references(() => billingPlans.id),
+    toPlanId: integer('to_plan_id').references(() => billingPlans.id),
+    mrrDeltaRub: integer('mrr_delta_rub').notNull().default(0),
+    paymentId: uuid('payment_id').references(() => billingPayments.id),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    index('bse_user_idx').on(table.userId),
+    index('bse_created_idx').on(table.createdAt),
+    index('bse_type_idx').on(table.eventType),
+  ],
+);
+
+export type BillingSubscriptionEventItem = typeof billingSubscriptionEvents.$inferSelect;
+export type NewBillingSubscriptionEvent = typeof billingSubscriptionEvents.$inferInsert;
