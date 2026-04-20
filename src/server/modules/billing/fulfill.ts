@@ -1,5 +1,6 @@
 import { type LobeChatDatabase } from '@/database/type';
 import { BillingService } from '@/server/services/billing';
+import { writeSubscriptionEvent } from '@/server/modules/analytics/writeSubscriptionEvent';
 
 export async function fulfillPayment(
   db: LobeChatDatabase,
@@ -17,10 +18,26 @@ export async function fulfillPayment(
   const billingService = new BillingService(db, payment.userId);
 
   if (payment.type === 'subscription' && payment.planId) {
+    // Capture pre-change state for subscription event classification
+    const currentBilling = await billingService.getOrCreateUserBilling();
+    const fromPlanId = currentBilling.planId;
+    const fromPlan = await billingService.getPlanById(fromPlanId);
+    const toPlan = await billingService.getPlanById(payment.planId);
+
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
-    await billingService.getOrCreateUserBilling();
     await billingService.updatePlan(payment.planId, expiresAt);
+
+    await writeSubscriptionEvent(db, {
+      userId: payment.userId,
+      fromPlanId,
+      toPlanId: payment.planId,
+      fromPlanPrice: fromPlan?.priceRub ?? 0,
+      toPlanPrice: toPlan?.priceRub ?? 0,
+      currentExpiresAt: currentBilling.subscriptionExpiresAt ?? null,
+      paymentId: payment.id,
+    });
+
     console.info(`[billing] Subscription activated: user=${payment.userId} plan=${payment.planId}`);
   } else if (payment.type === 'topup' && payment.tokensAmount) {
     await billingService.getOrCreateUserBilling();
