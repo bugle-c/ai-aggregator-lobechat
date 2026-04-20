@@ -89,6 +89,7 @@ export const POST = checkAuth(
 
             const decoder = new TextDecoder();
             let usageData: { input?: number; output?: number } = {};
+            let observedOutputChars = 0;
 
             while (true) {
               const { done, value } = await reader.read();
@@ -107,6 +108,17 @@ export const POST = checkAuth(
                       output: parsed.usage.completion_tokens || parsed.usage.output_tokens || 0,
                     };
                   }
+                  // Observe streamed content to estimate output when upstream
+                  // doesn't report usage (common for non-OpenAI compatible providers).
+                  const delta = parsed?.choices?.[0]?.delta?.content;
+                  if (typeof delta === 'string') observedOutputChars += delta.length;
+                  const text = parsed?.choices?.[0]?.message?.content;
+                  if (typeof text === 'string') observedOutputChars += text.length;
+                  // Anthropic-style streaming deltas
+                  const anthropicDelta = parsed?.delta?.text;
+                  if (typeof anthropicDelta === 'string') {
+                    observedOutputChars += anthropicDelta.length;
+                  }
                 } catch {
                   // Not JSON, skip
                 }
@@ -123,14 +135,26 @@ export const POST = checkAuth(
                 { provider, kind: 'chat' },
               );
             } else {
-              // Fallback: estimate from message content length
-              const estimatedInput = JSON.stringify(data.messages || []).length / 4;
+              // Fallback: estimate from message content length + observed stream.
+              // CRITICAL: never use outputTokens=0, otherwise calculateCredits
+              // undercounts by ~600x (output is where the cost lives).
+              const estimatedInput = Math.max(
+                100,
+                Math.round(JSON.stringify(data.messages || []).length / 4),
+              );
+              // Use observed output chars if streamed; otherwise estimate a
+              // conservative floor (50% of input, min 500 tokens) so we never
+              // charge a fraction of the real cost.
+              const estimatedOutput =
+                observedOutputChars > 0
+                  ? Math.ceil(observedOutputChars / 4)
+                  : Math.max(500, Math.round(estimatedInput * 0.5));
               await recordTokenUsage(
                 serverDB,
                 userId,
-                Math.max(100, Math.round(estimatedInput)),
+                estimatedInput,
                 data.model,
-                200,
+                estimatedOutput,
                 { provider, kind: 'chat' },
               );
             }
