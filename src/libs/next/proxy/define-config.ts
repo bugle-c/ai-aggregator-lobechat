@@ -153,6 +153,39 @@ export function defineConfig() {
       }
     }
 
+    // UTM attribution: capture first + last touch into cookies for user_attribution on signup
+    const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'] as const;
+    const hasUtm = utmKeys.some((k) => url.searchParams.has(k));
+    const hasFirstCookie = request.cookies.has('utm_attribution_first');
+    if (hasUtm || !hasFirstCookie) {
+      const payload = JSON.stringify({
+        landing_page: url.pathname + url.search,
+        referrer: request.headers.get('referer') || null,
+        seen_at: new Date().toISOString(),
+        utm_campaign: url.searchParams.get('utm_campaign'),
+        utm_content: url.searchParams.get('utm_content'),
+        utm_medium: url.searchParams.get('utm_medium'),
+        utm_source: url.searchParams.get('utm_source'),
+      });
+      const cookieOpts = {
+        path: '/',
+        sameSite: 'lax' as const,
+        secure: process.env.NODE_ENV === 'production',
+      };
+      if (!hasFirstCookie) {
+        rewrite.cookies.set('utm_attribution_first', payload, {
+          ...cookieOpts,
+          maxAge: 60 * 60 * 24 * 365, // 1 year
+        });
+      }
+      if (hasUtm) {
+        rewrite.cookies.set('utm_attribution_last', payload, {
+          ...cookieOpts,
+          maxAge: 60 * 60 * 24 * 30, // 30 days
+        });
+      }
+    }
+
     return rewrite;
   };
 
