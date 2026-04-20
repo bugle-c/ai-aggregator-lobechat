@@ -256,7 +256,12 @@ export function defineConfig() {
           signInUrl.searchParams.set('hl', hl);
           logBetterAuth('Preserving locale to sign-in: hl=%s', hl);
         }
-        return Response.redirect(signInUrl);
+        // Preserve UTM cookies set by defaultMiddleware across the auth redirect
+        const redirectResponse = NextResponse.redirect(signInUrl);
+        for (const c of response.cookies.getAll()) {
+          redirectResponse.cookies.set(c);
+        }
+        return redirectResponse;
       }
       logBetterAuth('Request a free route but not login, allow visit without auth header');
     }
