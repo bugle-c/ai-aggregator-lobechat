@@ -197,6 +197,7 @@ export function defineConfig() {
     '/api/workflows(.*)',
     '/api/agent(.*)',
     '/api/dev(.*)',
+    '/api/cron(.*)',
     '/webapi(.*)',
     '/trpc(.*)',
     // version
