@@ -280,6 +280,84 @@ table ai_providers {
   }
 }
 
+table billing_subscription_events {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  event_type varchar(32) [not null]
+  from_plan_id integer
+  to_plan_id integer
+  mrr_delta_rub integer [not null, default: 0]
+  payment_id uuid
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'bse_user_idx']
+    created_at [name: 'bse_created_idx']
+    event_type [name: 'bse_type_idx']
+  }
+}
+
+table usage_daily_rollup {
+  user_id text [not null]
+  day date [not null]
+  model text [not null]
+  requests integer [not null, default: 0]
+  input_tokens integer [not null, default: 0]
+  output_tokens integer [not null, default: 0]
+  credits_charged integer [not null, default: 0]
+  cost_rub "numeric(14, 4)" [not null, default: '0']
+
+  indexes {
+    (user_id, day, model) [pk]
+    day [name: 'usage_daily_rollup_day_idx']
+  }
+}
+
+table usage_logs {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  model text [not null]
+  provider text [not null]
+  input_tokens integer [not null, default: 0]
+  output_tokens integer [not null, default: 0]
+  credits_charged integer [not null]
+  cost_usd "numeric(10, 6)" [not null]
+  cost_rub "numeric(10, 4)" [not null]
+  exchange_rate "numeric(8, 4)" [not null]
+  kind varchar(16) [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, created_at) [name: 'usage_logs_user_created_idx']
+    created_at [name: 'usage_logs_created_idx']
+    model [name: 'usage_logs_model_idx']
+    kind [name: 'usage_logs_kind_idx']
+  }
+}
+
+table user_attribution {
+  user_id text [pk, not null]
+  first_utm_source text
+  first_utm_medium text
+  first_utm_campaign text
+  first_utm_content text
+  first_referrer text
+  first_landing_page text
+  first_seen_at "timestamp with time zone"
+  last_utm_source text
+  last_utm_medium text
+  last_utm_campaign text
+  last_utm_content text
+  last_referrer text
+  last_landing_page text
+  registered_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    first_utm_source [name: 'user_attribution_first_source_idx']
+    last_utm_source [name: 'user_attribution_last_source_idx']
+  }
+}
+
 table api_keys {
   id text [pk, not null]
   name varchar(256) [not null]
@@ -397,6 +475,56 @@ table verifications {
 
   indexes {
     identifier [name: 'verification_identifier_idx']
+  }
+}
+
+table billing_payments {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  type varchar(16) [not null]
+  amount_rub integer [not null]
+  yookassa_payment_id text [unique]
+  status varchar(16) [not null, default: 'pending']
+  plan_id integer
+  tokens_amount integer
+  metadata jsonb [default: `{}`]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'billing_payments_user_id_idx']
+    yookassa_payment_id [name: 'billing_payments_yookassa_id_idx']
+    status [name: 'billing_payments_status_idx']
+  }
+}
+
+table billing_plans {
+  id serial [pk, not null, increment]
+  name text [not null]
+  slug varchar(32) [not null, unique]
+  price_rub integer [not null, default: 0]
+  token_limit integer [not null, default: 50000]
+  is_active boolean [not null, default: true]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+}
+
+table user_billing {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null, unique]
+  plan_id integer [not null, default: 1]
+  token_balance integer [not null, default: 0]
+  tokens_used_month integer [not null, default: 0]
+  month_start "timestamp with time zone" [not null, default: `now()`]
+  subscription_expires_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'user_billing_user_id_idx']
   }
 }
 
