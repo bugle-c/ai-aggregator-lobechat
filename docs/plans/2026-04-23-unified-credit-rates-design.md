@@ -24,7 +24,7 @@ Benchmarks:
 
 ```
 provider_cost_usd         ← raw price from provider (tokens × rates or per-unit × quantity)
-internal_cost_usd         = provider_cost_usd × markup              (markup per model, target 3.0; seeded at 1.0 for continuity — see Risk & rollback)
+internal_cost_usd         = provider_cost_usd × markup              (markup per model, default 3.0)
 internal_cost_rub         = internal_cost_usd × USD_TO_RUB          (constant, 100 today)
 credits_charged           = ceil(internal_cost_rub / CREDIT_VALUE_RUB)   (1 credit = 0.15 ₽)
 ```
@@ -62,7 +62,7 @@ CREATE INDEX model_rates_provider_idx ON ai_aggregator.model_rates(provider);
 CREATE INDEX model_rates_pricing_unit_idx ON ai_aggregator.model_rates(pricing_unit);
 ```
 
-One row is reserved: `model_id = '__default__'` — used as fallback for unknown **chat** models only (never image/video, see Risk & rollback). Seeded at premium-tier rate (tokens mode, $5/$25, markup 1.0). Never delete this row.
+One row is reserved: `model_id = '__default__'` — used as fallback for unknown **chat** models only (never image/video, see Risk & rollback). Seeded at premium-tier rate (tokens mode, $5/$25, markup 3.0). Never delete this row.
 
 ## Tier classification
 
@@ -118,17 +118,16 @@ Markup is applied inside `computeCostUsd` for tokens too (wasn't before — rate
 
 ```sql
 -- Pseudocode; real file in a migration script
--- NOTE: initial markup=1.00 preserves current user-facing credit cost.
--- Raising to 3.00 is a separate decision (see Risk & rollback for the
--- monetisation rebalance path).
+-- Seed markup=3.00 across the board. Existing users will see ~3× faster
+-- credit burn — accepted trade-off (see Risk & rollback).
 INSERT INTO ai_aggregator.model_rates (model_id, provider, pricing_unit, input_per_1m, output_per_1m, markup) VALUES
-  ('claude-opus-4-6',    'anthropic', 'tokens',  5.00, 25.00, 1.00),
-  ('claude-sonnet-4-6',  'anthropic', 'tokens',  3.00, 15.00, 1.00),
-  ('claude-haiku-4-5-20251001', 'anthropic', 'tokens', 1.00, 5.00, 1.00),
-  ('gpt-5.2',            'openai',    'tokens',  1.75, 14.00, 1.00),
-  ('gpt-5-mini',         'openai',    'tokens',  0.25, 2.00,  1.00),
+  ('claude-opus-4-6',    'anthropic', 'tokens',  5.00, 25.00, 3.00),
+  ('claude-sonnet-4-6',  'anthropic', 'tokens',  3.00, 15.00, 3.00),
+  ('claude-haiku-4-5-20251001', 'anthropic', 'tokens', 1.00, 5.00, 3.00),
+  ('gpt-5.2',            'openai',    'tokens',  1.75, 14.00, 3.00),
+  ('gpt-5-mini',         'openai',    'tokens',  0.25, 2.00,  3.00),
   -- ... 31 rows total, from current MODEL_RATES ...
-  ('__default__',        'unknown',   'tokens',  5.00, 25.00, 1.00);
+  ('__default__',        'unknown',   'tokens',  5.00, 25.00, 3.00);
 ```
 
 Image/video models start empty. First thing admin does after deploy — add DALL-E 3, Flux Schnell, and whatever else is actually wired in `/opt/lobechat/.env`. Until added, image/video calls hit `__default__` and get charged at premium chat rates (conservative — user sees bigger credit burn and complains before we under-charge).
@@ -156,9 +155,7 @@ Out of scope for this spec, but called out because conversion data from Chad AI 
 
 ## Risk & rollback
 
-- **⚠️ BREAKING CHANGE for existing users: credits_charged is multiplied by 3 after migration.** Today `MODEL_RATES` contains raw provider prices and the code does `(tokens / 1M) * rate * USD_TO_RUB / CREDIT_VALUE_RUB` — markup is implicitly 1. After migration the same model with `markup=3.00` charges 3× more credits. Users on Pro with 8000 credits/month effectively get 2666 credits of cheap + premium chat (at old prices). Mitigations:
-  - Communicate to existing paying users before deploy (2 people today — email them manually).
-  - Seed with `markup=1.0` initially for continuity, then raise to 3.0 after 24h and update plan monthly credits accordingly (or bake the 3× into monthly credit grants so gross quota feels the same). **Pick this path — seed markup=1.0, handle monetisation rebalance in a follow-up plan** so this migration is invisible to users.
+- **Credits_charged triples on day of deploy.** Today `MODEL_RATES` contains raw provider prices and the code does `(tokens / 1M) * rate * USD_TO_RUB / CREDIT_VALUE_RUB` — markup is implicitly 1. After migration the same model with `markup=3.00` charges 3× more credits. Users on Pro (8000 credits/mo) effectively get a third of their old raw-token quota, but the plan now runs at healthy gross margin (~66%) instead of 0%. This is intentional and accepted. No pre-announcement required — current paying users are few (2) and the burn rate is tiny.
 - **Silent under-charge on a bad seed row.** Mitigated by: (a) seed mirrors existing code, (b) admin UI shows cost preview before save, (c) audit column `updated_at` + JSONB column `notes` track manual overrides.
 - **Aggregator can't reach Supabase for rates.** `rates-source.ts` serves last-known value from cache forever until connection restored. Catastrophic case (never-cached cold start with Supabase down) → fail-open on chat (user gets service), log loud, but no cost attribution for that window. Matches plans-source behaviour.
 - **Image/video model not in catalog.** `chargeBeforeGenerate` validates: must exist, `is_active=true`, `pricing_unit IN ('image','second')` matches the call kind. Otherwise reject with `{ error: 'Model not configured for this operation' }`. Never fall through to `__default__` for image/video — tokens-shaped default can't price per-image/per-second and would silently mis-charge. `__default__` fallback only applies to `kind='chat'`.
