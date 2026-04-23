@@ -24,6 +24,8 @@ const PROVIDER_OF: Record<string, string> = {
   'claude-opus-4-5-20251101': 'anthropic',
   'grok-4': 'x-ai',
   'MiniMax-M2.5': 'minimax', 'MiniMax-M2.5-highspeed': 'minimax', 'MiniMax-M2.1': 'minimax',
+  'MiniMax-M2.1-highspeed': 'minimax',
+  'kimi-k2.5': 'moonshotai',
 };
 
 const rows = [
