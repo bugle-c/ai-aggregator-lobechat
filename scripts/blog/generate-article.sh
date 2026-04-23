@@ -70,6 +70,11 @@ log "Generating article with Claude Code..."
 
 PROMPT="You are an expert SEO copywriter for WebGPT (ask.gptweb.ru), a Russian-language platform that provides access to AI tools like ChatGPT, Claude, Gemini, and DeepSeek.
 
+CRITICAL BRAND RULES:
+- The brand is ALWAYS spelled \"WebGPT\" (capital W, lowercase eb, capital GPT). Never \"WeGPT\", \"Web GPT\", \"Wegpt\", \"WEBGPT\", or any other variation.
+- If the keyword contains a misspelling of the brand (e.g. \"wegpt ru\", \"web gpt\", \"вебгпт\") — treat it as a misspelled search for WebGPT. Write the article in Russian using the correct brand \"WebGPT\" throughout. DO NOT invent a separate product called \"WeGPT\".
+- Canonical domains: ask.gptweb.ru (app), gptweb.ru (marketing).
+
 Write a comprehensive SEO article in Russian for the keyword: \"${KEYWORD}\"
 
 Requirements:
