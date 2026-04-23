@@ -27,6 +27,12 @@ export const usageLogs = pgTable(
     provider: text('provider').notNull(),
     inputTokens: integer('input_tokens').notNull().default(0),
     outputTokens: integer('output_tokens').notNull().default(0),
+    // Prompt-caching breakdown (Anthropic splits write TTL into 5m/1h; OpenAI
+    // and Gemini only expose cached reads). All default to 0 for backwards
+    // compatibility.
+    cacheWrite5mTokens: integer('cache_write_5m_tokens').notNull().default(0),
+    cacheWrite1hTokens: integer('cache_write_1h_tokens').notNull().default(0),
+    cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
     creditsCharged: integer('credits_charged').notNull(),
     costUsd: numeric('cost_usd', { precision: 10, scale: 6 }).notNull(),
     costRub: numeric('cost_rub', { precision: 10, scale: 4 }).notNull(),

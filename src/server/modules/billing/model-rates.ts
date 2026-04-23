@@ -115,19 +115,54 @@ export function getModelRate(modelId: string): ModelRate {
   return MODEL_RATES[modelId] || DEFAULT_MODEL_RATE;
 }
 
+export interface TokenBreakdown {
+  inputTokens: number; // base non-cached input
+  outputTokens: number;
+  cacheWrite5mTokens?: number; // Anthropic 5m TTL write = 1.25× inputRate
+  cacheWrite1hTokens?: number; // Anthropic 1h TTL write = 2.00× inputRate
+  cacheReadTokens?: number; // All providers: cached read = 0.10× inputRate
+}
+
 /**
- * Calculate credits consumed for a given model and token usage.
- * Formula: costRub = (input/1M * inputRate + output/1M * outputRate) * USD_TO_RUB
- *          credits = max(1, ceil(costRub / CREDIT_VALUE_RUB))
+ * Compute USD cost for a given model and token breakdown, including
+ * prompt-cache write/read multipliers. The caller should pass the breakdown
+ * they saw in the provider's usage field; omitted fields default to 0.
+ *
+ * Anthropic 2025 pricing multipliers:
+ *   cache_write_5m = 1.25 × input
+ *   cache_write_1h = 2.00 × input
+ *   cache_read     = 0.10 × input
+ * OpenAI / Gemini only expose cached-read (~0.25-0.5× input) — we conservatively
+ * bill them at 0.25× input (matches Anthropic's 90% discount approximation).
+ */
+export function computeCostUsd(modelId: string, b: TokenBreakdown): number {
+  const rate = getModelRate(modelId);
+  const inPer1M = rate.inputPer1M;
+  const outPer1M = rate.outputPer1M;
+  return (
+    (b.inputTokens / 1_000_000) * inPer1M +
+    ((b.cacheWrite5mTokens ?? 0) / 1_000_000) * inPer1M * 1.25 +
+    ((b.cacheWrite1hTokens ?? 0) / 1_000_000) * inPer1M * 2.0 +
+    ((b.cacheReadTokens ?? 0) / 1_000_000) * inPer1M * 0.1 +
+    (b.outputTokens / 1_000_000) * outPer1M
+  );
+}
+
+/**
+ * Calculate credits consumed. Backwards-compatible signature: if only
+ * (inputTokens, outputTokens) are passed, behaves as before. Pass the full
+ * TokenBreakdown object to correctly bill cache tokens.
  */
 export function calculateCredits(
   modelId: string,
-  inputTokens: number,
-  outputTokens: number,
+  inputOrBreakdown: number | TokenBreakdown,
+  outputTokens?: number,
 ): number {
-  const rate = getModelRate(modelId);
-  const costUsd =
-    (inputTokens / 1_000_000) * rate.inputPer1M + (outputTokens / 1_000_000) * rate.outputPer1M;
+  const breakdown: TokenBreakdown =
+    typeof inputOrBreakdown === 'number'
+      ? { inputTokens: inputOrBreakdown, outputTokens: outputTokens ?? 0 }
+      : inputOrBreakdown;
+  const costUsd = computeCostUsd(modelId, breakdown);
   const costRub = costUsd * USD_TO_RUB;
   return Math.max(1, Math.ceil(costRub / CREDIT_VALUE_RUB));
 }

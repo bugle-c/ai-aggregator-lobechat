@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Card, Modal, Typography } from 'antd';
+import { Button, Card, Modal, Tag, Typography } from 'antd';
 import { Zap } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,18 +36,34 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(({ open, onClose 
 
   if (!data || !plans) return null;
 
-  const { planName, daysUntilReset, creditLimit } = data;
+  const { planName, planSlug, daysUntilReset, creditLimit } = data;
   const upgradePlans = plans.filter((p) => p.priceRub > 0);
   const cheapestTopup = packages?.[0];
+
+  // Recommended = next tier above the user's current plan. Users on free →
+  // recommend basic; on basic → recommend pro. If no "next", first priced
+  // plan is recommended (usually basic).
+  const planOrder = ['free', 'basic', 'pro', 'pro_max'];
+  const currentIdx = planOrder.indexOf(planSlug || 'free');
+  const recommendedSlug = planOrder[currentIdx + 1] || 'basic';
+  const recommendedId =
+    upgradePlans.find((p) => p.slug === recommendedSlug)?.id ?? upgradePlans[0]?.id;
+
+  // "X× больше" — visual anchor for how much more value the upgrade gives.
+  const formatMultiplier = (planCredits: number): string => {
+    if (!creditLimit || creditLimit <= 0) return '';
+    const ratio = Math.round(planCredits / creditLimit);
+    return ratio > 1 ? `×${ratio} больше` : '';
+  };
 
   return (
     <Modal
       centered
       footer={null}
       open={open}
-      width={480}
+      width={540}
       title={
-        <Flexbox horizontal align="center" gap={8}>
+        <Flexbox align="center" gap={8} horizontal>
           <Icon icon={Zap} />
           {t('modal.exhausted.title')}
         </Flexbox>
@@ -56,41 +72,67 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(({ open, onClose 
     >
       <Flexbox gap={16}>
         <Text>{t('modal.exhausted.desc', { credits: creditLimit, plan: planName })}</Text>
-        <Text type="secondary">{t('modal.exhausted.resetIn', { days: daysUntilReset })}</Text>
+        <Text type="secondary">
+          {t('modal.exhausted.resetIn', { days: daysUntilReset })} · без доступа до сброса
+        </Text>
 
-        <Flexbox horizontal gap={12}>
-          {upgradePlans.map((plan) => (
-            <Card key={plan.id} size="small" style={{ flex: 1, textAlign: 'center' }}>
-              <Flexbox align="center" gap={8}>
-                <Title level={5} style={{ margin: 0 }}>
-                  {plan.name}
-                </Title>
-                <Text style={{ fontSize: 18 }}>
-                  {plan.priceRub} {'₽/мес'}
-                </Text>
-                <Text type="secondary">
-                  {plan.tokenLimit} {'кредитов'}
-                </Text>
-                <Button
-                  block
-                  loading={subscribeMutation.isPending}
-                  type="primary"
-                  onClick={() => subscribeMutation.mutate({ planId: plan.id })}
-                >
-                  {t('modal.exhausted.select')}
-                </Button>
-              </Flexbox>
-            </Card>
-          ))}
+        <Flexbox gap={12} horizontal>
+          {upgradePlans.map((plan) => {
+            const isRecommended = plan.id === recommendedId;
+            const multiplier = formatMultiplier(plan.tokenLimit);
+            return (
+              <Card
+                key={plan.id}
+                size="small"
+                style={{
+                  borderColor: isRecommended ? '#1677ff' : undefined,
+                  borderWidth: isRecommended ? 2 : 1,
+                  flex: 1,
+                  position: 'relative',
+                  textAlign: 'center',
+                }}
+              >
+                {isRecommended && (
+                  <Tag
+                    color="blue"
+                    style={{ left: '50%', position: 'absolute', top: -10, transform: 'translateX(-50%)' }}
+                  >
+                    Рекомендуем
+                  </Tag>
+                )}
+                <Flexbox align="center" gap={6}>
+                  <Title level={5} style={{ margin: 0 }}>
+                    {plan.name}
+                  </Title>
+                  <Text style={{ fontSize: 20, fontWeight: 600 }}>{plan.priceRub} ₽/мес</Text>
+                  <Text type="secondary">{plan.tokenLimit.toLocaleString('ru-RU')} кредитов</Text>
+                  {multiplier && (
+                    <Tag color={isRecommended ? 'blue' : 'default'} style={{ margin: 0 }}>
+                      {multiplier}
+                    </Tag>
+                  )}
+                  <Button
+                    block
+                    loading={subscribeMutation.isPending}
+                    type={isRecommended ? 'primary' : 'default'}
+                    onClick={() => subscribeMutation.mutate({ planId: plan.id })}
+                  >
+                    {isRecommended ? 'Продолжить общение' : t('modal.exhausted.select')}
+                  </Button>
+                </Flexbox>
+              </Card>
+            );
+          })}
         </Flexbox>
 
         {cheapestTopup && (
           <Button
             block
             loading={topUpMutation.isPending}
+            type="dashed"
             onClick={() => topUpMutation.mutate({ amountRub: cheapestTopup.amountRub })}
           >
-            {t('modal.exhausted.topup', { price: cheapestTopup.amountRub })}
+            Или разово докупить за {cheapestTopup.amountRub} ₽
           </Button>
         )}
       </Flexbox>

@@ -33,7 +33,7 @@ export const POST = checkAuth(
 
       // ============  2a. check usage limit  ============ //
       const { checkUsageLimit } = await import('@/server/modules/billing/checkUsageLimit');
-      const limitResult = await checkUsageLimit(serverDB, userId);
+      const limitResult = await checkUsageLimit(serverDB, userId, data.model);
       if (!limitResult.allowed) {
         return createErrorResponse(ChatErrorType.InternalServerError, {
           error: { message: limitResult.message },
@@ -88,7 +88,13 @@ export const POST = checkAuth(
             if (!reader) return;
 
             const decoder = new TextDecoder();
-            let usageData: { input?: number; output?: number } = {};
+            let usageData: {
+              input?: number;
+              output?: number;
+              cacheWrite5m?: number;
+              cacheWrite1h?: number;
+              cacheRead?: number;
+            } = {};
             let observedOutputChars = 0;
 
             while (true) {
@@ -103,9 +109,26 @@ export const POST = checkAuth(
                 try {
                   const parsed = JSON.parse(jsonStr);
                   if (parsed.usage) {
+                    const u = parsed.usage;
                     usageData = {
-                      input: parsed.usage.prompt_tokens || parsed.usage.input_tokens || 0,
-                      output: parsed.usage.completion_tokens || parsed.usage.output_tokens || 0,
+                      input: u.prompt_tokens || u.input_tokens || 0,
+                      output: u.completion_tokens || u.output_tokens || 0,
+                      // Anthropic: cache_creation_input_tokens (5m default),
+                      // or detailed cache_creation.ephemeral_5m_input_tokens /
+                      // ephemeral_1h_input_tokens for explicit TTL.
+                      cacheWrite5m:
+                        u.cache_creation?.ephemeral_5m_input_tokens ??
+                        u.cache_creation_input_tokens ??
+                        0,
+                      cacheWrite1h: u.cache_creation?.ephemeral_1h_input_tokens ?? 0,
+                      // Anthropic: cache_read_input_tokens. OpenAI:
+                      // prompt_tokens_details.cached_tokens. Gemini:
+                      // usage_metadata.cached_content_token_count.
+                      cacheRead:
+                        u.cache_read_input_tokens ??
+                        u.prompt_tokens_details?.cached_tokens ??
+                        u.cached_content_token_count ??
+                        0,
                     };
                   }
                   // Observe streamed content to estimate output when upstream
@@ -132,7 +155,13 @@ export const POST = checkAuth(
                 usageData.input || 0,
                 data.model,
                 usageData.output || 0,
-                { provider, kind: 'chat' },
+                {
+                  provider,
+                  kind: 'chat',
+                  cacheWrite5mTokens: usageData.cacheWrite5m || 0,
+                  cacheWrite1hTokens: usageData.cacheWrite1h || 0,
+                  cacheReadTokens: usageData.cacheRead || 0,
+                },
               );
             } else {
               // Fallback: estimate from message content length + observed stream.
