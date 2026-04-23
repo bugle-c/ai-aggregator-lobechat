@@ -1,13 +1,12 @@
 import { desc, eq, sql } from 'drizzle-orm';
 
-import type {
-  BillingPaymentItem,
-  BillingPlanItem,
-  NewBillingPayment,
-  UserBillingItem,
-} from '@/database/schemas';
-import { billingPayments, billingPlans, userBilling } from '@/database/schemas';
+import type { BillingPaymentItem, NewBillingPayment, UserBillingItem } from '@/database/schemas';
+import { billingPayments, userBilling } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
+
+import { type PlanView, fetchActivePlans, fetchPlanById } from './plans-source';
+
+export type { PlanView };
 
 export class BillingService {
   private userId: string;
@@ -20,22 +19,12 @@ export class BillingService {
 
   // ============ Plans ============ //
 
-  getActivePlans = async (): Promise<BillingPlanItem[]> => {
-    return this.db
-      .select()
-      .from(billingPlans)
-      .where(eq(billingPlans.isActive, true))
-      .orderBy(billingPlans.priceRub);
+  getActivePlans = async (): Promise<PlanView[]> => {
+    return fetchActivePlans();
   };
 
-  getPlanById = async (planId: number): Promise<BillingPlanItem | undefined> => {
-    const rows = await this.db
-      .select()
-      .from(billingPlans)
-      .where(eq(billingPlans.id, planId))
-      .limit(1);
-
-    return rows[0];
+  getPlanById = async (planId: number): Promise<PlanView | undefined> => {
+    return fetchPlanById(planId);
   };
 
   // ============ User Billing ============ //

@@ -11,7 +11,7 @@ Fork of LobeChat (`lobehub/lobe-chat`) customized for ask.gptweb.ru with YooKass
 
 - **Stack:** Next.js 16 + React 19 + Drizzle ORM + Better Auth + tRPC + antd
 - **DB:** ParadeDB/PG17 in Docker (port 5433), database `lobechat`
-- **Docker:** 7 containers in `/opt/lobechat/` (VPS #1: 194.113.209.247)
+- **Docker:** 7 containers in `/opt/lobechat/` (VPS #1: 135.181.115.234)
 - **Image:** `lobechat-custom:latest` (built locally from this repo)
 - **Reverse proxy:** Caddy on `ask.gptweb.ru`
 
@@ -138,7 +138,7 @@ Fork of LobeChat (`lobehub/lobe-chat`) customized for ask.gptweb.ru with YooKass
 # === Dev mode (instant hot reload) ===
 cd /home/deploy/projects/ai-aggregator-lobechat
 npx next dev -p 3300
-# Open http://194.113.209.247:3300
+# Open http://135.181.115.234:3300
 
 # === Prod build & deploy ===
 cd /home/deploy/projects/ai-aggregator-lobechat
@@ -192,9 +192,17 @@ curl -X POST http://localhost:3210/api/billing/webhook \
 - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` — AI provider keys (direct, no proxy)
 - `OPENROUTER_API_KEY` — empty, not yet configured
 
-## Pricing & Plan Tiers (2026-04-20)
+## Pricing & Plan Tiers (2026-04-20, plans source refactored 2026-04-23)
 
-### Active plans (`billing_plans` table)
+### Source of truth — `ai_aggregator.plans` in Supabase
+
+**Since 2026-04-23 plans live in Supabase, NOT in LobeChat PG.** Edited from webgpt-admin `/admin/finance/plans`. Landing (`gptweb.ru/`) and this aggregator both read from the same Supabase table — no more split-brain.
+
+- Aggregator: `src/server/services/billing/plans-source.ts` — Supabase REST + in-memory cache (TTL 60s, stale-on-error fallback). `BillingService.getActivePlans/getPlanById` now delegate here; direct imports available (`fetchActivePlans`, `fetchPlanById`, `fetchPlanBySlug`).
+- LobeChat PG `billing_plans` left as frozen artifact — FK dropped (user_billing/billing_payments/billing_subscription_events), code no longer reads. Safe to `DROP TABLE` in a separate migration + remove `billingPlans` from `packages/database/src/schemas/billing.ts`.
+- IDs aligned 1:1 between old and new: free=1, basic=2, pro=3. `user_billing.plan_id` integer values still valid — they reference `ai_aggregator.plans.id` now.
+
+### Active plans
 
 | slug  | name     | price_rub | token_limit/mo | daily_credit_limit | max_tier |
 |-------|----------|-----------|----------------|---------------------|----------|
@@ -234,4 +242,4 @@ Plan → max tier: `free=cheap`, `basic=mid`, `pro=premium`. Unknown models defa
 
 ### Changing limits
 
-`token_limit`, `daily_credit_limit`, `price_rub` all in `billing_plans` — update via SQL, no code change (read fresh on every `checkUsageLimit`). Tier → plan mapping lives in `PLAN_MAX_TIER` (`model-tiers.ts`). Adding a new plan = SQL insert + add entry there.
+Edit through `/admin/finance/plans` (writes to `ai_aggregator.plans`). Aggregator picks up changes within 60s (cache TTL). Tier → plan mapping lives in `PLAN_MAX_TIER` (`model-tiers.ts`) — adding a new plan = insert row via admin + add entry to `PLAN_MAX_TIER` + rebuild image.

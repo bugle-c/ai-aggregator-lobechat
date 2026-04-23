@@ -1,8 +1,9 @@
 import { and, eq, isNotNull, lt, not, sql } from 'drizzle-orm';
 
-import { type LobeChatDatabase } from '@/database/type';
+import { userBilling } from '@/database/schemas/billing';
 import { billingSubscriptionEvents } from '@/database/schemas/analytics';
-import { billingPlans, userBilling } from '@/database/schemas/billing';
+import { type LobeChatDatabase } from '@/database/type';
+import { fetchPlanById } from '@/server/services/billing/plans-source';
 
 import { writeSubscriptionEvent } from './writeSubscriptionEvent';
 
@@ -14,16 +15,14 @@ import { writeSubscriptionEvent } from './writeSubscriptionEvent';
 export async function expireSubscriptions(db: LobeChatDatabase): Promise<number> {
   const now = new Date();
 
-  // Candidates: have planId != free(1) OR have a set subscriptionExpiresAt in the past.
+  // Candidates: have planId != free(1) AND a past subscriptionExpiresAt.
   const expired = await db
     .select({
       userId: userBilling.userId,
       planId: userBilling.planId,
       expiresAt: userBilling.subscriptionExpiresAt,
-      priceRub: billingPlans.priceRub,
     })
     .from(userBilling)
-    .leftJoin(billingPlans, eq(billingPlans.id, userBilling.planId))
     .where(
       and(
         isNotNull(userBilling.subscriptionExpiresAt),
@@ -48,11 +47,13 @@ export async function expireSubscriptions(db: LobeChatDatabase): Promise<number>
       .limit(1);
     if (existing.length > 0) continue;
 
+    const plan = await fetchPlanById(row.planId);
+
     await writeSubscriptionEvent(db, {
       userId: row.userId,
       fromPlanId: row.planId,
       toPlanId: 1, // Free
-      fromPlanPrice: row.priceRub ?? 0,
+      fromPlanPrice: plan?.priceRub ?? 0,
       toPlanPrice: 0,
       currentExpiresAt: row.expiresAt,
     });

@@ -3,7 +3,8 @@ import { Plans } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 
 import { getServerDB } from '@/database/core/db-adaptor';
-import { billingPlans, userBilling } from '@/database/schemas';
+import { userBilling } from '@/database/schemas';
+import { fetchPlanById } from '@/server/services/billing/plans-source';
 
 const PLAN_SLUG_TO_ENUM: Record<string, Plans> = {
   basic: Plans.Basic,
@@ -31,11 +32,7 @@ export async function getSubscriptionPlan(userId: string): Promise<Plans> {
       return Plans.Free;
     }
 
-    const [plan] = await db
-      .select()
-      .from(billingPlans)
-      .where(eq(billingPlans.id, billing.planId))
-      .limit(1);
+    const plan = await fetchPlanById(billing.planId);
 
     return PLAN_SLUG_TO_ENUM[plan?.slug || 'free'] || Plans.Free;
   } catch (error) {
