@@ -183,3 +183,25 @@ export const TOKENS_PER_CREDIT = 2500;
 export function tokensToCredits(tokens: number): number {
   return Math.max(1, Math.ceil(tokens / TOKENS_PER_CREDIT));
 }
+
+import { fetchRate } from '@/server/services/billing/rates-source';
+import { computeCostUsdFromRate, type Usage } from './compute-cost';
+
+/**
+ * New unit-aware credit calculator. Pulls rate from Supabase-backed cache,
+ * computes USD cost with markup, converts to credits (1 credit = CREDIT_VALUE_RUB).
+ *
+ * Replaces synchronous `calculateCredits(modelId, inputTokens, outputTokens)`
+ * call sites. Returns 1 (floor) if cost is 0 but usage is non-empty — same
+ * behaviour as old formula's max(1, ceil(...)).
+ */
+export async function calculateCreditsAsync(modelId: string, usage: Usage): Promise<number> {
+  const rate = await fetchRate(modelId);
+  if (!rate) {
+    console.warn(`[billing] no rate for model=${modelId}, charging 1 credit floor`);
+    return 1;
+  }
+  const costUsd = computeCostUsdFromRate(rate, usage);
+  const costRub = costUsd * USD_TO_RUB;
+  return Math.max(1, Math.ceil(costRub / CREDIT_VALUE_RUB));
+}

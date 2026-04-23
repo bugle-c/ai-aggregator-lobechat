@@ -4,7 +4,8 @@ import { usageLogs } from '@/database/schemas/analytics';
 import { type LobeChatDatabase } from '@/database/type';
 import { BillingService } from '@/server/services/billing';
 
-import { calculateCredits } from './model-rates';
+import { type Usage } from './compute-cost';
+import { calculateCreditsAsync } from './model-rates';
 import {
   type ModelTier,
   type PlanSlug,
