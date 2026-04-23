@@ -23,13 +23,35 @@ CREATE TABLE IF NOT EXISTS ai_aggregator.model_rates (
   created_at     timestamptz NOT NULL DEFAULT now(),
   updated_at     timestamptz NOT NULL DEFAULT now(),
   CHECK (pricing_unit IN ('tokens', 'image', 'second')),
+  -- Mutual-exclusion: tokens pricing populates input/output only; image/second
+  -- pricing populates per_unit only. Prevents ambiguous rows where both sides
+  -- are set.
   CHECK (
-    (pricing_unit = 'tokens' AND input_per_1m IS NOT NULL AND output_per_1m IS NOT NULL)
-    OR (pricing_unit IN ('image', 'second') AND per_unit IS NOT NULL)
+    (pricing_unit = 'tokens'
+      AND input_per_1m IS NOT NULL AND output_per_1m IS NOT NULL
+      AND per_unit IS NULL)
+    OR (pricing_unit IN ('image', 'second')
+      AND per_unit IS NOT NULL
+      AND input_per_1m IS NULL AND output_per_1m IS NULL)
   ),
   CHECK (markup > 0),
   CHECK (tier_override IS NULL OR tier_override IN ('cheap','mid','high','premium'))
 );
+
+-- Generic updated_at trigger function. Named generically so future tables in
+-- this schema can reuse it without creating near-duplicate functions.
+CREATE OR REPLACE FUNCTION ai_aggregator.set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS model_rates_set_updated_at ON ai_aggregator.model_rates;
+CREATE TRIGGER model_rates_set_updated_at
+  BEFORE UPDATE ON ai_aggregator.model_rates
+  FOR EACH ROW EXECUTE FUNCTION ai_aggregator.set_updated_at();
 
 CREATE INDEX IF NOT EXISTS model_rates_provider_idx ON ai_aggregator.model_rates(provider);
 CREATE INDEX IF NOT EXISTS model_rates_pricing_unit_idx ON ai_aggregator.model_rates(pricing_unit);
