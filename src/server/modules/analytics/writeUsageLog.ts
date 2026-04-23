@@ -1,37 +1,40 @@
 import { usageLogs } from '@/database/schemas/analytics';
 import { type LobeChatDatabase } from '@/database/type';
-import {
-  USD_TO_RUB,
-  computeCostUsd,
-  type TokenBreakdown,
-} from '@/server/modules/billing/model-rates';
+import { computeCostUsdFromRate, type Usage } from '@/server/modules/billing/compute-cost';
+import { USD_TO_RUB } from '@/server/modules/billing/model-rates';
+import { fetchRate } from '@/server/services/billing/rates-source';
 
 export interface WriteUsageLogInput {
+  cacheReadTokens?: number;
+  cacheWrite1hTokens?: number;
+  cacheWrite5mTokens?: number;
   creditsCharged: number;
   inputTokens: number;
-  outputTokens: number;
-  cacheWrite5mTokens?: number;
-  cacheWrite1hTokens?: number;
-  cacheReadTokens?: number;
   kind: 'chat' | 'image' | 'video';
   model: string;
+  outputTokens: number;
   provider: string;
   userId: string;
 }
 
 /**
  * Pure function: compute the row we'll insert. Cache-aware pricing via
- * computeCostUsd. Separated from the DB call so the math is unit-testable.
+ * rates-source + compute-cost. Separated from the DB call so the math is
+ * unit-testable.
  */
-export function computeUsageLogRow(input: WriteUsageLogInput) {
-  const breakdown: TokenBreakdown = {
-    inputTokens: input.inputTokens,
-    outputTokens: input.outputTokens,
-    cacheWrite5mTokens: input.cacheWrite5mTokens ?? 0,
-    cacheWrite1hTokens: input.cacheWrite1hTokens ?? 0,
-    cacheReadTokens: input.cacheReadTokens ?? 0,
+export async function computeUsageLogRow(input: WriteUsageLogInput) {
+  const rate = await fetchRate(input.model);
+  const usage: Usage = {
+    kind: 'chat',
+    tokens: {
+      inputTokens: input.inputTokens,
+      outputTokens: input.outputTokens,
+      cacheWrite5mTokens: input.cacheWrite5mTokens ?? 0,
+      cacheWrite1hTokens: input.cacheWrite1hTokens ?? 0,
+      cacheReadTokens: input.cacheReadTokens ?? 0,
+    },
   };
-  const costUsd = computeCostUsd(input.model, breakdown);
+  const costUsd = rate ? computeCostUsdFromRate(rate, usage) : 0;
   const costRub = costUsd * USD_TO_RUB;
 
   return {
@@ -40,9 +43,9 @@ export function computeUsageLogRow(input: WriteUsageLogInput) {
     provider: input.provider,
     inputTokens: input.inputTokens,
     outputTokens: input.outputTokens,
-    cacheWrite5mTokens: breakdown.cacheWrite5mTokens ?? 0,
-    cacheWrite1hTokens: breakdown.cacheWrite1hTokens ?? 0,
-    cacheReadTokens: breakdown.cacheReadTokens ?? 0,
+    cacheWrite5mTokens: input.cacheWrite5mTokens ?? 0,
+    cacheWrite1hTokens: input.cacheWrite1hTokens ?? 0,
+    cacheReadTokens: input.cacheReadTokens ?? 0,
     creditsCharged: input.creditsCharged,
     costUsd: costUsd.toFixed(6),
     costRub: costRub.toFixed(4),
@@ -55,7 +58,7 @@ export async function writeUsageLog(
   db: LobeChatDatabase,
   input: WriteUsageLogInput,
 ): Promise<void> {
-  const row = computeUsageLogRow(input);
+  const row = await computeUsageLogRow(input);
   try {
     await db.insert(usageLogs).values(row);
     console.info(

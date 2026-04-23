@@ -6,12 +6,7 @@ import { BillingService } from '@/server/services/billing';
 
 import { type Usage } from './compute-cost';
 import { calculateCreditsAsync } from './model-rates';
-import {
-  type ModelTier,
-  type PlanSlug,
-  classifyModelTier,
-  getModelsByTier,
-} from './model-tiers';
+import { classifyModelTier, getModelsByTier, type ModelTier, type PlanSlug } from './model-tiers';
 
 /**
  * Per-plan × per-tier daily credit caps (last 24h rolling).
@@ -152,9 +147,9 @@ export async function checkUsageLimit(
 }
 
 export interface RecordTokenUsageExtras {
-  cacheWrite5mTokens?: number;
-  cacheWrite1hTokens?: number;
   cacheReadTokens?: number;
+  cacheWrite1hTokens?: number;
+  cacheWrite5mTokens?: number;
   kind?: 'chat' | 'image' | 'video';
   provider?: string;
 }
@@ -169,22 +164,20 @@ export async function recordTokenUsage(
 ): Promise<void> {
   if (tokensUsed <= 0 && (!outputTokens || outputTokens <= 0)) return;
   try {
-    let credits: number;
-    if (modelId && outputTokens !== undefined) {
-      // Cache-aware pricing: compute credits from full breakdown including
-      // cache_write_5m/1h (expensive, 1.25-2.0× input rate) and cache_read
-      // (cheap, 0.1× input rate). Falling back to {input,output} still works.
-      credits = calculateCredits(modelId, {
+    const usage: Usage = {
+      kind: 'chat',
+      tokens: {
         inputTokens: tokensUsed,
-        outputTokens,
+        outputTokens: outputTokens ?? 0,
         cacheWrite5mTokens: opts?.cacheWrite5mTokens ?? 0,
         cacheWrite1hTokens: opts?.cacheWrite1hTokens ?? 0,
         cacheReadTokens: opts?.cacheReadTokens ?? 0,
-      });
-    } else {
-      // Legacy fallback: flat rate (for image/video that still use total tokens)
-      credits = Math.max(1, Math.ceil(tokensUsed / 2500));
-    }
+      },
+    };
+    const credits = modelId
+      ? await calculateCreditsAsync(modelId, usage)
+      : Math.max(1, Math.ceil(tokensUsed / 2500));
+
     const billingService = new BillingService(db, userId);
     await billingService.incrementTokensUsed(credits);
 
