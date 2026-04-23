@@ -65,6 +65,61 @@ fi
 
 log "Keyword: '$KEYWORD' (id=$KEYWORD_ID)"
 
+# Step 1.5: Dedup guard — fetch existing titles so LLM can avoid topical duplicates
+EXISTING_TITLES=""
+if [[ -n "${SUPABASE_URL:-}" && -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
+    EXISTING_TITLES=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_posts?select=title&status=eq.published&order=created_at.desc&limit=80" \
+        -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+        -H "Accept-Profile: ai_aggregator" 2>/dev/null | python3 -c "
+import json, sys
+try:
+    rows = json.load(sys.stdin)
+    for r in rows:
+        t = r.get('title', '').strip()
+        if t: print(f'- {t}')
+except Exception:
+    pass
+" 2>/dev/null)
+    if [[ -n "$EXISTING_TITLES" ]]; then
+        log "Loaded $(echo "$EXISTING_TITLES" | wc -l) existing titles for dedup context"
+    else
+        log "WARN: could not load existing titles for dedup"
+    fi
+fi
+
+# Pre-check: does the keyword itself look like an obvious duplicate of an existing title?
+if [[ -n "$EXISTING_TITLES" ]]; then
+    DUP_CHECK=$(echo "$EXISTING_TITLES" | python3 -c "
+import sys, re
+kw = '''${KEYWORD}'''.lower()
+kw_words = set(re.findall(r'[а-яёa-z0-9]{4,}', kw))
+if len(kw_words) < 2:
+    sys.exit(0)
+for line in sys.stdin:
+    title = line.strip().lstrip('- ').lower()
+    title_words = set(re.findall(r'[а-яёa-z0-9]{4,}', title))
+    if not title_words:
+        continue
+    overlap = len(kw_words & title_words)
+    if overlap >= max(2, int(len(kw_words) * 0.8)):
+        print(line.strip())
+        sys.exit(0)
+" 2>/dev/null)
+    if [[ -n "$DUP_CHECK" ]]; then
+        log "SKIP: keyword '$KEYWORD' too similar to existing article: $DUP_CHECK"
+        # Mark keyword as duplicate directly in Supabase so it doesn't come back
+        curl -sf -X PATCH "${SUPABASE_URL}/rest/v1/blog_keywords?id=eq.${KEYWORD_ID}" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Accept-Profile: ai_aggregator" \
+            -H "Content-Profile: ai_aggregator" \
+            -H "Content-Type: application/json" \
+            -d "{\"status\":\"duplicate\",\"updated_at\":\"$(date -u +%FT%TZ)\"}" >/dev/null 2>&1 || true
+        log "=== Article generation skipped (duplicate) ==="
+        exit 0
+    fi
+fi
+
 # Step 2: Generate article via Claude Code
 log "Generating article with Claude Code..."
 
@@ -76,6 +131,9 @@ CRITICAL BRAND RULES:
 - Canonical domains: ask.gptweb.ru (app), gptweb.ru (marketing).
 
 Write a comprehensive SEO article in Russian for the keyword: \"${KEYWORD}\"
+
+EXISTING PUBLISHED ARTICLES (avoid duplicating their angle — pick a fresh perspective, a narrower sub-topic, or a more specific use case):
+${EXISTING_TITLES:-(none)}
 
 Requirements:
 - 3000-5000 words of deep, expert-level content in Russian
