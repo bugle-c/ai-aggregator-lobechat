@@ -6,7 +6,12 @@ import { BillingService } from '@/server/services/billing';
 
 import { type Usage } from './compute-cost';
 import { calculateCreditsAsync } from './model-rates';
-import { classifyModelTier, getModelsByTier, type ModelTier, type PlanSlug } from './model-tiers';
+import {
+  classifyModelTierAsync,
+  getModelsByTierAsync,
+  type ModelTier,
+  type PlanSlug,
+} from './model-tiers';
 
 /**
  * Per-plan × per-tier daily credit caps (last 24h rolling).
@@ -72,11 +77,11 @@ export async function checkUsageLimit(
     // This replaces the previous `claude-opus-%` hardcode and catches any
     // future premium model automatically via classifyModelTier.
     if (modelId && plan?.slug) {
-      const modelTier = classifyModelTier(modelId);
+      const modelTier = await classifyModelTierAsync(modelId);
       const capMap = TIER_DAILY_CAPS[plan.slug as PlanSlug] ?? {};
       const tierCap = capMap[modelTier];
       if (tierCap && tierCap > 0) {
-        const tierModels = getModelsByTier(modelTier);
+        const tierModels = await getModelsByTierAsync(modelTier);
         if (tierModels.length > 0) {
           const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
           const rows = await db

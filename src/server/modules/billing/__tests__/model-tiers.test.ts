@@ -1,82 +1,160 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { classifyModelTier, getRequiredPlanForModel, isModelAllowedForPlan } from '../model-tiers';
+import { classifyModelTierAsync, getModelsByTierAsync, invalidateRatesCache } from '../model-tiers';
 
-describe('classifyModelTier', () => {
-  it('classifies claude-opus as premium', () => {
-    expect(classifyModelTier('claude-opus-4-6')).toBe('premium');
-    expect(classifyModelTier('anthropic/claude-opus-4-6')).toBe('premium');
+const ROWS = [
+  {
+    model_id: 'claude-opus-4-6',
+    provider: 'anthropic',
+    pricing_unit: 'tokens',
+    input_per_1m: '5',
+    output_per_1m: '25',
+    per_unit: null,
+    markup: '3',
+    tier_override: null,
+    is_active: true,
+  },
+  {
+    model_id: 'claude-sonnet-4-6',
+    provider: 'anthropic',
+    pricing_unit: 'tokens',
+    input_per_1m: '3',
+    output_per_1m: '15',
+    per_unit: null,
+    markup: '3',
+    tier_override: null,
+    is_active: true,
+  },
+  {
+    model_id: 'claude-haiku-4-5-20251001',
+    provider: 'anthropic',
+    pricing_unit: 'tokens',
+    input_per_1m: '1',
+    output_per_1m: '5',
+    per_unit: null,
+    markup: '3',
+    tier_override: null,
+    is_active: true,
+  },
+  {
+    model_id: 'gpt-5-nano',
+    provider: 'openai',
+    pricing_unit: 'tokens',
+    input_per_1m: '0.1',
+    output_per_1m: '0.4',
+    per_unit: null,
+    markup: '3',
+    tier_override: null,
+    is_active: true,
+  },
+  {
+    model_id: 'dall-e-3',
+    provider: 'openai',
+    pricing_unit: 'image',
+    input_per_1m: null,
+    output_per_1m: null,
+    per_unit: '0.04',
+    markup: '3',
+    tier_override: null,
+    is_active: true,
+  },
+  {
+    model_id: 'sora-2',
+    provider: 'openai',
+    pricing_unit: 'second',
+    input_per_1m: null,
+    output_per_1m: null,
+    per_unit: '0.05',
+    markup: '3',
+    tier_override: null,
+    is_active: true,
+  },
+  {
+    model_id: '__default__',
+    provider: 'unknown',
+    pricing_unit: 'tokens',
+    input_per_1m: '5',
+    output_per_1m: '25',
+    per_unit: null,
+    markup: '3',
+    tier_override: null,
+    is_active: true,
+  },
+];
+
+beforeEach(() => {
+  process.env.SUPABASE_URL = 'https://supabase.test';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+  globalThis.fetch = vi
+    .fn()
+    .mockResolvedValue({ ok: true, json: async () => ROWS }) as unknown as typeof fetch;
+  invalidateRatesCache();
+});
+
+afterEach(() => {
+  invalidateRatesCache();
+});
+
+describe('classifyModelTierAsync — tokens', () => {
+  it('opus × markup 3 → premium', async () => {
+    // output $25 × markup 3 = $75 → > $45 → premium
+    expect(await classifyModelTierAsync('claude-opus-4-6')).toBe('premium');
   });
 
-  it('classifies claude-haiku as mid (output $5)', () => {
-    expect(classifyModelTier('claude-haiku-4-5-20251001')).toBe('mid');
+  it('sonnet × markup 3 → high (at upper bound)', async () => {
+    // $15 × 3 = $45 hits the high/premium boundary exactly; using ≤ it falls into high.
+    expect(await classifyModelTierAsync('claude-sonnet-4-6')).toBe('high');
   });
 
-  it('classifies gpt-5-nano as cheap', () => {
-    expect(classifyModelTier('gpt-5-nano')).toBe('cheap');
+  it('haiku × markup 3 → high', async () => {
+    // $5 × 3 = $15 → high (≤15)
+    expect(await classifyModelTierAsync('claude-haiku-4-5-20251001')).toBe('high');
   });
 
-  it('classifies gemini-2.5-pro as high (output $10)', () => {
-    expect(classifyModelTier('gemini-2.5-pro')).toBe('high');
-  });
-
-  it('classifies claude-sonnet as high (output $15)', () => {
-    expect(classifyModelTier('claude-sonnet-4-6')).toBe('high');
-  });
-
-  it('defaults unknown model to high (DEFAULT output = 15)', () => {
-    expect(classifyModelTier('unknown-mystery-model')).toBe('high');
+  it('gpt-5-nano × markup 3 → cheap', async () => {
+    // $0.4 × 3 = $1.2 → cheap (≤3)
+    expect(await classifyModelTierAsync('gpt-5-nano')).toBe('cheap');
   });
 });
 
-describe('isModelAllowedForPlan', () => {
-  it('free plan allows only cheap', () => {
-    expect(isModelAllowedForPlan('gpt-5-nano', 'free')).toBe(true);
-    expect(isModelAllowedForPlan('claude-haiku-4-5-20251001', 'free')).toBe(false);
-    expect(isModelAllowedForPlan('claude-opus-4-6', 'free')).toBe(false);
-    expect(isModelAllowedForPlan('gemini-2.5-pro', 'free')).toBe(false);
-  });
-
-  it('basic plan allows cheap and mid', () => {
-    expect(isModelAllowedForPlan('gpt-5-nano', 'basic')).toBe(true);
-    expect(isModelAllowedForPlan('claude-haiku-4-5-20251001', 'basic')).toBe(true);
-    expect(isModelAllowedForPlan('gemini-2.5-pro', 'basic')).toBe(false);
-    expect(isModelAllowedForPlan('claude-opus-4-6', 'basic')).toBe(false);
-  });
-
-  it('pro plan allows everything', () => {
-    expect(isModelAllowedForPlan('gpt-5-nano', 'pro')).toBe(true);
-    expect(isModelAllowedForPlan('claude-haiku-4-5-20251001', 'pro')).toBe(true);
-    expect(isModelAllowedForPlan('gemini-2.5-pro', 'pro')).toBe(true);
-    expect(isModelAllowedForPlan('claude-opus-4-6', 'pro')).toBe(true);
-  });
-
-  it('unknown plan defaults to free (cheap only)', () => {
-    expect(isModelAllowedForPlan('gpt-5-nano', 'bogus')).toBe(true);
-    expect(isModelAllowedForPlan('claude-opus-4-6', 'bogus')).toBe(false);
-  });
-
-  it('unknown model defaults to high tier -> only pro allowed', () => {
-    expect(isModelAllowedForPlan('unknown-mystery-model', 'free')).toBe(false);
-    expect(isModelAllowedForPlan('unknown-mystery-model', 'basic')).toBe(false);
-    expect(isModelAllowedForPlan('unknown-mystery-model', 'pro')).toBe(true);
+describe('classifyModelTierAsync — image', () => {
+  it('dall-e-3 × markup 3 = $0.12 → mid', async () => {
+    expect(await classifyModelTierAsync('dall-e-3')).toBe('mid');
   });
 });
 
-describe('getRequiredPlanForModel', () => {
-  it('returns free for cheap models', () => {
-    expect(getRequiredPlanForModel('gpt-5-nano')).toBe('free');
+describe('classifyModelTierAsync — second', () => {
+  it('sora-2 × markup 3 = $0.15/sec → mid', async () => {
+    expect(await classifyModelTierAsync('sora-2')).toBe('mid');
   });
+});
 
-  it('returns basic for mid models', () => {
-    expect(getRequiredPlanForModel('claude-haiku-4-5-20251001')).toBe('basic');
+describe('classifyModelTierAsync — unknown model', () => {
+  it('falls back to __default__ classification (premium)', async () => {
+    expect(await classifyModelTierAsync('absolutely-unknown-model')).toBe('premium');
   });
+});
 
-  it('returns pro for high models', () => {
-    expect(getRequiredPlanForModel('gemini-2.5-pro')).toBe('pro');
+describe('classifyModelTierAsync — tier_override', () => {
+  it('honours tier_override when set', async () => {
+    const withOverride = [{ ...ROWS[0], tier_override: 'cheap' }, ROWS[6]];
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => withOverride,
+      }) as unknown as typeof fetch;
+    invalidateRatesCache();
+    expect(await classifyModelTierAsync('claude-opus-4-6')).toBe('cheap');
   });
+});
 
-  it('returns pro for premium models', () => {
-    expect(getRequiredPlanForModel('claude-opus-4-6')).toBe('pro');
+describe('getModelsByTierAsync', () => {
+  it('buckets all rates correctly', async () => {
+    const premium = await getModelsByTierAsync('premium');
+    expect(premium).toContain('claude-opus-4-6');
+    const mid = await getModelsByTierAsync('mid');
+    expect(mid).toContain('dall-e-3');
+    expect(mid).toContain('sora-2');
   });
 });

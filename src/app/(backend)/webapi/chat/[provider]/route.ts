@@ -45,13 +45,13 @@ export const POST = checkAuth(
       // ============  2b. check model tier vs plan  ============ //
       const modelId = data.model;
       if (modelId) {
-        const { isModelAllowedForPlan, getRequiredPlanForModel } =
+        const { isModelAllowedForPlanAsync, getRequiredPlanForModelAsync } =
           await import('@/server/modules/billing/model-tiers');
         const { BillingService } = await import('@/server/services/billing');
         const billingService = new BillingService(serverDB, userId);
         const planSlug = await billingService.getUserPlanSlug();
-        if (!isModelAllowedForPlan(modelId, planSlug)) {
-          const requiredPlan = getRequiredPlanForModel(modelId);
+        if (!(await isModelAllowedForPlanAsync(modelId, planSlug))) {
+          const requiredPlan = await getRequiredPlanForModelAsync(modelId);
           return new Response(
             JSON.stringify({
               currentPlan: planSlug,

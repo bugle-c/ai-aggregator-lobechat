@@ -1,5 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
+import { TIER_DAILY_CAPS } from '@/server/modules/billing/checkUsageLimit';
 import {
   CREDIT_VALUE_RUB,
   DEFAULT_MODEL_RATE,
@@ -7,11 +9,10 @@ import {
   USD_TO_RUB,
 } from '@/server/modules/billing/model-rates';
 import {
+  classifyModelTierAsync,
+  getRequiredPlanForModelAsync,
   PLAN_MAX_TIER,
-  classifyModelTier,
-  getRequiredPlanForModel,
 } from '@/server/modules/billing/model-tiers';
-import { TIER_DAILY_CAPS } from '@/server/modules/billing/checkUsageLimit';
 
 // Provider lookup is the same prefix map used for OpenRouter routing
 // (duplicated from model-rates.ts which keeps it unexported). Keep in sync.
@@ -30,7 +31,7 @@ const PROVIDER_OF: Record<string, string> = {
   'chatgpt-4o-latest': 'openai',
   'gpt-4-turbo': 'openai',
   'o4-mini': 'openai',
-  o3: 'openai',
+  'o3': 'openai',
   'gemini-2.5-flash': 'google',
   'gemini-2.5-pro': 'google',
   'gemini-3-flash-preview': 'google',
@@ -75,35 +76,37 @@ export async function GET(request: NextRequest) {
   // under both "gpt-5-mini" and "openai/gpt-5-mini"; we only want the canonical
   // one for UI purposes.
   const seen = new Set<string>();
-  const models = Object.entries(MODEL_RATES)
-    .filter(([id]) => {
-      if (id.includes('/')) return false; // skip prefixed duplicates
-      if (seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    })
-    .map(([id, rate]) => ({
-      id,
-      provider: providerOf(id),
-      inputPer1M: rate.inputPer1M,
-      outputPer1M: rate.outputPer1M,
-      tier: classifyModelTier(id),
-      requiredPlan: getRequiredPlanForModel(id),
-    }))
-    .sort((a, b) => {
-      const tierOrder = { premium: 0, high: 1, mid: 2, cheap: 3 };
-      if (tierOrder[a.tier] !== tierOrder[b.tier]) {
-        return tierOrder[a.tier] - tierOrder[b.tier];
-      }
-      return b.outputPer1M - a.outputPer1M;
-    });
+  const filtered = Object.entries(MODEL_RATES).filter(([id]) => {
+    if (id.includes('/')) return false; // skip prefixed duplicates
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+  const models = (
+    await Promise.all(
+      filtered.map(async ([id, rate]) => ({
+        id,
+        provider: providerOf(id),
+        inputPer1M: rate.inputPer1M,
+        outputPer1M: rate.outputPer1M,
+        tier: await classifyModelTierAsync(id),
+        requiredPlan: await getRequiredPlanForModelAsync(id),
+      })),
+    )
+  ).sort((a, b) => {
+    const tierOrder = { premium: 0, high: 1, mid: 2, cheap: 3 };
+    if (tierOrder[a.tier] !== tierOrder[b.tier]) {
+      return tierOrder[a.tier] - tierOrder[b.tier];
+    }
+    return b.outputPer1M - a.outputPer1M;
+  });
 
   return NextResponse.json({
     models,
     defaultRate: {
       inputPer1M: DEFAULT_MODEL_RATE.inputPer1M,
       outputPer1M: DEFAULT_MODEL_RATE.outputPer1M,
-      tier: classifyModelTier('__unknown__'),
+      tier: await classifyModelTierAsync('__unknown__'),
     },
     creditValueRub: CREDIT_VALUE_RUB,
     usdToRub: USD_TO_RUB,
