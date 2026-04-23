@@ -16,6 +16,3 @@ export type TopupPackage = (typeof TOPUP_PACKAGES)[number];
 export function getTopupPackage(amountRub: number): TopupPackage | undefined {
   return TOPUP_PACKAGES.find((p) => p.amountRub === amountRub);
 }
-
-// Re-export from model-rates for backward compatibility
-export { TOKENS_PER_CREDIT, tokensToCredits } from './model-rates';
