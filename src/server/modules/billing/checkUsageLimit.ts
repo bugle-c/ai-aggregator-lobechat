@@ -8,19 +8,20 @@ import { calculateCredits } from './model-rates';
 import { classifyModelTier } from './model-tiers';
 
 /**
- * Daily credit cap for PREMIUM-tier models on the Pro plan. Premium models
- * (claude-opus, chatgpt-4o-turbo) can burn $10+ in a few hours if unbounded,
- * which would exceed Pro's monthly revenue in a single session. Without this
- * cap, Pro gross margin becomes negative in the worst case.
+ * Daily credit cap for PREMIUM-tier models (Opus family). Premium models can
+ * burn $10+ in a few hours if unbounded, which would exceed the plan's
+ * monthly revenue in a single session.
  *
- * Default 1000 credits ≈ $1.50 real-cost/day ≈ $45/mo cost ceiling. Pro revenue
- * is 1490₽ ≈ $15/mo, so cap ≠ guaranteed profit, but it prevents one user
- * from single-handedly zeroing out the plan's margin.
+ * After the 2026-04-23 Pro split only pro_max has premium access at all;
+ * Pro is now `high`-tier max (Sonnet/Gemini Pro/GPT-4.1) and Opus is rejected
+ * by tier gating before this cap is even consulted. This cap therefore only
+ * fires on pro_max, where 2000 credits/24h ≈ $3/day ≈ $90/mo cost ceiling
+ * against 2990 ₽ ≈ $29.9 revenue — keeps a bad-day bounded.
  *
- * Override via env: PRO_PREMIUM_DAILY_CREDIT_CAP=<n>.
+ * Override via env: PRO_MAX_PREMIUM_DAILY_CREDIT_CAP=<n>.
  */
-export const PRO_PREMIUM_DAILY_CREDIT_CAP =
-  Number(process.env.PRO_PREMIUM_DAILY_CREDIT_CAP) || 1000;
+export const PRO_MAX_PREMIUM_DAILY_CREDIT_CAP =
+  Number(process.env.PRO_MAX_PREMIUM_DAILY_CREDIT_CAP) || 2000;
 
 export interface UsageLimitResult {
   allowed: boolean;
@@ -40,13 +41,14 @@ export async function checkUsageLimit(
     const creditLimit = plan?.tokenLimit || 50;
     const totalAvailable = creditLimit + billing.tokenBalance;
 
-    // Premium-model daily cap (Pro only — Free/Basic already blocked by tier gating).
-    // Prevents an Opus marathon from exceeding Pro's monthly revenue in one day.
+    // Premium-model daily cap (pro_max only — all other plans blocked by tier
+    // gating). Prevents an Opus marathon from exceeding Pro Max revenue in
+    // one day.
     if (
       modelId &&
-      plan?.slug === 'pro' &&
+      plan?.slug === 'pro_max' &&
       classifyModelTier(modelId) === 'premium' &&
-      PRO_PREMIUM_DAILY_CREDIT_CAP > 0
+      PRO_MAX_PREMIUM_DAILY_CREDIT_CAP > 0
     ) {
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const premiumRows = await db
@@ -62,11 +64,11 @@ export async function checkUsageLimit(
           ),
         );
       const premiumDayUsed = premiumRows[0]?.used ?? 0;
-      if (premiumDayUsed >= PRO_PREMIUM_DAILY_CREDIT_CAP) {
+      if (premiumDayUsed >= PRO_MAX_PREMIUM_DAILY_CREDIT_CAP) {
         return {
           allowed: false,
           creditsRemaining: 0,
-          message: `Дневной лимит на premium-модели (Opus) исчерпан: ${PRO_PREMIUM_DAILY_CREDIT_CAP} кредитов/24ч. Попробуйте более дешёвую модель или вернитесь завтра.`,
+          message: `Дневной лимит на premium-модели (Opus) исчерпан: ${PRO_MAX_PREMIUM_DAILY_CREDIT_CAP} кредитов/24ч. Попробуйте более дешёвую модель или вернитесь завтра.`,
         };
       }
     }
