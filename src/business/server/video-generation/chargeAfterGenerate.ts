@@ -49,6 +49,7 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
     outputTokens: 0,
     provider: params.provider || 'unknown',
     userId: params.userId,
+    videoSeconds: seconds,
   });
 
   console.info(

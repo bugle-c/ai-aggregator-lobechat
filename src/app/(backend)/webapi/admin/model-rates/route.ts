@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
   const enriched = await Promise.all(
     rates.map(async (r) => ({
       ...r,
+      id: r.modelId, // admin UI reads `m.id`; keep alias alongside camelCase modelId
       tier: await classifyModelTierAsync(r.modelId),
       requiredPlan: await getRequiredPlanForModelAsync(r.modelId),
     })),

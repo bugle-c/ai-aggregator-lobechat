@@ -19,7 +19,7 @@ function tierFromRate(rate: RateView): ModelTier {
   if (rate.pricingUnit === 'tokens') {
     const out = (rate.outputPer1M ?? 0) * markedUp;
     if (out <= 3) return 'cheap';
-    if (out < 15) return 'mid';
+    if (out <= 15) return 'mid';
     if (out <= 45) return 'high';
     return 'premium';
   }

@@ -106,9 +106,9 @@ describe('classifyModelTierAsync — tokens', () => {
     expect(await classifyModelTierAsync('claude-sonnet-4-6')).toBe('high');
   });
 
-  it('haiku × markup 3 → high', async () => {
-    // $5 × 3 = $15 → high (≤15)
-    expect(await classifyModelTierAsync('claude-haiku-4-5-20251001')).toBe('high');
+  it('haiku × markup 3 → mid', async () => {
+    // $5 × 3 = $15 → mid (≤15)
+    expect(await classifyModelTierAsync('claude-haiku-4-5-20251001')).toBe('mid');
   });
 
   it('gpt-5-nano × markup 3 → cheap', async () => {
@@ -138,12 +138,10 @@ describe('classifyModelTierAsync — unknown model', () => {
 describe('classifyModelTierAsync — tier_override', () => {
   it('honours tier_override when set', async () => {
     const withOverride = [{ ...ROWS[0], tier_override: 'cheap' }, ROWS[6]];
-    globalThis.fetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => withOverride,
-      }) as unknown as typeof fetch;
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => withOverride,
+    }) as unknown as typeof fetch;
     invalidateRatesCache();
     expect(await classifyModelTierAsync('claude-opus-4-6')).toBe('cheap');
   });

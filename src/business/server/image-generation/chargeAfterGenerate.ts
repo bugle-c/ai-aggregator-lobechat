@@ -32,6 +32,7 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
 
   await writeUsageLog(db, {
     creditsCharged: credits,
+    images: imageNum,
     inputTokens: 0,
     kind: 'image',
     model: params.metadata.modelId,

@@ -9,12 +9,14 @@ export interface WriteUsageLogInput {
   cacheWrite1hTokens?: number;
   cacheWrite5mTokens?: number;
   creditsCharged: number;
+  images?: number;
   inputTokens: number;
   kind: 'chat' | 'image' | 'video';
   model: string;
   outputTokens: number;
   provider: string;
   userId: string;
+  videoSeconds?: number;
 }
 
 /**
@@ -24,16 +26,23 @@ export interface WriteUsageLogInput {
  */
 export async function computeUsageLogRow(input: WriteUsageLogInput) {
   const rate = await fetchRate(input.model);
-  const usage: Usage = {
-    kind: 'chat',
-    tokens: {
-      inputTokens: input.inputTokens,
-      outputTokens: input.outputTokens,
-      cacheWrite5mTokens: input.cacheWrite5mTokens ?? 0,
-      cacheWrite1hTokens: input.cacheWrite1hTokens ?? 0,
-      cacheReadTokens: input.cacheReadTokens ?? 0,
-    },
-  };
+  let usage: Usage;
+  if (input.kind === 'image') {
+    usage = { kind: 'image', images: input.images ?? 1 };
+  } else if (input.kind === 'video') {
+    usage = { kind: 'video', videoSeconds: input.videoSeconds ?? 0 };
+  } else {
+    usage = {
+      kind: 'chat',
+      tokens: {
+        inputTokens: input.inputTokens,
+        outputTokens: input.outputTokens,
+        cacheWrite5mTokens: input.cacheWrite5mTokens ?? 0,
+        cacheWrite1hTokens: input.cacheWrite1hTokens ?? 0,
+        cacheReadTokens: input.cacheReadTokens ?? 0,
+      },
+    };
+  }
   const costUsd = rate ? computeCostUsdFromRate(rate, usage) : 0;
   const costRub = costUsd * USD_TO_RUB;
 
