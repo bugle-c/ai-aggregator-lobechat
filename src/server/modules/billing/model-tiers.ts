@@ -1,4 +1,4 @@
-import { getModelRate } from './model-rates';
+import { MODEL_RATES, getModelRate } from './model-rates';
 
 export type ModelTier = 'cheap' | 'mid' | 'high' | 'premium';
 export type PlanSlug = 'free' | 'basic' | 'pro' | 'pro_max';
@@ -11,6 +11,30 @@ export function classifyModelTier(modelId: string): ModelTier {
   if (out <= 5) return 'mid';
   if (out <= 15) return 'high';
   return 'premium';
+}
+
+let _modelsByTierCache: Record<ModelTier, string[]> | null = null;
+
+/**
+ * Return all catalog model IDs classified into the given tier. Used by
+ * checkUsageLimit to sum cross-provider spend for per-tier daily caps —
+ * previously the cap was hardcoded to `claude-opus-*` which missed GPT-4
+ * Turbo, future Opus versions, and anything routed via OpenRouter.
+ */
+export function getModelsByTier(tier: ModelTier): string[] {
+  if (!_modelsByTierCache) {
+    const buckets: Record<ModelTier, string[]> = {
+      cheap: [],
+      high: [],
+      mid: [],
+      premium: [],
+    };
+    for (const id of Object.keys(MODEL_RATES)) {
+      buckets[classifyModelTier(id)].push(id);
+    }
+    _modelsByTierCache = buckets;
+  }
+  return _modelsByTierCache[tier];
 }
 
 // Each plan gets everything UP TO its tier (inclusive). Pro historically

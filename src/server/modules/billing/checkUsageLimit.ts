@@ -1,27 +1,57 @@
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 
 import { usageLogs } from '@/database/schemas/analytics';
 import { type LobeChatDatabase } from '@/database/type';
 import { BillingService } from '@/server/services/billing';
 
 import { calculateCredits } from './model-rates';
-import { classifyModelTier } from './model-tiers';
+import {
+  type ModelTier,
+  type PlanSlug,
+  classifyModelTier,
+  getModelsByTier,
+} from './model-tiers';
 
 /**
- * Daily credit cap for PREMIUM-tier models (Opus family). Premium models can
- * burn $10+ in a few hours if unbounded, which would exceed the plan's
- * monthly revenue in a single session.
+ * Per-plan × per-tier daily credit caps (last 24h rolling).
  *
- * After the 2026-04-23 Pro split only pro_max has premium access at all;
- * Pro is now `high`-tier max (Sonnet/Gemini Pro/GPT-4.1) and Opus is rejected
- * by tier gating before this cap is even consulted. This cap therefore only
- * fires on pro_max, where 2000 credits/24h ≈ $3/day ≈ $90/mo cost ceiling
- * against 2990 ₽ ≈ $29.9 revenue — keeps a bad-day bounded.
+ * Rationale: monthly `tokenLimit` alone can't protect a plan from a one-day
+ * spend-marathon on premium/high-tier models. Caps bound the worst-case
+ * daily cost against the plan's monthly revenue. Applies to ALL premium
+ * providers (Anthropic Opus, OpenAI GPT-4 Turbo, future Opus versions,
+ * anything at premium tier) — previously hardcoded to `claude-opus-%`.
  *
- * Override via env: PRO_MAX_PREMIUM_DAILY_CREDIT_CAP=<n>.
+ * Numbers below assume 1 credit ≈ $0.0015 real cost. A tier cap of N credits
+ * = N * $0.0015/day max real spend for that user on that tier.
+ *
+ * Override any cell via env: BILLING_CAP_{PLAN}_{TIER}=<n> (e.g.
+ * BILLING_CAP_PRO_HIGH=5000). 0 disables the specific cap.
  */
-export const PRO_MAX_PREMIUM_DAILY_CREDIT_CAP =
-  Number(process.env.PRO_MAX_PREMIUM_DAILY_CREDIT_CAP) || 2000;
+type TierCapMap = Partial<Record<ModelTier, number>>;
+
+function envCap(plan: PlanSlug, tier: ModelTier, fallback: number): number {
+  const v = Number(process.env[`BILLING_CAP_${plan.toUpperCase()}_${tier.toUpperCase()}`]);
+  return Number.isFinite(v) && v >= 0 ? v : fallback;
+}
+
+export const TIER_DAILY_CAPS: Record<PlanSlug, TierCapMap> = {
+  // free/basic: cheap/mid models only (tier-gating blocks higher), and their
+  // monthly + daily_credit_limit already bound spend — no per-tier cap needed.
+  basic: {},
+  free: {},
+  // pro: 1490 ₽ ≈ $14.9/mo. Sonnet/GPT-4.1/Gemini Pro: cap to 3000 credits
+  // (~$4.50/day → worst case $135/mo, still leaves margin from 8000-credit
+  // monthly quota). Premium blocked by tier gating.
+  pro: {
+    high: envCap('pro', 'high', 3000),
+  },
+  // pro_max: 2990 ₽ ≈ $29.9/mo. Slightly looser high-tier cap; premium
+  // (Opus, GPT-4 Turbo) capped so one session can't eat the whole plan.
+  pro_max: {
+    high: envCap('pro_max', 'high', 5000),
+    premium: envCap('pro_max', 'premium', 2000),
+  },
+};
 
 export interface UsageLimitResult {
   allowed: boolean;
@@ -41,35 +71,45 @@ export async function checkUsageLimit(
     const creditLimit = plan?.tokenLimit || 50;
     const totalAvailable = creditLimit + billing.tokenBalance;
 
-    // Premium-model daily cap (pro_max only — all other plans blocked by tier
-    // gating). Prevents an Opus marathon from exceeding Pro Max revenue in
-    // one day.
-    if (
-      modelId &&
-      plan?.slug === 'pro_max' &&
-      classifyModelTier(modelId) === 'premium' &&
-      PRO_MAX_PREMIUM_DAILY_CREDIT_CAP > 0
-    ) {
-      const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const premiumRows = await db
-        .select({
-          used: sql<number>`coalesce(sum(${usageLogs.creditsCharged}), 0)::int`,
-        })
-        .from(usageLogs)
-        .where(
-          and(
-            eq(usageLogs.userId, userId),
-            gte(usageLogs.createdAt, since),
-            sql`${usageLogs.model} ILIKE 'claude-opus-%'`,
-          ),
-        );
-      const premiumDayUsed = premiumRows[0]?.used ?? 0;
-      if (premiumDayUsed >= PRO_MAX_PREMIUM_DAILY_CREDIT_CAP) {
-        return {
-          allowed: false,
-          creditsRemaining: 0,
-          message: `Дневной лимит на premium-модели (Opus) исчерпан: ${PRO_MAX_PREMIUM_DAILY_CREDIT_CAP} кредитов/24ч. Попробуйте более дешёвую модель или вернитесь завтра.`,
-        };
+    // Per-tier daily caps: bound daily spend on premium/high-tier models
+    // across ALL providers (Anthropic, OpenAI, Google, xAI, OpenRouter).
+    // This replaces the previous `claude-opus-%` hardcode and catches any
+    // future premium model automatically via classifyModelTier.
+    if (modelId && plan?.slug) {
+      const modelTier = classifyModelTier(modelId);
+      const capMap = TIER_DAILY_CAPS[plan.slug as PlanSlug] ?? {};
+      const tierCap = capMap[modelTier];
+      if (tierCap && tierCap > 0) {
+        const tierModels = getModelsByTier(modelTier);
+        if (tierModels.length > 0) {
+          const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          const rows = await db
+            .select({
+              used: sql<number>`coalesce(sum(${usageLogs.creditsCharged}), 0)::int`,
+            })
+            .from(usageLogs)
+            .where(
+              and(
+                eq(usageLogs.userId, userId),
+                gte(usageLogs.createdAt, since),
+                inArray(usageLogs.model, tierModels),
+              ),
+            );
+          const tierDayUsed = rows[0]?.used ?? 0;
+          if (tierDayUsed >= tierCap) {
+            const tierLabel =
+              modelTier === 'premium'
+                ? 'premium (Opus, GPT-4 Turbo)'
+                : modelTier === 'high'
+                  ? 'high (Sonnet, Gemini Pro, GPT-4.1)'
+                  : modelTier;
+            return {
+              allowed: false,
+              creditsRemaining: 0,
+              message: `Дневной лимит на ${tierLabel} модели исчерпан: ${tierCap} кредитов/24ч. Попробуйте более дешёвую модель или вернитесь завтра.`,
+            };
+          }
+        }
       }
     }
 

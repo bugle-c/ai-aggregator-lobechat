@@ -6,8 +6,11 @@ export interface ModelRate {
   outputPer1M: number; // USD per 1M output tokens
 }
 
-// Safe default: Claude Sonnet pricing (mid-high tier)
-export const DEFAULT_MODEL_RATE: ModelRate = { inputPer1M: 3.0, outputPer1M: 15.0 };
+// Safe default for UNKNOWN models (e.g. openrouter/auto, future Anthropic
+// versions not yet in our catalog). We price at PREMIUM-tier ($5/$25) rather
+// than Sonnet rates so an unknown model cannot sneak through cheaper than its
+// actual cost — undercharging is the expensive side of this ambiguity.
+export const DEFAULT_MODEL_RATE: ModelRate = { inputPer1M: 5.0, outputPer1M: 25.0 };
 
 // 1 credit = 0.15 RUB of API cost
 export const CREDIT_VALUE_RUB = 0.15;
