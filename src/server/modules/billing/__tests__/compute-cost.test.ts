@@ -63,6 +63,49 @@ describe('computeCostUsdFromRate — tokens', () => {
   });
 });
 
+describe('computeCostUsdFromRate — providerCostUsd (OpenRouter)', () => {
+  it('prefers providerCostUsd × markup over token-rate math', () => {
+    // OpenRouter reports cost=$0.01 directly; rate has markup 3 → $0.03.
+    // Token counts are irrelevant in this branch (OpenRouter already applied
+    // cache discounts and upstream provider routing when computing cost).
+    const cost = computeCostUsdFromRate(TOKENS_RATE, {
+      kind: 'chat',
+      providerCostUsd: 0.01,
+      tokens: { inputTokens: 999_999, outputTokens: 999_999 },
+    });
+    expect(cost).toBeCloseTo(0.03, 6);
+  });
+
+  it('falls back to token-rate math when providerCostUsd is undefined', () => {
+    const cost = computeCostUsdFromRate(TOKENS_RATE, {
+      kind: 'chat',
+      tokens: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+    });
+    expect(cost).toBeCloseTo(90, 4);
+  });
+
+  it('falls back to token-rate math when providerCostUsd is negative', () => {
+    // Negative cost is nonsense — ignore the value and compute from tokens.
+    const cost = computeCostUsdFromRate(TOKENS_RATE, {
+      kind: 'chat',
+      providerCostUsd: -5,
+      tokens: { inputTokens: 1_000_000, outputTokens: 0 },
+    });
+    expect(cost).toBeCloseTo(15, 4); // $5 × markup 3
+  });
+
+  it('handles zero providerCostUsd (e.g. free model) correctly', () => {
+    // Zero is a valid cost (free tier). Token-rate math would otherwise
+    // over-charge — so we respect the zero when explicitly provided.
+    const cost = computeCostUsdFromRate(TOKENS_RATE, {
+      kind: 'chat',
+      providerCostUsd: 0,
+      tokens: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+    });
+    expect(cost).toBe(0);
+  });
+});
+
 describe('computeCostUsdFromRate — image', () => {
   it('multiplies images by per_unit and markup', () => {
     // 5 × $0.04 × 3 = $0.60

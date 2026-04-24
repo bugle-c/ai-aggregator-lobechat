@@ -15,6 +15,13 @@ export interface WriteUsageLogInput {
   model: string;
   outputTokens: number;
   provider: string;
+  /**
+   * Provider-reported cost in USD (e.g. OpenRouter `response.usage.cost`).
+   * When present, threaded through to computeCostUsdFromRate for chat usage
+   * so usage_logs.cost_usd reflects the actual provider charge × markup
+   * rather than a re-derivation from token counts.
+   */
+  providerCostUsd?: number;
   userId: string;
   videoSeconds?: number;
 }
@@ -34,6 +41,7 @@ export async function computeUsageLogRow(input: WriteUsageLogInput) {
   } else {
     usage = {
       kind: 'chat',
+      providerCostUsd: input.providerCostUsd,
       tokens: {
         inputTokens: input.inputTokens,
         outputTokens: input.outputTokens,

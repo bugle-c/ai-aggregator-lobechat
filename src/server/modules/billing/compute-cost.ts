@@ -10,6 +10,13 @@ export type { RateView };
 
 export interface ChatUsage {
   kind: 'chat';
+  /**
+   * Provider-reported cost in USD (e.g. `response.usage.cost` from OpenRouter).
+   * When present, `computeCostUsdFromRate` skips token-rate math and uses this
+   * value as the pre-markup base. Preferred for OpenRouter because it already
+   * reflects actual underlying provider, cache discounts, and volume tiers.
+   */
+  providerCostUsd?: number;
   tokens: {
     cacheReadTokens?: number;
     cacheWrite1hTokens?: number;
@@ -30,6 +37,11 @@ export type Usage = ChatUsage | ImageUsage | VideoUsage;
 
 export function computeCostUsdFromRate(rate: RateView, usage: Usage): number {
   if (rate.pricingUnit === 'tokens' && usage.kind === 'chat') {
+    // Prefer provider-reported cost when available (OpenRouter emits `usage.cost`
+    // in USD, already covering cache discounts and upstream volume tiers).
+    if (typeof usage.providerCostUsd === 'number' && usage.providerCostUsd >= 0) {
+      return usage.providerCostUsd * rate.markup;
+    }
     const inPer1M = rate.inputPer1M ?? 0;
     const outPer1M = rate.outputPer1M ?? 0;
     const t = usage.tokens;

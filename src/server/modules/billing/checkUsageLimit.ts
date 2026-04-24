@@ -157,6 +157,12 @@ export interface RecordTokenUsageExtras {
   cacheWrite5mTokens?: number;
   kind?: 'chat' | 'image' | 'video';
   provider?: string;
+  /**
+   * Provider-reported cost in USD (e.g. OpenRouter `response.usage.cost`).
+   * When present, computeCostUsdFromRate uses this × markup instead of
+   * deriving cost from token counts × per-model rates.
+   */
+  providerCostUsd?: number;
 }
 
 export async function recordTokenUsage(
@@ -171,6 +177,7 @@ export async function recordTokenUsage(
   try {
     const usage: Usage = {
       kind: 'chat',
+      providerCostUsd: opts?.providerCostUsd,
       tokens: {
         inputTokens: tokensUsed,
         outputTokens: outputTokens ?? 0,
@@ -202,6 +209,7 @@ export async function recordTokenUsage(
         cacheReadTokens: opts?.cacheReadTokens ?? 0,
         creditsCharged: credits,
         kind: opts?.kind || 'chat',
+        providerCostUsd: opts?.providerCostUsd,
       });
     });
 

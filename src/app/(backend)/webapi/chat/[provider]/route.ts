@@ -89,11 +89,13 @@ export const POST = checkAuth(
 
             const decoder = new TextDecoder();
             let usageData: {
+              cacheRead?: number;
+              cacheWrite1h?: number;
+              cacheWrite5m?: number;
+              /** OpenRouter: `usage.cost` in USD — pre-markup provider charge. */
+              cost?: number;
               input?: number;
               output?: number;
-              cacheWrite5m?: number;
-              cacheWrite1h?: number;
-              cacheRead?: number;
             } = {};
             let observedOutputChars = 0;
 
@@ -129,6 +131,11 @@ export const POST = checkAuth(
                         u.prompt_tokens_details?.cached_tokens ??
                         u.cached_content_token_count ??
                         0,
+                      // OpenRouter emits `cost` in USD (pre-markup) covering
+                      // cached tokens, volume discounts, and actual upstream
+                      // provider routing. When present we prefer it over
+                      // token-rate math in computeCostUsdFromRate.
+                      cost: typeof u.cost === 'number' ? u.cost : undefined,
                     };
                   }
                   // Observe streamed content to estimate output when upstream
@@ -173,6 +180,7 @@ export const POST = checkAuth(
                   cacheWrite5mTokens: decision.cacheWrite5mTokens,
                   cacheWrite1hTokens: decision.cacheWrite1hTokens,
                   cacheReadTokens: decision.cacheReadTokens,
+                  providerCostUsd: usageData.cost,
                 },
               );
             }
