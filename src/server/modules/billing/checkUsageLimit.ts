@@ -184,28 +184,38 @@ export async function recordTokenUsage(
       : Math.max(1, Math.ceil(tokensUsed / 2500));
 
     const billingService = new BillingService(db, userId);
-    await billingService.incrementTokensUsed(credits);
 
-    // Also log the raw request for v3 analytics + the cost audit.
+    // Atomic: increment monthly counter + insert usage_logs row. If either
+    // fails, rollback — otherwise we end up with phantom credits (the counter
+    // moves but no audit row exists). See writeUsageLog.ts for history.
     const { writeUsageLog } = await import('@/server/modules/analytics/writeUsageLog');
-    await writeUsageLog(db, {
-      userId,
-      model: modelId || 'unknown',
-      provider: opts?.provider || 'unknown',
-      inputTokens: tokensUsed,
-      outputTokens: outputTokens ?? 0,
-      cacheWrite5mTokens: opts?.cacheWrite5mTokens ?? 0,
-      cacheWrite1hTokens: opts?.cacheWrite1hTokens ?? 0,
-      cacheReadTokens: opts?.cacheReadTokens ?? 0,
-      creditsCharged: credits,
-      kind: opts?.kind || 'chat',
+    await db.transaction(async (tx) => {
+      await billingService.incrementTokensUsed(credits, tx);
+      await writeUsageLog(tx, {
+        userId,
+        model: modelId || 'unknown',
+        provider: opts?.provider || 'unknown',
+        inputTokens: tokensUsed,
+        outputTokens: outputTokens ?? 0,
+        cacheWrite5mTokens: opts?.cacheWrite5mTokens ?? 0,
+        cacheWrite1hTokens: opts?.cacheWrite1hTokens ?? 0,
+        cacheReadTokens: opts?.cacheReadTokens ?? 0,
+        creditsCharged: credits,
+        kind: opts?.kind || 'chat',
+      });
     });
 
     console.info(
       `[billing] charged ${credits} credits: user=${userId} model=${modelId || 'unknown'} in=${tokensUsed} out=${outputTokens || 0} cw5m=${opts?.cacheWrite5mTokens ?? 0} cw1h=${opts?.cacheWrite1hTokens ?? 0} cr=${opts?.cacheReadTokens ?? 0}`,
     );
   } catch (error) {
+    // Transaction rolled back → user NOT billed, no log row written. This is
+    // correct behaviour (the alternative is phantom credits), but we need a
+    // visible signal so we can diagnose the underlying insert failure
+    // (numeric overflow on cost columns, unknown enum value, FK mismatch…).
     const msg = error instanceof Error ? `${error.message}\n${error.stack}` : String(error);
-    console.error(`[billing] recordTokenUsage FAIL user=${userId}: ${msg}`);
+    console.error(
+      `[billing] charge transaction failed — rolled back. user=${userId} model=${modelId ?? 'unknown'}: ${msg}`,
+    );
   }
 }

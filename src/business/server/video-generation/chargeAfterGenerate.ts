@@ -52,18 +52,31 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
     videoSeconds: seconds,
   });
 
-  await new BillingService(db, params.userId).incrementTokensUsed(credits);
+  const billingService = new BillingService(db, params.userId);
 
-  await writeUsageLog(db, {
-    creditsCharged: credits,
-    inputTokens: 0,
-    kind: 'video',
-    model: params.metadata.modelId,
-    outputTokens: 0,
-    provider: params.provider || 'unknown',
-    userId: params.userId,
-    videoSeconds: seconds,
-  });
+  // Atomic: increment + log. Same reasoning as recordTokenUsage — if the log
+  // insert fails we must roll back the increment, otherwise phantom credits.
+  try {
+    await db.transaction(async (tx) => {
+      await billingService.incrementTokensUsed(credits, tx);
+      await writeUsageLog(tx, {
+        creditsCharged: credits,
+        inputTokens: 0,
+        kind: 'video',
+        model: params.metadata.modelId,
+        outputTokens: 0,
+        provider: params.provider || 'unknown',
+        userId: params.userId,
+        videoSeconds: seconds,
+      });
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? `${error.message}\n${error.stack}` : String(error);
+    console.error(
+      `[billing] video charge transaction failed — rolled back. user=${params.userId} model=${params.metadata.modelId}: ${msg}`,
+    );
+    return;
+  }
 
   console.info(
     `[billing] video charged ${credits} credits: user=${params.userId} model=${params.metadata.modelId} seconds=${seconds}`,

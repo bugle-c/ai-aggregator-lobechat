@@ -1,5 +1,5 @@
 import { usageLogs } from '@/database/schemas/analytics';
-import { type LobeChatDatabase } from '@/database/type';
+import { type LobeChatDatabase, type Transaction } from '@/database/type';
 import { computeCostUsdFromRate, type Usage } from '@/server/modules/billing/compute-cost';
 import { USD_TO_RUB } from '@/server/modules/billing/model-rates';
 import { fetchRate } from '@/server/services/billing/rates-source';
@@ -63,23 +63,25 @@ export async function computeUsageLogRow(input: WriteUsageLogInput) {
   };
 }
 
+/**
+ * Insert a usage_logs row. Throws on failure — the caller MUST handle the
+ * error (either by rolling back the sibling `incrementTokensUsed` via a
+ * shared transaction, or by explicitly deciding the log can be lost).
+ *
+ * Historical note: this function used to swallow insert errors so the chat
+ * response wouldn't break. That created "phantom credits" — the monthly
+ * counter incremented but no usage_logs row existed, so the cost audit
+ * under-counted real spend while users appeared to owe money we couldn't
+ * justify. 2025-H2 audit found 18/49 users affected, ~1090 stray credits
+ * total. Now all call sites wrap both operations in db.transaction.
+ */
 export async function writeUsageLog(
-  db: LobeChatDatabase,
+  db: LobeChatDatabase | Transaction,
   input: WriteUsageLogInput,
 ): Promise<void> {
   const row = await computeUsageLogRow(input);
-  try {
-    await db.insert(usageLogs).values(row);
-    console.info(
-      `[analytics] usage_logs OK user=${input.userId} model=${input.model} credits=${input.creditsCharged} cost_usd=${row.costUsd}`,
-    );
-  } catch (error) {
-    // Log full stack — we rely on this row for the monthly cost audit and
-    // cannot silently swallow. DO still catch so chat response isn't broken.
-    const msg = error instanceof Error ? `${error.message}\n${error.stack}` : String(error);
-    console.error(
-      `[analytics] usage_logs FAIL user=${input.userId} model=${input.model} credits=${input.creditsCharged}: ${msg}`,
-    );
-    console.error('[analytics] usage_logs row:', JSON.stringify(row));
-  }
+  await db.insert(usageLogs).values(row);
+  console.info(
+    `[analytics] usage_logs OK user=${input.userId} model=${input.model} credits=${input.creditsCharged} cost_usd=${row.costUsd}`,
+  );
 }

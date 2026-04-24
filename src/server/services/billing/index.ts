@@ -2,9 +2,9 @@ import { desc, eq, sql } from 'drizzle-orm';
 
 import type { BillingPaymentItem, NewBillingPayment, UserBillingItem } from '@/database/schemas';
 import { billingPayments, userBilling } from '@/database/schemas';
-import { type LobeChatDatabase } from '@/database/type';
+import { type LobeChatDatabase, type Transaction } from '@/database/type';
 
-import { type PlanView, fetchActivePlans, fetchPlanById } from './plans-source';
+import { fetchActivePlans, fetchPlanById, type PlanView } from './plans-source';
 
 export type { PlanView };
 
@@ -106,8 +106,14 @@ export class BillingService {
       .where(eq(userBilling.userId, this.userId));
   };
 
-  incrementTokensUsed = async (tokens: number): Promise<void> => {
-    await this.db
+  /**
+   * Increment the user's monthly token counter. Pass a `tx` when this must
+   * commit/rollback atomically with a sibling write (e.g. usage_logs insert)
+   * — see recordTokenUsage and chargeAfterGenerate.
+   */
+  incrementTokensUsed = async (tokens: number, tx?: Transaction): Promise<void> => {
+    const client = tx ?? this.db;
+    await client
       .update(userBilling)
       .set({
         tokensUsedMonth: sql`${userBilling.tokensUsedMonth} + ${tokens}`,
