@@ -148,43 +148,32 @@ export const POST = checkAuth(
               }
             }
 
-            if (usageData.input || usageData.output) {
+            const { decideChargeAfterStream } =
+              await import('@/server/modules/billing/decideChargeAfterStream');
+            const decision = decideChargeAfterStream(usageData, observedOutputChars, data.messages);
+            if (decision.skip) {
+              // Empty stream — upstream aborted, errored after headers, or
+              // returned no content. Don't phantom-charge for a non-delivered
+              // response. Previously this branch charged ~1 credit via the
+              // estimation floor, producing the "+1 everywhere" overcount
+              // across 12 users in the 2025-H2 audit.
+              console.info(
+                `[billing] skipping charge (${decision.reason}): user=${userId} model=${data.model}`,
+              );
+            } else {
               await recordTokenUsage(
                 serverDB,
                 userId,
-                usageData.input || 0,
+                decision.inputTokens,
                 data.model,
-                usageData.output || 0,
+                decision.outputTokens,
                 {
                   provider,
                   kind: 'chat',
-                  cacheWrite5mTokens: usageData.cacheWrite5m || 0,
-                  cacheWrite1hTokens: usageData.cacheWrite1h || 0,
-                  cacheReadTokens: usageData.cacheRead || 0,
+                  cacheWrite5mTokens: decision.cacheWrite5mTokens,
+                  cacheWrite1hTokens: decision.cacheWrite1hTokens,
+                  cacheReadTokens: decision.cacheReadTokens,
                 },
-              );
-            } else {
-              // Fallback: estimate from message content length + observed stream.
-              // CRITICAL: never use outputTokens=0, otherwise calculateCredits
-              // undercounts by ~600x (output is where the cost lives).
-              const estimatedInput = Math.max(
-                100,
-                Math.round(JSON.stringify(data.messages || []).length / 4),
-              );
-              // Use observed output chars if streamed; otherwise estimate a
-              // conservative floor (50% of input, min 500 tokens) so we never
-              // charge a fraction of the real cost.
-              const estimatedOutput =
-                observedOutputChars > 0
-                  ? Math.ceil(observedOutputChars / 4)
-                  : Math.max(500, Math.round(estimatedInput * 0.5));
-              await recordTokenUsage(
-                serverDB,
-                userId,
-                estimatedInput,
-                data.model,
-                estimatedOutput,
-                { provider, kind: 'chat' },
               );
             }
           } catch (e) {
