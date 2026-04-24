@@ -50,8 +50,17 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
   let asyncTaskMetadata: VideoGenerationTaskMetadata | undefined;
 
   try {
-    // Parse webhook body using provider-specific handler
-    const runtime = ModelRuntime.initializeWithProvider(provider, {});
+    // Parse webhook body using provider-specific handler.
+    //
+    // The OpenAI-compatible factory requires `apiKey` at construction time
+    // even for webhook handlers that don't issue upstream HTTP calls. We
+    // inject the provider's API key from env so runtime init doesn't throw
+    // InvalidProviderAPIKey on otherwise-valid webhook deliveries. Env var
+    // name follows LobeChat convention: `${PROVIDER}_API_KEY` uppercase.
+    const envApiKey = process.env[`${provider.toUpperCase()}_API_KEY`];
+    const runtime = ModelRuntime.initializeWithProvider(provider, {
+      apiKey: envApiKey,
+    });
     const result = await runtime.handleCreateVideoWebhook({ body });
 
     if (!result) {
