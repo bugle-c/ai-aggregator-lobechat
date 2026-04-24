@@ -149,6 +149,10 @@ export const getLLMConfig = () => {
       ENABLED_VOLCENGINE: z.boolean(),
       VOLCENGINE_API_KEY: z.string().optional(),
 
+      ENABLED_WAVESPEED: z.boolean(),
+      WAVESPEED_API_KEY: z.string().optional(),
+      WAVESPEED_WEBHOOK_SECRET: z.string().optional(),
+
       ENABLED_TENCENT_CLOUD: z.boolean(),
       TENCENT_CLOUD_API_KEY: z.string().optional(),
 
@@ -251,6 +255,10 @@ export const getLLMConfig = () => {
 
       ENABLED_VOLCENGINE: !!process.env.VOLCENGINE_API_KEY,
       VOLCENGINE_API_KEY: process.env.VOLCENGINE_API_KEY,
+
+      ENABLED_WAVESPEED: !!process.env.WAVESPEED_API_KEY,
+      WAVESPEED_API_KEY: process.env.WAVESPEED_API_KEY,
+      WAVESPEED_WEBHOOK_SECRET: process.env.WAVESPEED_WEBHOOK_SECRET,
 
       ENABLED_PERPLEXITY: !!process.env.PERPLEXITY_API_KEY,
       PERPLEXITY_API_KEY: process.env.PERPLEXITY_API_KEY,

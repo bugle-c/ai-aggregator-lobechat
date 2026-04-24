@@ -64,6 +64,7 @@ export enum ModelProvider {
   VertexAI = 'vertexai',
   VLLM = 'vllm',
   Volcengine = 'volcengine',
+  WaveSpeed = 'wavespeed',
   Wenxin = 'wenxin',
   XAI = 'xai',
   XiaomiMiMo = 'xiaomimimo',
