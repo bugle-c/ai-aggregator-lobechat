@@ -1,3 +1,6 @@
+import type { UpdateChannel, UpdaterState } from '@lobechat/electron-client-ipc';
+
+import { UPDATE_CHANNEL } from '@/modules/updater/configs';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -40,5 +43,38 @@ export default class UpdaterCtr extends ControllerModule {
   installLater() {
     logger.info('Install later requested');
     this.app.updaterManager.installLater();
+  }
+
+  @IpcMethod()
+  async getUpdateChannel(): Promise<UpdateChannel> {
+    return this.app.storeManager.get('updateChannel') ?? UPDATE_CHANNEL;
+  }
+
+  /**
+   * Get the build-time channel (stable, canary, beta, or legacy nightly).
+   * Used for display in About page to distinguish pre-release builds.
+   */
+  @IpcMethod()
+  async getBuildChannel(): Promise<string> {
+    const { BUILD_CHANNEL } = await import('@/modules/updater/configs');
+    return BUILD_CHANNEL;
+  }
+
+  @IpcMethod()
+  async setUpdateChannel(channel: UpdateChannel): Promise<void> {
+    const validChannels = new Set<UpdateChannel>(['stable', 'canary']);
+    if (!validChannels.has(channel)) {
+      logger.warn(`Invalid update channel: ${channel}, ignoring`);
+      return;
+    }
+
+    logger.info(`Set update channel requested: ${channel}`);
+    this.app.storeManager.set('updateChannel', channel);
+    this.app.updaterManager.switchChannel(channel);
+  }
+
+  @IpcMethod()
+  async getUpdaterState(): Promise<UpdaterState> {
+    return this.app.updaterManager.getUpdaterState();
   }
 }

@@ -7,7 +7,7 @@ import { SearchIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 
 const SearchInput = memo(() => {
   const { t } = useTranslation('components');
@@ -74,8 +74,12 @@ const SearchInput = memo(() => {
           ref={inputRef}
           size="small"
           style={{ width: 200 }}
-          suffix={localQuery ? <XIcon size={14} style={{ cursor: 'pointer' }} onClick={handleCollapse} /> : undefined}
           value={localQuery}
+          suffix={
+            localQuery ? (
+              <XIcon size={14} style={{ cursor: 'pointer' }} onClick={handleCollapse} />
+            ) : undefined
+          }
           onBlur={handleBlur}
           onChange={(e) => setLocalQuery(e.target.value)}
           onKeyDown={handleKeyDown}

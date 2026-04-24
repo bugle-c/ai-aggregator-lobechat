@@ -1,5 +1,9 @@
 {
   "common.checkUpdates": "Проверка за актуализации...",
+  "common.checkingUpdates": "Проверяване за актуализации...",
+  "common.downloadingUpdate": "Изтегляне на актуализация...",
+  "common.isLatestVersion": "Вече сте с последната версия",
+  "common.restartToUpdate": "Рестартирайте за актуализация",
   "context.copyImage": "Копирай изображение",
   "context.copyImageAddress": "Копирай адреса на изображението",
   "context.copyLink": "Копирай връзката",
@@ -82,5 +86,6 @@
   "window.minimize": "Минимизирай",
   "window.title": "Прозорец",
   "window.toggleFullscreen": "Превключи на цял екран",
-  "window.zoom": "Мащаб"
+  "window.zoom": "Мащаб",
+  "tray.openMiniToolbar": "Quick Composer"
 }

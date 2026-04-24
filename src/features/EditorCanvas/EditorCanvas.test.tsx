@@ -26,9 +26,9 @@ vi.mock('./InternalEditor', () => ({
   default: vi.fn(() => <div data-testid="internal-editor">InternalEditor</div>),
 }));
 
-// Mock ErrorBoundary to pass through children
-vi.mock('./ErrorBoundary', () => ({
-  EditorErrorBoundary: vi.fn(({ children }) => <>{children}</>),
+// Mock SafeBoundary to pass through children
+vi.mock('@/components/ErrorBoundary', () => ({
+  default: vi.fn(({ children }) => <>{children}</>),
 }));
 
 describe('EditorCanvas', () => {
@@ -108,6 +108,7 @@ describe('EditorCanvas', () => {
           editor={mockEditor}
           placeholder="Custom placeholder"
           sourceType="notebook"
+          unsavedChangesGuard={{ enabled: true, message: 'unsaved', title: 'Unsaved' }}
           onContentChange={onContentChange}
           onInit={onInit}
         />,
@@ -124,6 +125,7 @@ describe('EditorCanvas', () => {
         onInit,
         placeholder: 'Custom placeholder',
         sourceType: 'notebook',
+        unsavedChangesGuard: { enabled: true, message: 'unsaved', title: 'Unsaved' },
       });
     });
 
@@ -182,25 +184,25 @@ describe('EditorCanvas', () => {
   });
 
   describe('error boundary wrapping', () => {
-    it('should wrap DocumentIdMode with ErrorBoundary', async () => {
+    it('should wrap DocumentIdMode with SafeBoundary', async () => {
       render(<EditorCanvas documentId="doc-123" editor={mockEditor} />);
 
-      const ErrorBoundary = await vi.importMock('./ErrorBoundary');
-      expect(ErrorBoundary.EditorErrorBoundary).toHaveBeenCalled();
+      const SafeBoundary = await vi.importMock('@/components/ErrorBoundary');
+      expect(SafeBoundary.default).toHaveBeenCalled();
     });
 
-    it('should wrap EditorDataMode with ErrorBoundary', async () => {
+    it('should wrap EditorDataMode with SafeBoundary', async () => {
       render(<EditorCanvas editor={mockEditor} editorData={{ content: 'test' }} />);
 
-      const ErrorBoundary = await vi.importMock('./ErrorBoundary');
-      expect(ErrorBoundary.EditorErrorBoundary).toHaveBeenCalled();
+      const SafeBoundary = await vi.importMock('@/components/ErrorBoundary');
+      expect(SafeBoundary.default).toHaveBeenCalled();
     });
 
-    it('should wrap InternalEditor with ErrorBoundary in basic mode', async () => {
+    it('should wrap InternalEditor with SafeBoundary in basic mode', async () => {
       render(<EditorCanvas editor={mockEditor} />);
 
-      const ErrorBoundary = await vi.importMock('./ErrorBoundary');
-      expect(ErrorBoundary.EditorErrorBoundary).toHaveBeenCalled();
+      const SafeBoundary = await vi.importMock('@/components/ErrorBoundary');
+      expect(SafeBoundary.default).toHaveBeenCalled();
     });
   });
 });

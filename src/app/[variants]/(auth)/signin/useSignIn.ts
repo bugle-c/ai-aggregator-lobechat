@@ -1,5 +1,6 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Form } from 'antd';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -7,13 +8,14 @@ import { type CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/
 import { type ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
 import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
 import { message } from '@/components/AntdStaticMethods';
+import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
-import { useRouter, useSearchParams } from '@/libs/next/navigation';
-import { useServerConfigStore } from '@/store/serverConfig';
-import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
+import { useAuthServerConfigStore } from '../_layout/AuthServerConfigProvider';
 import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
+
+const LAST_AUTH_PROVIDER_KEY = 'lobehub:auth:last-provider:v1';
 
 type Step = 'email' | 'password';
 
@@ -31,17 +33,32 @@ export const useSignIn = () => {
   const { t } = useTranslation('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
-  const enableMagicLink = useServerConfigStore(serverConfigSelectors.enableMagicLink);
-  const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
+  const enableMagicLink = useAuthServerConfigStore((s) => s.serverConfig.enableMagicLink || false);
+  const disableEmailPassword = useAuthServerConfigStore(
+    (s) => s.serverConfig.disableEmailPassword || false,
+  );
   const [form] = Form.useForm<SignInFormValues>();
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [isSocialOnly, setIsSocialOnly] = useState(false);
-  const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
-  const oAuthSSOProviders = useServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
-  const { ssoProviders, preSocialSigninCheck, getAdditionalData } = useBusinessSignin();
+  const [lastAuthProvider] = useState(() => {
+    try {
+      return localStorage.getItem(LAST_AUTH_PROVIDER_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const serverConfigInit = useAuthServerConfigStore((s) => s.serverConfigInit);
+  const oAuthSSOProviders = useAuthServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
+  const {
+    businessElement,
+    ssoProviders,
+    preSocialSigninCheck,
+    getAdditionalData,
+    getFetchOptions,
+  } = useBusinessSignin();
 
   useEffect(() => {
     const emailParam = searchParams.get('email');
@@ -109,6 +126,8 @@ export const useSignIn = () => {
 
   const handleCheckUser = async (values: Pick<SignInFormValues, 'email'>) => {
     setLoading(true);
+    await trackLoginOrSignupClicked({ spm: 'signin.email_step.submit' });
+
     try {
       const resolvedEmail = await resolveEmailFromIdentifier(values.email);
       if (!resolvedEmail) return;
@@ -156,6 +175,8 @@ export const useSignIn = () => {
 
   const handleSignIn = async (values: Pick<SignInFormValues, 'password'>) => {
     setLoading(true);
+    await trackLoginOrSignupClicked({ spm: 'signin.password_step.submit' });
+
     try {
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const result = await signIn.email(
@@ -187,26 +208,40 @@ export const useSignIn = () => {
   const handleSocialSignIn = async (provider: string) => {
     setSocialLoading(provider);
     const normalizedProvider = normalizeProviderId(provider);
+    await trackLoginOrSignupClicked({
+      provider: normalizedProvider,
+      spm: 'signin.social.click',
+    });
+
     try {
       if (ENABLE_BUSINESS_FEATURES && !(await preSocialSigninCheck())) {
         setSocialLoading(null);
         return;
       }
 
+      try {
+        localStorage.setItem(LAST_AUTH_PROVIDER_KEY, provider);
+      } catch {
+        // Ignore localStorage errors (e.g., quota exceeded, private mode)
+      }
+
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const additionalData = await getAdditionalData();
+      const fetchOptions = await getFetchOptions();
       const result = isBuiltinProvider(normalizedProvider)
         ? await signIn.social({
             additionalData,
             callbackURL: callbackUrl,
+            fetchOptions,
             provider: normalizedProvider,
           })
         : await signIn.oauth2({
             additionalData,
             callbackURL: callbackUrl,
+            fetchOptions,
             providerId: normalizedProvider,
           });
-      if (result?.error) throw result.error;
+      if (result && 'error' in result && result.error) throw result.error;
     } catch (error) {
       console.error(`${normalizedProvider} sign in error:`, error);
       message.error(t('betterAuth.signin.socialError'));
@@ -227,7 +262,9 @@ export const useSignIn = () => {
     const params = new URLSearchParams();
     if (currentEmail) params.set('email', currentEmail);
     params.set('callbackUrl', callbackUrl);
-    router.push(`/signup?${params.toString()}`);
+    void trackLoginOrSignupClicked({ spm: 'signin.go_to_signup.click' }).finally(() => {
+      router.push(`/signup?${params.toString()}`);
+    });
   };
 
   const handleForgotPassword = async () => {
@@ -242,7 +279,17 @@ export const useSignIn = () => {
     }
   };
 
+  const resolvedProviders = ENABLE_BUSINESS_FEATURES ? ssoProviders : oAuthSSOProviders;
+  const sortedProviders = lastAuthProvider
+    ? [...resolvedProviders].sort((a, b) => {
+        if (a === lastAuthProvider) return -1;
+        if (b === lastAuthProvider) return 1;
+        return 0;
+      })
+    : resolvedProviders;
+
   return {
+    businessElement,
     disableEmailPassword,
     email,
     form,
@@ -253,8 +300,9 @@ export const useSignIn = () => {
     handleSignIn,
     handleSocialSignIn,
     isSocialOnly,
+    lastAuthProvider,
     loading,
-    oAuthSSOProviders: ENABLE_BUSINESS_FEATURES ? ssoProviders : oAuthSSOProviders,
+    oAuthSSOProviders: sortedProviders,
     serverConfigInit: ENABLE_BUSINESS_FEATURES ? true : serverConfigInit,
     socialLoading,
     step,

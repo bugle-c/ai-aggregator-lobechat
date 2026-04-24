@@ -8,6 +8,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { after } from 'next/server';
 import { z } from 'zod';
 
+import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
 import { AgentMigrationRepo } from '@/database/repositories/agentMigration';
@@ -38,6 +39,48 @@ const topicProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
 });
 
 export const topicRouter = router({
+  getTopicContext: topicProcedure
+    .input(z.object({ topicId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const topic = await ctx.topicModel.findById(input.topicId);
+
+      if (!topic) {
+        return { content: `Topic not found: ${input.topicId}`, success: false };
+      }
+
+      const title = topic.title || 'Untitled';
+
+      // Prefer historySummary if available
+      if (topic.historySummary) {
+        return {
+          content: `# Topic: ${title}\n\n## Summary\n${topic.historySummary}`,
+          success: true,
+        };
+      }
+
+      // Fallback: fetch recent messages with correct agentId/groupId
+      const messageModel = new MessageModel(ctx.serverDB, ctx.userId);
+      const messages = await messageModel.query({
+        agentId: topic.agentId ?? undefined,
+        groupId: topic.groupId ?? undefined,
+        topicId: input.topicId,
+      });
+
+      const recentMessages = messages.slice(-30);
+      const lines = [`# Topic: ${title}`, '', '## Recent Messages', ''];
+
+      for (const msg of recentMessages) {
+        const role =
+          msg.role === 'user' ? 'User' : msg.role === 'assistant' ? 'Assistant' : msg.role;
+        const content = (msg.content || '').trim();
+        if (content) {
+          lines.push(`**${role}**: ${content}`, '');
+        }
+      }
+
+      return { content: lines.join('\n'), success: true };
+    }),
+
   batchCreateTopics: topicProcedure
     .input(
       z.array(
@@ -131,6 +174,7 @@ export const topicRouter = router({
           groupId: z.string().nullable().optional(),
           messages: z.array(z.string()).optional(),
           title: z.string(),
+          trigger: z.string().optional(),
         })
         .extend(basicContextSchema.shape),
     )
@@ -191,19 +235,38 @@ export const topicRouter = router({
       z.object({
         agentId: z.string().nullable().optional(),
         current: z.number().optional(),
+        excludeStatuses: z.array(z.string()).optional(),
         excludeTriggers: z.array(z.string()).optional(),
         groupId: z.string().nullable().optional(),
+        includeTriggers: z.array(z.string()).optional(),
         isInbox: z.boolean().optional(),
         pageSize: z.number().optional(),
         sessionId: z.string().nullable().optional(),
+        triggers: z.array(z.string()).optional(),
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { sessionId, isInbox, groupId, excludeTriggers, ...rest } = input;
+      const {
+        sessionId,
+        isInbox,
+        groupId,
+        excludeStatuses,
+        excludeTriggers,
+        includeTriggers,
+        triggers,
+        ...rest
+      } = input;
 
       // If groupId is provided, query by groupId directly
       if (groupId) {
-        const result = await ctx.topicModel.query({ excludeTriggers, groupId, ...rest });
+        const result = await ctx.topicModel.query({
+          excludeStatuses,
+          excludeTriggers,
+          groupId,
+          includeTriggers,
+          triggers,
+          ...rest,
+        });
         return { items: result.items, total: result.total };
       }
 
@@ -216,8 +279,11 @@ export const topicRouter = router({
       const result = await ctx.topicModel.query({
         ...rest,
         agentId: effectiveAgentId,
+        excludeStatuses,
         excludeTriggers,
+        includeTriggers,
         isInbox,
+        triggers,
       });
 
       // Runtime migration: backfill agentId for ALL legacy topics and messages under this agent
@@ -481,6 +547,7 @@ export const topicRouter = router({
         id: z.string(),
         value: z.object({
           agentId: z.string().optional(),
+          completedAt: z.date().nullable().optional(),
           favorite: z.boolean().optional(),
           historySummary: z.string().optional(),
           messages: z.array(z.string()).optional(),
@@ -491,6 +558,7 @@ export const topicRouter = router({
             })
             .optional(),
           sessionId: z.string().optional(),
+          status: z.enum(['active', 'completed', 'archived']).nullable().optional(),
           title: z.string().optional(),
         }),
       }),
@@ -513,8 +581,39 @@ export const topicRouter = router({
       z.object({
         id: z.string(),
         metadata: z.object({
+          boundDeviceId: z.string().optional(),
+          heteroSessionId: z.string().optional(),
           model: z.string().optional(),
+          onboardingFeedback: z
+            .object({
+              comment: z.string().max(500).optional(),
+              rating: z.enum(['good', 'bad']),
+              submittedAt: z.string(),
+            })
+            .optional(),
+          onboardingSession: z
+            .object({
+              agentIdentityCompletedAt: z.string().optional(),
+              discoveryCompletedAt: z.string().optional(),
+              finalAgentNames: z.array(z.string()).optional(),
+              finishedAt: z.string().optional(),
+              lastActiveAt: z.string(),
+              phase: z.enum(['agent_identity', 'user_identity', 'discovery', 'summary']),
+              startedAt: z.string(),
+              userIdentityCompletedAt: z.string().optional(),
+              version: z.number(),
+            })
+            .optional(),
           provider: z.string().optional(),
+          runningOperation: z
+            .object({
+              assistantMessageId: z.string(),
+              operationId: z.string(),
+              scope: z.string().optional(),
+              threadId: z.string().nullable().optional(),
+            })
+            .nullable()
+            .optional(),
           workingDirectory: z.string().optional(),
         }),
       }),

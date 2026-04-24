@@ -1,13 +1,7 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
-import {
-  type CommandResult,
-  type MarketSkillItem,
-  type SearchSkillParams,
-  SkillsIdentifier,
-} from '@lobechat/builtin-tool-skills';
+import { type CommandResult, SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import {
   type ExportFileResult,
-  type SkillImportServiceResult,
   type SkillRuntimeService,
   SkillsExecutionRuntime,
 } from '@lobechat/builtin-tool-skills/executionRuntime';
@@ -19,18 +13,18 @@ import { sha256 } from 'js-sha256';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { UserModel } from '@/database/models/user';
+import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { FileS3 } from '@/server/modules/S3';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
-import { SkillImporter } from '@/server/services/skill/importer';
 import { SkillResourceService } from '@/server/services/skill/resource';
+import { preprocessLhCommand } from '@/server/services/toolExecution/preprocessLhCommand';
 
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:skills-runtime');
 
 class SkillServerRuntimeService implements SkillRuntimeService {
-  private importer: SkillImporter;
   private resourceService: SkillResourceService;
   private skillModel: AgentSkillModel;
   private marketService: MarketService;
@@ -42,7 +36,6 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   constructor(options: {
     fileModel: FileModel;
     fileService: FileService;
-    importer: SkillImporter;
     marketService: MarketService;
     resourceService: SkillResourceService;
     skillModel: AgentSkillModel;
@@ -51,7 +44,6 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   }) {
     this.skillModel = options.skillModel;
     this.resourceService = options.resourceService;
-    this.importer = options.importer;
     this.marketService = options.marketService;
     this.fileService = options.fileService;
     this.fileModel = options.fileModel;
@@ -71,26 +63,60 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     return this.skillModel.findByName(name);
   };
 
-  importFromGitHub = async (gitUrl: string): Promise<SkillImportServiceResult> => {
-    const result = await this.importer.importFromGitHub({ gitUrl });
-    return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
-  };
-
-  importFromUrl = async (url: string): Promise<SkillImportServiceResult> => {
-    const result = await this.importer.importFromUrl({ url });
-    return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
-  };
-
-  importFromZipUrl = async (url: string): Promise<SkillImportServiceResult> => {
-    const result = await this.importer.importFromUrl({ url });
-    return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
-  };
-
   readResource = async (id: string, path: string): Promise<SkillResourceContent> => {
     const skill = await this.skillModel.findById(id);
     if (!skill) throw new Error(`Skill not found: ${id}`);
     if (!skill.resources) throw new Error(`Skill has no resources: ${id}`);
     return this.resourceService.readResource(skill.resources, path);
+  };
+
+  runCommand = async (options: { command: string }): Promise<CommandResult> => {
+    if (!this.topicId) {
+      throw new Error('topicId is required for runCommand');
+    }
+
+    // Preprocess lh commands: rewrite to npx @lobehub/cli + inject auth env vars
+    const lhResult = await preprocessLhCommand(options.command, this.userId);
+    if (lhResult.error) {
+      return { exitCode: 1, output: '', stderr: lhResult.error, success: false };
+    }
+
+    try {
+      const market = this.marketService.market;
+      const response = await market.plugins.runBuildInTool(
+        'runCommand' as any,
+        { command: lhResult.command },
+        { topicId: this.topicId, userId: this.userId },
+      );
+
+      log('runCommand response: %O', response);
+
+      if (!response.success) {
+        return {
+          exitCode: 1,
+          output: '',
+          stderr: response.error?.message || 'Command execution failed',
+          success: false,
+        };
+      }
+
+      const result = response.data?.result || {};
+
+      return {
+        exitCode: result.exitCode ?? (response.success ? 0 : 1),
+        output: result.stdout || result.output || '',
+        stderr: result.stderr || '',
+        success: response.success && (result.exitCode === 0 || result.exitCode === undefined),
+      };
+    } catch (error) {
+      log('Error running command: %O', error);
+      return {
+        exitCode: 1,
+        output: '',
+        stderr: (error as Error).message || 'Command execution failed',
+        success: false,
+      };
+    }
   };
 
   execScript = async (
@@ -267,40 +293,6 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       };
     }
   };
-
-  searchSkill = async (
-    params: SearchSkillParams,
-  ): Promise<{ items: MarketSkillItem[]; page: number; pageSize: number; total: number }> => {
-    log('Searching skills with params: %O', params);
-
-    try {
-      const result = await this.marketService.searchSkill(params);
-      log('Search skills result: %O', result);
-      return result;
-    } catch (error) {
-      log('Error searching skills: %O', error);
-      throw error;
-    }
-  };
-
-  importFromMarket = async (identifier: string): Promise<SkillImportServiceResult> => {
-    log('Importing skill from market: %s', identifier);
-
-    try {
-      // Get download URL and import ZIP
-      // The ZIP contains SKILL.md (manifest + content) and resources
-      // Everything is extracted and stored according to DB structure
-      const downloadUrl = this.marketService.getSkillDownloadUrl(identifier);
-      log('Download URL: %s', downloadUrl);
-
-      const result = await this.importFromZipUrl(downloadUrl);
-      log('Import from market result: %O', result);
-      return result;
-    } catch (error) {
-      log('Error importing skill from market: %O', error);
-      throw error;
-    }
-  };
 }
 
 /**
@@ -333,7 +325,6 @@ export const skillsRuntime: ServerRuntimeRegistration = {
 
     const skillModel = new AgentSkillModel(context.serverDB, context.userId);
     const resourceService = new SkillResourceService(context.serverDB, context.userId);
-    const importer = new SkillImporter(context.serverDB, context.userId);
     const marketService = new MarketService({
       accessToken: marketAccessToken,
       userInfo: { userId: context.userId },
@@ -344,7 +335,6 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     const service = new SkillServerRuntimeService({
       fileModel,
       fileService,
-      importer,
       marketService,
       resourceService,
       skillModel,
@@ -352,7 +342,10 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       userId: context.userId,
     });
 
-    return new SkillsExecutionRuntime({ builtinSkills, service });
+    return new SkillsExecutionRuntime({
+      builtinSkills: filterBuiltinSkills(builtinSkills),
+      service,
+    });
   },
   identifier: SkillsIdentifier,
 };

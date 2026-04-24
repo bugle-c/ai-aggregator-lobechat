@@ -1,11 +1,11 @@
 export { SkillsManifest } from './manifest';
 export { systemPrompt } from './systemRole';
 export {
+  type ActivateSkillParams,
   type CommandResult,
-  type MarketSkillItem,
+  type ExecScriptActivatedSkill,
+  type ExecScriptParams,
   type ReadReferenceParams,
-  type RunSkillParams,
-  type SearchSkillParams,
   SkillsApiName,
   SkillsIdentifier,
 } from './types';

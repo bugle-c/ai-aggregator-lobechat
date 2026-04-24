@@ -1,16 +1,21 @@
-import { ARTIFACT_TAG_REGEX, ARTIFACT_THINKING_TAG_REGEX } from '@lobechat/const';
+import { ARTIFACT_THINKING_TAG_REGEX } from '@lobechat/const';
+
+const ARTIFACT_TAG_REGEX_GLOBAL =
+  /<lobeArtifact\b[^>]*>(?<content>[\S\s]*?)(?:<\/lobeArtifact>|$)/g;
 
 /**
  * Replace all line breaks in the matched `lobeArtifact` tag with an empty string
  */
 export const processWithArtifact = (input: string = '') => {
   // First remove outer fenced code block if it exists
+  /* eslint-disable regexp/no-super-linear-backtracking */
   let output = input.replace(
     /^([\s\S]*?)\s*```[^\n]*\n((?:<lobeThinking>[\s\S]*?<\/lobeThinking>[\t\v\f\r \xA0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]*\n\s*)?<lobeArtifact[\s\S]*?<\/lobeArtifact>\s*)\n```\s*([\s\S]*)$/,
     (_, before = '', content, after = '') => {
       return [before.trim(), content.trim(), after.trim()].filter(Boolean).join('\n\n');
     },
   );
+  /* eslint-enable regexp/no-super-linear-backtracking */
 
   const thinkMatch = ARTIFACT_THINKING_TAG_REGEX.exec(output);
 
@@ -44,11 +49,13 @@ export const processWithArtifact = (input: string = '') => {
     },
   );
 
-  const match = ARTIFACT_TAG_REGEX.exec(output);
-  // If the input contains the `lobeArtifact` tag, replace all line breaks with an empty string
-  if (match) {
-    output = output.replace(ARTIFACT_TAG_REGEX, (match) => match.replaceAll(/\r?\n|\r/g, ''));
-  }
+  // If the input contains `lobeArtifact` tags, replace all line breaks with an empty string
+  // Use global regex to handle multiple artifacts in the same message
+  // Keep artifact markup as one raw HTML segment for the rehype artifact plugin. Preserving
+  // script block newlines here can make Markdown parse script text outside the custom tag.
+  output = output.replaceAll(ARTIFACT_TAG_REGEX_GLOBAL, (match) =>
+    match.replaceAll(/\r?\n|\r/g, ''),
+  );
 
   // if not match, check if it's start with <lobeArtifact but not closed
   const regex = /<lobeArtifact\b(?:(?!\/?>)[\s\S])*$/;

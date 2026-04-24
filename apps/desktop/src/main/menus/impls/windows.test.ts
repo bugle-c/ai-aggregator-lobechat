@@ -1,4 +1,4 @@
-import { Menu, app, shell } from 'electron';
+import { app, Menu, shell } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -56,6 +56,7 @@ const createMockApp = () => {
       'dev.forceReload': 'Force Reload',
       'dev.devTools': 'Developer Tools',
       'dev.devPanel': 'Dev Panel',
+      'tray.openMiniToolbar': 'Quick Composer',
       'tray.open': `Open ${params?.appName || 'App'}`,
       'tray.quit': 'Quit',
     };
@@ -67,6 +68,11 @@ const createMockApp = () => {
       ns: vi.fn(() => mockT),
     },
     browserManager: {
+      getMainWindow: vi.fn(() => ({
+        broadcast: vi.fn(),
+        loadUrl: vi.fn(),
+        show: vi.fn(),
+      })),
       showMainWindow: vi.fn(),
       retrieveByIdentifier: vi.fn(() => ({
         show: vi.fn(),
@@ -74,6 +80,8 @@ const createMockApp = () => {
     },
     updaterManager: {
       checkForUpdates: vi.fn(),
+      getUpdaterState: vi.fn(() => ({ stage: 'idle' })),
+      installNow: vi.fn(),
     },
   } as unknown as App;
 };
@@ -391,10 +399,12 @@ describe('WindowsMenu', () => {
       const windowMenu = template.find((item: any) => item.label === 'Window');
 
       const minimizeItem = windowMenu.submenu.find((item: any) => item.role === 'minimize');
-      const closeItem = windowMenu.submenu.find((item: any) => item.role === 'close');
+      const closeItem = windowMenu.submenu.find((item: any) => item.label === 'Close');
 
       expect(minimizeItem).toBeDefined();
       expect(closeItem).toBeDefined();
+      expect(closeItem.accelerator).toBe('CmdOrCtrl+W');
+      expect(typeof closeItem.click).toBe('function');
     });
 
     it('should have zoom controls in view menu', () => {

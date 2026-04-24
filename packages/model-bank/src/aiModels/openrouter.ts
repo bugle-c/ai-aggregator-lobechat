@@ -33,12 +33,65 @@ const openrouterChatModels: AIChatModelCard[] = [
   {
     abilities: {
       imageOutput: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 65_536 + 65_536,
+    description:
+      'Gemini 3.1 Flash Image Preview, a.k.a. "Nano Banana 2," is Google’s latest state of the art image generation and editing model, delivering Pro-level visual quality at Flash speed. It combines advanced contextual understanding with fast, cost-efficient inference, making complex image generation and iterative edits significantly more accessible.',
+    displayName: 'Nano Banana 2',
+    id: 'google/gemini-3.1-flash-image-preview',
+    maxOutput: 65_536,
+    pricing: {
+      approximatePricePerImage: 0.067,
+      units: [
+        { name: 'imageOutput', rate: 60, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-02-26',
+    settings: {
+      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      imageOutput: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072 + 32_768,
+    description:
+      'Nano Banana Pro is Google’s most advanced image-generation and editing model, built on Gemini 3 Pro. It extends the original Nano Banana with significantly improved multimodal reasoning, real-world grounding, and high-fidelity visual synthesis. The model generates context-rich graphics, from infographics and diagrams to cinematic composites, and can incorporate real-time information via Search grounding.',
+    displayName: 'Nano Banana Pro',
+    id: 'google/gemini-3-pro-image-preview',
+    maxOutput: 32_768,
+    pricing: {
+      approximatePricePerImage: 0.134,
+      units: [
+        { name: 'imageOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-11-20',
+    settings: {
+      extendParams: ['imageAspectRatio', 'imageResolution'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      imageOutput: true,
       vision: true,
     },
     contextWindowTokens: 32_768 + 8192,
-    description: 'Gemini 2.5 Flash experimental model with image generation support.',
+    description:
+      'Gemini 2.5 Flash Image, a.k.a. "Nano Banana," is now generally available. It is a state of the art image generation model with contextual understanding. It is capable of image generation, edits, and multi-turn conversations.',
     displayName: 'Nano Banana',
-    id: 'google/gemini-2.5-flash-image-preview',
+    id: 'google/gemini-2.5-flash-image',
     maxOutput: 8192,
     pricing: {
       approximatePricePerImage: 0.039,
@@ -48,26 +101,10 @@ const openrouterChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2025-08-26',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
+    releasedAt: '2025-10-07',
+    settings: {
+      extendParams: ['imageAspectRatio', 'imageResolution'],
     },
-    contextWindowTokens: 163_840,
-    description:
-      'DeepSeek-V3.1 is a large hybrid reasoning model with 128K context and efficient mode switching, delivering excellent performance and speed for tool use, code generation, and complex reasoning.',
-    displayName: 'DeepSeek V3.1',
-    id: 'deepseek/deepseek-chat-v3.1',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-08-21',
     type: 'chat',
   },
   {
@@ -1011,23 +1048,6 @@ const openrouterChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.162, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.162, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'LLaMA 3.2 is designed for tasks combining vision and text. It excels at image captioning and visual QA, bridging language generation and visual reasoning.',
-    displayName: 'Llama 3.2 90B Vision',
-    id: 'meta-llama/llama-3.2-90b-vision-instruct',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',

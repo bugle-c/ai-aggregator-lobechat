@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix  */
 import { isNotNull } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
@@ -22,6 +21,8 @@ import { idGenerator, randomSlug } from '../utils/idGenerator';
 import { accessedAt, createdAt, timestamps } from './_helpers';
 import { asyncTasks } from './asyncTask';
 import { users } from './user';
+
+export const DOCUMENT_FOLDER_TYPE = 'custom/folder';
 
 export const globalFiles = pgTable(
   'global_files',

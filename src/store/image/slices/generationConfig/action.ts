@@ -14,6 +14,10 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors';
 
+import {
+  normalizeImageInputOnSchemaSwitch,
+  preserveSupportedParams,
+} from '../../../utils/preserveSupportedParams';
 import { type ImageStore } from '../../store';
 import { calculateInitialAspectRatio } from '../../utils/aspectRatio';
 import { adaptSizeToRatio, parseRatio } from '../../utils/size';
@@ -64,6 +68,20 @@ function prepareModelConfigState(model: string, provider: string) {
   };
 }
 
+function preserveImageInputParams(
+  previousParameters: RuntimeImageGenParams,
+  nextDefaultValues: RuntimeImageGenParams,
+  nextSchema: ModelParamsSchema,
+) {
+  const result = preserveSupportedParams(previousParameters, nextDefaultValues, nextSchema, [
+    'prompt',
+    'imageUrl',
+    'imageUrls',
+  ]);
+
+  return normalizeImageInputOnSchemaSwitch(previousParameters, nextSchema, result);
+}
+
 type Setter = StoreSetter<ImageStore>;
 export const createGenerationConfigSlice = (set: Setter, get: () => ImageStore, _api?: unknown) =>
   new GenerationConfigActionImpl(set, get, _api);
@@ -95,12 +113,7 @@ export class GenerationConfigActionImpl {
   setWidth = (width: number): void => {
     this.#set(
       (state) => {
-        const {
-          parameters,
-          isAspectRatioLocked,
-          activeAspectRatio,
-          parametersSchema,
-        } = state;
+        const { parameters, isAspectRatioLocked, activeAspectRatio, parametersSchema } = state;
 
         const newParams = { ...parameters, width };
         if (isAspectRatioLocked && activeAspectRatio) {
@@ -126,12 +139,7 @@ export class GenerationConfigActionImpl {
   setHeight = (height: number): void => {
     this.#set(
       (state) => {
-        const {
-          parameters,
-          isAspectRatioLocked,
-          activeAspectRatio,
-          parametersSchema,
-        } = state;
+        const { parameters, isAspectRatioLocked, activeAspectRatio, parametersSchema } = state;
         const newParams = { ...parameters, height };
 
         if (isAspectRatioLocked && activeAspectRatio) {
@@ -157,12 +165,7 @@ export class GenerationConfigActionImpl {
   toggleAspectRatioLock = (): void => {
     this.#set(
       (state) => {
-        const {
-          isAspectRatioLocked,
-          activeAspectRatio,
-          parameters,
-          parametersSchema,
-        } = state;
+        const { isAspectRatioLocked, activeAspectRatio, parameters, parametersSchema } = state;
         const newLockState = !isAspectRatioLocked;
 
         // If transitioning from unlocked to locked and there's an active aspect ratio, adjust dimensions immediately
@@ -259,16 +262,23 @@ export class GenerationConfigActionImpl {
   };
 
   setModelAndProviderOnSelect = (model: string, provider: string): void => {
+    const previousParameters = this.#get().parameters;
     const { defaultValues, parametersSchema, initialActiveRatio } = prepareModelConfigState(
       model,
       provider,
+    );
+
+    const parameters = preserveImageInputParams(
+      previousParameters,
+      defaultValues,
+      parametersSchema,
     );
 
     this.#set(
       {
         model,
         provider,
-        parameters: defaultValues,
+        parameters,
         parametersSchema,
         isAspectRatioLocked: false,
         activeAspectRatio: initialActiveRatio,

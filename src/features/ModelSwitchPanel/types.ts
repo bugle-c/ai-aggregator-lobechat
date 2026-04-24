@@ -1,8 +1,10 @@
 import { type DropdownMenuPlacement } from '@lobehub/ui';
 import { type AiModelForSelect } from 'model-bank';
-import { type ReactNode } from 'react';
+import { type ComponentType } from 'react';
 
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
+
+import { type PricingMode } from './components/ModelDetailPanel';
 
 export type GroupMode = 'byModel' | 'byProvider';
 
@@ -60,16 +62,19 @@ export type ListItem =
 export type DropdownPlacement = DropdownMenuPlacement;
 
 export interface ModelSwitchPanelProps {
-  children?: ReactNode;
+  children?: React.ReactNode;
   /**
-   * Render function for extra controls in the model detail popup (e.g. ControlsForm).
-   * Receives the hovered model's ID and provider ID.
+   * When set (e.g. image/video generation), uses this list instead of enabled chat models.
    */
-  extraControls?: (modelId: string, providerId: string) => ReactNode;
+  enabledList?: EnabledProviderWithModels[];
   /**
    * Current model ID. If not provided, uses currentAgentModel from store.
    */
   model?: string;
+  /**
+   * Optional row component for generation UIs (e.g. ImageModelItem). Requires `enabledList` + `pricingMode`.
+   */
+  ModelItemComponent?: ComponentType<any>;
   /**
    * Callback when model changes. If not provided, uses updateAgentConfig from store.
    */
@@ -84,6 +89,10 @@ export interface ModelSwitchPanelProps {
    * Dropdown placement. Defaults to 'topLeft'.
    */
   placement?: DropdownPlacement;
+  /**
+   * Pass-through to ModelDetailPanel for image/video approximate pricing.
+   */
+  pricingMode?: PricingMode;
   /**
    * Current provider ID. If not provided, uses currentAgentModelProvider from store.
    */

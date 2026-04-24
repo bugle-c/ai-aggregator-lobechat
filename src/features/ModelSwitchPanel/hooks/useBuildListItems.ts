@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 
-import { RECOMMENDED_MODELS } from '@/const/recommended-models';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 import { type GroupMode, type ListItem, type ModelWithProviders } from '../types';
@@ -9,7 +8,6 @@ export const useBuildListItems = (
   enabledList: EnabledProviderWithModels[],
   groupMode: GroupMode,
   searchKeyword: string = '',
-  showAll: boolean = false,
 ): ListItem[] => {
   return useMemo(() => {
     if (enabledList.length === 0) {
@@ -30,31 +28,6 @@ export const useBuildListItems = (
       if (!aIsLobehub && bIsLobehub) return 1;
       return 0;
     });
-
-    // Build recommended items when not searching
-    const recommendedItems: ListItem[] = [];
-    if (!searchKeyword.trim()) {
-      const recModels: ListItem[] = [];
-      for (const rec of RECOMMENDED_MODELS) {
-        for (const provider of sortedProviders) {
-          const found = provider.children.find((m) => m.id === rec.modelId);
-          if (found) {
-            recModels.push({
-              creditCost: rec.creditCost,
-              description: rec.description,
-              model: found,
-              providerId: provider.id,
-              type: 'recommended-model',
-            });
-            break;
-          }
-        }
-      }
-      if (recModels.length > 0) {
-        recommendedItems.push({ type: 'recommended-header' });
-        recommendedItems.push(...recModels);
-      }
-    }
 
     if (groupMode === 'byModel') {
       const modelMap = new Map<string, ModelWithProviders>();
@@ -97,24 +70,13 @@ export const useBuildListItems = (
         });
       }
 
-      const regularItems = modelArray
-        .sort((a, b) => a.displayName.localeCompare(b.displayName))
-        .map((data) => ({
-          data,
-          type:
-            data.providers.length === 1
-              ? ('model-item-single' as const)
-              : ('model-item-multiple' as const),
-        }));
-
-      if (!showAll && recommendedItems.length > 0) {
-        return [
-          ...recommendedItems,
-          { count: regularItems.length, type: 'show-all-toggle' as const },
-        ];
-      }
-
-      return [...recommendedItems, ...regularItems];
+      return modelArray.map((data) => ({
+        data,
+        type:
+          data.providers.length === 1
+            ? ('model-item-single' as const)
+            : ('model-item-multiple' as const),
+      }));
     } else {
       const items: ListItem[] = [];
 
@@ -142,11 +104,7 @@ export const useBuildListItems = (
         }
       }
 
-      if (!showAll && recommendedItems.length > 0) {
-        return [...recommendedItems, { count: items.length, type: 'show-all-toggle' as const }];
-      }
-
-      return [...recommendedItems, ...items];
+      return items;
     }
-  }, [enabledList, groupMode, searchKeyword, showAll]);
+  }, [enabledList, groupMode, searchKeyword]);
 };

@@ -1,6 +1,7 @@
-/* eslint-disable unicorn/no-array-push-push */
-import { Menu, MenuItemConstructorOptions, app, clipboard, shell } from 'electron';
-import * as path from 'node:path';
+import path from 'node:path';
+
+import type { MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, clipboard, Menu, shell } from 'electron';
 
 import { isDev } from '@/const/env';
 import NotificationCtr from '@/controllers/NotificationCtr';
@@ -11,6 +12,7 @@ import { BaseMenuPlatform } from './BaseMenuPlatform';
 
 export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
   private appMenu: Menu | null = null;
+  private dockMenu: Menu | null = null;
   private trayMenu: Menu | null = null;
 
   buildAndSetAppMenu(options?: MenuOptions): Menu {
@@ -19,6 +21,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
     this.appMenu = Menu.buildFromTemplate(template);
 
     Menu.setApplicationMenu(this.appMenu);
+    this.buildAndSetDockMenu();
 
     return this.appMenu;
   }
@@ -78,12 +81,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             },
             label: t('macOS.about', { appName }),
           },
-          {
-            click: () => {
-              this.app.updaterManager.checkForUpdates({ manual: true });
-            },
-            label: t('common.checkUpdates'),
-          },
+          this.getUpdateMenuItem(t),
           { type: 'separator' },
           {
             accelerator: 'Command+,',
@@ -120,6 +118,15 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             },
             label: t('file.newTopic'),
           },
+          {
+            accelerator: 'Command+T',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewTab');
+            },
+            label: t('file.newTab'),
+          },
           { type: 'separator' },
           {
             accelerator: 'Alt+Command+A',
@@ -149,7 +156,25 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             label: t('file.newPage'),
           },
           { type: 'separator' },
-          { label: t('window.close'), role: 'close' },
+          {
+            click: () => this.app.screenCaptureManager.startSession(),
+            label: t('tray.openMiniToolbar'),
+          },
+          { type: 'separator' },
+          {
+            accelerator: 'CmdOrCtrl+W',
+            click: () => {
+              const focused = BrowserWindow.getFocusedWindow();
+              if (!focused) return;
+              const mainWindow = this.app.browserManager.getMainWindow();
+              if (focused === mainWindow.browserWindow) {
+                mainWindow.broadcast('closeCurrentTabOrWindow');
+              } else {
+                focused.close();
+              }
+            },
+            label: t('window.close'),
+          },
         ],
       },
       {
@@ -250,7 +275,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           {
             click: () => {
               const logsPath = app.getPath('logs');
-              console.log(`[Menu] Opening logs directory: ${logsPath}`);
+              console.info(`[Menu] Opening logs directory: ${logsPath}`);
               shell.openPath(logsPath).catch((err) => {
                 console.error(`[Menu] Error opening path ${logsPath}:`, err);
                 // Optionally show an error dialog to the user
@@ -261,7 +286,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           {
             click: () => {
               const userDataPath = app.getPath('userData');
-              console.log(`[Menu] Opening user data directory: ${userDataPath}`);
+              console.info(`[Menu] Opening user data directory: ${userDataPath}`);
               shell.openPath(userDataPath).catch((err) => {
                 console.error(`[Menu] Error opening path ${userDataPath}:`, err);
                 // Optionally show an error dialog to the user
@@ -388,6 +413,34 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
     }
 
     return template;
+  }
+
+  private getUpdateMenuItem(t: (key: string, opts?: any) => string): MenuItemConstructorOptions {
+    const { stage } = this.app.updaterManager.getUpdaterState();
+
+    switch (stage) {
+      case 'checking': {
+        return { enabled: false, label: t('common.checkingUpdates') };
+      }
+      case 'downloading': {
+        return { enabled: false, label: t('common.downloadingUpdate') };
+      }
+      case 'downloaded': {
+        return {
+          click: () => this.app.updaterManager.installNow(),
+          label: t('common.restartToUpdate'),
+        };
+      }
+      case 'latest': {
+        return { enabled: false, label: t('common.isLatestVersion') };
+      }
+      default: {
+        return {
+          click: () => this.app.updaterManager.checkForUpdates({ manual: true }),
+          label: t('common.checkUpdates'),
+        };
+      }
+    }
   }
 
   private getDefaultContextMenuTemplate(data?: ContextMenuData): MenuItemConstructorOptions[] {
@@ -628,6 +681,14 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         label: t('tray.show', { appName }),
       },
       {
+        click: () => this.app.screenCaptureManager.startSession(),
+        label: t('tray.openMiniToolbar'),
+      },
+      {
+        click: () => this.app.browserManager.openQuickChatPopup(),
+        label: t('tray.quickChat'),
+      },
+      {
         click: async () => {
           const mainWindow = this.app.browserManager.getMainWindow();
           mainWindow.show();
@@ -637,6 +698,29 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
       },
       { type: 'separator' },
       { label: t('tray.quit'), role: 'quit' },
+    ];
+  }
+
+  private buildAndSetDockMenu() {
+    if (!app.dock?.setMenu) return;
+
+    this.dockMenu = Menu.buildFromTemplate(this.getDockMenuTemplate());
+    app.dock.setMenu(this.dockMenu);
+  }
+
+  private getDockMenuTemplate(): MenuItemConstructorOptions[] {
+    const t = this.app.i18n.ns('menu');
+    const appName = app.getName();
+
+    return [
+      {
+        click: () => this.app.browserManager.showMainWindow(),
+        label: t('tray.show', { appName }),
+      },
+      {
+        click: () => this.app.screenCaptureManager.startSession(),
+        label: t('tray.openMiniToolbar'),
+      },
     ];
   }
 }

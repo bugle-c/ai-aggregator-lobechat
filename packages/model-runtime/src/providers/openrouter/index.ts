@@ -14,7 +14,16 @@ export const params = {
   baseURL: 'https://openrouter.ai/api/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { reasoning_effort, thinking, reasoning: _reasoning, thinkingLevel, ...rest } = payload;
+      const {
+        reasoning_effort,
+        thinking,
+        reasoning: _reasoning,
+        thinkingLevel,
+        imageAspectRatio,
+        imageResolution,
+        model,
+        ...rest
+      } = payload;
 
       let reasoning: OpenRouterReasoning | undefined;
 
@@ -37,8 +46,35 @@ export const params = {
         }
       }
 
+      // Add modalities and image_config for image generation models
+      const isImageModel = model.includes('-image') || model.includes('flux');
+      const modalities =
+        (payload as any).modalities ?? (isImageModel ? ['image', 'text'] : undefined);
+
+      // Map imageResolution to image_size: '512px' → '0.5K', others pass through
+      const imageSizeValue = imageResolution
+        ? imageResolution === '512px'
+          ? '0.5K'
+          : imageResolution
+        : undefined;
+
+      // 'auto' means use model default — omit the parameter
+      const aspectRatioValue =
+        imageAspectRatio && imageAspectRatio !== 'auto' ? imageAspectRatio : undefined;
+
+      const image_config =
+        (payload as any).image_config ??
+        (isImageModel && (aspectRatioValue || imageSizeValue)
+          ? {
+              ...(aspectRatioValue && { aspect_ratio: aspectRatioValue }),
+              ...(imageSizeValue && { image_size: imageSizeValue }),
+            }
+          : undefined);
+
       return {
         ...rest,
+        ...(image_config && { image_config }),
+        ...(modalities && { modalities }),
         model: payload.enabledSearch ? `${payload.model}:online` : payload.model,
         ...(reasoning && { reasoning }),
         stream: payload.stream ?? true,
@@ -68,13 +104,13 @@ export const params = {
       return [];
     }
 
-    // 处理前端获取的模型信息，转换为标准格式
+    // Process the model info fetched from the frontend and convert to standard format
     const formattedModels = modelList.map((model) => {
       const { top_provider, architecture, pricing, supported_parameters } = model;
 
       const inputModalities = architecture.input_modalities || [];
 
-      // 处理 name，默认去除冒号及其前面的内容
+      // Process the name, by default strip the colon and everything before it
       let displayName = model.name;
       const colonIndex = displayName.indexOf(':');
       if (colonIndex !== -1) {
@@ -130,7 +166,7 @@ export const params = {
           if (model.description && model.description.includes('`reasoning` `enabled`')) {
             extendParams.push('enableReasoning');
           }
-          if (hasReasoning && model.id.includes('gpt-5.2')) {
+          if (hasReasoning && (model.id.includes('gpt-5.2') || model.id.includes('gpt-5.4'))) {
             extendParams.push('gpt5_2ReasoningEffort', 'textVerbosity');
           } else if (hasReasoning && model.id.includes('gpt-5.1')) {
             extendParams.push('gpt5_1ReasoningEffort', 'textVerbosity');

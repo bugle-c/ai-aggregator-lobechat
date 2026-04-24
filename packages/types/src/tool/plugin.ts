@@ -1,8 +1,8 @@
-import type { LobeChatPluginManifest, Meta } from '@lobehub/chat-plugin-sdk';
-
+import type { Meta } from './builtin';
+import type { ToolManifest, ToolManifestType } from './manifest';
 import type { LobeToolType } from './tool';
 
-export type PluginManifestMap = Record<string, LobeChatPluginManifest>;
+export type PluginManifestMap = Record<string, ToolManifest>;
 
 export interface CustomPluginMetadata {
   avatar?: string;
@@ -26,7 +26,6 @@ export interface CustomPluginParams {
     serverUrl: string;
   };
 
-  /* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
   manifestMode?: 'local' | 'url';
   manifestUrl?: string;
   /**
@@ -54,7 +53,7 @@ export interface CustomPluginParams {
 export interface LobeToolCustomPlugin {
   customParams?: CustomPluginParams;
   identifier: string;
-  manifest?: LobeChatPluginManifest;
+  manifest?: ToolManifest;
   settings?: any;
   type: 'customPlugin';
 }
@@ -64,11 +63,20 @@ export interface InstallPluginMeta extends Partial<Meta> {
   createdAt?: string;
   homepage?: string;
   identifier: string;
-  runtimeType?: 'mcp' | 'default' | 'markdown' | 'standalone' | undefined;
+  runtimeType?: ToolManifestType;
   type: LobeToolType;
 }
 
 export interface PluginInstallError {
   cause?: string;
   message: 'noManifest' | 'fetchError' | 'manifestInvalid' | 'urlError';
+}
+
+export interface PluginRequestPayload {
+  apiName: string;
+  arguments?: string;
+  identifier: string;
+  indexUrl?: string;
+  manifest?: ToolManifest;
+  type?: string;
 }

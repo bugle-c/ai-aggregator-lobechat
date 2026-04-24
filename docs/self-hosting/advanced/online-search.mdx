@@ -51,6 +51,24 @@ Supported crawler types are listed below:
 
 ---
 
+## `CRAWL_CONCURRENCY`
+
+Controls crawler concurrency per crawl task. The default is `3`. On low-resource servers, use `1` to reduce CPU spikes.
+
+```env
+CRAWL_CONCURRENCY=3
+```
+
+## `CRAWLER_RETRY`
+
+Controls retry attempts per URL on crawl failures. The default is `1` (up to 2 attempts total).
+
+```env
+CRAWLER_RETRY=1
+```
+
+---
+
 ## `SEARCH_PROVIDERS`
 
 Configure which search engine providers to use for web search.
@@ -214,6 +232,6 @@ If AI can answer these time-sensitive questions, it indicates that the online se
 
 ## References
 
-- [LobeHub Online Search RFC Discussion](https://github.com/lobehub/lobe-chat/discussions/6447)
+- [LobeHub Online Search RFC Discussion](https://github.com/lobehub/lobehub/discussions/6447)
 - [SearXNG GitHub Repository](https://github.com/searxng/searxng)
 - [Discussion on Enabling JSON Output for SearXNG](https://github.com/searxng/searxng/discussions/3542)

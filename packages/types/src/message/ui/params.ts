@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
 import { z } from 'zod';
 
 import type { ConversationContext } from '../../conversation';
@@ -109,6 +108,8 @@ export interface SendMessageParams {
    * @deprecated Use ConversationContext.newThread instead
    */
   createThread?: boolean;
+  /** Lexical editor JSON state for rich text rendering */
+  editorData?: Record<string, any>;
   files?: UploadFileItem[];
   /**
    *

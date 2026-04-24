@@ -5,12 +5,12 @@ import {
   Checkbox,
   copyToClipboard,
   Flexbox,
-  LobeSelect,
   Popover,
   Skeleton,
   Text,
   usePopoverContext,
 } from '@lobehub/ui';
+import { Select } from '@lobehub/ui/base-ui';
 import { App, Divider } from 'antd';
 import { ExternalLinkIcon, LinkIcon, LockIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
@@ -187,7 +187,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
 
       <Flexbox gap={4}>
         <Text type="secondary">{t('shareModal.popover.visibility')}</Text>
-        <LobeSelect
+        <Select
           disabled={updating}
           options={visibilityOptions}
           style={{ width: '100%' }}
@@ -227,9 +227,11 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
         >
           {t('shareModal.popover.moreOptions')}
         </Button>
-        <Button icon={LinkIcon} size="small" type="primary" onClick={handleCopyLink}>
-          {t('shareModal.copyLink')}
-        </Button>
+        {currentVisibility !== 'private' && (
+          <Button icon={LinkIcon} size="small" type="primary" onClick={handleCopyLink}>
+            {t('shareModal.copyLink')}
+          </Button>
+        )}
       </Flexbox>
     </Flexbox>
   );

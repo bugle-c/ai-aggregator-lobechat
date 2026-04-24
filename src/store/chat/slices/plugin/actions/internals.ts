@@ -1,8 +1,6 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { builtinTools } from '@lobechat/builtin-tools';
 import { ToolArgumentsRepairer, ToolNameResolver } from '@lobechat/context-engine';
-import { type ChatToolPayload, type MessageToolCall } from '@lobechat/types';
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type ChatToolPayload, type MessageToolCall, type ToolManifest } from '@lobechat/types';
 
 import { type ChatStore } from '@/store/chat/store';
 import { useToolStore } from '@/store/tool';
@@ -23,13 +21,10 @@ export const pluginInternals = (set: Setter, get: () => ChatStore, _api?: unknow
   new PluginInternalsActionImpl(set, get, _api);
 
 export class PluginInternalsActionImpl {
-  readonly #get: () => ChatStore;
-  readonly #set: Setter;
-
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
-    this.#set = set;
-    this.#get = get;
+    void set;
+    void get;
   }
 
   internal_transformToolCalls = (toolCalls: MessageToolCall[]): ChatToolPayload[] => {
@@ -37,25 +32,24 @@ export class PluginInternalsActionImpl {
 
     // Build manifests map from tool store
     const toolStoreState = useToolStore.getState();
-    const manifests: Record<string, LobeChatPluginManifest> = {};
+    const manifests: Record<string, ToolManifest> = {};
 
     // Track source for each identifier
-    const sourceMap: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'> = {};
+    const sourceMap: Record<string, 'builtin' | 'mcp' | 'klavis' | 'lobehubSkill'> = {};
 
-    // Get all installed plugins
+    // Get all installed plugins (all treated as MCP now)
     const installedPlugins = pluginSelectors.installedPlugins(toolStoreState);
     for (const plugin of installedPlugins) {
       if (plugin.manifest) {
-        manifests[plugin.identifier] = plugin.manifest as LobeChatPluginManifest;
-        // Check if this plugin has MCP params
-        sourceMap[plugin.identifier] = plugin.customParams?.mcp ? 'mcp' : 'plugin';
+        manifests[plugin.identifier] = plugin.manifest as ToolManifest;
+        sourceMap[plugin.identifier] = 'mcp';
       }
     }
 
     // Get all builtin tools
     for (const tool of builtinTools) {
       if (tool.manifest) {
-        manifests[tool.identifier] = tool.manifest as LobeChatPluginManifest;
+        manifests[tool.identifier] = tool.manifest as ToolManifest;
         sourceMap[tool.identifier] = 'builtin';
       }
     }
@@ -64,7 +58,7 @@ export class PluginInternalsActionImpl {
     const klavisTools = klavisStoreSelectors.klavisAsLobeTools(toolStoreState);
     for (const tool of klavisTools) {
       if (tool.manifest) {
-        manifests[tool.identifier] = tool.manifest as LobeChatPluginManifest;
+        manifests[tool.identifier] = tool.manifest as ToolManifest;
         sourceMap[tool.identifier] = 'klavis';
       }
     }
@@ -73,7 +67,7 @@ export class PluginInternalsActionImpl {
     const lobehubSkillTools = lobehubSkillStoreSelectors.lobehubSkillAsLobeTools(toolStoreState);
     for (const tool of lobehubSkillTools) {
       if (tool.manifest) {
-        manifests[tool.identifier] = tool.manifest as LobeChatPluginManifest;
+        manifests[tool.identifier] = tool.manifest as ToolManifest;
         sourceMap[tool.identifier] = 'lobehubSkill';
       }
     }

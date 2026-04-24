@@ -1,5 +1,5 @@
-/* eslint-disable unicorn/no-array-push-push */
-import { Menu, MenuItemConstructorOptions, app, clipboard, shell } from 'electron';
+import type { MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, clipboard, Menu, shell } from 'electron';
 
 import { isDev } from '@/const/env';
 
@@ -63,6 +63,15 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
             },
             label: t('file.newTopic'),
           },
+          {
+            accelerator: 'Ctrl+T',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewTab');
+            },
+            label: t('file.newTab'),
+          },
           { type: 'separator' },
           {
             accelerator: 'Alt+Ctrl+A',
@@ -96,12 +105,7 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
             click: () => this.app.browserManager.retrieveByIdentifier('settings').show(),
             label: t('file.preferences'),
           },
-          {
-            click: () => {
-              this.app.updaterManager.checkForUpdates({ manual: true });
-            },
-            label: t('common.checkUpdates'),
-          },
+          this.getUpdateMenuItem(t),
           { type: 'separator' },
           {
             accelerator: 'Alt+F4',
@@ -129,6 +133,8 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
       {
         label: t('view.title'),
         submenu: [
+          { accelerator: 'F12', label: t('dev.devTools'), role: 'toggleDevTools' },
+          { type: 'separator' },
           { label: t('view.resetZoom'), role: 'resetZoom' },
           { label: t('view.zoomIn'), role: 'zoomIn' },
           { label: t('view.zoomOut'), role: 'zoomOut' },
@@ -170,7 +176,20 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
         label: t('window.title'),
         submenu: [
           { label: t('window.minimize'), role: 'minimize' },
-          { label: t('window.close'), role: 'close' },
+          {
+            accelerator: 'CmdOrCtrl+W',
+            click: () => {
+              const focused = BrowserWindow.getFocusedWindow();
+              if (!focused) return;
+              const mainWindow = this.app.browserManager.getMainWindow();
+              if (focused === mainWindow.browserWindow) {
+                mainWindow.broadcast('closeCurrentTabOrWindow');
+              } else {
+                focused.close();
+              }
+            },
+            label: t('window.close'),
+          },
         ],
       },
       {
@@ -211,6 +230,34 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
     }
 
     return template;
+  }
+
+  private getUpdateMenuItem(t: (key: string, opts?: any) => string): MenuItemConstructorOptions {
+    const { stage } = this.app.updaterManager.getUpdaterState();
+
+    switch (stage) {
+      case 'checking': {
+        return { enabled: false, label: t('common.checkingUpdates') };
+      }
+      case 'downloading': {
+        return { enabled: false, label: t('common.downloadingUpdate') };
+      }
+      case 'downloaded': {
+        return {
+          click: () => this.app.updaterManager.installNow(),
+          label: t('common.restartToUpdate'),
+        };
+      }
+      case 'latest': {
+        return { enabled: false, label: t('common.isLatestVersion') };
+      }
+      default: {
+        return {
+          click: () => this.app.updaterManager.checkForUpdates({ manual: true }),
+          label: t('common.checkUpdates'),
+        };
+      }
+    }
   }
 
   private getDefaultContextMenuTemplate(data?: ContextMenuData): MenuItemConstructorOptions[] {
@@ -414,6 +461,14 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
       {
         click: () => this.app.browserManager.showMainWindow(),
         label: t('tray.open', { appName }),
+      },
+      {
+        click: () => this.app.screenCaptureManager.startSession(),
+        label: t('tray.openMiniToolbar'),
+      },
+      {
+        click: () => this.app.browserManager.openQuickChatPopup(),
+        label: t('tray.quickChat'),
       },
       { type: 'separator' },
       {

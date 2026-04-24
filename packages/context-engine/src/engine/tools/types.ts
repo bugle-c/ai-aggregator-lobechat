@@ -68,6 +68,12 @@ export type FunctionCallChecker = (model: string, provider: string) => boolean;
 export interface GenerateToolsParams {
   /** Additional context information */
   context?: ToolsGenerationContext;
+  /**
+   * Tool IDs to exclude from the default tools list.
+   * These IDs will be filtered out from defaultToolIds before merging.
+   * Useful for manual skill mode where only discovery tools should be excluded.
+   */
+  excludeDefaultToolIds?: string[];
   /** Model name */
   model: string;
   /** Provider name */
@@ -150,4 +156,64 @@ export interface UniformTool {
    * The type of the tool. Currently, only `function` is supported.
    */
   type: 'function';
+}
+
+// ---- Tool Lifecycle Types ----
+
+export type ToolSource = 'builtin' | 'client' | 'mcp' | 'klavis' | 'lobehubSkill';
+
+/**
+ * Where the tool is executed for a given invocation.
+ * Orthogonal to ToolSource (origin): executor describes dispatch target.
+ */
+export type ToolExecutor = 'client' | 'server';
+
+/**
+ * How a tool was activated at step level
+ */
+export type ActivationSource = 'active_tools' | 'mention' | 'device' | 'discovery';
+
+/**
+ * Operation-level tool set: determined at createOperation time, immutable during execution.
+ */
+export interface OperationToolSet {
+  enabledToolIds: string[];
+  executorMap?: Record<string, ToolExecutor>;
+  manifestMap: Record<string, LobeToolManifest>;
+  sourceMap: Record<string, ToolSource>;
+  tools: UniformTool[];
+}
+
+/**
+ * Record of a tool activated at step level.
+ */
+export interface ActivatedStepTool {
+  activatedAtStep: number;
+  id: string;
+  manifest?: LobeToolManifest;
+  source: ActivationSource;
+}
+
+/**
+ * Declarative delta describing tool changes for a single step.
+ * Built by `buildStepToolDelta`, consumed by `ToolResolver.resolve`.
+ */
+export interface StepToolDelta {
+  activatedTools: Array<{
+    id: string;
+    manifest?: LobeToolManifest;
+    source: ActivationSource;
+  }>;
+  deactivatedToolIds?: string[];
+}
+
+/**
+ * Final resolved tool set ready for LLM call.
+ */
+export interface ResolvedToolSet {
+  enabledToolIds: string[];
+  executorMap?: Record<string, ToolExecutor>;
+  manifestMap: Record<string, LobeToolManifest>;
+  sourceMap: Record<string, ToolSource>;
+  tools: UniformTool[];
 }

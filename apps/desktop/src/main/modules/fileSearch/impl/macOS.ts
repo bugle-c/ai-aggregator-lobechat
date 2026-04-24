@@ -1,13 +1,15 @@
-import { execa } from 'execa';
 import { stat } from 'node:fs/promises';
 import * as os from 'node:os';
-import * as path from 'node:path';
+import path from 'node:path';
 
-import { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
+import { execa } from 'execa';
+
+import type { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
 import { createLogger } from '@/utils/logger';
 
-import { FileResult, SearchOptions } from '../types';
-import { UnixFileSearch, UnixSearchTool } from './unix';
+import type { FileResult, SearchOptions } from '../types';
+import type { UnixSearchTool } from './unix';
+import { UnixFileSearch } from './unix';
 
 const logger = createLogger('module:FileSearch:macOS');
 
@@ -367,10 +369,10 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
           continue;
         }
 
-        const match = line.match(/^(\w+)\s+=\s+(.*)$/);
-        if (match) {
-          currentKey = match[1];
-          const value = match[2].trim();
+        const keyValue = line.split(/\s+=\s+/, 2);
+        if (keyValue.length === 2 && /^\w+$/.test(keyValue[0])) {
+          currentKey = keyValue[0];
+          const value = keyValue[1].trim();
 
           if (value.includes('(') && !value.includes(')')) {
             isMultilineValue = true;
@@ -401,8 +403,7 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
     if (value === 'Yes' || value === 'true') return true;
     if (value === 'No' || value === 'false') return false;
 
-    const dateMatch = value.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [+-]\d{4})$/);
-    if (dateMatch) {
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [+-]\d{4}$/.test(value)) {
       try {
         return new Date(value);
       } catch {
@@ -410,7 +411,7 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
       }
     }
 
-    if (/^-?\d+(\.\d+)?$/.test(value)) {
+    if (/^-?\d+(?:\.\d+)?$/.test(value)) {
       return Number(value);
     }
 

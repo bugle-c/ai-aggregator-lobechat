@@ -3,50 +3,39 @@ export const SkillsIdentifier = 'lobe-skills';
 export const SkillsApiName = {
   execScript: 'execScript',
   exportFile: 'exportFile',
-  importSkill: 'importSkill',
-  importFromMarket: 'importFromMarket',
   readReference: 'readReference',
-  runSkill: 'runSkill',
-  searchSkill: 'searchSkill',
+  runCommand: 'runCommand',
+  activateSkill: 'activateSkill',
 };
 
-export interface RunSkillParams {
+export interface ActivateSkillParams {
   name: string;
 }
 
-export interface RunSkillState {
+export interface ActivateSkillState {
   description?: string;
   hasResources: boolean;
   id: string;
   name: string;
 }
 
+/**
+ * Activated skill info passed to execScript
+ */
+export interface ExecScriptActivatedSkill {
+  description?: string;
+  id: string;
+  name: string;
+}
+
 export interface ExecScriptParams {
+  /**
+   * All activated skills from stepContext
+   * Server will resolve zipUrls for all skills
+   */
+  activatedSkills?: ExecScriptActivatedSkill[];
   command: string;
-  /**
-   * Skill configuration context
-   * Used by server to locate skill resources (zipUrl will be resolved server-side)
-   */
-  config?: {
-    /**
-     * Current skill's description
-     */
-    description?: string;
-    /**
-     * Current skill's ID
-     */
-    id?: string;
-    /**
-     * Current skill's name
-     */
-    name?: string;
-  };
   description: string;
-  /**
-   * Whether to run on the desktop client (for local shell access).
-   * Only available on desktop. When false or omitted, runs in cloud sandbox.
-   */
-  runInClient?: boolean;
 }
 
 export interface ExecScriptState {
@@ -57,7 +46,6 @@ export interface ExecScriptState {
 
 export interface RunCommandOptions {
   command: string;
-  runInClient?: boolean;
   timeout?: number;
 }
 
@@ -68,28 +56,22 @@ export interface CommandResult {
   success: boolean;
 }
 
+export interface RunCommandParams {
+  command: string;
+  description?: string;
+}
+
 export interface ReadReferenceParams {
   id: string;
   path: string;
 }
 
 export interface ReadReferenceState {
-  encoding: 'base64' | 'utf-8';
+  encoding: 'base64' | 'utf8';
   fileType: string;
+  fullPath?: string;
   path: string;
   size: number;
-}
-
-export interface ImportSkillParams {
-  type: 'url' | 'zip';
-  url: string;
-}
-
-export interface ImportSkillState {
-  name?: string;
-  skillId?: string;
-  status: 'created' | 'updated' | 'unchanged';
-  success: boolean;
 }
 
 export interface ExportFileParams {
@@ -109,74 +91,4 @@ export interface ExportFileState {
   mimeType?: string;
   size?: number;
   url?: string;
-}
-
-export interface SearchSkillParams {
-  /**
-   * Locale for search results (e.g., 'en-US', 'zh-CN')
-   */
-  locale?: string;
-  /**
-   * Sort order: 'asc' or 'desc'
-   */
-  order?: 'asc' | 'desc';
-  /**
-   * Page number (default: 1)
-   */
-  page?: number;
-  /**
-   * Page size (default: 20)
-   */
-  pageSize?: number;
-  /**
-   * Search query (searches name, description, summary)
-   */
-  q?: string;
-  /**
-   * Sort field: createdAt | installCount | forks | name | relevance | stars | updatedAt | watchers
-   */
-  sort?:
-    | 'createdAt'
-    | 'forks'
-    | 'installCount'
-    | 'name'
-    | 'relevance'
-    | 'stars'
-    | 'updatedAt'
-    | 'watchers';
-}
-
-export interface MarketSkillItem {
-  category?: string;
-  createdAt: string;
-  description: string;
-  identifier: string;
-  installCount: number;
-  name: string;
-  repository?: string;
-  sourceUrl?: string;
-  summary?: string;
-  updatedAt: string;
-  version?: string;
-}
-
-export interface SearchSkillState {
-  items: MarketSkillItem[];
-  page: number;
-  pageSize: number;
-  total: number;
-}
-
-export interface ImportFromMarketParams {
-  /**
-   * The identifier of the skill to import from market
-   */
-  identifier: string;
-}
-
-export interface ImportFromMarketState {
-  name?: string;
-  skillId?: string;
-  status: 'created' | 'updated' | 'unchanged';
-  success: boolean;
 }

@@ -4,7 +4,14 @@ import { LobeHub, ModelIcon, ProviderIcon } from '@lobehub/icons';
 import { type FlexboxProps } from '@lobehub/ui';
 import { Avatar, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, useResponsive } from 'antd-style';
-import { Infinity, LucideEye, LucideImage, LucidePaperclip, Video, Wrench } from 'lucide-react';
+import {
+  Infinity as InfinityIcon,
+  LucideEye,
+  LucideImage,
+  LucidePaperclip,
+  Video,
+  Wrench,
+} from 'lucide-react';
 import { type ModelAbilities } from 'model-bank';
 import numeral from 'numeral';
 import { type CSSProperties, type FC } from 'react';
@@ -175,7 +182,7 @@ const Context = memo(
 
     const tag = (
       <Tag className={styles.token} size={'small'}>
-        {contextWindowTokens === 0 ? <Infinity size={17} strokeWidth={1.6} /> : tokensText}
+        {contextWindowTokens === 0 ? <InfinityIcon size={17} strokeWidth={1.6} /> : tokensText}
       </Tag>
     );
 
@@ -230,6 +237,7 @@ export const ModelInfoTags = memo<ModelInfoTagsProps>(
 interface ModelItemRenderProps extends ChatModelCard, Partial<Omit<FlexboxProps, 'id' | 'title'>> {
   abilities?: ModelAbilities;
   newBadgeLabel?: string;
+  proBadgeLabel?: string;
   showInfoTag?: boolean;
 }
 
@@ -242,6 +250,7 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
     functionCall,
     imageOutput,
     newBadgeLabel,
+    proBadgeLabel,
     video,
     vision,
     id,
@@ -286,6 +295,11 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
             <NewModelBadgeCore label={newBadgeLabel} releasedAt={releasedAt} />
           ) : (
             <NewModelBadgeI18n releasedAt={releasedAt} />
+          )}
+          {proBadgeLabel && (
+            <Tag color="gold" size="small">
+              {proBadgeLabel}
+            </Tag>
           )}
         </Flexbox>
         {showInfoTag && (

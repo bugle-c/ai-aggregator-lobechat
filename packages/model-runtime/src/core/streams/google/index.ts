@@ -30,6 +30,18 @@ const getBlockReasonMessage = (blockReason: string): string => {
   );
 };
 
+const getCandidateBlockedReason = (
+  candidate: NonNullable<GenerateContentResponse['candidates']>[number] | undefined,
+) => {
+  const finishReason = candidate?.finishReason;
+
+  if (!finishReason || typeof finishReason !== 'string') return undefined;
+
+  if (finishReason in GOOGLE_AI_BLOCK_REASON) return finishReason;
+
+  return undefined;
+};
+
 const transformGoogleGenerativeAIStream = (
   chunk: GenerateContentResponse,
   context: StreamContext,
@@ -67,6 +79,37 @@ const transformGoogleGenerativeAIStream = (
   // maybe need another structure to add support for multiple choices
   const candidate = chunk.candidates?.[0];
   const { usageMetadata } = chunk;
+
+  // Handle blocked terminal candidate finishReason (e.g., PROHIBITED_CONTENT, SAFETY)
+  const blockedReason = getCandidateBlockedReason(candidate);
+  if (blockedReason) {
+    const convertedUsage = usageMetadata
+      ? convertGoogleAIUsage(usageMetadata, payload?.pricing)
+      : undefined;
+    const humanFriendlyMessage = getBlockReasonMessage(blockedReason);
+
+    return [
+      ...(convertedUsage
+        ? [{ data: convertedUsage, id: context?.id, type: 'usage' as const }]
+        : []),
+      {
+        data: {
+          body: {
+            context: {
+              finishMessage: (candidate as any)?.finishMessage,
+              finishReason: blockedReason,
+            },
+            message: humanFriendlyMessage,
+            provider: 'google',
+          },
+          type: 'ProviderBizError',
+        },
+        id: context?.id || 'error',
+        type: 'error' as const,
+      },
+    ];
+  }
+
   const usageChunks: StreamProtocolChunk[] = [];
   if (candidate?.finishReason && usageMetadata) {
     usageChunks.push({ data: candidate.finishReason, id: context?.id, type: 'stop' });
@@ -96,7 +139,7 @@ const transformGoogleGenerativeAIStream = (
               name: value.name,
             },
             id: generateToolCallId(index, value.name),
-            index: index,
+            index,
             thoughtSignature: value.thoughtSignature,
             type: 'function',
           }),
@@ -233,26 +276,55 @@ const transformGoogleGenerativeAIStream = (
     }
 
     // return the grounding
-    const { groundingChunks, webSearchQueries } = candidate.groundingMetadata ?? {};
+    const { groundingChunks, imageSearchQueries, webSearchQueries } =
+      candidate.groundingMetadata ?? {};
     if (groundingChunks) {
+      const webChunks = groundingChunks.filter((chunk) => chunk.web);
+      const imageChunks = groundingChunks.filter((chunk) => chunk.image);
+
       return [
-        { data: text, id: context.id, type: 'text' },
+        ...(text ? [{ data: text, id: context.id, type: 'text' as const }] : []),
         {
           data: {
-            citations: groundingChunks?.map((chunk) => ({
-              // Google returns a uri processed by Google itself, so it cannot display the real favicon
-              // Need to use title as a replacement
-              favicon: chunk.web?.title,
-              title: chunk.web?.title,
-              url: chunk.web?.uri,
-            })),
-            searchQueries: webSearchQueries,
+            citations:
+              webChunks.length > 0
+                ? webChunks.map((chunk) => {
+                    // Fall back to hostname when title is empty
+                    let displayTitle = chunk.web?.title?.replaceAll(/<[^>]*>/g, '');
+                    if (!displayTitle) {
+                      try {
+                        displayTitle = new URL(chunk.web?.uri || '').hostname.replace('www.', '');
+                      } catch {
+                        displayTitle = chunk.web?.uri;
+                      }
+                    }
+                    return {
+                      // Google returns a uri processed by Google itself, so it cannot display the real favicon
+                      // Need to use title (or derived hostname) as a replacement
+                      favicon: displayTitle,
+                      title: displayTitle,
+                      url: chunk.web?.uri,
+                    };
+                  })
+                : undefined,
+            imageResults:
+              imageChunks.length > 0
+                ? imageChunks.map((chunk) => ({
+                    domain: chunk.image?.domain,
+                    imageUri: chunk.image?.imageUri,
+                    sourceUri: chunk.image?.sourceUri,
+                    title: chunk.image?.title,
+                  }))
+                : undefined,
+            imageSearchQueries:
+              imageSearchQueries && imageSearchQueries.length > 0 ? imageSearchQueries : undefined,
+            searchQueries: webSearchQueries?.filter(Boolean),
           } as GroundingSearch,
           id: context.id,
           type: 'grounding',
         },
         ...usageChunks,
-      ];
+      ].filter(Boolean) as StreamProtocolChunk[];
     }
 
     // Check for image data before handling finishReason
@@ -328,7 +400,7 @@ export const GoogleGenerativeAIStream = (
   return rawStream
     .pipeThrough(
       createTokenSpeedCalculator(transformWithPayload, {
-        enableStreaming: enableStreaming,
+        enableStreaming,
         inputStartAt,
         streamStack,
       }),

@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import type { UserGeneralConfig } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
@@ -139,6 +140,7 @@ export class CommonActionImpl {
                 isUserCanEnableTrace: data.canEnableTrace,
                 isUserHasConversation: data.hasConversation,
                 isUserStateInit: true,
+                agentOnboarding: data.agentOnboarding,
                 onboarding: data.onboarding,
                 preference,
                 referralStatus: data.referralStatus,
@@ -149,6 +151,28 @@ export class CommonActionImpl {
               false,
               n('initUserState'),
             );
+
+            const autoDetectedGeneralConfig: Partial<UserGeneralConfig> = {};
+            const currentGeneralSettings = data.settings?.general;
+
+            // Auto-detect and sync browser timezone on first load
+            if (!currentGeneralSettings?.timezone && typeof Intl !== 'undefined') {
+              const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+              if (detectedTimezone) autoDetectedGeneralConfig.timezone = detectedTimezone;
+            }
+
+            // Keep reply language aligned with the browser locale until the user makes a choice.
+            if (!currentGeneralSettings?.responseLanguage && typeof navigator !== 'undefined') {
+              autoDetectedGeneralConfig.responseLanguage =
+                userGeneralSettingsSelectors.currentResponseLanguage(this.#get());
+            }
+
+            if (Object.keys(autoDetectedGeneralConfig).length > 0) {
+              this.#get()
+                .updateGeneralConfig(autoDetectedGeneralConfig)
+                .catch(() => {});
+            }
+
             //analytics
             const analytics = getSingletonAnalyticsOptional();
             analytics?.identify(data.userId || '', {

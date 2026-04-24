@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import {
   type ChatMessageError,
   type ChatMessagePluginError,
@@ -14,7 +13,7 @@ import { type StoreSetter } from '@/store/types';
 import { merge } from '@/utils/merge';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
-import { displayMessageSelectors } from '../../message/selectors';
+import { dbMessageSelectors, displayMessageSelectors } from '../../message/selectors';
 
 /**
  * Params for batch updating tool message content, state, and error
@@ -41,11 +40,10 @@ export const pluginOptimisticUpdate = (set: Setter, get: () => ChatStore, _api?:
 
 export class PluginOptimisticUpdateActionImpl {
   readonly #get: () => ChatStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
-    this.#set = set;
+    void set;
     this.#get = get;
   }
 
@@ -209,18 +207,14 @@ export class PluginOptimisticUpdateActionImpl {
     id: string,
     context?: OptimisticUpdateContext,
   ): Promise<void> => {
-    const { dbMessageSelectors } = await import('../../message/selectors');
     const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
     if (!message || !message.tools) return;
 
-    const { internal_toggleMessageLoading, replaceMessages, internal_getConversationContext } =
-      this.#get();
+    const { replaceMessages, internal_getConversationContext } = this.#get();
 
     const ctx = internal_getConversationContext(context);
 
-    internal_toggleMessageLoading(true, id);
     const result = await messageService.updateMessage(id, { tools: message.tools }, ctx);
-    internal_toggleMessageLoading(false, id);
 
     if (result?.success && result.messages) {
       replaceMessages(result.messages, { context: ctx });

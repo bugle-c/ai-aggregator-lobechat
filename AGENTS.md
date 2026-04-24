@@ -1,6 +1,6 @@
-# LobeChat Development Guidelines
+# LobeHub Development Guidelines
 
-This document serves as a comprehensive guide for all team members when developing LobeChat.
+This document serves as a comprehensive guide for all team members when developing LobeHub.
 
 ## Project Description
 
@@ -17,8 +17,8 @@ You are developing an open-source, modern-design AI Agent Workspace: LobeHub (pr
 
 ## Directory Structure
 
-```
-lobe-chat/
+```plaintext
+lobehub/
 ├── apps/desktop/           # Electron desktop app
 ├── packages/               # Shared packages (@lobechat/*)
 │   ├── database/           # Database schemas, models, repositories
@@ -26,6 +26,9 @@ lobe-chat/
 │   └── ...
 ├── src/
 │   ├── app/                # Next.js app router
+│   ├── spa/                # SPA entry points (entry.*.tsx) and router config
+│   ├── routes/             # SPA page components (roots)
+│   ├── features/           # Business components by domain
 │   ├── store/              # Zustand stores
 │   ├── services/           # Client services
 │   ├── server/             # Server services and routers
@@ -38,12 +41,13 @@ lobe-chat/
 
 ### Git Workflow
 
-- The current release branch is `next` until v2.0.0 is officially released
+- **Branch strategy**: `canary` is the development branch (cloud production); `main` is the release branch (periodically cherry-picks from canary)
+- New branches should be created from `canary`; PRs should target `canary`
 - Use rebase for git pull
 - Git commit messages should prefix with gitmoji
-- Git branch name format: `username/feat/feature-name`
+- Git branch name format: `feat/feature-name`
 - Use `.github/PULL_REQUEST_TEMPLATE.md` for PR descriptions
-- PR titles with `✨ feat/` or `🐛 fix` trigger releases
+- **Protection of local changes**: Never use `git restore`, `git checkout --`, `git reset --hard`, or any other command or workflow that can forcibly overwrite, discard, or silently replace user-owned uncommitted changes. Before any revert or restoration affecting existing files, inspect the working tree carefully and obtain explicit user confirmation.
 
 ### Package Management
 
@@ -82,23 +86,15 @@ cd packages/[package-name] && bunx vitest run --silent='passed-only' '[file-path
 - **Dev**: Translate `locales/zh-CN/namespace.json` locale file only for preview
 - DON'T run `pnpm i18n`, let CI auto handle it
 
-## Linear Issue Management
+## SPA Routes and Features
 
-Follow [Linear rules in CLAUDE.md](CLAUDE.md#linear-issue-management-ignore-if-not-installed-linear-mcp) when working with Linear issues.
+- **`src/routes/`** holds only page segments (`_layout/index.tsx`, `index.tsx`, `[id]/index.tsx`). Keep route files **thin** — import from `@/features/*` and compose, no business logic.
+- **`src/features/`** holds business components by **domain** (e.g. `Pages`, `PageEditor`, `Home`). Layout pieces, hooks, and domain UI go here.
+- **Desktop router parity:** When changing the main SPA route tree, update **both** `src/spa/router/desktopRouter.config.tsx` (dynamic imports) and `src/spa/router/desktopRouter.config.desktop.tsx` (sync imports) so paths and nesting match. Changing only one can leave routes unregistered and cause **blank screens**.
+- See the **spa-routes** skill (`.agents/skills/spa-routes/SKILL.md`) for the full convention and file-division rules.
 
 ## Skills (Auto-loaded)
 
-All AI development skills are available in `.agents/skills/` directory:
+All AI development skills are available in `.agents/skills/` directory and auto-loaded by Claude Code when relevant.
 
-| Category    | Skills                                     |
-| ----------- | ------------------------------------------ |
-| Frontend    | `react`, `typescript`, `i18n`, `microcopy` |
-| State       | `zustand`                                  |
-| Backend     | `drizzle`                                  |
-| Desktop     | `desktop`                                  |
-| Testing     | `testing`                                  |
-| UI          | `modal`, `hotkey`, `recent-data`           |
-| Config      | `add-provider-doc`, `add-setting-env`      |
-| Workflow    | `linear`, `debug`                          |
-| Performance | `vercel-react-best-practices`              |
-| Overview    | `project-overview`                         |
+**IMPORTANT**: When reviewing PRs or code diffs, ALWAYS read `.agents/skills/code-review/SKILL.md` first.

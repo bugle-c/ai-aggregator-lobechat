@@ -1,8 +1,9 @@
-import { GrepContentParams, GrepContentResult } from '@lobechat/electron-client-ipc';
-import fg from 'fast-glob';
 import { readFile, stat } from 'node:fs/promises';
 
-import { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
+import type { GrepContentParams, GrepContentResult } from '@lobechat/electron-client-ipc';
+import fg from 'fast-glob';
+
+import type { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('module:ContentSearch:base');
@@ -151,7 +152,7 @@ export abstract class BaseContentSearch {
     const regex = new RegExp(pattern, flags);
 
     // Determine files to search
-    let filesToSearch: string[] = [];
+    let filesToSearch: string[];
     const stats = await stat(searchPath);
 
     if (stats.isFile()) {

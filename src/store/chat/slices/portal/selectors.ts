@@ -63,15 +63,24 @@ const artifactMessageId = (s: ChatStoreState) => currentArtifact(s)?.id;
 const artifactType = (s: ChatStoreState) => currentArtifact(s)?.type;
 const artifactCodeLanguage = (s: ChatStoreState) => currentArtifact(s)?.language;
 
+// Escape special regex characters in a string
+const escapeRegExp = (str: string) => str.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&');
+
 const artifactMessageContent = (id: string) => (s: ChatStoreState) => {
   const message = dbMessageSelectors.getDbMessageById(id)(s);
   return message?.content || '';
 };
 
-const artifactCode = (id: string) => (s: ChatStoreState) => {
+const artifactCode = (id: string, identifier?: string) => (s: ChatStoreState) => {
   const messageContent = artifactMessageContent(id)(s);
-  const result = messageContent.match(ARTIFACT_TAG_REGEX);
 
+  const regex = identifier
+    ? new RegExp(
+        `<lobeArtifact\\b[^>]*identifier="${escapeRegExp(identifier)}"[^>]*>(?<content>[\\S\\s]*?)(?:<\\/lobeArtifact>|$)`,
+      )
+    : ARTIFACT_TAG_REGEX;
+
+  const result = messageContent.match(regex);
   let content = result?.groups?.content || '';
 
   // Remove markdown code block if content is wrapped
@@ -80,8 +89,16 @@ const artifactCode = (id: string) => (s: ChatStoreState) => {
   return content;
 };
 
-const isArtifactTagClosed = (id: string) => (s: ChatStoreState) => {
+const isArtifactTagClosed = (id: string, identifier?: string) => (s: ChatStoreState) => {
   const content = artifactMessageContent(id)(s);
+
+  if (identifier) {
+    // Check if the specific artifact (by identifier) is closed
+    const regex = new RegExp(
+      `<lobeArtifact\\b[^>]*identifier="${escapeRegExp(identifier)}"[^>]*>[\\S\\s]*?<\\/lobeArtifact>`,
+    );
+    return regex.test(content || '');
+  }
 
   return ARTIFACT_TAG_CLOSED_REGEX.test(content || '');
 };
@@ -123,7 +140,6 @@ const toolUIIdentifier = (s: ChatStoreState) => currentToolUI(s)?.identifier;
 const isPluginUIOpen = (id: string) => (s: ChatStoreState) =>
   toolMessageId(s) === id && showPortal(s);
 
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 export const chatPortalSelectors = {
   // Core stack selectors
   currentView,

@@ -52,7 +52,7 @@ describe('anthropicHelpers', () => {
       });
     });
 
-    it('should transform a regular image URL into an Anthropic.ImageBlockParam', async () => {
+    it('should convert URL to base64 for image URLs', async () => {
       vi.mocked(parseDataUri).mockReturnValueOnce({
         mimeType: 'image/png',
         base64: null,
@@ -82,7 +82,7 @@ describe('anthropicHelpers', () => {
       });
     });
 
-    it('should use default media_type for URL images when mimeType is not provided', async () => {
+    it('should convert URL to base64 for URLs without extension', async () => {
       vi.mocked(parseDataUri).mockReturnValueOnce({
         mimeType: null,
         base64: null,
@@ -100,6 +100,7 @@ describe('anthropicHelpers', () => {
 
       const result = await buildAnthropicBlock(content);
 
+      expect(imageUrlToBase64).toHaveBeenCalledWith(content.image_url.url);
       expect(result).toEqual({
         source: {
           data: 'convertedBase64String',
@@ -144,14 +145,14 @@ describe('anthropicHelpers', () => {
       expect(result).toBeUndefined();
     });
 
-    it('should return undefined for unsupported SVG image (URL)', async () => {
+    it('should return undefined for unsupported SVG URL after base64 conversion', async () => {
       vi.mocked(parseDataUri).mockReturnValueOnce({
         mimeType: null,
         base64: null,
         type: 'url',
       });
       vi.mocked(imageUrlToBase64).mockResolvedValueOnce({
-        base64: 'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==',
+        base64: 'svgBase64String',
         mimeType: 'image/svg+xml',
       });
 
@@ -161,6 +162,7 @@ describe('anthropicHelpers', () => {
       } as const;
 
       const result = await buildAnthropicBlock(content);
+      expect(imageUrlToBase64).toHaveBeenCalledWith(content.image_url.url);
       expect(result).toBeUndefined();
     });
   });
@@ -184,6 +186,24 @@ describe('anthropicHelpers', () => {
       expect(result).toEqual({ content: 'Hello!', role: 'user' });
     });
 
+    it('should return undefined for user message with empty string content', async () => {
+      const message: OpenAIChatMessage = {
+        content: '',
+        role: 'user',
+      };
+      const result = await buildAnthropicMessage(message);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined for user message with whitespace-only string content', async () => {
+      const message: OpenAIChatMessage = {
+        content: '   \n\t  ',
+        role: 'user',
+      };
+      const result = await buildAnthropicMessage(message);
+      expect(result).toBeUndefined();
+    });
+
     it('should correctly convert user message with content parts', async () => {
       const message: OpenAIChatMessage = {
         content: [
@@ -196,6 +216,15 @@ describe('anthropicHelpers', () => {
       expect(result!.role).toBe('user');
       expect(result!.content).toHaveLength(2);
       expect((result!.content[1] as any).type).toBe('image');
+    });
+
+    it('should return undefined for user message when content parts are all filtered out', async () => {
+      const message: OpenAIChatMessage = {
+        content: [{ type: 'text', text: '' }],
+        role: 'user',
+      };
+      const result = await buildAnthropicMessage(message);
+      expect(result).toBeUndefined();
     });
 
     it('should correctly convert tool message', async () => {
@@ -241,6 +270,42 @@ describe('anthropicHelpers', () => {
           type: 'tool_use',
         },
       ]);
+    });
+
+    it('logs and falls back to empty input when tool_call arguments are invalid JSON', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const message: OpenAIChatMessage = {
+        content: '',
+        role: 'assistant',
+        tool_calls: [
+          {
+            id: 'call_bad',
+            type: 'function',
+            function: {
+              name: 'search',
+              // LOBE-7761 Qwen shape — upstream sanitize should catch this, but
+              // if it doesn't we want noise in the logs rather than a silent drop.
+              arguments: '{, "query": "anthropic"}',
+            },
+          },
+        ],
+      };
+
+      const result = await buildAnthropicMessage(message);
+
+      expect(result!.content).toEqual([
+        { id: 'call_bad', input: {}, name: 'search', type: 'tool_use' },
+      ]);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'parse tool call arguments error:',
+        expect.objectContaining({
+          id: 'call_bad',
+          name: 'search',
+          arguments: '{, "query": "anthropic"}',
+        }),
+        expect.any(Error),
+      );
+      consoleErrorSpy.mockRestore();
     });
 
     it('should correctly convert function message', async () => {
@@ -1096,6 +1161,22 @@ describe('anthropicHelpers', () => {
         {
           content: [{ cache_control: { type: 'ephemeral' }, text: 'Hi', type: 'text' }],
           role: 'assistant',
+        },
+      ]);
+    });
+
+    it('should filter empty user messages before applying cache control', async () => {
+      const messages: OpenAIChatMessage[] = [
+        { content: '   \n\t  ', role: 'user' },
+        { content: 'Hello', role: 'user' },
+      ];
+
+      const contents = await buildAnthropicMessages(messages, { enabledContextCaching: true });
+
+      expect(contents).toEqual([
+        {
+          content: [{ cache_control: { type: 'ephemeral' }, text: 'Hello', type: 'text' }],
+          role: 'user',
         },
       ]);
     });

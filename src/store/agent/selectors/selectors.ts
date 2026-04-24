@@ -3,24 +3,28 @@ import {
   DEFAULT_AGENT_CONFIG,
   DEFAULT_AVATAR,
   DEFAULT_BACKGROUND_COLOR,
+  DEFAULT_INBOX_AVATAR,
   DEFAULT_MODEL,
   DEFAUTT_AGENT_TTS_CONFIG,
+  isDesktop,
 } from '@lobechat/const';
 import {
   type AgentMode,
   type KnowledgeItem,
   type LobeAgentConfig,
   type LobeAgentTTSConfig,
-  type LocalSystemConfig,
   type MetaData,
+  type RuntimeEnvConfig,
 } from '@lobechat/types';
 import { KnowledgeType } from '@lobechat/types';
 import { VoiceList } from '@lobehub/tts';
 
 import { DEFAULT_OPENING_QUESTIONS } from '@/features/AgentSetting/store/selectors';
+import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { filterToolIds } from '@/helpers/toolFilters';
 
 import { type AgentStoreState } from '../initialState';
+import { getLocalAgentWorkingDirectory } from '../utils/localAgentWorkingDirectoryStorage';
 import { builtinAgentSelectors } from './builtinAgentSelectors';
 
 // ==========   Meta   ============== //
@@ -30,7 +34,14 @@ const currentAgentData = (s: AgentStoreState) =>
 
 const currentAgentTitle = (s: AgentStoreState) => currentAgentData(s)?.title;
 
-const currentAgentAvatar = (s: AgentStoreState) => currentAgentData(s)?.avatar || DEFAULT_AVATAR;
+const getDefaultAvatarByAgentId = (s: AgentStoreState, agentId?: string) => {
+  const inboxAgentId = builtinAgentSelectors.inboxAgentId(s);
+
+  return agentId && inboxAgentId === agentId ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR;
+};
+
+const currentAgentAvatar = (s: AgentStoreState) =>
+  currentAgentData(s)?.avatar || getDefaultAvatarByAgentId(s, s.activeAgentId);
 
 const currentAgentDescription = (s: AgentStoreState) => currentAgentData(s)?.description;
 
@@ -46,7 +57,7 @@ const currentAgentTags = (s: AgentStoreState) => currentAgentData(s)?.tags || []
 const currentAgentMeta = (s: AgentStoreState): MetaData => {
   const data = currentAgentData(s);
   return {
-    avatar: data?.avatar || DEFAULT_AVATAR,
+    avatar: data?.avatar || getDefaultAvatarByAgentId(s, s.activeAgentId),
     backgroundColor: data?.backgroundColor || DEFAULT_BACKGROUND_COLOR,
     description: data?.description || undefined,
     marketIdentifier: data?.marketIdentifier || undefined,
@@ -66,7 +77,7 @@ const getAgentMetaById =
     if (!data) return {};
 
     return {
-      avatar: data.avatar || DEFAULT_AVATAR,
+      avatar: data.avatar || getDefaultAvatarByAgentId(s, agentId),
       backgroundColor: data.backgroundColor || DEFAULT_BACKGROUND_COLOR,
       description: data.description || undefined,
       marketIdentifier: data.marketIdentifier || undefined,
@@ -248,19 +259,40 @@ const currentAgentMode = (s: AgentStoreState): AgentMode | undefined => {
 const isAgentModeEnabled = (s: AgentStoreState): boolean => currentAgentMode(s) !== undefined;
 
 /**
- * Get current agent's local system config
- * Now reads from chatConfig.localSystem
+ * Get current agent's runtime env config
+ * Now reads from chatConfig.runtimeEnv
  */
-const currentAgentLocalSystemConfig = (s: AgentStoreState): LocalSystemConfig | undefined =>
-  currentAgentConfig(s)?.chatConfig?.localSystem;
+const currentAgentRuntimeEnvConfig = (s: AgentStoreState): RuntimeEnvConfig | undefined =>
+  currentAgentConfig(s)?.chatConfig?.runtimeEnv;
 
 /**
  * Get current agent's working directory
  */
 const currentAgentWorkingDirectory = (s: AgentStoreState): string | undefined =>
-  currentAgentLocalSystemConfig(s)?.workingDirectory;
+  (() => {
+    if (!isDesktop) return;
+
+    const activeAgentId = s.activeAgentId;
+    if (!activeAgentId) return globalAgentContextManager.getContext().homePath;
+
+    return (
+      getLocalAgentWorkingDirectory(activeAgentId) ??
+      globalAgentContextManager.getContext().homePath
+    );
+  })();
 
 const isCurrentAgentExternal = (s: AgentStoreState): boolean => !currentAgentData(s)?.virtual;
+
+/**
+ * Whether current agent is driven by an external heterogeneous runtime
+ * (e.g. Claude Code). These agents skip LobeHub's message-channel / model
+ * pickers because their toolchain is owned by the external runtime.
+ */
+const isCurrentAgentHeterogeneous = (s: AgentStoreState): boolean =>
+  !!currentAgentConfig(s)?.agencyConfig?.heterogeneousProvider;
+
+const getAgentDocumentsById = (agentId: string) => (s: AgentStoreState) =>
+  s.agentDocumentsMap[agentId];
 
 export const agentSelectors = {
   currentAgentAvatar,
@@ -269,7 +301,7 @@ export const agentSelectors = {
   currentAgentDescription,
   currentAgentFiles,
   currentAgentKnowledgeBases,
-  currentAgentLocalSystemConfig,
+  currentAgentRuntimeEnvConfig,
   currentAgentMeta,
   currentAgentMode,
   currentAgentModel,
@@ -285,6 +317,7 @@ export const agentSelectors = {
   currentKnowledgeIds,
   displayableAgentPlugins,
   getAgentConfigById,
+  getAgentDocumentsById,
   getAgentMetaById,
   getAgentSlugById,
   hasEnabledKnowledge,
@@ -296,6 +329,7 @@ export const agentSelectors = {
   isAgentConfigLoading,
   isAgentModeEnabled,
   isCurrentAgentExternal,
+  isCurrentAgentHeterogeneous,
   openingMessage,
   openingQuestions,
 };

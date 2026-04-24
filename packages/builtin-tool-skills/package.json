@@ -9,12 +9,16 @@
     "./executionRuntime": "./src/ExecutionRuntime/index.ts"
   },
   "main": "./src/index.ts",
-  "devDependencies": {
+  "dependencies": {
+    "@lobechat/const": "workspace:*",
     "@lobechat/prompts": "workspace:*",
+    "@lobechat/shared-tool-ui": "workspace:*"
+  },
+  "devDependencies": {
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/ui": "*",
+    "@lobehub/ui": "^5",
     "antd-style": "*",
     "react": "*",
     "react-i18next": "*"

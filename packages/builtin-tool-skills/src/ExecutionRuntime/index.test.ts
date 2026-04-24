@@ -1,15 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { CommandResult } from '../types';
-import { SkillsExecutionRuntime, type SkillRuntimeService } from './index';
+import { type SkillRuntimeService, SkillsExecutionRuntime } from './index';
 
 const createMockService = (overrides?: Partial<SkillRuntimeService>): SkillRuntimeService => ({
   findAll: vi.fn().mockResolvedValue({ data: [], total: 0 }),
   findById: vi.fn().mockResolvedValue(undefined),
   findByName: vi.fn().mockResolvedValue(undefined),
-  importFromGitHub: vi.fn(),
-  importFromUrl: vi.fn(),
-  importFromZipUrl: vi.fn(),
   readResource: vi.fn(),
   ...overrides,
 });
@@ -153,6 +150,35 @@ describe('SkillsExecutionRuntime', () => {
 
         expect(result.success).toBe(false);
         expect(result.content).toBe('Command execution is not available in this environment.');
+      });
+    });
+  });
+
+  describe('readReference', () => {
+    it('should expose fullPath in state when provided by the service', async () => {
+      const service = createMockService({
+        findByName: vi.fn().mockResolvedValue({ id: 'skill-1', name: 'demo-skill' }),
+        readResource: vi.fn().mockResolvedValue({
+          content: 'print("hello")',
+          encoding: 'utf8',
+          fileHash: 'hash-1',
+          fileType: 'text/x-python',
+          fullPath: '/Users/test/lobehub/file-storage/skills/extracted/hash-1/bazi.py',
+          path: 'bazi.py',
+          size: 14,
+        }),
+      });
+      const runtime = new SkillsExecutionRuntime({ service });
+
+      const result = await runtime.readReference({ id: 'demo-skill', path: 'bazi.py' });
+
+      expect(result.success).toBe(true);
+      expect(result.state).toEqual({
+        encoding: 'utf8',
+        fileType: 'text/x-python',
+        fullPath: '/Users/test/lobehub/file-storage/skills/extracted/hash-1/bazi.py',
+        path: 'bazi.py',
+        size: 14,
       });
     });
   });

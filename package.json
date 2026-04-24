@@ -32,11 +32,11 @@
     "apps/desktop/src/main"
   ],
   "scripts": {
-    "prebuild": "tsx scripts/prebuild.mts && npm run lint",
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 next build --webpack",
+    "prebuild": "tsx scripts/dockerPrebuild.mts && npm run lint",
+    "build": "bun run build:spa && bun run build:spa:copy && bun run build:next",
     "postbuild": "npm run build-sitemap && npm run build-migrate-db",
     "build:analyze": "NODE_OPTIONS=--max-old-space-size=81920 ANALYZE=true next build --webpack",
-    "build:docker": "tsx scripts/prebuild.mts && npm run lint:ts && npm run lint:style && NODE_OPTIONS=--max-old-space-size=8192 DOCKER=true next build --webpack && npm run build-sitemap",
+    "build:docker": "pnpm run build:spa && pnpm run build:spa:mobile && pnpm run build:spa:copy && cross-env NODE_OPTIONS=--max-old-space-size=8192 DOCKER=true next build && pnpm run build-sitemap",
     "build:vercel": "tsx scripts/prebuild.mts && npm run lint:ts && npm run lint:style && npm run type-check:tsc && npm run lint:circular && cross-env NODE_OPTIONS=--max-old-space-size=6144 next build --webpack && npm run postbuild",
     "build-migrate-db": "bun run db:migrate",
     "build-sitemap": "tsx ./scripts/buildSitemapIndex/index.ts",
@@ -245,7 +245,6 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@saintno/comfyui-sdk": "^0.2.49",
-    "@serwist/next": "^9.5.0",
     "@t3-oss/env-nextjs": "^0.13.10",
     "@tanstack/react-query": "^5.90.20",
     "@trpc/client": "^11.8.1",

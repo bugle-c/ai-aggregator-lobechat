@@ -7,6 +7,10 @@ export default {
   'alert.cloud.descOnMobile':
     'All registered users get {{credit}} free computing credits per month—no setup needed.',
   'alert.cloud.title': '{{name}} beta is live',
+  'agentOnboardingPromo.actionLabel': 'Try it now',
+  'agentOnboardingPromo.description':
+    'Set up your agent teams in a quick chat with Lobe AI. Your existing agents remain unchanged.',
+  'agentOnboardingPromo.title': 'Quick Wizard',
   'appLoading.appIdle': 'Ready to start',
   'appLoading.appInitializing': 'Application is starting...',
   'appLoading.failed':
@@ -34,7 +38,10 @@ export default {
     'Current topic is not saved, please save it first to use subtopic feature',
   'cancel': 'Cancel',
   'changelog': 'Changelog',
+  'alreadyUpToDate': 'Already Up to Date',
   'checkForUpdates': 'Check for Updates',
+  'downloadingUpdate': 'Downloading {{percent}}%',
+  'restartToUpdate': 'Restart to Update',
   'clientDB.autoInit.title': 'Initializing PGlite Database',
   'clientDB.error.desc':
     'PGlite failed to initialize. Retry first. If it helps, open Self-serve fixes and follow the steps. Still stuck after a few tries? Use Report issue to send us the error details.',
@@ -110,7 +117,7 @@ export default {
   'cmdk.aiModeEmptyState': 'Type your question above to start chatting with AI',
   'cmdk.aiModeHint': 'Press Enter to ask',
   'cmdk.aiModePlaceholder': 'Ask AI anything...',
-  'cmdk.aiPainting': 'AI Art',
+  'cmdk.aiPainting': 'AI Image',
   'cmdk.askAI': 'Ask Agent',
   'cmdk.askAIHeading': 'Use the following features for {{query}}',
   'cmdk.askAIHeadingEmpty': 'Choose an AI feature',
@@ -126,7 +133,7 @@ export default {
   'cmdk.context.group': 'Group',
   'cmdk.context.memory': 'Memory',
   'cmdk.context.page': 'Page',
-  'cmdk.context.painting': 'Painting',
+  'cmdk.context.painting': 'Image',
   'cmdk.context.resource': 'Resource',
   'cmdk.context.settings': 'Settings',
   'cmdk.discover': 'Discover',
@@ -181,6 +188,8 @@ export default {
 
   'cmdk.keywords.submitIssue': 'issue bug problem feedback',
 
+  'cmdk.keywords.tasks': 'tasks todo agent kanban',
+
   'cmdk.keywords.usage': 'usage statistics consumption quota',
 
   'cmdk.keywords.video': 'video,generate,seedance,kling',
@@ -207,7 +216,7 @@ export default {
 
   'cmdk.pages': 'Pages',
 
-  'cmdk.painting': 'Painting',
+  'cmdk.painting': 'Image',
 
   'cmdk.resource': 'Resources',
 
@@ -219,6 +228,10 @@ export default {
 
   'cmdk.search.assistants': 'Agents',
 
+  'cmdk.search.chatGroup': 'Agent Team',
+
+  'cmdk.search.chatGroups': 'Agent Teams',
+
   'cmdk.search.communityAgent': 'Community Agent',
 
   'cmdk.search.file': 'File',
@@ -228,6 +241,10 @@ export default {
   'cmdk.search.folder': 'Folder',
 
   'cmdk.search.folders': 'Folders',
+
+  'cmdk.search.knowledgeBase': 'Library',
+
+  'cmdk.search.knowledgeBases': 'Libraries',
 
   'cmdk.search.loading': 'Searching...',
 
@@ -253,6 +270,7 @@ export default {
   'cmdk.settings': 'Settings',
   'cmdk.starOnGitHub': 'Star us on GitHub',
   'cmdk.submitIssue': 'Submit Issue',
+  'cmdk.tasks': 'Tasks',
   'cmdk.theme': 'Theme',
   'cmdk.themeAuto': 'Auto',
   'cmdk.themeCurrent': 'Current',
@@ -268,6 +286,11 @@ export default {
   'copy': 'Copy',
   'copyFail': 'Copy failed',
   'copySuccess': 'Copied',
+  'promptTransform.action': 'Refine Idea',
+  'promptTransform.actions.rewrite': 'Expand Details',
+  'promptTransform.actions.translate': 'Translate',
+  'promptTransform.status.rewrite': 'Expanding details...',
+  'promptTransform.status.translate': 'Translating...',
   'dataStatistics.messages': 'Messages',
   'dataStatistics.sessions': 'Agents',
   'dataStatistics.today': "Today's New",
@@ -277,7 +300,7 @@ export default {
   'delete': 'Delete',
   'document': 'User Manual',
   'download': 'Download',
-  'downloadClient': 'Download Client',
+  'getDesktopApp': 'Get Desktop App',
   'duplicate': 'Duplicate',
   'edit': 'Edit',
   'errors.invalidFileFormat': 'Invalid file format',
@@ -290,6 +313,7 @@ export default {
   'exportType.allAgentWithMessage': 'Export All Agents and Messages',
   'exportType.globalSetting': 'Export Global Settings',
   'feedback': 'Feedback',
+  'feedback.emailContact': 'You can also email us at {{email}}',
   'feedback.errors.fileTooLarge': 'File exceeds 5MB',
   'feedback.errors.submitFailed': 'Submit failed. Try again.',
   'feedback.errors.teamNotFound': 'Configuration error',
@@ -325,12 +349,7 @@ export default {
   'footer.star.title': 'Star us on GitHub',
   'footer.title': 'Like Our Product?',
   'fullscreen': 'Full Screen Mode',
-  'geminiImageChineseWarning.content':
-    'Nano Banana may occasionally fail to generate images when using Chinese. It is recommended to use English for better results.',
-  'geminiImageChineseWarning.continueGenerate': 'Continue Generating',
-  'geminiImageChineseWarning.continueSend': 'Continue Sending',
-  'geminiImageChineseWarning.doNotShowAgain': 'Do Not Show Again',
-  'geminiImageChineseWarning.title': 'Chinese Input Notice',
+  'generation.hero.taglinePrefix': 'Start Creating with',
   'historyRange': 'History Range',
   'home.suggestQuestions': 'Try these examples',
   'import': 'Import',
@@ -411,12 +430,23 @@ export default {
   'mail.business': 'Business Cooperation',
   'mail.support': 'Email Support',
   'more': 'More',
-  'navPanel.agent': 'Agent',
+  'navPanel.agent': 'Agents',
+  'navPanel.customizeSidebar': 'Customize Sidebar',
   'navPanel.displayItems': 'Display Items',
+  'navPanel.resetDefault': 'Reset to Default',
+  'navPanel.hidden': 'Hidden',
+  'navPanel.hideSection': 'Hide Section',
   'navPanel.library': 'Library',
+  'navPanel.moveDown': 'Move Down',
+  'navPanel.pinned': 'Pinned',
+  'navPanel.moveUp': 'Move Up',
+  'navPanel.show': 'Show',
+  'navPanel.visible': 'Visible',
   'navPanel.searchAgent': 'Search Agent...',
+  'navPanel.searchRecent': 'Search Recent...',
   'navPanel.searchResultEmpty': 'No search results found',
   'new': 'New',
+  'pro': 'Pro',
   'noContent': 'No content',
   'oauth': 'SSO Login',
   'officialSite': 'Official Website',
@@ -468,21 +498,25 @@ export default {
   'sync.title': 'Sync Status',
   'sync.unconnected.tip':
     'Signaling server connection failed, and peer-to-peer communication channel cannot be established. Please check the network and try again.',
-  'tab.aiImage': 'Artwork',
+  'tab.image': 'Image',
   'tab.audio': 'Audio',
   'tab.chat': 'Chat',
+  'recents': 'Recents',
   'tab.community': 'Community',
+  'tab.create': 'Create',
   'tab.discover': 'Discover',
   'tab.eval': 'Eval Lab',
   'tab.files': 'Files',
   'tab.home': 'Home',
   'tab.knowledgeBase': 'Library',
+  'tab.marketplace': 'Marketplace',
   'tab.me': 'Me',
   'tab.memory': 'Memory',
   'tab.pages': 'Pages',
   'tab.resource': 'Resources',
   'tab.search': 'Search',
   'tab.setting': 'Settings',
+  'tab.tasks': 'Tasks',
   'tab.video': 'Video',
   'telemetry.allow': 'Allow',
   'telemetry.deny': 'Deny',
@@ -500,12 +534,13 @@ export default {
   'upgradeVersion.newVersion': 'Update available: {{version}}',
   'upgradeVersion.serverVersion': 'Server: {{version}}',
   'userPanel.anonymousNickName': 'Anonymous User',
-  'userPanel.billing': 'Billing Management',
+  'userPanel.billing': 'Billing',
   'userPanel.cloud': 'Launch {{name}}',
   'userPanel.community': 'Community',
+  'userPanel.credits': 'Credits',
   'userPanel.data': 'Data Storage',
   'userPanel.defaultNickname': 'Community User',
-  'userPanel.discord': 'Community Support',
+  'userPanel.discord': 'Discord',
   'userPanel.docs': 'Documentation',
   'userPanel.email': 'Email Support',
   'userPanel.feedback': 'Contact Us',
@@ -514,6 +549,7 @@ export default {
   'userPanel.plans': 'Subscription Plans',
   'userPanel.profile': 'Account',
   'userPanel.setting': 'Settings',
-  'userPanel.usages': 'Usage Statistics',
+  'userPanel.upgradePlan': 'Upgrade Plan',
+  'userPanel.usages': 'Usage',
   'version': 'Version',
 };

@@ -6,13 +6,13 @@ import { AccordionItem, Flexbox, Skeleton } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { memo, useEffect, useState } from 'react';
 
+import SafeBoundary from '@/components/ErrorBoundary';
 import dynamic from '@/libs/next/dynamic';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 
-import { ToolErrorBoundary } from '../../Tool/ErrorBoundary';
 import Actions from './Actions';
 import Inspectors from './Inspector';
 
@@ -82,10 +82,23 @@ const Tool = memo<GroupToolProps>(
       operationSelectors.isMessageInToolCalling(assistantMessageId),
     );
 
-    // Fallback: arguments completed but no final result yet
-    const isToolCallingFallback =
-      !isArgumentsStreaming && (!result || result.content === LOADING_FLAT || !result.content);
-    const isToolCalling = isToolCallingFromOperation || isToolCallingFallback;
+    // Only treat "missing/placeholder result" as in-flight while this assistant
+    // message still has a running operation. After the run ends, tools may
+    // legitimately have no merged `result` — do not keep showing "executing".
+    const isAssistantMessageBusy = useChatStore(
+      operationSelectors.isMessageProcessing(assistantMessageId),
+    );
+
+    const hasError = !!result?.error;
+    // This tool's own result is the source of truth for completion. The
+    // message-level toolCalling flag stays true while sibling tools are still
+    // running, so without this guard a finished tool flips back into "loading".
+    const hasFinishedResult =
+      hasError || (!!result && result.content !== LOADING_FLAT && !!result.content);
+    const looksLikeWaitingForToolResult = !hasError && !isArgumentsStreaming && !hasFinishedResult;
+    const isToolCallingFallback = looksLikeWaitingForToolResult && isAssistantMessageBusy;
+    const isToolCalling =
+      !hasFinishedResult && (isToolCallingFromOperation || isToolCallingFallback);
 
     const hasCustomRender = !!getBuiltinRender(identifier, apiName);
     // Only allow toggle when has custom render and not in pending/reject/abort state
@@ -96,6 +109,10 @@ const Tool = memo<GroupToolProps>(
       // Block collapse action when alwaysExpand is set
       if (isAlwaysExpand && expand === false) {
         return;
+      }
+      // When collapsing, also turn off debug mode so the accordion can actually collapse
+      if (expand === false) {
+        setShowDebug(false);
       }
       setShowToolRender(!!expand);
     };
@@ -111,6 +128,7 @@ const Tool = memo<GroupToolProps>(
     return (
       <AccordionItem
         expand={isToolDetailExpand}
+        hideIndicator={isAlwaysExpand}
         itemKey={id}
         paddingBlock={4}
         paddingInline={4}
@@ -134,6 +152,7 @@ const Tool = memo<GroupToolProps>(
             identifier={identifier}
             intervention={intervention}
             isArgumentsStreaming={isArgumentsStreaming}
+            isToolCalling={isToolCalling}
             result={result}
           />
         }
@@ -151,7 +170,7 @@ const Tool = memo<GroupToolProps>(
               type={type}
             />
           )}
-          <ToolErrorBoundary apiName={apiName} identifier={identifier}>
+          <SafeBoundary alertTitle={`${identifier} / ${apiName}`} variant="alert">
             <Detail
               apiName={apiName}
               arguments={requestArgs}
@@ -167,7 +186,7 @@ const Tool = memo<GroupToolProps>(
               toolMessageId={toolMessageId}
               type={type}
             />
-          </ToolErrorBoundary>
+          </SafeBoundary>
           <Divider dashed style={{ marginBottom: 0, marginTop: 8 }} />
         </Flexbox>
       </AccordionItem>

@@ -215,11 +215,11 @@ describe('SkillResourceService', () => {
 
       expect(result).toEqual({
         content: 'file content',
-        encoding: 'utf-8',
+        encoding: 'utf8',
         fileHash: 'abc123fileHash',
         fileType: 'text/plain',
         path: 'test.txt',
-        size: Buffer.byteLength('file content', 'utf-8'),
+        size: Buffer.byteLength('file content', 'utf8'),
       });
       expect(mockGetFileContentByHash).toHaveBeenCalledWith('abc123fileHash');
     });

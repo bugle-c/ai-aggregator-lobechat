@@ -1,37 +1,41 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
 import { z } from 'zod';
 
-import { PageSelection, PageSelectionSchema } from './pageSelection';
+import type { PageSelection } from './pageSelection';
+import { PageSelectionSchema } from './pageSelection';
 
 export interface ModelTokensUsage {
+  // Prediction tokens
+  acceptedPredictionTokens?: number;
+  inputAudioTokens?: number;
   // Input tokens breakdown
   /**
    * user prompt input
    */
   // Input cache tokens
   inputCachedTokens?: number;
-  inputCacheMissTokens?: number;
-  inputWriteCacheTokens?: number;
 
-  inputTextTokens?: number;
-  /**
-   * user prompt image
-   */
-  inputImageTokens?: number;
-  inputAudioTokens?: number;
+  inputCacheMissTokens?: number;
   /**
    * currently only pplx has citation_tokens
    */
   inputCitationTokens?: number;
+  /**
+   * user prompt image
+   */
+  inputImageTokens?: number;
+  inputTextTokens?: number;
+
+  /**
+   * tool use prompt tokens (Google AI / Vertex AI)
+   */
+  inputToolTokens?: number;
+  inputWriteCacheTokens?: number;
+  outputAudioTokens?: number;
+  outputImageTokens?: number;
+  outputReasoningTokens?: number;
 
   // Output tokens breakdown
   outputTextTokens?: number;
-  outputImageTokens?: number;
-  outputAudioTokens?: number;
-  outputReasoningTokens?: number;
-
-  // Prediction tokens
-  acceptedPredictionTokens?: number;
   rejectedPredictionTokens?: number;
 
   // Total tokens
@@ -50,6 +54,7 @@ export const ModelUsageSchema = z.object({
   inputImageTokens: z.number().optional(),
   inputAudioTokens: z.number().optional(),
   inputCitationTokens: z.number().optional(),
+  inputToolTokens: z.number().optional(),
 
   // Output tokens breakdown
   outputTextTokens: z.number().optional(),
@@ -80,8 +85,8 @@ export const ModelPerformanceSchema = z.object({
 // ============ Emoji Reaction ============ //
 
 export interface EmojiReaction {
-  emoji: string;
   count: number;
+  emoji: string;
   users: string[];
 }
 
@@ -97,7 +102,15 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
   pageSelections: z.array(PageSelectionSchema).optional(),
+  // Canonical nested shape — flat fields above are deprecated. Must be listed
+  // here so zod doesn't strip them from writes going through UpdateMessageParamsSchema
+  // (e.g. messageService.updateMessage, used by the heterogeneous-agent executor).
+  performance: ModelPerformanceSchema.optional(),
   reactions: z.array(EmojiReactionSchema).optional(),
+  scope: z.string().optional(),
+  subAgentId: z.string().optional(),
+  toolExecutionTimeMs: z.number().optional(),
+  usage: ModelUsageSchema.optional(),
 });
 
 export interface ModelUsage extends ModelTokensUsage {
@@ -109,14 +122,6 @@ export interface ModelUsage extends ModelTokensUsage {
 
 export interface ModelPerformance {
   /**
-   * tokens per second
-   */
-  tps?: number;
-  /**
-   * time to first token (ms)
-   */
-  ttft?: number;
-  /**
    * from output start to output finish (ms)
    */
   duration?: number;
@@ -124,54 +129,130 @@ export interface ModelPerformance {
    * from input start to output finish (ms)
    */
   latency?: number;
+  /**
+   * tokens per second
+   */
+  tps?: number;
+  /**
+   * time to first token (ms)
+   */
+  ttft?: number;
 }
 
-export interface MessageMetadata extends ModelUsage, ModelPerformance {
+export interface MessageMetadata {
+  // ───────────────────────────────────────────────────────────────
+  // Token usage + performance fields — DEPRECATED flat shape.
+  // New code must write to `metadata.usage` / `metadata.performance` (nested)
+  // instead. Kept here so legacy reads still type-check during migration;
+  // writers should stop populating them.
+  // ───────────────────────────────────────────────────────────────
+  /** @deprecated use `metadata.usage` instead */
+  acceptedPredictionTokens?: number;
   activeBranchIndex?: number;
   activeColumn?: boolean;
-  finishType?: string;
   /**
    * Message collapse state
    * true: collapsed, false/undefined: expanded
    */
   collapsed?: boolean;
+  compare?: boolean;
+  /** @deprecated use `metadata.usage` instead */
+  cost?: number;
+  /** @deprecated use `metadata.performance` instead */
+  duration?: number;
+  finishType?: string;
+  /** @deprecated use `metadata.usage` instead */
+  inputAudioTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputCachedTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputCacheMissTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputCitationTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputImageTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputTextTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputToolTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputWriteCacheTokens?: number;
   /**
    * Tool inspect expanded state
    * true: expanded, false/undefined: collapsed
    */
   inspectExpanded?: boolean;
-  compare?: boolean;
-  usage?: ModelUsage;
-  performance?: ModelPerformance;
-  /**
-   * Flag indicating if message content is multimodal (serialized MessageContentPart[])
-   */
-  isMultimodal?: boolean;
-  // message content is multimodal, display content in the streaming, won't save to db
-  tempDisplayContent?: string;
-  /**
-   * Flag indicating if message is from the Supervisor agent in group orchestration
-   * Used by conversation-flow to transform role to 'supervisor' for UI rendering
-   */
-  isSupervisor?: boolean;
-  /**
-   * Flag indicating if message is pinned (excluded from compression)
-   */
-  pinned?: boolean;
   /**
    * Task instruction (for role='task' messages)
    * The instruction given by supervisor to the agent
    * Thread's sourceMessageId links back to this message for status tracking
    */
   instruction?: string;
-  taskTitle?: string;
+  /**
+   * Flag indicating if message content is multimodal (serialized MessageContentPart[])
+   */
+  isMultimodal?: boolean;
+
+  /**
+   * Flag indicating if message is from the Supervisor agent in group orchestration
+   * Used by conversation-flow to transform role to 'supervisor' for UI rendering
+   */
+  isSupervisor?: boolean;
+  /** @deprecated use `metadata.performance` instead */
+  latency?: number;
+  /** @deprecated use `metadata.usage` instead */
+  outputAudioTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  outputImageTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  outputReasoningTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  outputTextTokens?: number;
   /**
    * Page selections attached to user message
    * Used for Ask AI functionality to persist selection context
    */
   pageSelections?: PageSelection[];
+  performance?: ModelPerformance;
+  /**
+   * Flag indicating if message is pinned (excluded from compression)
+   */
+  pinned?: boolean;
   /**
    * Emoji reactions on this message
    */
   reactions?: EmojiReaction[];
+  /** @deprecated use `metadata.usage` instead */
+  rejectedPredictionTokens?: number;
+  /**
+   * Message scope - indicates the context in which this message was created
+   * Used by conversation-flow to determine how to handle message grouping and display
+   * See MessageMapScope for available values
+   */
+  scope?: string;
+  /**
+   * Sub Agent ID - behavior depends on scope
+   * - scope: 'sub_agent': conversation-flow will transform message.agentId to this value for display
+   * - scope: 'group' | 'group_agent': indicates the agent that generated this message in group mode
+   * Used by callAgent tool (sub_agent) and group orchestration (group modes)
+   */
+  subAgentId?: string;
+  taskTitle?: string;
+  // message content is multimodal, display content in the streaming, won't save to db
+  tempDisplayContent?: string;
+  /**
+   * Tool execution time for tool messages (ms)
+   */
+  toolExecutionTimeMs?: number;
+  /** @deprecated use `metadata.usage` instead */
+  totalInputTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  totalOutputTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  totalTokens?: number;
+  /** @deprecated use `metadata.performance` instead */
+  tps?: number;
+  /** @deprecated use `metadata.performance` instead */
+  ttft?: number;
+  usage?: ModelUsage;
 }

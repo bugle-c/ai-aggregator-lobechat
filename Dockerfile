@@ -94,20 +94,13 @@ RUN set -e && \
 
 COPY . .
 
+# Prebuild: env checks (checkDeprecatedAuth, checkRequiredEnvVars, printEnvInfo) then remove desktop-only code
+RUN pnpm exec tsx scripts/dockerPrebuild.mts
+RUN rm -rf src/app/desktop "src/app/(backend)/trpc/desktop"
+
 # run build standalone for docker version (mount cache for incremental builds)
 RUN --mount=type=cache,target=/app/.next/cache \
-    NODE_OPTIONS=--max-old-space-size=8192 DOCKER=true npx next build --webpack
-
-# Prepare desktop export assets for Electron packaging (if generated)
-RUN set -e && \
-    if [ -d "/app/out" ]; then \
-        mkdir -p /app/apps/desktop/dist/next && \
-        cp -a /app/out/. /app/apps/desktop/dist/next/ && \
-        echo "Copied Next export output into /app/apps/desktop/dist/next"; \
-    else \
-        echo "No Next export output found at /app/out, creating empty directory" && \
-        mkdir -p /app/apps/desktop/dist/next; \
-    fi
+    npm run build:docker
 
 ## Application image, copy all the files for production
 FROM busybox:latest AS app
@@ -117,9 +110,9 @@ COPY --from=base /distroless/ /
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder /app/.next/standalone /app/
-# Copy Next export output for desktop renderer
-COPY --from=builder /app/apps/desktop/dist/next /app/apps/desktop/dist/next
-
+COPY --from=builder /app/.next/static /app/.next/static
+# Copy SPA assets (Vite build output)
+COPY --from=builder /app/public/_spa /app/public/_spa
 # Copy database migrations
 COPY --from=builder /app/packages/database/migrations /app/migrations
 COPY --from=builder /app/scripts/migrateServerDB/docker.cjs /app/docker.cjs
@@ -152,7 +145,7 @@ ENV NODE_ENV="production" \
     SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
 
 # Make the middleware rewrite through local as default
-# refs: https://github.com/lobehub/lobe-chat/issues/5876
+# refs: https://github.com/lobehub/lobehub/issues/5876
 ENV MIDDLEWARE_REWRITE_THROUGH_LOCAL="1"
 
 # set hostname to localhost

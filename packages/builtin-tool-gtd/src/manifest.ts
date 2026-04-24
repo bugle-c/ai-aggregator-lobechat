@@ -7,7 +7,6 @@ import { GTDApiName } from './types';
 export const GTDIdentifier = 'lobe-gtd';
 
 export const GTDManifest: BuiltinToolManifest = {
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   api: [
     // ==================== Planning ====================
     {
@@ -237,9 +236,8 @@ export const GTDManifest: BuiltinToolManifest = {
   identifier: GTDIdentifier,
   meta: {
     avatar: '✅',
-    description: 'Plan goals and track progress with GTD methodology',
-    readme:
-      'Plan goals and track progress using GTD methodology. Create strategic plans, manage todo lists with status tracking, and execute long-running async tasks.',
+    description:
+      'Plan and track one-time goals, manage todo checklists, and run background tasks. For tasks that need to be done once or tracked manually — NOT for tasks that should repeat automatically on a schedule (use lobe-cron for daily/weekly/recurring automation).',
     title: 'GTD Tools',
   },
   systemRole: systemPrompt,

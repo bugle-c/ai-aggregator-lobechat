@@ -1,5 +1,9 @@
 {
-  "common.checkUpdates": "업데이트 확인 중...",
+  "common.checkUpdates": "업데이트 확인...",
+  "common.checkingUpdates": "업데이트 확인 중...",
+  "common.downloadingUpdate": "업데이트 다운로드 중...",
+  "common.isLatestVersion": "이미 최신 버전입니다",
+  "common.restartToUpdate": "업데이트를 완료하려면 다시 시작하세요",
   "context.copyImage": "이미지 복사",
   "context.copyImageAddress": "이미지 주소 복사",
   "context.copyLink": "링크 복사",
@@ -82,5 +86,6 @@
   "window.minimize": "최소화",
   "window.title": "창",
   "window.toggleFullscreen": "전체 화면 전환",
-  "window.zoom": "줌"
+  "window.zoom": "줌",
+  "tray.openMiniToolbar": "Quick Composer"
 }

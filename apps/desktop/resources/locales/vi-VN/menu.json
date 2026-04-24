@@ -1,5 +1,9 @@
 {
   "common.checkUpdates": "Kiểm tra cập nhật...",
+  "common.checkingUpdates": "Đang kiểm tra cập nhật...",
+  "common.downloadingUpdate": "Đang tải xuống cập nhật...",
+  "common.isLatestVersion": "Đã là phiên bản mới nhất",
+  "common.restartToUpdate": "Khởi động lại để cập nhật",
   "context.copyImage": "Sao chép hình ảnh",
   "context.copyImageAddress": "Sao chép địa chỉ hình ảnh",
   "context.copyLink": "Sao chép liên kết",
@@ -82,5 +86,6 @@
   "window.minimize": "Thu nhỏ",
   "window.title": "Cửa sổ",
   "window.toggleFullscreen": "Chuyển đổi toàn màn hình",
-  "window.zoom": "Thu phóng"
+  "window.zoom": "Thu phóng",
+  "tray.openMiniToolbar": "Quick Composer"
 }

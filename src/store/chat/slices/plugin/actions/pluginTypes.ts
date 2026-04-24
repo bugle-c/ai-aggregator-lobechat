@@ -1,12 +1,8 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { type ChatToolPayload, type RuntimeStepContext } from '@lobechat/types';
-import { PluginErrorType } from '@lobehub/chat-plugin-sdk';
 import debug from 'debug';
-import { t } from 'i18next';
 
 import { type MCPToolCallResult } from '@/libs/mcp';
 import { truncateToolResult } from '@/server/utils/truncateToolResult';
-import { chatService } from '@/services/chat';
 import { mcpService } from '@/services/mcp';
 import { messageService } from '@/services/message';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation';
@@ -33,11 +29,10 @@ export const pluginTypes = (set: Setter, get: () => ChatStore, _api?: unknown) =
 
 export class PluginTypesActionImpl {
   readonly #get: () => ChatStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
-    this.#set = set;
+    void set;
     this.#get = get;
   }
 
@@ -144,11 +139,14 @@ export class PluginTypesActionImpl {
           topicId,
         });
 
+      // When error exists but content is empty, backfill error message into content
+      const content = result.content || result.error?.message || '';
+
       // Use optimisticUpdateToolMessage to batch update content, state, error, metadata
       await optimisticUpdateToolMessage(
         id,
         {
-          content: result.content,
+          content,
           metadata: result.metadata,
           pluginError: result.error
             ? {
@@ -177,17 +175,11 @@ export class PluginTypesActionImpl {
     console.error(
       `[invokeBuiltinTool] No executor found for: ${payload.identifier}/${payload.apiName}`,
     );
-    return;
-  };
-
-  invokeDefaultTypePlugin = async (id: string, payload: any): Promise<string | undefined> => {
-    const { internal_callPluginApi } = this.#get();
-
-    const data = await internal_callPluginApi(id, payload);
-
-    if (!data) return;
-
-    return data;
+    return {
+      content: `Tool ${payload.identifier}/${payload.apiName} is not available`,
+      error: { type: 'ToolNotFound', message: 'No executor found' },
+      success: false,
+    };
   };
 
   invokeKlavisTypePlugin = async (
@@ -212,45 +204,6 @@ export class PluginTypesActionImpl {
       lobehubSkillExecutor,
       'invokeLobehubSkillTypePlugin',
     );
-  };
-
-  invokeMarkdownTypePlugin = async (id: string, payload: ChatToolPayload): Promise<void> => {
-    const { internal_callPluginApi } = this.#get();
-
-    await internal_callPluginApi(id, payload);
-  };
-
-  invokeStandaloneTypePlugin = async (id: string, payload: ChatToolPayload): Promise<void> => {
-    const result = await useToolStore.getState().validatePluginSettings(payload.identifier);
-    if (!result) return;
-
-    // if the plugin settings is not valid, then set the message with error type
-    if (!result.valid) {
-      // Get message to extract agentId/topicId
-      const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
-      const updateResult = await messageService.updateMessageError(
-        id,
-        {
-          body: {
-            error: result.errors,
-            message: '[plugin] your settings is invalid with plugin manifest setting schema',
-          },
-          message: t('response.PluginSettingsInvalid', { ns: 'error' }),
-          type: PluginErrorType.PluginSettingsInvalid as any,
-        },
-        {
-          agentId: message?.agentId,
-          topicId: message?.topicId,
-        },
-      );
-
-      if (updateResult?.success && updateResult.messages) {
-        this.#get().replaceMessages(updateResult.messages, {
-          context: { agentId: message?.agentId || '', topicId: message?.topicId },
-        });
-      }
-      return;
-    }
   };
 
   invokeMCPTypePlugin = async (
@@ -307,7 +260,7 @@ export class PluginTypesActionImpl {
     if (!data) return;
 
     // Truncate content to prevent context overflow
-    const truncatedContent = truncateToolResult(data.content);
+    const truncatedContent = truncateToolResult(data.content || (data.error as any)?.message || '');
 
     // operationId already declared above, reuse it
     const context = operationId ? { operationId } : undefined;
@@ -352,7 +305,9 @@ export class PluginTypesActionImpl {
     );
 
     try {
-      data = await executor(payload);
+      // Pass topicId from message context, not global active state
+      // This ensures tool calls use the correct topic even if user switches topics
+      data = await executor(payload, { topicId: message?.topicId });
     } catch (error) {
       console.error(`[${logPrefix}] Error:`, error);
 
@@ -379,90 +334,21 @@ export class PluginTypesActionImpl {
     // If error occurred, exit
     if (!data) return;
 
+    const remoteContent = data.content || (data.error as any)?.message || '';
     const context = operationId ? { operationId } : undefined;
 
     // Use optimisticUpdateToolMessage to update content and state/error in a single call
     await this.#get().optimisticUpdateToolMessage(
       id,
       {
-        content: data.content,
+        content: remoteContent,
         pluginError: data.success ? undefined : data.error,
         pluginState: data.success ? data.state : undefined,
       },
       context,
     );
 
-    return data.content;
-  };
-
-  internal_callPluginApi = async (
-    id: string,
-    payload: ChatToolPayload,
-  ): Promise<string | undefined> => {
-    const { optimisticUpdateMessageContent } = this.#get();
-    let data: string;
-
-    // Get message to extract agentId/topicId
-    const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
-
-    // Get abort controller from operation
-    const operationId = this.#get().messageOperationMap[id];
-    const operation = operationId ? this.#get().operations[operationId] : undefined;
-    const abortController = operation?.abortController;
-
-    log(
-      '[internal_callPluginApi] messageId=%s, plugin=%s, operationId=%s, aborted=%s',
-      id,
-      payload.identifier,
-      operationId,
-      abortController?.signal.aborted,
-    );
-
-    try {
-      const res = await chatService.runPluginApi(payload, {
-        signal: abortController?.signal,
-        trace: { observationId: message?.observationId, traceId: message?.traceId },
-      });
-      data = res.text;
-
-      // save traceId
-      if (res.traceId) {
-        await messageService.updateMessage(id, { traceId: res.traceId });
-      }
-    } catch (error) {
-      console.error(error);
-      const err = error as Error;
-
-      // ignore the aborted request error
-      if (err.message.includes('The user aborted a request.')) {
-        log(
-          '[internal_callPluginApi] Request aborted: messageId=%s, plugin=%s',
-          id,
-          payload.identifier,
-        );
-      } else {
-        const result = await messageService.updateMessageError(id, error as any, {
-          agentId: message?.agentId,
-          topicId: message?.topicId,
-        });
-        if (result?.success && result.messages) {
-          this.#get().replaceMessages(result.messages, {
-            context: { agentId: message?.agentId || '', topicId: message?.topicId },
-          });
-        }
-      }
-
-      data = '';
-    }
-    // If error occurred, exit
-    if (!data) return;
-
-    // operationId already declared above, reuse it
-    const context = operationId ? { operationId } : undefined;
-
-    await optimisticUpdateMessageContent(id, data, undefined, context);
-
-    return data;
+    return remoteContent;
   };
 }
 

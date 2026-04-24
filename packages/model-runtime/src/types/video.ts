@@ -1,5 +1,10 @@
-/* eslint-disable typescript-sort-keys/interface */
-import { RuntimeVideoGenParams } from 'model-bank';
+import type { RuntimeVideoGenParams } from 'model-bank';
+
+export type CreateVideoErrorPayload = {
+  error: any;
+  errorType: string;
+  provider?: string;
+};
 
 export type CreateVideoPayload = {
   callbackUrl?: string;
@@ -7,9 +12,35 @@ export type CreateVideoPayload = {
   params: RuntimeVideoGenParams;
 };
 
-export type CreateVideoResponse = {
-  inferenceId: string;
-};
+export interface CreateVideoMethodOptions {
+  /** Metadata passed to hooks (billing, tracing, etc.) */
+  metadata?: Record<string, unknown>;
+}
+
+export type CreateVideoResponse =
+  | {
+      inferenceId: string;
+      /** Provider uses webhook callback instead of polling */
+      useWebhook?: boolean;
+    }
+  | {
+      inferenceId: string;
+      videoUrl: string;
+    };
+
+export type PollVideoStatusResult =
+  | {
+      headers?: Record<string, string>;
+      status: 'success';
+      videoUrl: string;
+    }
+  | {
+      error: string;
+      status: 'failed';
+    }
+  | {
+      status: 'pending';
+    };
 
 export type HandleCreateVideoWebhookPayload = {
   body: unknown;

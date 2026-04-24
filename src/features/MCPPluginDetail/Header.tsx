@@ -231,11 +231,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
             )}
             {isClaimed && <Tag size={'small'}>{t('isClaimed')}</Tag>}
             <Icon icon={DotIcon} />
-            <PublishedTime
-              className={styles.time}
-              date={(updatedAt || createdAt) as string}
-             
-            />
+            <PublishedTime className={styles.time} date={(updatedAt || createdAt) as string} />
           </Flexbox>
         </Flexbox>
       </Flexbox>

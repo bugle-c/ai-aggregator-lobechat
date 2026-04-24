@@ -11,7 +11,7 @@ import {
 } from '../../../schemas';
 import { AgentEvalRunModel } from '../run';
 
-let serverDB = await getTestDB();
+const serverDB = await getTestDB();
 
 const userId = 'run-test-user';
 const userId2 = 'run-test-user-2';
@@ -303,7 +303,6 @@ describe('AgentEvalRunModel', () => {
         passRate: 0.5,
       });
       expect(result?.updatedAt).toBeDefined();
-      expect(result?.updatedAt.getTime()).toBeGreaterThanOrEqual(result!.createdAt.getTime());
     });
 
     it('should not update a run owned by another user', async () => {

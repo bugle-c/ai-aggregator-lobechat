@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { type ChatToolPayload, type RuntimeStepContext, type UIChatMessage } from '@lobechat/types';
 import i18n from 'i18next';
 
@@ -19,11 +18,10 @@ export const pluginPublicApi = (set: Setter, get: () => ChatStore, _api?: unknow
 
 export class PluginPublicApiActionImpl {
   readonly #get: () => ChatStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
-    this.#set = set;
+    void set;
     this.#get = get;
   }
 
@@ -94,26 +92,15 @@ export class PluginPublicApiActionImpl {
     stepContext?: RuntimeStepContext,
   ): Promise<any> => {
     switch (payload.type) {
-      case 'standalone': {
-        return await this.#get().invokeStandaloneTypePlugin(id, payload);
-      }
-
-      case 'markdown': {
-        return await this.#get().invokeMarkdownTypePlugin(id, payload);
-      }
-
-      case 'builtin': {
-        // Pass stepContext to builtin tools for dynamic state access
-        return await this.#get().invokeBuiltinTool(id, payload, stepContext);
-      }
-
       // @ts-ignore
       case 'mcp': {
         return await this.#get().invokeMCPTypePlugin(id, payload);
       }
 
+      case 'builtin':
       default: {
-        return await this.#get().invokeDefaultTypePlugin(id, payload);
+        // Pass stepContext to builtin tools for dynamic state access
+        return await this.#get().invokeBuiltinTool(id, payload, stepContext);
       }
     }
   };

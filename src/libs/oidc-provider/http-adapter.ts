@@ -86,8 +86,7 @@ export const createNodeRequest = async (req: NextRequest): Promise<IncomingMessa
 
     method: req.method,
     // Simulate readable stream behavior (oidc-provider might not rely on this if body is pre-parsed)
-    // eslint-disable-next-line @typescript-eslint/ban-types
-    on: (event: string, handler: Function) => {
+    on: (event: string, handler: (...args: any[]) => any) => {
       if (event === 'end') {
         // Simulate end immediately as body is already processed or will be attached
         handler();

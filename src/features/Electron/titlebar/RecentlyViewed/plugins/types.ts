@@ -6,11 +6,32 @@ import { type SessionGroupItem } from '@/types/session';
 import { type ChatTopic } from '@/types/topic';
 
 import {
+  type CachedPageData,
   type PageParamsMap,
   type PageReference,
   type PageType,
   type ResolvedPageData,
 } from '../types';
+
+// ======== New Tab Action ======== //
+
+/**
+ * Descriptor returned by a plugin to enable the TabBar "+" button
+ * for a given active reference.
+ */
+export interface NewTabAction {
+  /**
+   * Produce a new PageReference (plus optional cached display data) for
+   * a fresh tab in the same context as the active tab. Return null to
+   * cancel the creation (e.g. missing prerequisites).
+   */
+  onCreate: () => Promise<NewTabActionResult | null>;
+}
+
+export interface NewTabActionResult {
+  cached?: CachedPageData;
+  reference: PageReference;
+}
 
 // ======== Plugin Context ======== //
 
@@ -53,6 +74,12 @@ export interface BaseRecentlyViewedPlugin {
   checkExists: (reference: PageReference, ctx: PluginContext) => boolean;
 
   /**
+   * Build a "new tab" action for the TabBar "+" button. Return null to
+   * hide the button when this plugin's reference is active.
+   */
+  createNewTabAction?: (reference: PageReference, ctx: PluginContext) => NewTabAction | null;
+
+  /**
    * Generate unique ID from reference params
    */
   generateId: (reference: PageReference) => string;
@@ -71,6 +98,12 @@ export interface BaseRecentlyViewedPlugin {
    * Check if URL matches this plugin
    */
   matchUrl: (pathname: string, searchParams: URLSearchParams) => boolean;
+
+  /**
+   * Called when a tab with this reference type is activated.
+   * Use to perform store-level state transitions (e.g. switchTopic).
+   */
+  onActivate?: (reference: PageReference) => void;
 
   /**
    * Parse URL into a page reference
@@ -105,6 +138,12 @@ export interface RecentlyViewedPlugin<T extends PageType = PageType> {
   checkExists: (reference: PageReference<T>, ctx: PluginContext) => boolean;
 
   /**
+   * Build a "new tab" action for the TabBar "+" button. Return null to
+   * hide the button when this plugin's reference is active.
+   */
+  createNewTabAction?: (reference: PageReference<T>, ctx: PluginContext) => NewTabAction | null;
+
+  /**
    * Generate unique ID from reference params
    * e.g., "agent:abc123" or "agent-topic:abc123:topic456"
    */
@@ -124,6 +163,12 @@ export interface RecentlyViewedPlugin<T extends PageType = PageType> {
    * Check if URL matches this plugin
    */
   matchUrl: (pathname: string, searchParams: URLSearchParams) => boolean;
+
+  /**
+   * Called when a tab with this reference type is activated.
+   * Use to perform store-level state transitions (e.g. switchTopic).
+   */
+  onActivate?: (reference: PageReference<T>) => void;
 
   /**
    * Parse URL into a page reference

@@ -3,13 +3,13 @@
 import { Button, Icon, Text } from '@lobehub/ui';
 import { Form, Input } from 'antd';
 import { Lock, Mail } from 'lucide-react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Link from '@/libs/next/Link';
-import { useSearchParams } from '@/libs/next/navigation';
-
 import { AuthCard } from '../../../../../features/AuthCard';
+import { trackLoginOrSignupClicked } from '../../../../../features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { type SignUpFormValues } from './useSignUp';
 import { useSignUp } from './useSignUp';
 
@@ -28,7 +28,17 @@ const BetterAuthSignUpForm = () => {
   const footer = (
     <Text>
       {t('betterAuth.signup.hasAccount')}{' '}
-      <Link href={`/signin?${searchParams.toString()}`}>{t('betterAuth.signup.signinLink')}</Link>
+      <Link
+        href={`/signin?${searchParams.toString()}`}
+        onClick={(event) => {
+          event.preventDefault();
+          void trackLoginOrSignupClicked({ spm: 'signup.go_to_signin.click' }).finally(() => {
+            window.location.href = `/signin?${searchParams.toString()}`;
+          });
+        }}
+      >
+        {t('betterAuth.signup.signinLink')}
+      </Link>
     </Text>
   );
 

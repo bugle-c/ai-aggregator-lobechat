@@ -5,8 +5,11 @@
  * Modules can register additional custom detectors via ToolDetectorManager.
  */
 
+export { browserAutomationDetectors } from './agentBrowserDetectors';
+export { cliAgentDetectors, detectHeterogeneousCliCommand } from './cliAgentDetectors';
 export { astSearchDetectors, contentSearchDetectors } from './contentSearchDetectors';
 export { fileSearchDetectors } from './fileSearchDetectors';
+export { runtimeEnvironmentDetectors } from './runtimeEnvironmentDetectors';
 
 // Re-export types for convenience
 export type {

@@ -7,6 +7,7 @@ import { type ReactNode } from 'react';
 import { memo } from 'react';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { isModifierClick } from '@/utils/navigation';
 
 const ACTION_CLASS_NAME = 'nav-item-actions';
 
@@ -101,12 +102,12 @@ const NavItem = memo<NavItemProps>(
         paddingInline={4}
         variant={variant}
         onClick={(e) => {
-          if (disabled || loading) return;
-          // Prevent default link behavior for normal clicks (let onClick handle it)
-          // But allow cmd+click to open in new tab
-          if (href && !e.metaKey && !e.ctrlKey) {
+          // Always prevent default <a> navigation for normal clicks to avoid full page reload.
+          // This must run before any early return to ensure SPA navigation is never bypassed.
+          if (href && !isModifierClick(e)) {
             e.preventDefault();
           }
+          if (disabled) return;
           onClick?.(e);
         }}
         {...linkProps}

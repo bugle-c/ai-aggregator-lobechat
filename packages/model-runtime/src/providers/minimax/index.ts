@@ -2,12 +2,9 @@ import { minimax as minimaxChatModels, ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { resolveParameters } from '../../core/parameterResolver';
+import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
 import { createMiniMaxImage } from './createImage';
-
-export const getMinimaxMaxOutputs = (modelId: string): number | undefined => {
-  const model = minimaxChatModels.find((model) => model.id === modelId);
-  return model ? model.maxOutput : undefined;
-};
+import { createMiniMaxVideo } from './createVideo';
 
 export const LobeMinimaxAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.minimaxi.com/v1',
@@ -18,7 +15,7 @@ export const LobeMinimaxAI = createOpenAICompatibleRuntime({
       // Interleaved thinking
       const processedMessages = messages.map((message: any) => {
         if (message.role === 'assistant' && message.reasoning) {
-          // 只处理没有 signature 的历史推理内容
+          // Only process historical reasoning content without a signature
           if (!message.reasoning.signature && message.reasoning.content) {
             const { reasoning, ...messageWithoutReasoning } = message;
             return {
@@ -35,7 +32,7 @@ export const LobeMinimaxAI = createOpenAICompatibleRuntime({
             };
           }
 
-          // 有 signature 或没有 content 的情况，移除 reasoning 字段
+          // If there is a signature or no content, remove the reasoning field
           // eslint-disable-next-line unused-imports/no-unused-vars
           const { reasoning, ...messageWithoutReasoning } = message;
           return messageWithoutReasoning;
@@ -46,7 +43,10 @@ export const LobeMinimaxAI = createOpenAICompatibleRuntime({
       // Resolve parameters with constraints
       const resolvedParams = resolveParameters(
         {
-          max_tokens: max_tokens !== undefined ? max_tokens : getMinimaxMaxOutputs(payload.model),
+          max_tokens:
+            max_tokens !== undefined
+              ? max_tokens
+              : getModelMaxOutputs(payload.model, minimaxChatModels),
           temperature,
           top_p,
         },
@@ -73,6 +73,14 @@ export const LobeMinimaxAI = createOpenAICompatibleRuntime({
     },
   },
   createImage: createMiniMaxImage,
+  createVideo: createMiniMaxVideo,
+  handlePollVideoStatus: async (inferenceId, options) => {
+    const { pollMiniMaxVideoStatus } = await import('./createVideo');
+    return pollMiniMaxVideoStatus(inferenceId, {
+      apiKey: options.apiKey,
+      baseURL: options.baseURL || '',
+    });
+  },
   debug: {
     chatCompletion: () => process.env.DEBUG_MINIMAX_CHAT_COMPLETION === '1',
   },

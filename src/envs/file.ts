@@ -1,4 +1,4 @@
-import { createEnv } from '@t3-oss/env-nextjs';
+import { createEnv } from '@t3-oss/env-core';
 import { z } from 'zod';
 
 const DEFAULT_S3_FILE_PATH = 'files';
@@ -13,6 +13,7 @@ export const getFileConfig = () => {
   const S3_PUBLIC_DOMAIN = process.env.S3_PUBLIC_DOMAIN || process.env.NEXT_PUBLIC_S3_DOMAIN;
 
   return createEnv({
+    clientPrefix: 'NEXT_PUBLIC_',
     client: {
       /**
        * @deprecated
@@ -37,7 +38,7 @@ export const getFileConfig = () => {
       S3_PUBLIC_DOMAIN,
       S3_REGION: process.env.S3_REGION,
       S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY,
-      S3_SET_ACL: process.env.S3_SET_ACL !== '0',
+      S3_SET_ACL: process.env.S3_SET_ACL === '1',
     },
     server: {
       CHUNKS_AUTO_EMBEDDING: z.boolean(),

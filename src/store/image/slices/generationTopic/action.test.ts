@@ -47,6 +47,9 @@ vi.mock('@/store/user/selectors', () => ({
       provider: 'openai',
     }),
   },
+  userGeneralSettingsSelectors: {
+    currentResponseLanguage: vi.fn(() => 'en-US'),
+  },
 }));
 
 beforeEach(() => {

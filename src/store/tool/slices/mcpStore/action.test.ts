@@ -1,5 +1,5 @@
 import type * as LobechatConstModule from '@lobechat/const';
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type ToolManifest } from '@lobechat/types';
 import { type PluginItem } from '@lobehub/market-sdk';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -52,12 +52,9 @@ vi.mock('@/utils/sleep', () => ({
   sleep: vi.fn().mockResolvedValue(undefined),
 }));
 
-const ORIGINAL_DESKTOP_ENV = process.env.NEXT_PUBLIC_IS_DESKTOP_APP;
-
 const bootstrapToolStoreWithDesktop = async (isDesktopEnv: boolean) => {
   vi.resetModules();
   vi.mock('zustand/traditional');
-  process.env.NEXT_PUBLIC_IS_DESKTOP_APP = isDesktopEnv ? '1' : '0';
 
   vi.doMock('@lobechat/const', async () => {
     const actual = await vi.importActual<typeof LobechatConstModule>('@lobechat/const');
@@ -75,11 +72,6 @@ const bootstrapToolStoreWithDesktop = async (isDesktopEnv: boolean) => {
     vi.resetModules();
     vi.doUnmock('@lobechat/const');
     vi.mock('zustand/traditional');
-    if (ORIGINAL_DESKTOP_ENV === undefined) {
-      delete process.env.NEXT_PUBLIC_IS_DESKTOP_APP;
-    } else {
-      process.env.NEXT_PUBLIC_IS_DESKTOP_APP = ORIGINAL_DESKTOP_ENV;
-    }
   };
 
   return {
@@ -126,11 +118,7 @@ afterEach(() => {
 });
 
 afterAll(() => {
-  if (ORIGINAL_DESKTOP_ENV === undefined) {
-    delete process.env.NEXT_PUBLIC_IS_DESKTOP_APP;
-  } else {
-    process.env.NEXT_PUBLIC_IS_DESKTOP_APP = ORIGINAL_DESKTOP_ENV;
-  }
+  vi.resetModules();
 });
 
 describe('mcpStore actions', () => {
@@ -242,7 +230,7 @@ describe('mcpStore actions', () => {
   });
 
   describe('testMcpConnection', () => {
-    const mockManifest: LobeChatPluginManifest = {
+    const mockManifest: ToolManifest = {
       api: [],
       gateway: '',
       identifier: 'test-plugin',
@@ -729,7 +717,7 @@ describe('mcpStore actions', () => {
       },
     };
 
-    const mockServerManifest: LobeChatPluginManifest = {
+    const mockServerManifest: ToolManifest = {
       api: [],
       gateway: '',
       identifier: 'test-plugin',
@@ -1182,7 +1170,7 @@ describe('mcpStore actions', () => {
           version: '1.5.0',
         };
 
-        const serverManifestWithVersion: LobeChatPluginManifest = {
+        const serverManifestWithVersion: ToolManifest = {
           api: [],
           gateway: '',
           identifier: 'test-plugin',

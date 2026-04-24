@@ -3,18 +3,16 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { Link } from 'react-router-dom';
 
-import { navigateToDesktopOnboarding } from '@/app/[variants]/(desktop)/desktop-onboarding/navigation';
-import { clearDesktopOnboardingCompleted } from '@/app/[variants]/(desktop)/desktop-onboarding/storage';
-import { DesktopOnboardingScreen } from '@/app/[variants]/(desktop)/desktop-onboarding/types';
 import BusinessPanelContent from '@/business/client/features/User/BusinessPanelContent';
-import BrandWatermark from '@/components/BrandWatermark';
 import Menu from '@/components/Menu';
 import { isDesktop } from '@/const/version';
+import UserInfo from '@/features/User/UserInfo';
+import { navigateToDesktopOnboarding } from '@/routes/(desktop)/desktop-onboarding/navigation';
+import { DesktopOnboardingScreen } from '@/routes/(desktop)/desktop-onboarding/types';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 import DataStatistics from '../DataStatistics';
-import UserInfo from '../UserInfo';
 import UserLoginOrSignup from '../UserLoginOrSignup';
 import LangButton from './LangButton';
 import { useMenu } from './useMenu';
@@ -39,7 +37,6 @@ const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
       } catch (error) {
         console.error(error);
       } finally {
-        clearDesktopOnboardingCompleted();
         signOut();
         navigateToDesktopOnboarding(DesktopOnboardingScreen.Login);
       }
@@ -65,11 +62,8 @@ const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
       )}
 
       <Menu items={mainItems} onClick={closePopover} />
+      <LangButton placement={'right' as any} />
       <Menu items={logoutItems} onClick={handleSignOut} />
-      <Flexbox horizontal gap={4} justify={'space-between'} style={{ padding: '6px 8px 6px 16px' }}>
-        <BrandWatermark />
-        <LangButton placement={'right' as any} />
-      </Flexbox>
     </Flexbox>
   );
 };

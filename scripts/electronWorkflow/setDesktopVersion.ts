@@ -4,11 +4,11 @@ import fs from 'fs-extra';
 
 type ReleaseType = 'stable' | 'beta' | 'nightly' | 'canary';
 
-// 获取脚本的命令行参数
+// Get command line arguments for the script
 const version = process.argv[2];
 const releaseType = process.argv[3] as ReleaseType;
 
-// 验证参数
+// Validate parameters
 if (!version || !releaseType) {
   console.error(
     'Missing parameters. Usage: bun run setDesktopVersion.ts <version> <stable|beta|nightly|canary>',
@@ -23,14 +23,14 @@ if (!['stable', 'beta', 'nightly', 'canary'].includes(releaseType)) {
   process.exit(1);
 }
 
-// 获取根目录
+// Get root directory
 const rootDir = path.resolve(__dirname, '../..');
 
-// 桌面应用 package.json 的路径
+// Path to the desktop app package.json
 const desktopPackageJsonPath = path.join(rootDir, 'apps/desktop/package.json');
 const buildDir = path.join(rootDir, 'apps/desktop/build');
 
-// 更新应用图标
+// Update app icon
 function updateAppIcon(type: 'beta' | 'nightly') {
   console.log(`📦 Updating app icon for ${type} version...`);
   try {
@@ -56,7 +56,7 @@ function updateAppIcon(type: 'beta' | 'nightly') {
     }
   } catch (error) {
     console.error('  ❌ Error updating icons:', error);
-    // 不终止程序，继续处理 package.json
+    // Don't terminate the program, continue processing package.json
   }
 }
 
@@ -70,41 +70,40 @@ function updatePackageJson() {
 
     const packageJson = fs.readJSONSync(desktopPackageJsonPath);
 
-    // 始终更新版本号
+    // Always update the version number
     packageJson.version = version;
 
-    // 根据 releaseType 修改其他字段
+    // Modify other fields based on releaseType
     switch (releaseType) {
       case 'stable': {
-        packageJson.productName = 'WebGPT';
-        packageJson.name = 'webgpt-desktop';
+        packageJson.productName = 'LobeHub';
+        packageJson.name = 'lobehub-desktop';
         console.log('🌟 Setting as Stable version.');
         break;
       }
       case 'beta': {
-        packageJson.productName = 'WebGPT-Beta';
-        packageJson.name = 'webgpt-desktop-beta';
+        packageJson.productName = 'LobeHub-Beta'; // Or 'LobeHub-Beta' if preferred
+        packageJson.name = 'lobehub-desktop-beta'; // Or 'lobehub-desktop' if preferred
         console.log('🧪 Setting as Beta version.');
         updateAppIcon('beta');
         break;
       }
       case 'nightly': {
-        packageJson.productName = 'WebGPT-Nightly';
-        packageJson.name = 'webgpt-desktop-nightly';
+        packageJson.productName = 'LobeHub-Nightly'; // Or 'LobeHub-Nightly'
+        packageJson.name = 'lobehub-desktop-nightly'; // Or 'lobehub-desktop-nightly'
         console.log('🌙 Setting as Nightly version.');
         updateAppIcon('nightly');
         break;
       }
       case 'canary': {
-        packageJson.productName = 'WebGPT-Canary';
-        packageJson.name = 'webgpt-desktop-canary';
-        console.log('🐤 Setting as Canary version.');
-        updateAppIcon('nightly');
+        packageJson.productName = 'LobeHub';
+        packageJson.name = 'lobehub-desktop-canary';
+        console.log('🐤 Setting as Canary version (same app name and icon as stable).');
         break;
       }
     }
 
-    // 写回文件
+    // Write back to file
     fs.writeJsonSync(desktopPackageJsonPath, packageJson, { spaces: 2 });
 
     console.log(
@@ -116,5 +115,5 @@ function updatePackageJson() {
   }
 }
 
-// 执行更新
+// Execute update
 updatePackageJson();

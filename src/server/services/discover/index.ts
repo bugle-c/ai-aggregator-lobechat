@@ -20,6 +20,7 @@ import {
   type DiscoverPluginItem,
   type DiscoverProviderDetail,
   type DiscoverProviderItem,
+  type DiscoverSkillItem,
   type DiscoverUserProfile,
   type IdentifiersResponse,
   type McpListResponse,
@@ -95,7 +96,7 @@ export class DiscoverService {
 
     log(
       'DiscoverService initialized with market baseURL: %s, hasAuth: %s, userId: %s',
-      process.env.NEXT_PUBLIC_MARKET_BASE_URL,
+      process.env.MARKET_BASE_URL,
       !!(accessToken || userInfo),
       userInfo?.userId,
     );
@@ -1832,6 +1833,8 @@ export class DiscoverService {
         favoriteAgents?: any[];
         forkedAgentGroups?: any[];
         forkedAgents?: any[];
+        plugins?: any[];
+        skills?: any[];
       };
 
       if (!response?.user) {
@@ -1847,6 +1850,8 @@ export class DiscoverService {
         forkedAgentGroups,
         favoriteAgents,
         favoriteAgentGroups,
+        skills,
+        plugins,
       } = response;
 
       // Transform agents to DiscoverAssistantItem format
@@ -1989,6 +1994,53 @@ export class DiscoverService {
         updatedAt: group.updatedAt,
       }));
 
+      // Transform skills to DiscoverSkillItem format
+      const transformedSkills: DiscoverSkillItem[] = (skills || []).map((skill: any) => ({
+        author: skill.author || '',
+        category: skill.category,
+        commentCount: skill.commentCount,
+        createdAt: skill.createdAt,
+        description: skill.description || '',
+        github: skill.github,
+        homepage: skill.homepage,
+        icon: skill.icon,
+        identifier: skill.identifier,
+        installCount: skill.installCount || 0,
+        isFeatured: skill.isFeatured || false,
+        isOfficial: skill.isOfficial || false,
+        isValidated: skill.isValidated || false,
+        name: skill.name || skill.identifier,
+        ratingAvg: skill.ratingAvg,
+        ratingCount: skill.ratingCount || 0,
+        resourcesCount: skill.resourcesCount,
+        status: skill.status,
+        tags: skill.tags || [],
+        updatedAt: skill.updatedAt,
+        version: skill.version || 'latest',
+      }));
+
+      // Transform plugins to DiscoverPluginItem format
+      const transformedPlugins: DiscoverPluginItem[] = (plugins || []).map((plugin: any) => ({
+        author: plugin.author || '',
+        avatar: plugin.avatar,
+        category: plugin.category,
+        createdAt: plugin.createdAt,
+        description: plugin.description || '',
+        homepage: `https://lobehub.com/discover/plugin/${plugin.identifier}`,
+        identifier: plugin.identifier,
+        installCount: plugin.installCount || 0,
+        isClaimed: plugin.isClaimed || false,
+        isFeatured: plugin.isFeatured || false,
+        isOfficial: plugin.isOfficial || false,
+        isValidated: plugin.isValidated || false,
+        manifest: plugin.manifest || '',
+        schemaVersion: 1,
+        status: plugin.status,
+        tags: plugin.tags || [],
+        title: plugin.name || plugin.identifier,
+        updatedAt: plugin.updatedAt,
+      }));
+
       const result: DiscoverUserProfile = {
         agentGroups: transformedAgentGroups,
         agents: transformedAgents,
@@ -1996,6 +2048,8 @@ export class DiscoverService {
         favoriteAgents: transformedFavoriteAgents,
         forkedAgentGroups: transformedForkedAgentGroups,
         forkedAgents: transformedForkedAgents,
+        plugins: transformedPlugins,
+        skills: transformedSkills,
         user: {
           avatarUrl: user.avatarUrl || null,
           bannerUrl: user.meta?.bannerUrl || null,
@@ -2013,13 +2067,15 @@ export class DiscoverService {
       };
 
       log(
-        'getUserInfo: returning user profile with %d agents, %d groups, %d forked agents, %d forked groups, %d favorite agents, %d favorite groups',
+        'getUserInfo: returning user profile with %d agents, %d groups, %d forked agents, %d forked groups, %d favorite agents, %d favorite groups, %d skills, %d plugins',
         result.agents.length,
         result.agentGroups?.length || 0,
         result.forkedAgents?.length || 0,
         result.forkedAgentGroups?.length || 0,
         result.favoriteAgents?.length || 0,
         result.favoriteAgentGroups?.length || 0,
+        result.skills?.length || 0,
+        result.plugins?.length || 0,
       );
       return result;
     } catch (error) {

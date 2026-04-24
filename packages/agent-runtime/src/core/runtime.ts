@@ -140,6 +140,7 @@ export class AgentRuntime {
             arguments: tc.function.arguments,
             id: tc.id,
             identifier: tc.function.name,
+            thoughtSignature: tc.thoughtSignature,
             type: 'default' as any,
           }));
 
@@ -213,7 +214,12 @@ export class AgentRuntime {
       return {
         events: allEvents,
         newState: currentState,
-        nextContext: finalNextContext,
+        // When execution is blocked (waiting for human or interrupted),
+        // clear nextContext so the outer loop stops instead of continuing
+        nextContext:
+          currentState.status === 'waiting_for_human' || currentState.status === 'interrupted'
+            ? undefined
+            : finalNextContext,
       };
     } catch (error) {
       const errorState = structuredClone(state);

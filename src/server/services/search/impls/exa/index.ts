@@ -31,7 +31,7 @@ export class ExaImpl implements SearchServiceImpl {
     const endpoint = urlJoin(this.baseUrl, '/search');
 
     const defaultQueryParams: ExaSearchParameters = {
-      numResults: 15,
+      numResults: 10,
       query,
       type: 'auto',
     };
@@ -59,7 +59,7 @@ export class ExaImpl implements SearchServiceImpl {
 
     let response: Response;
     const startAt = Date.now();
-    let costTime = 0;
+    let costTime: number;
     try {
       log('Sending request to endpoint: %s', endpoint);
       response = await fetch(endpoint, {

@@ -17,11 +17,13 @@ export enum SidebarTabKey {
   Pages = 'pages',
   Resource = 'resource',
   Setting = 'settings',
+  Tasks = 'tasks',
   Video = 'video',
 }
 
 export enum ChatSettingsTabs {
   Chat = 'chat',
+  Documents = 'documents',
   Meta = 'meta',
   Modal = 'modal',
   Opening = 'opening',
@@ -38,16 +40,24 @@ export enum GroupSettingsTabs {
 
 export enum SettingsTabs {
   About = 'about',
+  Advanced = 'advanced',
+  /** @deprecated Use ServiceModel instead */
   Agent = 'agent',
   APIKey = 'apikey',
+  Appearance = 'appearance',
   Billing = 'billing',
+  /** @deprecated Use Appearance instead */
   ChatAppearance = 'chat-appearance',
+  /** @deprecated Use Appearance instead */
   Common = 'common',
-  Funds = 'funds',
+  Credits = 'credits',
+  Creds = 'creds',
   Hotkey = 'hotkey',
+  /** @deprecated Use ServiceModel instead */
   Image = 'image',
   LLM = 'llm',
   Memory = 'memory',
+  Notification = 'notification',
   // business
   Plans = 'plans',
   Profile = 'profile',
@@ -55,15 +65,15 @@ export enum SettingsTabs {
   Proxy = 'proxy',
   Referral = 'referral',
   Security = 'security',
+  ServiceModel = 'service-model',
   Skill = 'skill',
 
-  /* eslint-disable typescript-sort-keys/string-enum */
   Stats = 'stats',
   Storage = 'storage',
   SystemTools = 'system-tools',
+  /** @deprecated Use ServiceModel instead */
   TTS = 'tts',
   Usage = 'usage',
-  /* eslint-enable typescript-sort-keys/string-enum */
 }
 
 /**
@@ -90,6 +100,11 @@ export interface SystemStatus {
   chatInputHeight?: number;
   disabledModelProvidersSortType?: string;
   disabledModelsSortType?: string;
+  /**
+   * IDs of banners/ads the user has dismissed. New banners use a new ID
+   * so dismissing the current one does not hide future ones.
+   */
+  dismissedBannerIds?: string[];
   expandInputActionbar?: boolean;
   // which sessionGroup should expand
   expandSessionGroupKeys: string[];
@@ -101,12 +116,16 @@ export interface SystemStatus {
    * Group Agent Builder panel width
    */
   groupAgentBuilderPanelWidth?: number;
-  hideGemini2_5FlashImagePreviewChineseWarning?: boolean;
+  /**
+   * Hidden sidebar sections
+   */
+  hiddenSidebarSections?: string[];
   hidePWAInstaller?: boolean;
   hideThreadLimitAlert?: boolean;
   hideTopicSharePrivacyWarning?: boolean;
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
+  imageTopicViewMode?: 'grid' | 'list';
   /**
    * Do not enable PGLite on app initialization, only enable when user manually turns it on
    */
@@ -145,6 +164,10 @@ export interface SystemStatus {
   portalWidth: number;
   readNotificationSlugs?: string[];
   /**
+   * number of recent items to display
+   */
+  recentPageSize?: number;
+  /**
    * Resource Manager column widths
    */
   resourceManagerColumnWidths?: {
@@ -162,7 +185,38 @@ export interface SystemStatus {
   showSystemRole?: boolean;
   showVideoPanel?: boolean;
   showVideoTopicPanel?: boolean;
+  /**
+   * Flat ordered list of sidebar items.
+   */
+  sidebarItems?: string[];
+  /**
+   * Legacy accordion-only ordering (recents/agent) from the pre-rework sidebar.
+   * @deprecated Kept for one-time migration into `sidebarItems`.
+   */
+  sidebarSectionOrder?: string[];
   systemRoleExpandedMap: Record<string, boolean>;
+  /**
+   * Whether the inline task create entry on the tasks page is collapsed (hidden).
+   * When true, the tasks page shows a "+" button in the header that opens the create modal.
+   */
+  taskCreateInlineCollapsed?: boolean;
+  /**
+   * Kanban columns hidden from the main board. Each column renders as a collapsible
+   * entry in the right-side "Hidden columns" panel until restored.
+   */
+  taskKanbanHiddenColumns?: string[];
+  /**
+   * Whether the right-side "Hidden columns" panel on the Kanban board is collapsed.
+   */
+  taskKanbanHiddenPanelCollapsed?: boolean;
+  taskListViewOptions?: {
+    groupBy: 'assignee' | 'none' | 'priority' | 'status';
+    hideCompleted: boolean;
+    orderBy: 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
+    orderCompletedByRecency: boolean;
+    orderDirection: 'asc' | 'desc';
+    subGroupBy: 'assignee' | 'none' | 'priority' | 'status';
+  };
   /**
    * Whether to display tokens in short format
    */
@@ -173,8 +227,16 @@ export interface SystemStatus {
   topicPageSize?: number;
   videoPanelWidth: number;
   videoTopicPanelWidth?: number;
+  videoTopicViewMode?: 'grid' | 'list';
   zenMode?: boolean;
 }
+
+export interface GlobalNavigationRef {
+  current: NavigateFunction | null;
+}
+
+/** Fresh ref object — use for store init and resets so `initialState` is not aliased by nested mutation. */
+export const createNavigationRef = (): GlobalNavigationRef => ({ current: null });
 
 export interface GlobalState {
   hasNewVersion?: boolean;
@@ -198,7 +260,8 @@ export interface GlobalState {
   isServerVersionOutdated?: boolean;
   isStatusInit?: boolean;
   latestVersion?: string;
-  navigate?: NavigateFunction;
+  /** Imperative router navigate; see `NavigatorRegistrar` in `src/utils/router.tsx`. */
+  navigationRef: GlobalNavigationRef;
   /**
    * Server version number, used to detect client-server version consistency
    */
@@ -210,26 +273,38 @@ export interface GlobalState {
 
 export const INITIAL_STATUS = {
   agentBuilderPanelWidth: 360,
-  agentPageSize: 10,
+  agentPageSize: 5,
   chatInputHeight: 64,
+  recentPageSize: 5,
+  taskListViewOptions: {
+    groupBy: 'status',
+    hideCompleted: true,
+    orderBy: 'updatedAt',
+    orderCompletedByRecency: true,
+    orderDirection: 'asc',
+    subGroupBy: 'none',
+  },
+  taskKanbanHiddenColumns: ['done'],
+  taskKanbanHiddenPanelCollapsed: false,
   disabledModelProvidersSortType: 'default',
   disabledModelsSortType: 'default',
+  dismissedBannerIds: [],
   expandInputActionbar: true,
   expandSessionGroupKeys: [SessionDefaultGroup.Pinned, SessionDefaultGroup.Default],
   fileManagerViewMode: 'list' as const,
   filePanelWidth: 320,
   groupAgentBuilderPanelWidth: 360,
-  hideGemini2_5FlashImagePreviewChineseWarning: false,
   hidePWAInstaller: false,
   hideThreadLimitAlert: false,
   hideTopicSharePrivacyWarning: false,
   imagePanelWidth: 320,
+  imageTopicViewMode: 'grid' as const,
   imageTopicPanelWidth: 80,
   knowledgeBaseModalViewMode: 'list' as const,
   leftPanelWidth: 320,
   mobileShowTopic: false,
   modelSwitchPanelGroupMode: 'byProvider',
-  modelSwitchPanelWidth: 430,
+  modelSwitchPanelWidth: 460,
   noWideScreen: true,
   pageAgentPanelWidth: 360,
   pagePageSize: 20,
@@ -254,6 +329,7 @@ export const INITIAL_STATUS = {
   tokenDisplayFormatShort: true,
   topicPageSize: 20,
   videoPanelWidth: 320,
+  videoTopicViewMode: 'grid' as const,
   videoTopicPanelWidth: 80,
   zenMode: false,
 } satisfies SystemStatus;
@@ -262,6 +338,7 @@ export const initialState: GlobalState = {
   initClientDBStage: DatabaseLoadingState.Idle,
   isMobile: false,
   isStatusInit: false,
+  navigationRef: createNavigationRef(),
   sidebarKey: SidebarTabKey.Chat,
   status: INITIAL_STATUS,
   statusStorage: new AsyncLocalStorage('LOBE_SYSTEM_STATUS'),

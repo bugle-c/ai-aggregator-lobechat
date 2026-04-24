@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { type AgentState, type ExecutorResult } from '@lobechat/agent-runtime';
 import { GroupOrchestrationRuntime, GroupOrchestrationSupervisor } from '@lobechat/agent-runtime';
 import { type TaskStatusResult } from '@lobechat/types';
@@ -42,11 +41,10 @@ export const groupOrchestrationSlice = (set: Setter, get: () => ChatStore, _api?
 
 export class GroupOrchestrationActionImpl {
   readonly #get: () => ChatStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
-    this.#set = set;
+    void set;
     this.#get = get;
   }
 
@@ -348,6 +346,13 @@ export class GroupOrchestrationActionImpl {
     // 8. Complete Operation
     if (state.status === 'done') {
       this.#get().completeOperation(operationId);
+
+      // Mark unread completion for background conversations
+      const completedOp = this.#get().operations[operationId];
+      if (completedOp?.context.agentId) {
+        this.#get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
+      }
+
       log('[internal_execGroupOrchestration] Operation completed successfully');
     } else if (state.status === 'error') {
       this.#get().failOperation(operationId, {
@@ -373,7 +378,9 @@ export class GroupOrchestrationActionImpl {
       {
         revalidateOnFocus: false,
         revalidateOnReconnect: false,
-        refreshInterval: POLLING_INTERVAL,
+        // Keep one fetch for terminal tasks so completed/failed detail panels can load messages,
+        // but stop interval polling afterward to avoid endless status requests.
+        refreshInterval: (data) => (!data || data.status === 'processing' ? POLLING_INTERVAL : 0),
         onSuccess: (data) => {
           if (data && messageId) {
             // Update taskDetail and tasks (intermediate messages)

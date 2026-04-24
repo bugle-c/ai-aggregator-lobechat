@@ -1,14 +1,14 @@
-import { NetworkProxySettings } from '@lobechat/electron-client-ipc';
+import type { NetworkProxySettings } from '@lobechat/electron-client-ipc';
 import { isEqual, merge } from 'es-toolkit/compat';
 
 import { defaultProxySettings } from '@/const/store';
 import { createLogger } from '@/utils/logger';
 
+import type { ProxyTestResult } from '../modules/networkProxy';
 import {
   ProxyConfigValidator,
   ProxyConnectionTester,
   ProxyDispatcherManager,
-  ProxyTestResult,
 } from '../modules/networkProxy';
 import { ControllerModule, IpcMethod } from './index';
 
@@ -103,7 +103,7 @@ export default class NetworkProxyCtr extends ControllerModule {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Proxy connection test failed:', errorMessage);
-      throw new Error(`Connection failed: ${errorMessage}`);
+      throw new Error(`Connection failed: ${errorMessage}`, { cause: error });
     }
   }
 

@@ -1,7 +1,8 @@
-import  { type ChatModelCard } from '@lobechat/types';
-import  { type AIBaseModelCard, type AiModelSettings, type ExtendParamsType } from 'model-bank';
+import type { ChatModelCard } from '@lobechat/types';
+import type { AIBaseModelCard, AiModelSettings, AiModelType, ExtendParamsType } from 'model-bank';
+import { AiModelTypeSchema } from 'model-bank';
 
-import  { type ModelProviderKey } from '../types';
+import type { ModelProviderKey } from '../types';
 
 export interface ModelProcessorConfig {
   excludeKeywords?: readonly string[]; // Do not add tags to models that match
@@ -30,8 +31,8 @@ export const MODEL_LIST_CONFIGS = {
     visionKeywords: [],
   },
   deepseek: {
-    functionCallKeywords: ['v3', 'r1', 'deepseek-chat'],
-    reasoningKeywords: ['r1', 'deepseek-reasoner', 'v3.'],
+    functionCallKeywords: ['v3', 'v4', 'r1', 'deepseek-chat'],
+    reasoningKeywords: ['r1', 'deepseek-reasoner', 'v3.', 'v4'],
     visionKeywords: ['ocr'],
   },
   google: {
@@ -62,6 +63,11 @@ export const MODEL_LIST_CONFIGS = {
     functionCallKeywords: ['minimax'],
     reasoningKeywords: ['-m'],
     visionKeywords: ['-vl', 'Text-01'],
+  },
+  mistral: {
+    functionCallKeywords: ['mistral', 'ministral', 'pixtral'],
+    reasoningKeywords: ['magistral'],
+    visionKeywords: ['magistral', 'pixtral', 'ministral', 'mistral'],
   },
   moonshot: {
     functionCallKeywords: ['moonshot', 'kimi'],
@@ -121,9 +127,12 @@ export const MODEL_LIST_CONFIGS = {
     visionKeywords: ['vision', 'grok-4'],
   },
   xiaomimimo: {
+    excludeKeywords: ['tts'],
     functionCallKeywords: ['mimo'],
     reasoningKeywords: ['mimo'],
-    visionKeywords: [],
+    // mimo-v2.5 (non-pro) is natively omni-modal; match the exact id
+    // without also catching mimo-v2.5-pro, which is text-only.
+    visionKeywords: ['omni', 're:^mimo-v2\\.5$'],
   },
   zeroone: {
     functionCallKeywords: ['fc'],
@@ -146,6 +155,7 @@ export const MODEL_OWNER_DETECTION_CONFIG = {
   llama: ['llama', 'llava'],
   longcat: ['longcat'],
   minimax: ['minimax'],
+  mistral: ['mistral', 'ministral', 'magistral', 'pixtral'],
   moonshot: ['moonshot', 'kimi'],
   openai: ['o1', 'o3', 'o4', 'gpt-'],
   qwen: ['qwen', 'qwq', 'qvq'],
@@ -182,6 +192,20 @@ export const IMAGE_MODEL_KEYWORDS = [
 
 // Embedding model keyword configuration
 export const EMBEDDING_MODEL_KEYWORDS = ['embedding', 'embed', 'bge', 'm3e'] as const;
+
+const AI_MODEL_TYPE_SET = new Set<AiModelType>(AiModelTypeSchema.options);
+
+const normalizeModelType = (value: unknown): AiModelType | undefined => {
+  if (typeof value !== 'string') return undefined;
+
+  const normalized = value.toLowerCase() as AiModelType;
+
+  if (AI_MODEL_TYPE_SET.has(normalized)) {
+    return normalized;
+  }
+
+  return undefined;
+};
 
 /**
  * Detect whether a keyword list matches a model ID (supports multiple matching patterns)
@@ -336,6 +360,10 @@ const processReleasedAt = (model: any, knownModel?: any): string | undefined => 
  * @returns Processed display name
  */
 const processDisplayName = (displayName: string): string => {
+  if (displayName.includes('Gemini 3.1 Flash Image Preview')) {
+    return displayName.replace('Gemini 3.1 Flash Image Preview', 'Nano Banana 2');
+  }
+
   // If it contains "Gemini 2.5 Flash Image Preview", replace the corresponding part with "Nano Banana"
   if (displayName.includes('Gemini 2.5 Flash Image Preview')) {
     return displayName.replace('Gemini 2.5 Flash Image Preview', 'Nano Banana');
@@ -471,8 +499,9 @@ const processModelCard = (
   } = config;
 
   const isExcludedModel = isKeywordListMatch(model.id.toLowerCase(), excludeKeywords);
+  const normalizedModelType = normalizeModelType(model.type);
   const modelType =
-    model.type ||
+    normalizedModelType ||
     knownModel?.type ||
     (isKeywordListMatch(
       model.id.toLowerCase(),

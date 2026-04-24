@@ -1,5 +1,5 @@
 import { getLobehubSkillProviderById } from '@lobechat/const';
-import { enableMapSet, produce } from 'immer';
+import { produce } from 'immer';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
@@ -16,8 +16,6 @@ import {
   type LobehubSkillTool,
 } from './types';
 import { LobehubSkillStatus } from './types';
-
-enableMapSet();
 
 const n = setNamespace('lobehubSkillStore');
 
@@ -42,7 +40,7 @@ export class LobehubSkillStoreActionImpl {
   callLobehubSkillTool = async (
     params: CallLobehubSkillToolParams,
   ): Promise<CallLobehubSkillToolResult> => {
-    const { provider, toolName, args } = params;
+    const { provider, toolName, args, topicId } = params;
     const toolId = `${provider}:${toolName}`;
 
     this.#set(
@@ -58,6 +56,7 @@ export class LobehubSkillStoreActionImpl {
         args,
         provider,
         toolName,
+        topicId,
       });
 
       this.#set(

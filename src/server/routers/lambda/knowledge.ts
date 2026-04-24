@@ -65,7 +65,7 @@ export const knowledgeRouter = router({
           embeddingError: embeddingTask?.error ?? null,
           embeddingStatus: embeddingTask?.status as AsyncTaskStatus,
           finishEmbedding: embeddingTask?.status === AsyncTaskStatus.Success,
-          url: await ctx.fileService.getFullFileUrl(item.url!),
+          url: item.url ? await ctx.fileService.getFullFileUrl(item.url) : undefined,
         } as FileListItem);
       } else {
         // Document item - no chunk processing needed, includes editorData
@@ -78,7 +78,7 @@ export const knowledgeRouter = router({
           embeddingStatus: null,
           finishEmbedding: false,
         } as FileListItem;
-        console.log('[API getKnowledgeItems] Processing document:', {
+        console.info('[API getKnowledgeItems] Processing document:', {
           editorDataPreview: item.editorData ? JSON.stringify(item.editorData).slice(0, 100) : null,
           hasEditorData: !!item.editorData,
           id: item.id,

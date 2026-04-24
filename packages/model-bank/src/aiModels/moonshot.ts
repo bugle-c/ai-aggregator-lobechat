@@ -1,19 +1,48 @@
 import type { AIChatModelCard } from '../types/aiModel';
 
-// https://platform.moonshot.cn/docs/pricing/chat
+// https://platform.kimi.com/docs/pricing/chat
 const moonshotChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
       reasoning: true,
       structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      "Kimi K2.6 is Kimi's latest and most capable model, delivering stronger long-horizon coding, instruction following, and self-correction while supporting text, image, and video inputs plus chat and agent tasks.",
+    displayName: 'Kimi K2.6',
+    enabled: true,
+    id: 'kimi-k2.6',
+    maxOutput: 32_768,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 1.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-20',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+      video: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
     description:
       'Kimi K2.5 is Kimi\'s most versatile model to date, featuring a native multimodal architecture that supports both vision and text inputs, "thinking" and "non-thinking" modes, and both conversational and agent tasks.',
     displayName: 'Kimi K2.5',
-    enabled: true,
     id: 'kimi-k2.5',
     maxOutput: 32_768,
     pricing: {
@@ -84,8 +113,9 @@ const moonshotChatModels: AIChatModelCard[] = [
     contextWindowTokens: 262_144,
     description:
       'kimi-k2-0905-preview offers a 256k context window, stronger agentic coding, better front-end code quality, and improved context understanding.',
-    displayName: 'Kimi K2 0905',
+    displayName: 'Kimi K2 0905 Preview',
     id: 'kimi-k2-0905-preview',
+    maxOutput: 65_536,
     pricing: {
       currency: 'CNY',
       units: [
@@ -104,7 +134,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     contextWindowTokens: 131_072,
     description:
       'kimi-k2 is an MoE foundation model with strong coding and agent capabilities (1T total params, 32B active), outperforming other mainstream open models across reasoning, programming, math, and agent benchmarks.',
-    displayName: 'Kimi K2 0711',
+    displayName: 'Kimi K2 0711 Preview',
     id: 'kimi-k2-0711-preview',
     pricing: {
       currency: 'CNY',
@@ -124,7 +154,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     contextWindowTokens: 262_144,
     description:
       'kimi-k2 is an MoE foundation model with strong coding and agent capabilities (1T total params, 32B active), outperforming other mainstream open models across reasoning, programming, math, and agent benchmarks.',
-    displayName: 'Kimi K2 0905 Turbo',
+    displayName: 'Kimi K2 Turbo Preview',
     id: 'kimi-k2-turbo-preview',
     pricing: {
       currency: 'CNY',
@@ -135,70 +165,6 @@ const moonshotChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-09-05',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Kimi Latest uses the newest Kimi model and may include experimental features. It supports image understanding and automatically selects 8k/32k/128k billing models based on context length.',
-    displayName: 'Kimi Latest',
-    enabled: true,
-    id: 'kimi-latest',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.008_192]': 2,
-              '[0.008_193, 0.032_768]': 5,
-              '[0.032_769, 0.131_072]': 10,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.008_192]': 10,
-              '[0.008_193, 0.032_768]': 20,
-              '[0.032_769, 0.131_072]': 30,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-02-17',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Moonshot V1 Auto selects the appropriate model based on current context token usage.',
-    displayName: 'Moonshot V1 Auto',
-    id: 'moonshot-v1-auto',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
     type: 'chat',
   },
   {

@@ -53,7 +53,7 @@ Note that sometimes we may also need to update the index, but for this feature, 
 
 ### Database Migration
 
-After adjusting the schema, you need to generate and optimize migration files. See the [Database Migration Guide](https://github.com/lobehub/lobe-chat/blob/main/.agents/skills/drizzle/references/db-migrations.md) for detailed steps.
+After adjusting the schema, you need to generate and optimize migration files. See the [Database Migration Guide](https://github.com/lobehub/lobehub/blob/main/.agents/skills/drizzle/references/db-migrations.md) for detailed steps.
 
 ## 2. Update Data Model
 
@@ -294,6 +294,7 @@ const OpeningQuestions = memo(() => {
 ```
 
 Key points:
+
 - Read store config via `selectors`
 - Update config via the `setAgentConfig` action
 - Use `useTranslation('setting')` for i18n text
@@ -321,7 +322,8 @@ const WelcomeMessage = () => {
       <ChatItem avatar={meta} message={message} placement="left" />
       {/* Render guiding questions */}
       <OpeningQuestions questions={openingQuestions} />
-    </Flexbox>
+   
+</Flexbox>
   ) : (
     <ChatItem avatar={meta} message={message} placement="left" />
   );
@@ -330,7 +332,7 @@ const WelcomeMessage = () => {
 
 ## 5. Testing
 
-The project uses Vitest for unit testing. See the [Testing Skill Guide](https://github.com/lobehub/lobe-chat/blob/main/.agents/skills/testing/SKILL.md) for details.
+The project uses Vitest for unit testing. See the [Testing Skill Guide](https://github.com/lobehub/lobehub/blob/main/.agents/skills/testing/SKILL.md) for details.
 
 **Running tests:**
 

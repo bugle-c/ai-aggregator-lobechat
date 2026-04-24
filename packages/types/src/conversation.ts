@@ -6,6 +6,7 @@ import type { IThreadType } from './topic/thread';
  * - thread: Agent thread conversation
  * - group: Group main conversation
  * - group_agent: Agent conversation within a group
+ * - sub_agent: Agent-to-agent communication (non-group, uses subAgentId for config/display only)
  */
 export type MessageMapScope =
   | 'main'
@@ -14,7 +15,8 @@ export type MessageMapScope =
   | 'group_agent'
   | 'group_agent_builder'
   | 'page'
-  | 'agent_builder';
+  | 'agent_builder'
+  | 'sub_agent';
 
 /**
  * Context for generating message map key with scope-driven architecture
@@ -73,7 +75,6 @@ export interface MessageMapContext {
   topicId?: string | null;
 }
 
-/* eslint-disable typescript-sort-keys/interface */
 /**
  * Context for identifying a conversation or message list
  * This is the standard type for all conversation-related context passing
@@ -127,6 +128,13 @@ export interface ConversationContext {
    * Used for optimistic updates
    */
   isNew?: boolean;
+  /**
+   * When true, sendMessage will NOT update the global `useChatStore.activeTopicId`
+   * after creating a new topic — the caller is responsible for tracking the new
+   * topic id (e.g. via `ConversationHooks.onTopicCreated`). Used by isolated
+   * panels (Task Manager) that maintain their own topic pointer.
+   */
+  isolatedTopic?: boolean;
   /**
    * Whether the current agent is the Supervisor in group orchestration
    * - Used to mark assistant messages with metadata.isSupervisor
@@ -187,4 +195,15 @@ export interface ConversationContext {
    * When present, allows unauthenticated access to topic messages
    */
   topicShareId?: string;
+  /**
+   * Trigger value applied when sendMessage creates a new topic from this
+   * context (e.g. `'task_manager'`). Stamped on the topic row to support
+   * page-specific filtering. Only consumed during new-topic creation.
+   */
+  topicTrigger?: string;
+  /**
+   * Task Manager page the user is currently viewing. When set, streamingExecutor
+   * builds `RuntimeInitialContext.taskManager` from the task store.
+   */
+  viewedTask?: { type: 'list' } | { taskId: string; type: 'detail' };
 }

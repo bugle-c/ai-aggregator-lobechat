@@ -4,6 +4,7 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
 import { type State } from '../../initialState';
+import { getPendingInterventions } from './pendingInterventions';
 
 const displayMessages = (s: State) => s.displayMessages;
 const displayMessageIds = (s: State) => s.displayMessages.map((m) => m.id);
@@ -119,6 +120,10 @@ const currentTopicSummary = () => {
   return topicSelectors.currentActiveTopicSummary(chatState);
 };
 
+const pendingInterventions = (s: State) => getPendingInterventions(s.displayMessages);
+
+const isSecondLastMessageFromUser = (s: State) => s.displayMessages.at(-2)?.role === 'user';
+
 export const dataSelectors = {
   currentTopicSummary,
   dbMessages,
@@ -129,6 +134,8 @@ export const dataSelectors = {
   getDbMessageByToolCallId,
   getDisplayMessageById,
   getGroupLatestMessageWithoutTools,
+  isSecondLastMessageFromUser,
   messagesInit,
+  pendingInterventions,
   skipFetch,
 };

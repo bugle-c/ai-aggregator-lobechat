@@ -61,7 +61,7 @@ export interface OpenAIChatMessage {
  */
 export interface ChatStreamPayload {
   apiMode?: 'chatCompletion' | 'responses';
-  effort?: 'low' | 'medium' | 'high' | 'max';
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   /**
    * Enable context caching
    */
@@ -80,9 +80,10 @@ export interface ChatStreamPayload {
    */
   imageAspectRatio?: string;
   /**
-   * @title Image resolution for image generation (e.g., '1K', '2K', '4K')
+   * @title Image resolution for image generation (e.g., '512px', '1K', '2K', '4K')
    */
-  imageResolution?: '1K' | '2K' | '4K';
+  imageResolution?: '512px' | '1K' | '2K' | '4K';
+  logprobs?: boolean;
   /**
    * @title Maximum length of generated text
    */
@@ -123,7 +124,7 @@ export interface ChatStreamPayload {
     effort?: string;
     summary?: string;
   };
-  reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high';
+  reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   response_format?: ChatResponseFormat;
   responseMode?: 'stream' | 'json';
   /**
@@ -144,19 +145,20 @@ export interface ChatStreamPayload {
    */
   thinking?: {
     budget_tokens: number;
-    type: 'enabled' | 'disabled' | 'adaptive';
+    type?: 'enabled' | 'disabled' | 'adaptive';
   };
   thinkingBudget?: number;
   /**
    * Thinking level for Gemini models (e.g., gemini-3.0-pro)
    */
-  thinkingLevel?: 'low' | 'medium' | 'high';
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
   tool_choice?: string;
   tools?: ChatCompletionTool[];
   /**
    * @title Controls the highest probability single token in generated text
    * @default 1
    */
+  top_logprobs?: number;
   top_p?: number;
   truncation?: 'auto' | 'disabled';
   /**
@@ -172,6 +174,8 @@ export interface ChatMethodOptions {
    * response headers
    */
   headers?: Record<string, any>;
+  /** Metadata passed to hooks (billing, tracing, etc.) */
+  metadata?: Record<string, unknown>;
   /**
    * send the request to the ai api endpoint
    */

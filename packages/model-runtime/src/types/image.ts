@@ -1,4 +1,3 @@
-/* eslint-disable typescript-sort-keys/interface */
 import type { ModelUsage } from '@lobechat/types';
 import type { RuntimeImageGenParams } from 'model-bank';
 
@@ -6,6 +5,11 @@ export type CreateImagePayload = {
   model: string;
   params: RuntimeImageGenParams;
 };
+
+export interface CreateImageMethodOptions {
+  /** Metadata passed to hooks (billing, tracing, etc.) */
+  metadata?: Record<string, unknown>;
+}
 
 /**
  * Why return width and height?

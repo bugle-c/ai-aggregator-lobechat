@@ -1,4 +1,5 @@
 import { type Schema, type ValidationResult } from '@cfworker/json-schema';
+import { type LobeTool } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
@@ -8,7 +9,6 @@ import { type StoreSetter } from '@/store/types';
 import { merge } from '@/utils/merge';
 
 import { type ToolStore } from '../../store';
-import { pluginStoreSelectors } from '../oldStore/selectors';
 import { pluginSelectors } from './selectors';
 
 /**
@@ -29,24 +29,29 @@ export class PluginActionImpl {
     this.#get = get;
   }
 
-  checkPluginsIsInstalled = async (plugins: string[]): Promise<void> => {
-    // if there is no plugins, just skip.
-    if (plugins.length === 0) return;
+  checkPluginsIsInstalled = async (_plugins: string[]): Promise<void> => {
+    // Old plugin system has been deprecated, skip auto-installation
+  };
 
-    const { loadPluginStore, installPlugins } = this.#get();
-
-    // check if the store is empty
-    // if it is, we need to load the plugin store
-    if (pluginStoreSelectors.onlinePluginStore(this.#get()).length === 0) {
-      await loadPluginStore();
-    }
-
-    await installPlugins(plugins);
+  /**
+   * Refresh installed plugins from the server and update store state.
+   */
+  refreshPlugins = async (): Promise<void> => {
+    const data = await pluginService.getInstalledPlugins();
+    this.#set({ installedPlugins: data }, false, 'refreshPlugins');
   };
 
   removeAllPlugins = async (): Promise<void> => {
     await pluginService.removeAllPlugins();
     await this.#get().refreshPlugins();
+  };
+
+  updateInstallLoadingState = (id: string, loading: boolean | undefined): void => {
+    this.#set(
+      { pluginInstallLoading: { ...this.#get().pluginInstallLoading, [id]: loading } },
+      false,
+      'updateInstallLoadingState',
+    );
   };
 
   updateInstallMcpPlugin = async (id: string, value: any): Promise<void> => {
@@ -79,6 +84,22 @@ export class PluginActionImpl {
     await pluginService.updatePluginSettings(id, nextSettings, newSignal.signal);
 
     await this.#get().refreshPlugins();
+  };
+
+  useFetchInstalledPlugins = (enable: boolean): SWRResponse => {
+    return useClientDataSWR(
+      enable ? 'useFetchInstalledPlugins' : null,
+      () => pluginService.getInstalledPlugins(),
+      {
+        onSuccess: (data: LobeTool[]) => {
+          this.#set(
+            { installedPlugins: data, loadingInstallPlugins: false },
+            false,
+            'useFetchInstalledPlugins/onSuccess',
+          );
+        },
+      },
+    );
   };
 
   useCheckPluginsIsInstalled = (enable: boolean, plugins: string[]): SWRResponse => {

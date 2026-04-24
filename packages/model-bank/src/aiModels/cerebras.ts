@@ -1,44 +1,6 @@
-import type { AIChatModelCard } from '../types/aiModel';
+import { type AIChatModelCard } from '../types/aiModel';
 
 const cerebrasModels: AIChatModelCard[] = [
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    displayName: 'GPT OSS 120B',
-    enabled: true,
-    id: 'gpt-oss-120b',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.35, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['reasoningEffort'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Qwen 3 32B: strong at multilingual and coding tasks, suitable for mid-scale production use.',
-    displayName: 'Qwen 3 32B',
-    id: 'qwen-3-32b',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
   {
     abilities: {
       functionCall: true,
@@ -49,22 +11,6 @@ const cerebrasModels: AIChatModelCard[] = [
     pricing: {
       units: [
         { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description: 'Llama 3.3 70B: a mid-to-large Llama model balancing reasoning and throughput.',
-    displayName: 'Llama 3.3 70B',
-    id: 'llama-3.3-70b',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.85, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },

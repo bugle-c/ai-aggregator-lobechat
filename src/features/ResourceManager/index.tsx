@@ -6,10 +6,11 @@ import { createStaticStyles, useTheme } from 'antd-style';
 import { memo, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import DragUploadZone from '@/components/DragUploadZone';
 import { PageEditor } from '@/features/PageEditor';
 import dynamic from '@/libs/next/dynamic';
+import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';
 import { documentSelectors } from '@/store/file/slices/document/selectors';
@@ -59,12 +60,12 @@ export type ResourceManagerMode = 'editor' | 'explorer' | 'page';
 const ResourceManager = memo(() => {
   const theme = useTheme();
   const [, setSearchParams] = useSearchParams();
-  const [mode, currentViewItemId, libraryId, currentFolderId, setMode, setCurrentViewItemId] =
+  const currentFolderId = useCurrentFolderId();
+  const [mode, currentViewItemId, libraryId, setMode, setCurrentViewItemId] =
     useResourceManagerStore((s) => [
       s.mode,
       s.currentViewItemId,
       s.libraryId,
-      s.currentFolderId,
       s.setMode,
       s.setCurrentViewItemId,
     ]);

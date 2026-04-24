@@ -1,5 +1,9 @@
 {
   "common.checkUpdates": "Updates controleren...",
+  "common.checkingUpdates": "Updates controleren...",
+  "common.downloadingUpdate": "Update downloaden...",
+  "common.isLatestVersion": "Al up-to-date",
+  "common.restartToUpdate": "Herstarten om bij te werken",
   "context.copyImage": "Afbeelding kopiëren",
   "context.copyImageAddress": "Afbeeldingsadres kopiëren",
   "context.copyLink": "Link kopiëren",
@@ -82,5 +86,6 @@
   "window.minimize": "Minimaliseren",
   "window.title": "Venster",
   "window.toggleFullscreen": "Schakel volledig scherm in/uit",
-  "window.zoom": "Inzoomen"
+  "window.zoom": "Inzoomen",
+  "tray.openMiniToolbar": "Quick Composer"
 }

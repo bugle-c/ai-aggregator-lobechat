@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import InfoTooltip from '@/components/InfoTooltip';
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { selectors, useStore } from '../store';
 
@@ -225,7 +226,16 @@ const AgentModal = memo(() => {
     [form],
   );
 
-  const paramItems: FormItemProps[] = (Object.keys(PARAM_CONFIG) as ParamKey[]).map((key) => {
+  // Hide params the selected model rejects outright (e.g. Claude Opus 4.7 drops
+  // temperature / top_p). Declared via `settings.disabledParams` on the model card.
+  const disabledParams = useAiInfraStore(
+    aiModelSelectors.modelDisabledParams(config.model, config.provider ?? ''),
+  );
+  const visibleParamKeys = (Object.keys(PARAM_CONFIG) as ParamKey[]).filter(
+    (key) => !disabledParams?.includes(key),
+  );
+
+  const paramItems: FormItemProps[] = visibleParamKeys.map((key) => {
     const meta = PARAM_CONFIG[key];
     const enabled = enabledMap[key];
 
@@ -341,12 +351,12 @@ const AgentModal = memo(() => {
       itemsType={'group'}
       variant={'borderless'}
       onFinish={(values) => {
-        // 清理 params 中的 undefined 和 null 值，确保禁用的参数被正确移除
+        // Clean up undefined and null values in params to ensure disabled parameters are properly removed
         const cleanedValues = { ...values };
         if (cleanedValues.params) {
           const cleanedParams = { ...cleanedValues.params };
           (Object.keys(cleanedParams) as Array<keyof typeof cleanedParams>).forEach((key) => {
-            // 使用 null 作为禁用标记（JSON 可以序列化 null，而 undefined 会被忽略）
+            // Use null as disabled marker (JSON can serialize null, while undefined will be ignored)
             if (cleanedParams[key] === undefined) {
               cleanedParams[key] = null as any;
             }

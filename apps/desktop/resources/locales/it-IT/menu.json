@@ -1,5 +1,9 @@
 {
   "common.checkUpdates": "Controlla aggiornamenti...",
+  "common.checkingUpdates": "Controllo aggiornamenti in corso...",
+  "common.downloadingUpdate": "Download aggiornamento in corso...",
+  "common.isLatestVersion": "Già aggiornato",
+  "common.restartToUpdate": "Riavvia per aggiornare",
   "context.copyImage": "Copia immagine",
   "context.copyImageAddress": "Copia indirizzo immagine",
   "context.copyLink": "Copia link",
@@ -82,5 +86,6 @@
   "window.minimize": "Minimizza",
   "window.title": "Finestra",
   "window.toggleFullscreen": "Attiva/disattiva schermo intero",
-  "window.zoom": "Zoom"
+  "window.zoom": "Zoom",
+  "tray.openMiniToolbar": "Quick Composer"
 }

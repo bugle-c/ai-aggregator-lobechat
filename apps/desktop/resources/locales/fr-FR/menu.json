@@ -1,5 +1,9 @@
 {
   "common.checkUpdates": "Vérifier les mises à jour...",
+  "common.checkingUpdates": "Vérification des mises à jour...",
+  "common.downloadingUpdate": "Téléchargement de la mise à jour...",
+  "common.isLatestVersion": "Déjà à jour",
+  "common.restartToUpdate": "Redémarrer pour mettre à jour",
   "context.copyImage": "Copier l'image",
   "context.copyImageAddress": "Copier l'adresse de l'image",
   "context.copyLink": "Copier le lien",
@@ -82,5 +86,6 @@
   "window.minimize": "Réduire",
   "window.title": "Fenêtre",
   "window.toggleFullscreen": "Basculer en plein écran",
-  "window.zoom": "Zoom"
+  "window.zoom": "Zoom",
+  "tray.openMiniToolbar": "Quick Composer"
 }

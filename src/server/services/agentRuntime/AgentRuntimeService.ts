@@ -1,5 +1,11 @@
-import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
-import { AgentRuntime, GeneralChatAgent } from '@lobechat/agent-runtime';
+import type {
+  Agent,
+  AgentRuntimeContext,
+  AgentState,
+  GeneralAgentConfig,
+} from '@lobechat/agent-runtime';
+import { AgentRuntime, findInMessages, GeneralChatAgent } from '@lobechat/agent-runtime';
+import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
 import debug from 'debug';
@@ -14,12 +20,13 @@ import { type RuntimeExecutorContext } from '@/server/modules/AgentRuntime/Runti
 import { createRuntimeExecutors } from '@/server/modules/AgentRuntime/RuntimeExecutors';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { mcpService } from '@/server/services/mcp';
-import { PluginGatewayService } from '@/server/services/pluginGateway';
 import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
 
+import { isAbortError, throwIfAborted } from './abort';
+import { hookDispatcher } from './hooks';
 import {
   type AgentExecutionParams,
   type AgentExecutionResult,
@@ -30,7 +37,7 @@ import {
   type StartExecutionParams,
   type StartExecutionResult,
   type StepCompletionReason,
-  type StepLifecycleCallbacks,
+  type StepPresentationData,
 } from './types';
 
 if (process.env.VERCEL) {
@@ -79,6 +86,13 @@ function formatErrorForState(error: unknown): ChatMessageError {
 
 export interface AgentRuntimeServiceOptions {
   /**
+   * Custom agent factory. When provided, this function is called instead of
+   * the default `new GeneralChatAgent(config)` to create the Agent instance.
+   * This allows injecting alternative Agent implementations (e.g. GraphAgent)
+   * without the service needing to know about them.
+   */
+  agentFactory?: (config: GeneralAgentConfig) => Agent;
+  /**
    * Coordinator configuration options
    * Allows injection of custom stateManager and streamEventManager
    */
@@ -88,6 +102,12 @@ export interface AgentRuntimeServiceOptions {
    * Set to null to disable queue scheduling (for synchronous execution tests)
    */
   queueService?: QueueService | null;
+  /**
+   * Optional snapshot store for persisting agent execution traces.
+   * When provided, execution snapshots are recorded on every step and finalized on completion.
+   * In dev mode without this option, falls back to FileSnapshotStore automatically.
+   */
+  snapshotStore?: ISnapshotStore;
   /**
    * Custom StreamEventManager
    * Defaults to Redis-based StreamEventManager
@@ -113,15 +133,12 @@ export interface AgentRuntimeServiceOptions {
  * ```
  */
 export class AgentRuntimeService {
+  private agentFactory?: (config: GeneralAgentConfig) => Agent;
   private coordinator: AgentRuntimeCoordinator;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
+  private snapshotStore: ISnapshotStore | null;
   private toolExecutionService: ToolExecutionService;
-  /**
-   * Step lifecycle callback registry
-   * key: operationId, value: callbacks
-   */
-  private stepCallbacks: Map<string, StepLifecycleCallbacks> = new Map();
   private get baseURL() {
     const baseUrl = process.env.AGENT_RUNTIME_BASE_URL || appEnv.APP_URL || 'http://localhost:3010';
 
@@ -143,18 +160,18 @@ export class AgentRuntimeService {
     });
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
+    this.snapshotStore = options?.snapshotStore ?? this.createDefaultSnapshotStore();
+    this.agentFactory = options?.agentFactory;
     this.serverDB = db;
     this.userId = userId;
     this.messageModel = new MessageModel(db, this.userId);
 
     // Initialize ToolExecutionService with dependencies
-    const pluginGatewayService = new PluginGatewayService();
     const builtinToolsExecutor = new BuiltinToolsExecutor(db, userId);
 
     this.toolExecutionService = new ToolExecutionService({
       builtinToolsExecutor,
       mcpService,
-      pluginGatewayService,
     });
 
     // Setup local execution callback for LocalQueueServiceImpl
@@ -172,43 +189,9 @@ export class AgentRuntimeService {
     if (impl instanceof LocalQueueServiceImpl) {
       log('Setting up local execution callback');
       impl.setExecutionCallback(async (operationId, stepIndex, context) => {
-        log('[%s][%d] Local callback executing...', operationId, stepIndex);
-        await this.executeStep({
-          context,
-          operationId,
-          stepIndex,
-        });
+        await this.executeStep({ context, operationId, stepIndex });
       });
     }
-  }
-
-  // ==================== Step Lifecycle Callbacks ====================
-
-  /**
-   * Register step lifecycle callbacks
-   * @param operationId - Operation ID
-   * @param callbacks - Callback function collection
-   */
-  registerStepCallbacks(operationId: string, callbacks: StepLifecycleCallbacks): void {
-    this.stepCallbacks.set(operationId, callbacks);
-    log('[%s] Registered step callbacks', operationId);
-  }
-
-  /**
-   * Remove step lifecycle callbacks
-   * @param operationId - Operation ID
-   */
-  unregisterStepCallbacks(operationId: string): void {
-    this.stepCallbacks.delete(operationId);
-    log('[%s] Unregistered step callbacks', operationId);
-  }
-
-  /**
-   * Get step lifecycle callbacks
-   * @param operationId - Operation ID
-   */
-  getStepCallbacks(operationId: string): StepLifecycleCallbacks | undefined {
-    return this.stepCallbacks.get(operationId);
   }
 
   // ==================== Operation Interruption ====================
@@ -245,26 +228,54 @@ export class AgentRuntimeService {
    */
   async createOperation(params: OperationCreationParams): Promise<OperationCreationResult> {
     const {
+      activeDeviceId,
       operationId,
       initialContext,
       agentConfig,
       modelRuntimeConfig,
       userId,
       autoStart = true,
-      tools,
+      stream,
       initialMessages = [],
       appContext,
-      toolManifestMap,
-      toolSourceMap,
-      stepCallbacks,
+      toolSet,
+      hooks,
       userInterventionConfig,
-      completionWebhook,
+      queueRetries,
+      queueRetryDelay,
+      botPlatformContext,
+      discordContext,
       evalContext,
       maxSteps,
+      userMemory,
+      deviceSystemInfo,
+      operationSkillSet,
+      signal,
+      userTimezone,
+      initialStepCount = 0,
     } = params;
 
+    const operationToolSet = toolSet;
+    let operationCreated = false;
+    let hooksRegistered = false;
+
     try {
-      log('[%s] Creating new operation (autoStart: %s)', operationId, autoStart);
+      throwIfAborted(signal, 'Agent execution aborted before operation startup');
+
+      const memories = userMemory?.memories;
+      log(
+        '[%s] Creating new operation (autoStart: %s) with params: model=%s, provider=%s, tools=%d, messages=%d, manifests=%d, memory=%s',
+        operationId,
+        autoStart,
+        agentConfig?.model,
+        agentConfig?.provider,
+        operationToolSet.tools?.length ?? 0,
+        initialMessages.length,
+        operationToolSet.manifestMap ? Object.keys(operationToolSet.manifestMap).length : 0,
+        memories
+          ? `{contexts:${memories.contexts?.length ?? 0},experiences:${memories.experiences?.length ?? 0},preferences:${memories.preferences?.length ?? 0},identities:${memories.identities?.length ?? 0},activities:${memories.activities?.length ?? 0},persona:${memories.persona ? 'yes' : 'no'}}`
+          : 'none',
+      );
 
       // Initialize operation state - create state before saving
       const initialState = {
@@ -275,24 +286,36 @@ export class AgentRuntimeService {
         // Use the passed initial messages
         messages: initialMessages,
         metadata: {
+          activeDeviceId,
           agentConfig,
-          completionWebhook,
+          botPlatformContext,
+          deviceSystemInfo,
+          discordContext,
           evalContext,
           // need be removed
           modelRuntimeConfig,
+          queueRetries,
+          queueRetryDelay,
+          stream,
+          operationSkillSet,
           userId,
-          workingDirectory: agentConfig?.chatConfig?.localSystem?.workingDirectory,
+          userMemory,
+          userTimezone,
+          workingDirectory: agentConfig?.chatConfig?.runtimeEnv?.workingDirectory,
           ...appContext,
         },
         maxSteps,
         // modelRuntimeConfig at state level for executor fallback
         modelRuntimeConfig,
         operationId,
+        operationToolSet,
         status: 'idle',
-        stepCount: 0,
-        toolManifestMap,
-        toolSourceMap,
-        tools,
+        stepCount: initialStepCount,
+        // Backward-compat: resolved tool fields read by RuntimeExecutors
+        toolExecutorMap: operationToolSet.executorMap,
+        toolManifestMap: operationToolSet.manifestMap,
+        toolSourceMap: operationToolSet.sourceMap,
+        tools: operationToolSet.tools,
         // User intervention config for headless mode in async tasks
         userInterventionConfig,
       } as Partial<AgentState>;
@@ -303,14 +326,33 @@ export class AgentRuntimeService {
         modelRuntimeConfig,
         userId,
       });
+      operationCreated = true;
 
       // Save initial state
       await this.coordinator.saveAgentState(operationId, initialState as any);
 
-      // Register step lifecycle callbacks
-      if (stepCallbacks) {
-        this.registerStepCallbacks(operationId, stepCallbacks);
+      // Register external hooks
+      if (hooks && hooks.length > 0) {
+        hookDispatcher.register(operationId, hooks);
+        hooksRegistered = true;
+
+        // Persist webhook configs to state metadata for production mode
+        const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
+        if (serializedHooks && serializedHooks.length > 0) {
+          const currentState = await this.coordinator.loadAgentState(operationId);
+          if (currentState) {
+            await this.coordinator.saveAgentState(operationId, {
+              ...currentState,
+              metadata: {
+                ...currentState.metadata,
+                _hooks: serializedHooks,
+              },
+            });
+          }
+        }
       }
+
+      throwIfAborted(signal, 'Agent execution aborted before first step scheduling');
 
       let messageId: string | undefined;
       let autoStarted = false;
@@ -325,7 +367,9 @@ export class AgentRuntimeService {
           endpoint: `${this.baseURL}/run`,
           operationId,
           priority: 'high',
-          stepIndex: 0,
+          retryDelay: queueRetryDelay,
+          retries: queueRetries,
+          stepIndex: initialStepCount,
         });
         autoStarted = true;
         log('[%s] Scheduled first step (messageId: %s)', operationId, messageId);
@@ -337,6 +381,23 @@ export class AgentRuntimeService {
 
       return { autoStarted, messageId, operationId, success: true };
     } catch (error) {
+      if (isAbortError(error)) {
+        if (hooksRegistered) {
+          hookDispatcher.unregister(operationId);
+        }
+
+        if (operationCreated) {
+          try {
+            await this.coordinator.deleteAgentOperation(operationId);
+          } catch (cleanupError) {
+            console.error('Failed to cleanup aborted operation %s: %O', operationId, cleanupError);
+          }
+        }
+
+        log('[%s] Operation creation aborted before scheduling', operationId);
+        throw error;
+      }
+
       console.error('Failed to create operation %s: %O', operationId, error);
       throw error;
     }
@@ -346,11 +407,17 @@ export class AgentRuntimeService {
    * Execute Agent step
    */
   async executeStep(params: AgentExecutionParams): Promise<AgentExecutionResult> {
-    const { operationId, stepIndex, context, humanInput, approvedToolCall, rejectionReason } =
-      params;
-
-    // Get registered callbacks
-    const callbacks = this.getStepCallbacks(operationId);
+    const {
+      operationId,
+      stepIndex,
+      context,
+      humanInput,
+      approvedToolCall,
+      rejectionReason,
+      rejectAndContinue,
+      toolMessageId,
+      externalRetryCount = 0,
+    } = params;
 
     // ===== Distributed lock: prevent duplicate execution from QStash retries =====
     const claimed = await this.coordinator.tryClaimStep(operationId, stepIndex, 35);
@@ -385,6 +452,11 @@ export class AgentRuntimeService {
         throw new Error(`Agent state not found for operation ${operationId}`);
       }
 
+      agentState.metadata = {
+        ...agentState.metadata,
+        externalRetryCount,
+      };
+
       // Layer 2 defense: catch extremely delayed retries that arrive after lock TTL expired
       if (agentState.stepCount > stepIndex) {
         log(
@@ -417,19 +489,8 @@ export class AgentRuntimeService {
 
         const reason = this.determineCompletionReason(agentState);
 
-        // Trigger completion callback so eval run can finalize properly
-        if (callbacks?.onComplete) {
-          try {
-            await callbacks.onComplete({
-              finalState: agentState,
-              operationId,
-              reason,
-            });
-            this.unregisterStepCallbacks(operationId);
-          } catch (callbackError) {
-            log('[%s] onComplete callback error: %O', operationId, callbackError);
-          }
-        }
+        // Dispatch completion hooks so consumers (e.g., bot local-mode promise) can finalize
+        await this.dispatchCompletionHooks(operationId, agentState, reason);
 
         return {
           nextStepScheduled: false,
@@ -439,18 +500,24 @@ export class AgentRuntimeService {
         };
       }
 
-      // Call onBeforeStep callback
-      if (callbacks?.onBeforeStep) {
-        try {
-          await callbacks.onBeforeStep({
-            context,
+      // Dispatch beforeStep hooks
+      try {
+        const beforeStepMetadata = agentState?.metadata || {};
+        await hookDispatcher.dispatch(
+          operationId,
+          'beforeStep',
+          {
+            agentId: beforeStepMetadata?.agentId || '',
+            finalState: agentState,
             operationId,
-            state: agentState,
             stepIndex,
-          });
-        } catch (callbackError) {
-          log('[%s] onBeforeStep callback error: %O', operationId, callbackError);
-        }
+            steps: agentState?.stepCount || 0,
+            userId: beforeStepMetadata?.userId || this.userId,
+          },
+          beforeStepMetadata._hooks,
+        );
+      } catch (hookError) {
+        log('[%s] beforeStep hook dispatch error: %O', operationId, hookError);
       }
 
       // Create Agent and Runtime instances
@@ -470,10 +537,29 @@ export class AgentRuntimeService {
         const interventionResult = await this.handleHumanIntervention(runtime, currentState, {
           approvedToolCall,
           humanInput,
+          rejectAndContinue,
           rejectionReason,
+          toolMessageId,
         });
         currentState = interventionResult.newState;
         currentContext = interventionResult.nextContext;
+      }
+
+      // Pre-step computation: extract device context from DB messages
+      // Follows front-end computeStepContext pattern — computed at step boundary, not inside executors
+      if (!currentState.metadata?.activeDeviceId) {
+        const deviceContext = await this.computeDeviceContext(currentState);
+        if (deviceContext && currentState.metadata) {
+          currentState.metadata.activeDeviceId = deviceContext.activeDeviceId;
+          currentState.metadata.devicePlatform = deviceContext.devicePlatform;
+          currentState.metadata.deviceSystemInfo = deviceContext.deviceSystemInfo;
+          log(
+            '[%s][%d] Pre-step: device context computed from messages (deviceId: %s)',
+            operationId,
+            stepIndex,
+            deviceContext.activeDeviceId,
+          );
+        }
       }
 
       // Execute step
@@ -514,87 +600,343 @@ export class AgentRuntimeService {
         type: 'step_complete',
       });
 
-      // Build enhanced step completion log
+      // Build enhanced step completion log & presentation data
       const { usage, cost } = stepResult.newState;
       const phase = stepResult.nextContext?.phase;
+      const isToolPhase = phase === 'tool_result' || phase === 'tools_batch_result';
+
+      // --- Extract presentation fields from step result ---
+      let content: string | undefined;
+      let reasoning: string | undefined;
+      let toolsCalling:
+        | Array<{ apiName: string; arguments?: string; identifier: string }>
+        | undefined;
+      let toolsResult:
+        | Array<{ apiName: string; identifier: string; isSuccess?: boolean; output?: string }>
+        | undefined;
       let stepSummary: string;
 
       if (phase === 'tool_result') {
         const toolPayload = stepResult.nextContext?.payload as any;
         const toolCall = toolPayload?.toolCall;
-        const toolName = toolCall ? `${toolCall.identifier}/${toolCall.apiName}` : 'unknown';
-        stepSummary = `[tool] ${toolName}`;
+        const identifier = toolCall?.identifier || 'unknown';
+        const apiName = toolCall?.apiName || 'unknown';
+        const output = toolPayload?.data;
+        toolsResult = [
+          {
+            apiName,
+            identifier,
+            isSuccess: toolPayload?.isSuccess !== false,
+            output:
+              typeof output === 'string'
+                ? output
+                : output != null
+                  ? JSON.stringify(output)
+                  : undefined,
+          },
+        ];
+        stepSummary = `[tool] ${identifier}/${apiName}`;
       } else if (phase === 'tools_batch_result') {
         const nextPayload = stepResult.nextContext?.payload as any;
         const toolCount = nextPayload?.toolCount || 0;
-        const toolResults = nextPayload?.toolResults || [];
-        const toolNames = toolResults.map((r: any) => {
+        const rawToolResults = nextPayload?.toolResults || [];
+        const mappedResults: Array<{
+          apiName: string;
+          identifier: string;
+          isSuccess?: boolean;
+          output?: string;
+        }> = rawToolResults.map((r: any) => {
           const tc = r.toolCall;
-          return tc ? `${tc.identifier}/${tc.apiName}` : 'unknown';
+          const output = r.data;
+          return {
+            apiName: tc?.apiName || 'unknown',
+            identifier: tc?.identifier || 'unknown',
+            isSuccess: r?.isSuccess !== false,
+            output:
+              typeof output === 'string'
+                ? output
+                : output != null
+                  ? JSON.stringify(output)
+                  : undefined,
+          };
         });
+        toolsResult = mappedResults;
+        const toolNames = mappedResults.map((r) => `${r.identifier}/${r.apiName}`);
         stepSummary = `[tools×${toolCount}] ${toolNames.join(', ')}`;
       } else {
-        // LLM result
-        const llmEvent = stepResult.events?.find((e) => e.type === 'llm_result');
-        const content = (llmEvent as any)?.result?.content || '';
-        const reasoning = (llmEvent as any)?.result?.reasoning || '';
-        const toolCalling = (llmEvent as any)?.result?.tool_calls;
-        const hasToolCalls = Array.isArray(toolCalling) && toolCalling.length > 0;
+        // Check for done event first (finish step with no next context)
+        const doneEvent = stepResult.events?.find((e) => e.type === 'done') as
+          | { reason?: string; reasonDetail?: string; type: 'done' }
+          | undefined;
 
-        const parts: string[] = [];
+        if (doneEvent) {
+          stepSummary = `[done] reason=${doneEvent.reason ?? 'unknown'}`;
+        } else {
+          // LLM result
+          const llmEvent = stepResult.events?.find((e) => e.type === 'llm_result');
+          content = (llmEvent as any)?.result?.content || undefined;
+          reasoning = (llmEvent as any)?.result?.reasoning || undefined;
 
-        // Thinking preview
-        if (reasoning) {
-          const thinkPreview = reasoning.length > 30 ? reasoning.slice(0, 30) + '...' : reasoning;
-          parts.push(`💭 "${thinkPreview}"`);
+          // Use parsed ChatToolPayload from payload (has identifier + apiName)
+          const payloadToolsCalling = (stepResult.nextContext?.payload as any)?.toolsCalling as
+            | Array<{ apiName: string; arguments: string; identifier: string }>
+            | undefined;
+          const hasToolCalls = Array.isArray(payloadToolsCalling) && payloadToolsCalling.length > 0;
+
+          if (hasToolCalls) {
+            toolsCalling = payloadToolsCalling.map((tc) => ({
+              apiName: tc.apiName,
+              arguments: tc.arguments,
+              identifier: tc.identifier,
+            }));
+          }
+
+          const parts: string[] = [];
+          if (reasoning) {
+            const thinkPreview = reasoning.length > 30 ? reasoning.slice(0, 30) + '...' : reasoning;
+            parts.push(`💭 "${thinkPreview}"`);
+          }
+          if (!content && hasToolCalls) {
+            parts.push(
+              `→ call tools: ${toolsCalling!.map((tc) => `${tc.identifier}|${tc.apiName}`).join(', ')}`,
+            );
+          } else if (content) {
+            const preview = content.length > 20 ? content.slice(0, 20) + '...' : content;
+            parts.push(`"${preview}"`);
+          }
+          if (parts.length > 0) {
+            stepSummary = `[llm] ${parts.join(' | ')}`;
+          } else {
+            stepSummary = `[llm] (empty) phase=${stepResult.nextContext?.phase ?? 'none'} events=${stepResult.events?.length ?? 0}`;
+          }
         }
-
-        if (!content && hasToolCalls) {
-          const names = toolCalling.map((tc: any) => tc.function?.name || 'unknown');
-          parts.push(`→ call tools: ${names.join(', ')}`);
-        } else if (content) {
-          const preview = content.length > 20 ? content.slice(0, 20) + '...' : content;
-          parts.push(`"${preview}"`);
-        }
-
-        stepSummary = `[llm] ${parts.join(' | ') || '(empty)'}`;
       }
 
-      const rawTokens = usage?.llm?.tokens?.total ?? 0;
-      const totalTokens =
-        rawTokens >= 1_000_000
-          ? `${(rawTokens / 1_000_000).toFixed(1)}m`
-          : rawTokens >= 1000
-            ? `${(rawTokens / 1000).toFixed(1)}k`
-            : String(rawTokens);
-      const totalCost = (cost?.total ?? 0).toFixed(4);
+      // --- Step-level usage from nextContext.stepUsage ---
+      const stepUsage = stepResult.nextContext?.stepUsage as Record<string, number> | undefined;
+
+      // --- Cumulative usage ---
+      const tokens = usage?.llm?.tokens;
+      const totalInputTokens = tokens?.input ?? 0;
+      const totalOutputTokens = tokens?.output ?? 0;
+      const totalTokensNum = tokens?.total ?? 0;
+      const totalCostNum = cost?.total ?? 0;
+
+      const totalTokensStr =
+        totalTokensNum >= 1_000_000
+          ? `${(totalTokensNum / 1_000_000).toFixed(1)}m`
+          : totalTokensNum >= 1000
+            ? `${(totalTokensNum / 1000).toFixed(1)}k`
+            : String(totalTokensNum);
       const llmCalls = usage?.llm?.apiCalls ?? 0;
-      const toolCalls = usage?.tools?.totalCalls ?? 0;
+      const toolCallCount = usage?.tools?.totalCalls ?? 0;
 
       log(
         '[%s][%d] completed %s | total: %s tokens / $%s | llm×%d | tools×%d',
         operationId,
         stepIndex,
         stepSummary,
-        totalTokens,
-        totalCost,
+        totalTokensStr,
+        totalCostNum.toFixed(4),
         llmCalls,
-        toolCalls,
+        toolCallCount,
       );
 
-      // Call onAfterStep callback
-      if (callbacks?.onAfterStep) {
-        try {
-          await callbacks.onAfterStep({
+      // Build presentation data object for callbacks and webhooks
+      const stepPresentationData: StepPresentationData = {
+        content,
+        executionTimeMs: Date.now() - startAt,
+        reasoning,
+        stepCost: stepUsage?.cost ?? undefined,
+        stepInputTokens: stepUsage?.totalInputTokens ?? undefined,
+        stepOutputTokens: stepUsage?.totalOutputTokens ?? undefined,
+        stepTotalTokens: stepUsage?.totalTokens ?? undefined,
+        stepType: isToolPhase ? ('call_tool' as const) : ('call_llm' as const),
+        thinking: !isToolPhase,
+        toolsCalling,
+        toolsResult,
+        totalCost: totalCostNum,
+        totalInputTokens,
+        totalOutputTokens,
+        totalSteps: stepResult.newState.stepCount ?? 0,
+        totalTokens: totalTokensNum,
+      };
+
+      // Dispatch afterStep hooks (enriched with step presentation + tracking data)
+      try {
+        const metadata = stepResult.newState?.metadata || {};
+        const tracking = metadata._stepTracking || {};
+        const elapsedMs = stepResult.newState?.createdAt
+          ? Date.now() - new Date(stepResult.newState.createdAt).getTime()
+          : undefined;
+        const stepLabel = metadata?._stepLabel;
+        await hookDispatcher.dispatch(
+          operationId,
+          'afterStep',
+          {
+            agentId: metadata?.agentId || '',
+            content,
+            elapsedMs,
+            executionTimeMs: stepPresentationData.executionTimeMs,
+            finalState: stepResult.newState,
+            ...(stepLabel && { stepLabel }),
+            lastLLMContent: tracking.lastLLMContent,
+            lastToolsCalling: tracking.lastToolsCalling,
             operationId,
+            reasoning: stepPresentationData.reasoning,
             shouldContinue,
-            state: stepResult.newState,
+            status: stepResult.newState?.status,
+            stepCost: stepPresentationData.stepCost,
             stepIndex,
-            stepResult,
+            stepType: stepPresentationData.stepType,
+            steps: stepResult.newState?.stepCount || 0,
+            thinking: stepPresentationData.thinking,
+            toolCalls: stepResult.newState?.usage?.tools?.totalCalls,
+            toolsCalling: stepPresentationData.toolsCalling,
+            toolsResult: stepPresentationData.toolsResult,
+            topicId: metadata?.topicId,
+            totalCost: stepPresentationData.totalCost,
+            totalInputTokens: stepPresentationData.totalInputTokens,
+            totalOutputTokens: stepPresentationData.totalOutputTokens,
+            totalSteps: stepPresentationData.totalSteps,
+            totalTokens: stepPresentationData.totalTokens,
+            totalToolCalls: (tracking.totalToolCalls ?? 0) + (toolsCalling?.length ?? 0),
+            userId: metadata?.userId || this.userId,
+          },
+          metadata._hooks,
+        );
+      } catch (hookError) {
+        log('[%s] afterStep hook dispatch error: %O', operationId, hookError);
+      }
+
+      // Record step snapshot via injected snapshot store
+      if (this.snapshotStore) {
+        try {
+          const partial = (await this.snapshotStore.loadPartial(operationId)) ?? { steps: [] };
+
+          if (!partial.startedAt) {
+            partial.startedAt = Date.now();
+            partial.model =
+              (agentState?.metadata as any)?.agentConfig?.model ??
+              agentState?.modelRuntimeConfig?.model;
+            partial.provider =
+              (agentState?.metadata as any)?.agentConfig?.provider ??
+              agentState?.modelRuntimeConfig?.provider;
+          }
+
+          if (!partial.steps) partial.steps = [];
+
+          // Incremental diff: only store message delta + baseline at reset points
+          const prevMessages = agentState?.messages ?? [];
+          const afterMessages = stepResult.newState.messages;
+          const isCompression = stepResult.events?.some(
+            (e: any) => e.type === 'compression_complete',
+          );
+          const isBaseline = stepIndex === 0 || isCompression;
+          // Always store only the newly added messages, even for baseline steps
+          const messagesDelta = afterMessages.slice(prevMessages.length);
+
+          // Strip heavy/redundant data from events before persisting to snapshot
+          const snapshotEvents = (stepResult.events as any[])
+            ?.filter((e) => e.type !== 'llm_stream')
+            .map((e) => {
+              if (e.type === 'done' && e.finalState) {
+                // Remove reconstructible fields from finalState:
+                // - messages: from messagesBaseline + messagesDelta chain
+                // - operationToolSet: from toolsetBaseline (step 0)
+                // - toolManifestMap/tools/toolSourceMap: backward-compat copies of operationToolSet
+                const {
+                  messages: _msgs,
+                  operationToolSet: _ots,
+                  toolManifestMap: _tmm,
+                  toolSourceMap: _tsm,
+                  tools: _tools,
+                  // activatedStepTools is kept since it's the cumulative record
+                  ...restState
+                } = e.finalState;
+                return { ...e, finalState: restState };
+              }
+              return e;
+            });
+
+          // Strip toolResults from payload (already in step.toolsResult)
+          let snapshotPayload: unknown = currentContext?.payload;
+          if (
+            snapshotPayload &&
+            typeof snapshotPayload === 'object' &&
+            'toolResults' in snapshotPayload
+          ) {
+            const { toolResults: _tr, ...restPayload } = snapshotPayload as Record<string, unknown>;
+            snapshotPayload = restPayload;
+          }
+
+          // Compute activatedStepTools delta (newly discovered tools in this step)
+          const prevActivated = agentState?.activatedStepTools ?? [];
+          const afterActivated = stepResult.newState.activatedStepTools ?? [];
+          const activatedStepToolsDelta =
+            afterActivated.length > prevActivated.length
+              ? afterActivated.slice(prevActivated.length)
+              : undefined;
+
+          partial.steps.push({
+            activatedStepToolsDelta,
+            completedAt: Date.now(),
+            content: stepPresentationData.content,
+            context: {
+              payload: snapshotPayload,
+              phase: currentContext?.phase ?? 'unknown',
+              stepContext: currentContext?.stepContext,
+            },
+            events: snapshotEvents,
+            externalRetryCount,
+            executionTimeMs: stepPresentationData.executionTimeMs,
+            inputTokens: stepPresentationData.stepInputTokens,
+            isCompressionReset: isCompression || undefined,
+            messagesBaseline: isBaseline ? prevMessages : undefined,
+            messagesDelta,
+            outputTokens: stepPresentationData.stepOutputTokens,
+            reasoning: stepPresentationData.reasoning,
+            startedAt: startAt,
+            stepIndex,
+            stepType: stepPresentationData.stepType,
+            // Store operation-level toolset once at step 0
+            toolsetBaseline: stepIndex === 0 ? agentState?.operationToolSet : undefined,
+            toolsCalling: stepPresentationData.toolsCalling,
+            toolsResult: stepPresentationData.toolsResult,
+            totalCost: stepPresentationData.totalCost,
+            totalTokens: stepPresentationData.totalTokens,
           });
-        } catch (callbackError) {
-          log('[%s] onAfterStep callback error: %O', operationId, callbackError);
+
+          await this.snapshotStore.savePartial(operationId, partial);
+        } catch (e) {
+          log('[%s] snapshot step recording failed: %O', operationId, e);
         }
+      }
+
+      // Update step tracking in state metadata for afterStep hooks (cross-step accumulator)
+      const hasAfterStepHooks = stepResult.newState.metadata?._hooks?.some(
+        (h: { type: string }) => h.type === 'afterStep',
+      );
+      if (hasAfterStepHooks && stepResult.newState.metadata) {
+        const prevTracking = stepResult.newState.metadata._stepTracking || {};
+        const newTotalToolCalls = (prevTracking.totalToolCalls ?? 0) + (toolsCalling?.length ?? 0);
+
+        // Truncate content to 1800 chars to keep state small
+        const truncatedContent = content
+          ? content.length > 1800
+            ? content.slice(0, 1800) + '...'
+            : content
+          : prevTracking.lastLLMContent;
+
+        const updatedTracking = {
+          lastLLMContent: truncatedContent,
+          lastToolsCalling: toolsCalling || prevTracking.lastToolsCalling,
+          totalToolCalls: newTotalToolCalls,
+        };
+
+        // Persist tracking state for next step
+        stepResult.newState.metadata._stepTracking = updatedTracking;
+        await this.coordinator.saveAgentState(operationId, stepResult.newState);
       }
 
       if (shouldContinue && stepResult.nextContext && this.queueService) {
@@ -608,6 +950,14 @@ export class AgentRuntimeService {
           endpoint: `${this.baseURL}/run`,
           operationId,
           priority,
+          retryDelay:
+            typeof stepResult.newState.metadata?.queueRetryDelay === 'string'
+              ? stepResult.newState.metadata.queueRetryDelay
+              : undefined,
+          retries:
+            typeof stepResult.newState.metadata?.queueRetries === 'number'
+              ? stepResult.newState.metadata.queueRetries
+              : undefined,
           stepIndex: nextStepIndex,
         });
         nextStepScheduled = true;
@@ -619,21 +969,58 @@ export class AgentRuntimeService {
       if (!shouldContinue) {
         const reason = this.determineCompletionReason(stepResult.newState);
 
-        // Trigger completion webhook (fire-and-forget)
-        await this.triggerCompletionWebhook(stepResult.newState, operationId, reason);
+        // Dispatch onComplete hooks
+        await this.dispatchCompletionHooks(operationId, stepResult.newState, reason);
 
-        // Call onComplete callback
-        if (callbacks?.onComplete) {
+        // Finalize tracing snapshot via injected snapshot store
+        if (this.snapshotStore) {
           try {
-            await callbacks.onComplete({
-              finalState: stepResult.newState,
-              operationId,
-              reason,
-            });
-            // Clean up callbacks after operation completes
-            this.unregisterStepCallbacks(operationId);
-          } catch (callbackError) {
-            log('[%s] onComplete callback error: %O', operationId, callbackError);
+            const partial = await this.snapshotStore.loadPartial(operationId);
+
+            if (partial) {
+              const metadata = agentState?.metadata as any;
+              const snapshot = {
+                agentId: metadata?.agentId,
+                completedAt: Date.now(),
+                completionReason: reason,
+                error: stepResult.newState.error
+                  ? {
+                      message:
+                        this.extractErrorMessage(stepResult.newState.error) ??
+                        JSON.stringify(stepResult.newState.error),
+                      type: String(
+                        stepResult.newState.error.type ??
+                          stepResult.newState.error.errorType ??
+                          'unknown',
+                      ),
+                    }
+                  : undefined,
+                model: partial.model,
+                operationId,
+                provider: partial.provider,
+                retryDelayExpression:
+                  typeof metadata?.queueRetryDelay === 'string'
+                    ? metadata.queueRetryDelay
+                    : undefined,
+                startedAt: partial.startedAt ?? Date.now(),
+                steps: (partial.steps ?? []).sort((a, b) => a.stepIndex - b.stepIndex),
+                totalCost: stepResult.newState.cost?.total ?? 0,
+                totalSteps: stepResult.newState.stepCount,
+                totalTokens: stepResult.newState.usage?.llm?.tokens?.total ?? 0,
+                topicId: metadata?.topicId,
+                traceId: operationId,
+                userId: metadata?.userId,
+                externalRetryCount:
+                  typeof metadata?.externalRetryCount === 'number'
+                    ? metadata.externalRetryCount
+                    : undefined,
+              };
+
+              await this.snapshotStore.save(snapshot as any);
+              await this.snapshotStore.removePartial(operationId);
+            }
+          } catch (e) {
+            log('[%s] snapshot finalization failed: %O', operationId, e);
           }
         }
       }
@@ -646,45 +1033,62 @@ export class AgentRuntimeService {
       };
     } catch (error) {
       log('Step %d failed for operation %s: %O', stepIndex, operationId, error);
+      const formattedError = formatErrorForState(error);
 
-      // Publish error event
-      await this.streamManager.publishStreamEvent(operationId, {
-        data: {
-          error: (error as Error).message,
-          phase: 'step_execution',
+      // Build error state — try loading current state from coordinator, but if that
+      // also fails (e.g. Redis ECONNRESET), fall back to a minimal error state so
+      // that completion callbacks and webhooks can still fire.
+      let finalStateWithError: any;
+      try {
+        await this.streamManager.publishStreamEvent(operationId, {
+          data: {
+            error: formattedError.message,
+            errorType: String(formattedError.type),
+            phase: 'step_execution',
+            stepIndex,
+          },
           stepIndex,
-        },
-        stepIndex,
-        type: 'error',
-      });
-
-      // Build and save error state so it's persisted for later retrieval
-      const errorState = await this.coordinator.loadAgentState(operationId);
-      const finalStateWithError = {
-        ...errorState!,
-        error: formatErrorForState(error),
-        status: 'error' as const,
-      };
-
-      // Save the error state to coordinator so getOperationStatus can retrieve it
-      await this.coordinator.saveAgentState(operationId, finalStateWithError);
-
-      // Trigger completion webhook on error (fire-and-forget)
-      await this.triggerCompletionWebhook(finalStateWithError, operationId, 'error');
-
-      // Also call onComplete callback when execution fails
-      if (callbacks?.onComplete) {
-        try {
-          await callbacks.onComplete({
-            finalState: finalStateWithError,
-            operationId,
-            reason: 'error',
-          });
-          this.unregisterStepCallbacks(operationId);
-        } catch (callbackError) {
-          log('[%s] onComplete callback error in catch: %O', operationId, callbackError);
-        }
+          type: 'error',
+        });
+      } catch (publishError) {
+        log(
+          '[%s] Failed to publish error event (infra may be down): %O',
+          operationId,
+          publishError,
+        );
       }
+
+      try {
+        const errorState = await this.coordinator.loadAgentState(operationId);
+        finalStateWithError = {
+          ...errorState!,
+          error: formattedError,
+          metadata: {
+            ...errorState?.metadata,
+            externalRetryCount,
+          },
+          status: 'error' as const,
+          stepCount: errorState?.stepCount ?? stepIndex,
+        };
+      } catch (loadError) {
+        log('[%s] Failed to load error state (infra may be down): %O', operationId, loadError);
+        // Fallback: construct a minimal error state so callbacks still receive useful info
+        finalStateWithError = {
+          error: formattedError,
+          metadata: { externalRetryCount },
+          status: 'error' as const,
+          stepCount: stepIndex,
+        };
+      }
+
+      try {
+        await this.coordinator.saveAgentState(operationId, finalStateWithError);
+      } catch (saveError) {
+        log('[%s] Failed to save error state (infra may be down): %O', operationId, saveError);
+      }
+
+      // Dispatch onComplete + onError hooks
+      await this.dispatchCompletionHooks(operationId, finalStateWithError, 'error');
 
       throw error;
     } finally {
@@ -969,15 +1373,25 @@ export class AgentRuntimeService {
    * Process human intervention
    */
   async processHumanIntervention(params: {
-    action: 'approve' | 'reject' | 'input' | 'select';
+    action: 'approve' | 'reject' | 'reject_continue' | 'input' | 'select';
     approvedToolCall?: any;
     humanInput?: any;
     operationId: string;
+    rejectAndContinue?: boolean;
     rejectionReason?: string;
     stepIndex: number;
+    toolMessageId?: string;
   }): Promise<{ messageId?: string }> {
-    const { operationId, stepIndex, action, approvedToolCall, humanInput, rejectionReason } =
-      params;
+    const {
+      operationId,
+      stepIndex,
+      action,
+      approvedToolCall,
+      humanInput,
+      rejectAndContinue,
+      rejectionReason,
+      toolMessageId,
+    } = params;
 
     try {
       log(
@@ -995,7 +1409,13 @@ export class AgentRuntimeService {
           delay: 100,
           endpoint: `${this.baseURL}/run`,
           operationId,
-          payload: { approvedToolCall, humanInput, rejectionReason },
+          payload: {
+            approvedToolCall,
+            humanInput,
+            rejectAndContinue,
+            rejectionReason,
+            toolMessageId,
+          },
           priority: 'high',
           stepIndex,
         });
@@ -1027,8 +1447,8 @@ export class AgentRuntimeService {
     operationId: string;
     stepIndex: number;
   }) {
-    // Create Durable Agent instance
-    const agent = new GeneralChatAgent({
+    // Create Agent instance — use custom factory if provided, otherwise default to GeneralChatAgent
+    const generalConfig = {
       agentConfig: metadata?.agentConfig,
       compressionConfig: {
         enabled: metadata?.agentConfig?.chatConfig?.enableContextCompression ?? true,
@@ -1037,16 +1457,26 @@ export class AgentRuntimeService {
       modelRuntimeConfig: metadata?.modelRuntimeConfig,
       operationId,
       userId: metadata?.userId,
-    });
+    };
+
+    const agent = this.agentFactory
+      ? this.agentFactory(generalConfig)
+      : new GeneralChatAgent(generalConfig);
 
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
       agentConfig: metadata?.agentConfig,
+      botPlatformContext: metadata?.botPlatformContext,
+      discordContext: metadata?.discordContext,
+      userTimezone: metadata?.userTimezone,
       evalContext: metadata?.evalContext,
+      hookDispatcher,
+      loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,
       operationId,
       serverDB: this.serverDB,
       stepIndex,
+      stream: metadata?.stream,
       streamManager: this.streamManager,
       toolExecutionService: this.toolExecutionService,
       topicId: metadata?.topicId,
@@ -1062,23 +1492,241 @@ export class AgentRuntimeService {
   }
 
   /**
-   * Handle human intervention logic
+   * Create default snapshot store based on environment.
+   * - ENABLE_AGENT_S3_TRACING=1 → S3SnapshotStore
+   * - NODE_ENV=development → FileSnapshotStore
+   * - Otherwise → null (no tracing)
+   */
+  private createDefaultSnapshotStore(): ISnapshotStore | null {
+    if (process.env.ENABLE_AGENT_S3_TRACING === '1') {
+      try {
+        const { S3SnapshotStore } = require('@/server/modules/AgentTracing');
+        return new S3SnapshotStore();
+      } catch {
+        // S3SnapshotStore not available
+      }
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const { FileSnapshotStore } = require('@lobechat/agent-tracing');
+        return new FileSnapshotStore();
+      } catch {
+        // agent-tracing not available
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Compute device context from DB messages at step boundary.
+   * Uses findInMessages visitor to scan tool messages for device activation.
+   */
+  private async computeDeviceContext(state: any) {
+    try {
+      const dbMessages = await this.messageModel.query({
+        agentId: state.metadata?.agentId,
+        threadId: state.metadata?.threadId,
+        topicId: state.metadata?.topicId,
+      });
+
+      return findInMessages(
+        dbMessages,
+        (msg) => {
+          const activeDeviceId = msg.pluginState?.metadata?.activeDeviceId;
+          if (activeDeviceId) {
+            return {
+              activeDeviceId,
+              devicePlatform: msg.pluginState?.metadata?.devicePlatform as string | undefined,
+              deviceSystemInfo: msg.pluginState?.metadata?.deviceSystemInfo as
+                | Record<string, string>
+                | undefined,
+            };
+          }
+        },
+        { role: 'tool' },
+      );
+    } catch (error) {
+      log('computeDeviceContext error: %O', error);
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Handle human intervention logic.
+   *
+   * Mirrors the client-side flow in `conversationControl.ts`:
+   * - `approveToolCalling` → write intervention=approved, resume via
+   *   `phase: 'human_approved_tool'` so the runtime short-circuits into
+   *   `call_tool` with `skipCreateToolMessage: true`.
+   * - `rejectToolCalling` → write intervention=rejected and halt
+   *   (`status='interrupted'`, `interruption.reason='human_rejected'`).
+   * - `rejectAndContinueToolCalling` → write intervention=rejected and
+   *   resume via `phase: 'user_input'` so the next LLM call treats the
+   *   rejection content as user feedback.
    */
   private async handleHumanIntervention(
     runtime: AgentRuntime,
     state: any,
-    intervention: { approvedToolCall?: any; humanInput?: any; rejectionReason?: string },
+    intervention: {
+      approvedToolCall?: any;
+      humanInput?: any;
+      rejectAndContinue?: boolean;
+      rejectionReason?: string;
+      toolMessageId?: string;
+    },
   ) {
-    const { humanInput, approvedToolCall, rejectionReason } = intervention;
+    const { humanInput, approvedToolCall, rejectAndContinue, rejectionReason, toolMessageId } =
+      intervention;
 
+    // ---- A. approve ----
     if (approvedToolCall && state.status === 'waiting_for_human') {
-      // TODO: implement approveToolCall logic
-      return { newState: state, nextContext: undefined };
-    } else if (rejectionReason && state.status === 'waiting_for_human') {
-      // TODO: implement rejectToolCall logic
-      return { newState: state, nextContext: undefined };
-    } else if (humanInput) {
-      // TODO: implement processHumanInput logic
+      if (!toolMessageId) {
+        log('[handleHumanIntervention] approve requires toolMessageId, got undefined');
+        return { newState: state, nextContext: undefined };
+      }
+
+      await this.messageModel.updateMessagePlugin(toolMessageId, {
+        intervention: { status: 'approved' },
+      });
+
+      const newState = structuredClone(state);
+      newState.lastModified = new Date().toISOString();
+      newState.pendingToolsCalling = (state.pendingToolsCalling ?? []).filter(
+        (t: any) => t.id !== approvedToolCall.id,
+      );
+      // Keep waiting_for_human while other tools remain pending; resume to
+      // running when this was the last one.
+      newState.status = newState.pendingToolsCalling.length > 0 ? 'waiting_for_human' : 'running';
+
+      // Dispatch afterHumanIntervention hook (approved)
+      hookDispatcher
+        .dispatch(
+          state.metadata?.operationId ?? '',
+          'afterHumanIntervention',
+          {
+            action: 'approve',
+            operationId: state.metadata?.operationId ?? '',
+            toolCallId: approvedToolCall.id,
+            userId: state.metadata?.userId,
+          },
+          state.metadata?._hooks,
+        )
+        .catch(() => {});
+
+      const nextContext: AgentRuntimeContext = {
+        payload: {
+          approvedToolCall,
+          parentMessageId: toolMessageId,
+          skipCreateToolMessage: true,
+        },
+        phase: 'human_approved_tool',
+      };
+
+      return { newState, nextContext };
+    }
+
+    // ---- B / C. reject ----
+    if (rejectionReason && state.status === 'waiting_for_human') {
+      if (!toolMessageId) {
+        log('[handleHumanIntervention] reject requires toolMessageId, got undefined');
+        return { newState: state, nextContext: undefined };
+      }
+
+      const rejectionContent = rejectionReason
+        ? `User reject this tool calling with reason: ${rejectionReason}`
+        : 'User reject this tool calling without reason';
+
+      await this.messageModel.updateToolMessage(toolMessageId, { content: rejectionContent });
+      await this.messageModel.updateMessagePlugin(toolMessageId, {
+        intervention: { rejectedReason: rejectionReason, status: 'rejected' },
+      });
+
+      // Find the tool_call_id for this tool message so we can drop it from
+      // pendingToolsCalling. pendingToolsCalling holds ChatToolPayload[] whose
+      // id === tool_call_id; the mapping lives in messagePlugins (plugin id
+      // === message id, toolCallId is a separate column).
+      let rejectedToolCallId: string | undefined;
+      try {
+        const plugin = await this.serverDB.query.messagePlugins.findFirst({
+          where: (mp: any, { eq }: any) => eq(mp.id, toolMessageId),
+        });
+        rejectedToolCallId = (plugin as any)?.toolCallId ?? undefined;
+      } catch (error) {
+        log('[handleHumanIntervention] failed to look up tool plugin: %O', error);
+      }
+
+      const newState = structuredClone(state);
+      newState.lastModified = new Date().toISOString();
+      newState.pendingToolsCalling = rejectedToolCallId
+        ? (state.pendingToolsCalling ?? []).filter((t: any) => t.id !== rejectedToolCallId)
+        : (state.pendingToolsCalling ?? []);
+
+      if (rejectAndContinue) {
+        // C: persist the rejection, then either (a) wait for the remaining
+        // pending tools to be resolved or (b) resume LLM once this is the
+        // last one. Returning a `phase: 'user_input'` nextContext while
+        // pendingToolsCalling is non-empty would cause executeStep to run
+        // runtime.step immediately, resuming the LLM with an unresolved
+        // batch — see LOBE-7151 review P1.
+
+        // Dispatch afterHumanIntervention hook (rejectAndContinue)
+        hookDispatcher
+          .dispatch(
+            state.metadata?.operationId ?? '',
+            'afterHumanIntervention',
+            {
+              action: 'rejectAndContinue',
+              operationId: state.metadata?.operationId ?? '',
+              rejectionReason,
+              toolCallId: rejectedToolCallId,
+              userId: state.metadata?.userId,
+            },
+            state.metadata?._hooks,
+          )
+          .catch(() => {});
+
+        if (newState.pendingToolsCalling.length > 0) {
+          newState.status = 'waiting_for_human';
+          return { newState, nextContext: undefined };
+        }
+        newState.status = 'running';
+        const nextContext: AgentRuntimeContext = { phase: 'user_input' };
+        return { newState, nextContext };
+      }
+
+      // B: halt. Use interrupted + reason='human_rejected' to reuse the
+      // existing terminal-state plumbing (early-exit, completion hooks, etc).
+
+      // Dispatch onStopByHumanIntervention hook
+      hookDispatcher
+        .dispatch(
+          state.metadata?.operationId ?? '',
+          'onStopByHumanIntervention',
+          {
+            operationId: state.metadata?.operationId ?? '',
+            rejectionReason,
+            toolCallId: rejectedToolCallId,
+            userId: state.metadata?.userId,
+          },
+          state.metadata?._hooks,
+        )
+        .catch(() => {});
+
+      newState.status = 'interrupted';
+      newState.interruption = {
+        canResume: false,
+        interruptedAt: new Date().toISOString(),
+        reason: 'human_rejected',
+      };
+      return { newState, nextContext: undefined };
+    }
+
+    // ---- human_prompt / human_select (submitToolInteraction) — out of scope
+    //      for this change; wire up in a follow-up issue.
+    if (humanInput) {
       return { newState: state, nextContext: undefined };
     }
 
@@ -1086,44 +1734,84 @@ export class AgentRuntimeService {
   }
 
   /**
-   * Trigger completion webhook if configured in state metadata.
+   * Dispatch onComplete (and onError) hooks via HookDispatcher.
    * Fire-and-forget: errors are logged but never thrown.
    */
-  private async triggerCompletionWebhook(
-    state: any,
+  private async dispatchCompletionHooks(
     operationId: string,
-    reason: StepCompletionReason,
+    state: any,
+    reason: string,
   ): Promise<void> {
-    const webhook = state.metadata?.completionWebhook;
-    if (!webhook?.url) return;
-
     try {
-      log('[%s] Triggering completion webhook: %s', operationId, webhook.url);
+      const metadata = state?.metadata || {};
 
-      const duration = state.createdAt
+      // Extract last assistant content from state messages
+      const lastAssistantContent = state?.messages
+        ?.slice()
+        .reverse()
+        .find(
+          (m: { content?: string; role: string }) => m.role === 'assistant' && m.content,
+        )?.content;
+
+      const duration = state?.createdAt
         ? Date.now() - new Date(state.createdAt).getTime()
         : undefined;
 
-      await fetch(webhook.url, {
-        body: JSON.stringify({
-          ...webhook.body,
-          cost: state.cost?.total,
-          duration,
-          errorDetail: state.error,
-          errorMessage: this.extractErrorMessage(state.error),
-          llmCalls: state.usage?.llm?.apiCalls,
-          operationId,
-          reason,
-          status: state.status,
-          steps: state.stepCount,
-          toolCalls: state.usage?.tools?.totalCalls,
-          totalTokens: state.usage?.llm?.tokens?.total,
-        }),
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      });
+      const event = {
+        agentId: metadata?.agentId || '',
+        cost: state?.cost?.total,
+        duration,
+        errorDetail: state?.error,
+        errorMessage: this.extractErrorMessage?.(state?.error) || String(state?.error || ''),
+        // Full state available in local mode only (not serialized to webhooks)
+        finalState: state,
+        lastAssistantContent,
+        llmCalls: state?.usage?.llm?.apiCalls,
+        operationId,
+        reason,
+        status: state?.status || reason,
+        steps: state?.stepCount || 0,
+        toolCalls: state?.usage?.tools?.totalCalls,
+        topicId: metadata?.topicId,
+        totalTokens: state?.usage?.llm?.tokens?.total,
+        userId: metadata?.userId || this.userId,
+      };
+
+      // Dispatch onComplete hooks
+      await hookDispatcher.dispatch(operationId, 'onComplete', event, metadata._hooks);
+
+      // Also dispatch onError hooks if reason is error
+      if (reason === 'error') {
+        await hookDispatcher.dispatch(operationId, 'onError', event, metadata._hooks);
+
+        // Persist error into the assistant message so the frontend can display it
+        // after fetching messages from DB. Without this, the message stays with
+        // placeholder content and no error indicator.
+        const assistantMessageId = metadata?.assistantMessageId;
+        if (assistantMessageId && state?.error) {
+          const errorMessage = this.extractErrorMessage(state.error) || String(state.error);
+          try {
+            await this.messageModel.update(assistantMessageId, {
+              error: {
+                body: { message: errorMessage },
+                message: errorMessage,
+                type: 'AgentRuntimeError',
+              },
+            });
+          } catch (updateError) {
+            log(
+              '[%s] Failed to update assistant message with error (non-fatal): %O',
+              operationId,
+              updateError,
+            );
+          }
+        }
+      }
+
+      // Cleanup hooks after completion
+      hookDispatcher.unregister(operationId);
     } catch (error) {
-      console.error('[%s] Completion webhook failed:', operationId, error);
+      log('[%s] Hook dispatch error (non-fatal): %O', operationId, error);
     }
   }
 
@@ -1338,20 +2026,10 @@ export class AgentRuntimeService {
 
     if (stepIndex >= maxSteps) {
       log('[%s] Sync execution stopped: reached maxSteps (%d)', operationId, maxSteps);
-      // If stopped due to executeSync's maxSteps limit, need to manually call onComplete
+      // If stopped due to executeSync's maxSteps limit, need to manually dispatch onComplete hooks
       // Note: If stopped due to state.maxSteps being reached, onComplete has already been called in executeStep
-      const callbacks = this.getStepCallbacks(operationId);
-      if (callbacks?.onComplete && state.status !== 'done' && state.status !== 'error') {
-        try {
-          await callbacks.onComplete({
-            finalState: state,
-            operationId,
-            reason: 'max_steps',
-          });
-          this.unregisterStepCallbacks(operationId);
-        } catch (callbackError) {
-          log('[%s] onComplete callback error in executeSync: %O', operationId, callbackError);
-        }
+      if (state.status !== 'done' && state.status !== 'error') {
+        await this.dispatchCompletionHooks(operationId, state, 'max_steps');
       }
     }
 

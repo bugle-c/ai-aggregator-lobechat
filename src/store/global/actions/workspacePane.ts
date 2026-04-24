@@ -4,6 +4,7 @@ import { INBOX_SESSION_ID } from '@/const/session';
 import { SESSION_CHAT_URL } from '@/const/url';
 import { type GlobalStore } from '@/store/global';
 import { type StoreSetter } from '@/store/types';
+import { getStableNavigate } from '@/utils/stableNavigate';
 import { setNamespace } from '@/utils/storeDebug';
 
 const n = setNamespace('w');
@@ -14,17 +15,16 @@ export const globalWorkspaceSlice = (set: Setter, get: () => GlobalStore, _api?:
 
 export class GlobalWorkspacePaneActionImpl {
   readonly #get: () => GlobalStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => GlobalStore, _api?: unknown) {
     void _api;
-    this.#set = set;
+    void set;
     this.#get = get;
   }
 
   switchBackToChat = (sessionId?: string): void => {
     const target = SESSION_CHAT_URL(sessionId || INBOX_SESSION_ID, this.#get().isMobile);
-    this.#get().navigate?.(target);
+    getStableNavigate()?.(target);
   };
 
   toggleAgentSystemRoleExpand = (agentId: string, expanded?: boolean): void => {

@@ -1,4 +1,4 @@
-import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
 
 // https://cloud.baidu.com/doc/qianfan/s/rmh4stp0j
 
@@ -8,6 +8,7 @@ const wenxinChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      video: true,
       vision: true,
     },
     contextWindowTokens: 131_072,
@@ -57,6 +58,7 @@ const wenxinChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      video: true,
       vision: true,
     },
     contextWindowTokens: 131_072,
@@ -188,82 +190,6 @@ const wenxinChatModels: AIChatModelCard[] = [
         { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 3.2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'The all-new version of the Wenxin Yiyan large model, with significantly enhanced capabilities in image understanding, creation, translation, and coding. It supports a 32K context length for the first time, with greatly reduced initial token latency.',
-    displayName: 'ERNIE 4.5 Turbo VL 32K',
-    id: 'ernie-4.5-turbo-vl-32k',
-    maxOutput: 12_288,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'The all-new version of the Wenxin Yiyan large model, with significantly enhanced capabilities in image understanding, creation, translation, and coding. It supports a 32K context length for the first time, with greatly reduced initial token latency.',
-    displayName: 'ERNIE 4.5 Turbo VL 32K Preview',
-    id: 'ernie-4.5-turbo-vl-32k-preview',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'The all-new version of the Wenxin Yiyan large model, with significantly enhanced capabilities in image understanding, creation, translation, and coding. It supports a 32K context length for the first time, with greatly reduced initial token latency.',
-    displayName: 'ERNIE 4.5 Turbo VL',
-    id: 'ernie-4.5-turbo-vl-latest',
-    maxOutput: 12_288,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'The all-new version of the Wenxin Yiyan large model, with significantly enhanced capabilities in image understanding, creation, translation, and coding. It supports a 32K context length for the first time, with greatly reduced initial token latency.',
-    displayName: 'ERNIE 4.5 Turbo VL Preview',
-    id: 'ernie-4.5-turbo-vl-preview',
-    maxOutput: 12_288,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -431,6 +357,7 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      video: true,
       vision: true,
     },
     contextWindowTokens: 32_768,
@@ -448,22 +375,6 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 131_072,
-    description:
-      'Qianfan Lightning 128B A19B is a high-performance Chinese general model for complex QA and large-scale reasoning.',
-    displayName: 'Qianfan Lightning 128B A19B',
-    id: 'qianfan-lightning-128b-a19b',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
     },
     type: 'chat',
   },
@@ -526,6 +437,7 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      video: true,
       vision: true,
     },
     contextWindowTokens: 131_072,
@@ -549,6 +461,7 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      video: true,
       vision: true,
     },
     contextWindowTokens: 131_072,
@@ -569,6 +482,7 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      video: true,
       vision: true,
     },
     contextWindowTokens: 32_768,
@@ -589,6 +503,7 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      video: true,
       vision: true,
     },
     contextWindowTokens: 32_768,
@@ -612,6 +527,7 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      video: true,
       vision: true,
     },
     contextWindowTokens: 131_072,
@@ -1139,6 +1055,7 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      video: true,
       vision: true,
     },
     contextWindowTokens: 32_768,
@@ -1158,6 +1075,7 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      video: true,
       vision: true,
     },
     contextWindowTokens: 16_384,
@@ -1854,6 +1772,7 @@ const wenxinImageModels: AIImageModelCard[] = [
           '1104x1472',
         ],
       },
+      promptExtend: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1873,6 +1792,7 @@ const wenxinImageModels: AIImageModelCard[] = [
         default: '',
       },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1894,6 +1814,7 @@ const wenxinImageModels: AIImageModelCard[] = [
         default: '',
       },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1916,6 +1837,8 @@ const wenxinImageModels: AIImageModelCard[] = [
       seed: { default: null },
       steps: { default: 25, max: 50, min: 1 },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1937,6 +1860,8 @@ const wenxinImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1958,6 +1883,7 @@ const wenxinImageModels: AIImageModelCard[] = [
       seed: { default: null },
       steps: { default: 25, max: 50, min: 1 },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1968,6 +1894,113 @@ const wenxinImageModels: AIImageModelCard[] = [
   },
 ];
 
-export const allModels = [...wenxinChatModels, ...wenxinImageModels];
+const wenxinVideoModels: AIVideoModelCard[] = [
+  {
+    description:
+      'Supports 5s and 10s 720P dynamic video generation with sound. Enables multi-person conversational audio-visual creation, with synchronized sound and visuals, cinematic-quality imagery, and master-level camera movements.',
+    displayName: 'MuseSteamer 2.0 Turbo I2V Audio',
+    enabled: true,
+    id: 'musesteamer-2.0-turbo-i2v-audio',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'video' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Supports 5-second 720P silent dynamic video generation, featuring cinematic-quality visuals, complex camera movements, and realistic character emotions and actions.',
+    displayName: 'MuseSteamer 2.0 Turbo I2V',
+    enabled: true,
+    id: 'musesteamer-2.0-turbo-i2v',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1.4, strategy: 'fixed', unit: 'video' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Based on Turbo, supports 1080P dynamic video generation, offering higher visual quality and enhanced video expressiveness.',
+    displayName: 'MuseSteamer 2.0 Pro I2V',
+    enabled: true,
+    id: 'musesteamer-2.0-pro-i2v',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'video' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Compared to Turbo, it offers superior performance with excellent cost-effectiveness.',
+    displayName: 'MuseSteamer 2.0 Lite I2V',
+    enabled: true,
+    id: 'musesteamer-2.0-lite-i2v',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'video' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'The Baidu MuseSteamer Air video generation model performs well in subject consistency, physical realism, camera movement effects, and generation speed. It supports 5-second 720P silent dynamic video generation, delivering cinematic-quality visuals, fast generation, and excellent cost-effectiveness.',
+    displayName: 'MuseSteamer Air I2V',
+    id: 'musesteamer-air-i2v',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'video' }],
+    },
+    type: 'video',
+  },
+];
+
+export const allModels = [...wenxinChatModels, ...wenxinImageModels, ...wenxinVideoModels];
 
 export default allModels;
