@@ -112,6 +112,27 @@ if [[ -z "${KEYWORD:-}" ]]; then
     exit 1
 fi
 
+# Step 1.75: Build or reuse cluster for this keyword (Wordstat + LLM relevance filter)
+CLUSTER_ID=$("${SCRIPT_DIR}/cluster-builder.sh" "$KEYWORD" "$TARGET_CAT" 2>>"$LOG_FILE" || echo "")
+if [[ -z "$CLUSTER_ID" ]]; then
+    log "WARN: cluster-builder failed for keyword '$KEYWORD', falling back to single-keyword mode"
+fi
+
+RELATED_LIST=""
+if [[ -n "$CLUSTER_ID" ]]; then
+    RELATED_LIST=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_clusters?id=eq.${CLUSTER_ID}&select=related_keywords" \
+        "${SUPA_HDRS[@]}" 2>/dev/null | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    for r in (d[0].get('related_keywords', []) if d else []):
+        print(f'- {r}')
+except Exception:
+    pass
+" 2>/dev/null)
+    [[ -n "$RELATED_LIST" ]] && log "using cluster id=$CLUSTER_ID, primary='$KEYWORD', related=$(echo "$RELATED_LIST" | wc -l)"
+fi
+
 # Step 1.5: Dedup guard — fetch titles in TARGET category so LLM avoids topical duplicates
 EXISTING_TITLES=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_posts?select=title&status=eq.published&category_id=eq.${TARGET_CAT_ID}&order=created_at.desc&limit=60" "${SUPA_HDRS[@]}" 2>/dev/null | python3 -c "
 import json, sys
@@ -165,6 +186,11 @@ CRITICAL BRAND RULES:
 - Canonical domains: ask.gptweb.ru (app), gptweb.ru (marketing).
 
 Write a comprehensive SEO article in Russian for the keyword: \"${KEYWORD}\"
+
+PRIMARY KEYWORD: \"${KEYWORD}\"
+
+RELATED LONG-TAILS (article MUST naturally cover these — at least 60% should appear as h2/h3 headings or paragraph topics):
+${RELATED_LIST:-(none — fallback to single-keyword mode)}
 
 REQUIRED CATEGORY: ${TARGET_CAT} — ${TARGET_CAT_NAME}
 You MUST return category=\"${TARGET_CAT}\". Shape the article to fit this category:
@@ -265,6 +291,7 @@ echo "$ARTICLE_JSON" | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
 data['keyword_id'] = '${KEYWORD_ID}'
+data['cluster_id'] = int('${CLUSTER_ID}') if '${CLUSTER_ID}' else None
 data['auto_publish'] = True
 print(json.dumps(data, ensure_ascii=False))
 " > "$TMPFILE" 2>/dev/null
