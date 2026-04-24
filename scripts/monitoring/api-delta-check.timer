@@ -1,0 +1,15 @@
+[Unit]
+Description=Run api-delta-check.service daily at 09:00 MSK
+Documentation=file:///home/deploy/projects/ai-aggregator-lobechat/scripts/monitoring/check-api-delta.sh
+
+[Timer]
+# 09:00 MSK = 06:00 UTC. Set the calendar explicitly in UTC so the trigger
+# stays correct regardless of the server's local clock config.
+OnCalendar=*-*-* 06:00:00 UTC
+# +10 min jitter so several timers on the host don't all fire on the second.
+RandomizedDelaySec=600
+Persistent=true
+Unit=api-delta-check.service
+
+[Install]
+WantedBy=timers.target
