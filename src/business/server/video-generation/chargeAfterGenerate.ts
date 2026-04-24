@@ -2,6 +2,7 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { writeUsageLog } from '@/server/modules/analytics/writeUsageLog';
 import { calculateCreditsAsync } from '@/server/modules/billing/model-rates';
 import { BillingService } from '@/server/services/billing';
+import { fetchRate } from '@/server/services/billing/rates-source';
 
 interface ChargeParams {
   computePriceParams?: { generateAudio?: boolean };
@@ -29,6 +30,18 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
   if (seconds <= 0) {
     console.warn(
       `[billing] video chargeAfter: no durationSeconds for model=${params.metadata.modelId}, skipping charge`,
+    );
+    return;
+  }
+
+  // Defense-in-depth: re-validate the model is still configured as a video model.
+  // Mirrors chargeBeforeGenerate gate. If the before-gate passed and the after-gate
+  // fails, something changed mid-generation (admin deactivated / deleted / switched
+  // pricing_unit). Skip charge and log loudly to avoid silent 1-credit fallback.
+  const rate = await fetchRate(params.metadata.modelId);
+  if (!rate || rate.modelId === '__default__' || rate.pricingUnit !== 'second') {
+    console.error(
+      `[billing] chargeAfter: model=${params.metadata.modelId} no longer configured for second, skipping charge to avoid silent under-charge. user=${params.userId}`,
     );
     return;
   }

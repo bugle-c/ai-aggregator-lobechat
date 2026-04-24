@@ -202,9 +202,36 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
 
     // Charge after successful video generation
     try {
+      // Extract duration in seconds:
+      // 1) Prefer provider-webhook-reported duration if the normalizer ever adds it
+      //    (volcengine currently omits duration from callback payload, see
+      //     packages/model-runtime/src/providers/volcengine/video/handleCreateVideoWebhook.ts).
+      //    Extend the `usage` shape in handleCreateVideoWebhook per-provider when available
+      //    (Kling `duration`, Runway `duration_seconds`, etc.).
+      // 2) Fallback to the duration requested in the generation params (batch.config.duration),
+      //    which is what was sent to the provider in createVideo and is a faithful proxy
+      //    for what the provider billed us for.
+      // 3) Fallback to the processed video asset duration.
+      // 4) 0 -> chargeAfter logs + skips (matches existing defensive behavior).
+      const batchConfig = batch?.config as RuntimeVideoGenParams | undefined;
+      const webhookDurationSeconds = (result.usage as { durationSeconds?: number } | undefined)
+        ?.durationSeconds;
+      const requestedDurationSeconds =
+        typeof batchConfig?.duration === 'number' ? batchConfig.duration : undefined;
+      const processedDurationSeconds =
+        typeof processResult.duration === 'number' ? processResult.duration : undefined;
+      const durationSeconds =
+        webhookDurationSeconds ?? requestedDurationSeconds ?? processedDurationSeconds ?? 0;
+
+      const usageWithDuration = {
+        completionTokens: result.usage?.completionTokens ?? 0,
+        durationSeconds,
+        totalTokens: result.usage?.totalTokens ?? 0,
+      };
+
       await chargeAfterGenerate({
         computePriceParams: {
-          generateAudio: (batch?.config as RuntimeVideoGenParams)?.generateAudio,
+          generateAudio: batchConfig?.generateAudio,
         },
         latency: duration,
         metadata: {
@@ -216,7 +243,7 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
         model: resolvedModel,
         prechargeResult: metadata?.precharge as any,
         provider,
-        usage: result.usage,
+        usage: usageWithDuration,
         userId: asyncTask.userId,
       });
     } catch (chargeError) {
