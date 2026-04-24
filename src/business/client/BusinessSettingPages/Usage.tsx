@@ -5,7 +5,7 @@ import { Card, Progress, Spin, Statistic, Typography } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
+import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { lambdaQuery } from '@/libs/trpc/client';
 
 const { Text, Title } = Typography;
