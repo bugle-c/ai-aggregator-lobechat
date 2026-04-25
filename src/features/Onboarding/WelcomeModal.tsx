@@ -4,7 +4,7 @@ import { Flexbox, Icon } from '@lobehub/ui';
 import { Button, Modal, Typography } from 'antd';
 import { Sparkles } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
@@ -70,8 +70,11 @@ const WelcomeModal = memo(() => {
           {t('welcome.title')}
         </Title>
 
-        <Paragraph style={{ fontSize: 15, marginBottom: 0, textAlign: 'center' }} type="secondary">
-          {t('welcome.body')}
+        <Paragraph
+          style={{ fontSize: 15, marginBottom: 0, textAlign: 'center', whiteSpace: 'pre-line' }}
+          type="secondary"
+        >
+          <Trans components={{ 1: <strong /> }} i18nKey="welcome.body" ns="onboarding" t={t} />
         </Paragraph>
 
         <Button block size="large" type="primary" onClick={handleClose}>
