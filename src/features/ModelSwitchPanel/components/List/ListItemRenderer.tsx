@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
+import { LockedModelTooltip, useModelLockState } from '@/features/UIMode';
 
 import { styles } from '../../styles';
 import { type ListItem } from '../../types';
@@ -26,6 +27,79 @@ import { menuKey } from '../../utils';
 import ModelDetailPanel from '../ModelDetailPanel';
 import { MultipleProvidersModelItem } from './MultipleProvidersModelItem';
 import { SingleProviderModelItem } from './SingleProviderModelItem';
+
+interface RecommendedModelRowProps {
+  creditCost: number;
+  description: string;
+  isActive: boolean;
+  model: {
+    abilities?: Record<string, unknown>;
+    displayName?: string;
+    id: string;
+  } & Record<string, unknown>;
+  newLabel: string;
+  onClose: () => void;
+  onModelChange: (modelId: string, providerId: string) => Promise<void>;
+  providerId: string;
+}
+
+const RecommendedModelRow = memo<RecommendedModelRowProps>(
+  ({ model, providerId, isActive, newLabel, description, creditCost, onModelChange, onClose }) => {
+    const { data: lockState } = useModelLockState(model.id);
+    const isLocked = lockState?.isLocked ?? false;
+
+    const handleClick = async () => {
+      if (isLocked) return;
+      try {
+        await onModelChange(model.id, providerId);
+      } catch (err) {
+        console.error('[ModelSwitchPanel] onModelChange failed for recommended model', err);
+      }
+      onClose();
+    };
+
+    const content = (
+      <Block
+        clickable
+        className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
+        gap={2}
+        style={{ paddingBlock: 6, paddingInline: 8 }}
+        variant={'borderless'}
+        onClick={isLocked ? undefined : handleClick}
+      >
+        <ModelItemRender
+          {...(model as any)}
+          {...((model.abilities ?? {}) as any)}
+          showInfoTag
+          newBadgeLabel={newLabel}
+        />
+        <span
+          style={{
+            color: cssVar.colorTextTertiary,
+            fontSize: 11,
+            lineHeight: '14px',
+            paddingInlineStart: 2,
+          }}
+        >
+          {description} · ~{creditCost} кр.
+        </span>
+      </Block>
+    );
+
+    return (
+      <LockedModelTooltip
+        isLocked={isLocked}
+        modelName={model.displayName ?? model.id}
+        planPriceRub={lockState?.requiredPlan?.priceRub ?? 0}
+        requiredPlan={lockState?.requiredPlan?.name ?? 'Pro'}
+      >
+        {content}
+      </LockedModelTooltip>
+    );
+  },
+);
+
+RecommendedModelRow.displayName = 'RecommendedModelRow';
 
 interface ListItemRendererProps {
   activeKey: string;
@@ -241,34 +315,16 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
 
         return (
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
-            <Block
-              clickable
-              className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
-              gap={2}
-              style={{ paddingBlock: 6, paddingInline: 8 }}
-              variant={'borderless'}
-              onClick={async () => {
-                onModelChange(item.model.id, item.providerId);
-                onClose();
-              }}
-            >
-              <ModelItemRender
-                {...item.model}
-                {...item.model.abilities}
-                showInfoTag
-                newBadgeLabel={newLabel}
-              />
-              <span
-                style={{
-                  color: cssVar.colorTextTertiary,
-                  fontSize: 11,
-                  lineHeight: '14px',
-                  paddingInlineStart: 2,
-                }}
-              >
-                {item.description} · ~{item.creditCost} кр.
-              </span>
-            </Block>
+            <RecommendedModelRow
+              creditCost={item.creditCost}
+              description={item.description}
+              isActive={isActive}
+              model={item.model as any}
+              newLabel={newLabel}
+              providerId={item.providerId}
+              onClose={onClose}
+              onModelChange={onModelChange}
+            />
           </Flexbox>
         );
       }

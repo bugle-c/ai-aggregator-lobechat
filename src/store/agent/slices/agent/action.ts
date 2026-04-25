@@ -187,7 +187,13 @@ export class AgentSliceActionImpl {
 
     const controller = this.#get().internal_createAbortController('updateAgentConfigSignal');
 
-    await this.#get().optimisticUpdateAgentConfig(agentId, config, controller.signal);
+    try {
+      await this.#get().optimisticUpdateAgentConfig(agentId, config, controller.signal);
+    } catch (err) {
+      // Defensive: never let a failed config update crash the page (e.g. when a user
+      // tries to switch to a model their plan does not allow). Log and swallow.
+      console.error('[agent] updateAgentConfigById failed', { agentId, config, err });
+    }
   };
 
   updateAgentLocalSystemConfigById = async (
