@@ -630,6 +630,13 @@
       "when": 1776716513699,
       "tag": "0089_dashing_big_bertha",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1777680000000,
+      "tag": "0090_user_onboarding",
+      "breakpoints": true
     }
   ],
   "version": "6"

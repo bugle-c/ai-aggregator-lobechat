@@ -2,6 +2,7 @@ import { SESSION_CHAT_URL } from '@lobechat/const';
 import { useCallback } from 'react';
 
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { lambdaClient } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -68,6 +69,11 @@ export const useSend = () => {
       clearChatUploadFileList();
       clearChatContextSelections();
       mainInputEditor?.clearContent();
+
+      // Mark onboarding "first message seen" — fire-and-forget; failure is
+      // non-fatal (the state row might not exist for very first request, but
+      // the mutation creates it on the server).
+      lambdaClient.userOnboarding.markFirstMessageSeen.mutate().catch(() => {});
     }
   }, [inboxAgentId, sendMessage, clearChatContextSelections, clearChatUploadFileList, router]);
 

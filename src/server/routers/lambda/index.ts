@@ -6,6 +6,7 @@ import { referralRouter } from '@/business/server/lambda-routers/referral';
 import { spendRouter } from '@/business/server/lambda-routers/spend';
 import { subscriptionRouter } from '@/business/server/lambda-routers/subscription';
 import { topUpRouter } from '@/business/server/lambda-routers/topUp';
+import { userOnboardingRouter } from '@/business/server/lambda-routers/userOnboarding';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
 import { agentRouter } from './agent';
@@ -101,6 +102,7 @@ export const lambdaRouter = router({
   spend: spendRouter,
   subscription: subscriptionRouter,
   topUp: topUpRouter,
+  userOnboarding: userOnboardingRouter,
   /* eslint-enable sort-keys-fix/sort-keys-fix */
 });
 

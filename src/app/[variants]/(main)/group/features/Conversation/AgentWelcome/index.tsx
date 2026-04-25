@@ -6,11 +6,15 @@ import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SupervisorAvatar from '@/app/[variants]/(main)/group/features/GroupAvatar';
+import { useConversationStore } from '@/features/Conversation';
+import { SuggestedPrompts } from '@/features/Onboarding';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { lambdaQuery } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { agentGroupSelectors, useAgentGroupStore } from '@/store/agentGroup';
 import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import OpeningQuestions from './OpeningQuestions';
@@ -23,6 +27,17 @@ const InboxWelcome = memo(() => {
   const fontSize = useUserStore(userGeneralSettingsSelectors.fontSize);
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
   const [groupMeta] = useAgentGroupStore((s) => [agentGroupSelectors.currentGroupMeta(s)]);
+  const isLogin = useUserStore(authSelectors.isLogin);
+  const editor = useConversationStore((s) => s.editor);
+  const { data: onboarding } = lambdaQuery.userOnboarding.getOnboardingState.useQuery(undefined, {
+    enabled: isLogin,
+    staleTime: 60_000,
+  });
+
+  const handlePromptSelect = (prompt: string) => {
+    editor?.instance?.setDocument('markdown', prompt);
+    editor?.focus();
+  };
 
   // Use group config for opening message and questions
   const groupOpeningMessage = useAgentGroupStore(agentGroupSelectors.currentGroupOpeningMessage);
@@ -74,6 +89,16 @@ const InboxWelcome = memo(() => {
         {openingQuestions.length > 0 && (
           <OpeningQuestions mobile={mobile} questions={openingQuestions} />
         )}
+        {/* Onboarding starter prompts: shown only on inbox empty chat for new users
+            who haven't sent their first message yet, and only when the agent itself
+            doesn't ship custom opening questions. */}
+        {isInbox &&
+          openingQuestions.length === 0 &&
+          isLogin &&
+          onboarding != null &&
+          !onboarding.firstMessageSeen && (
+            <SuggestedPrompts onSelect={handlePromptSelect} />
+          )}
         <ToolAuthAlert />
       </Flexbox>
     </>

@@ -22,3 +22,4 @@ export * from './session';
 export * from './topic';
 export * from './user';
 export * from './userMemories';
+export * from './userOnboarding';

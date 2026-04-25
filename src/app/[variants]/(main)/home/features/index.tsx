@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { FirstMessageToast, WelcomeModal } from '@/features/Onboarding';
 import { useHomeStore } from '@/store/home';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -41,6 +42,8 @@ const Home = memo(() => {
         {/*<FeaturedPlugins />*/}
         {isLogin && <RecentResource />}
       </Flexbox>
+      {isLogin && <WelcomeModal />}
+      {isLogin && <FirstMessageToast />}
     </Flexbox>
   );
 });

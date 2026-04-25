@@ -5,11 +5,15 @@ import { useEffect, useMemo, useRef } from 'react';
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import { SuggestedPrompts } from '@/features/Onboarding';
+import { lambdaQuery } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useHomeStore } from '@/store/home';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import CommunityRecommend from '../CommunityRecommend';
 import SuggestQuestions from '../SuggestQuestions';
@@ -65,6 +69,22 @@ const InputArea = () => {
   const showSuggestQuestions =
     inputActiveMode && ['agent', 'group', 'write'].includes(inputActiveMode);
 
+  const isLogin = useUserStore(authSelectors.isLogin);
+  const { data: onboarding } = lambdaQuery.userOnboarding.getOnboardingState.useQuery(undefined, {
+    enabled: isLogin,
+    staleTime: 60_000,
+  });
+  // Show onboarding starter prompts only while the user hasn't completed
+  // their first message yet — falls back to default UI if state row missing.
+  const showOnboardingPrompts =
+    isLogin && !inputActiveMode && onboarding != null && !onboarding.firstMessageSeen;
+
+  const handlePromptSelect = (prompt: string) => {
+    const editor = useChatStore.getState().mainInputEditor;
+    editor?.instance?.setDocument('markdown', prompt);
+    editor?.focus();
+  };
+
   const extraActionItems = useMemo(
     () =>
       inputActiveMode
@@ -117,6 +137,9 @@ const InputArea = () => {
         </DragUploadZone>
       </Flexbox>
 
+      {showOnboardingPrompts && (
+        <SuggestedPrompts onSelect={handlePromptSelect} />
+      )}
       {/* Keep StarterList mounted to prevent useInitBuiltinAgent hooks from re-running */}
       <div style={{ display: showSuggestQuestions ? 'none' : undefined }}>
         <StarterList />
