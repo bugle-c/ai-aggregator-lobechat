@@ -143,9 +143,12 @@ const InputArea = () => {
 
       {showOnboardingPrompts && <SuggestedPrompts onSelect={handlePromptSelect} />}
       {/* Keep StarterList mounted to prevent useInitBuiltinAgent hooks from re-running */}
-      <div style={{ display: showSuggestQuestions ? 'none' : undefined }}>
-        <StarterList />
-      </div>
+      {/* Hide create-agent / create-group / write buttons in Light (free) plan */}
+      {!isLight && (
+        <div style={{ display: showSuggestQuestions ? 'none' : undefined }}>
+          <StarterList />
+        </div>
+      )}
       <AnimatePresence mode="popLayout">
         {showSuggestQuestions && (
           <motion.div
