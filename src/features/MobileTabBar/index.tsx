@@ -29,7 +29,7 @@ export default memo<Props>(({ className, tabBarKey }) => {
   const openSettings = () => {
     router.push('/settings/provider/all');
   };
-  const { showMarket, isSimpleUI } = useServerConfigStore(featureFlagsSelectors);
+  const { showMarket } = useServerConfigStore(featureFlagsSelectors);
 
   const items: TabBarProps['items'] = useMemo(
     () =>
@@ -44,18 +44,16 @@ export default memo<Props>(({ className, tabBarKey }) => {
           },
           title: t('tab.chat'),
         },
-        // Task 1.2: hide Discover/Market tab in simple UI on mobile too.
-        showMarket &&
-          !isSimpleUI && {
-            icon: (active: boolean) => (
-              <Icon className={active ? styles.active : undefined} icon={Bot} />
-            ),
-            key: SidebarTabKey.Community,
-            onClick: () => {
-              router.push('/community');
-            },
-            title: t('tab.community'),
+        showMarket && {
+          icon: (active: boolean) => (
+            <Icon className={active ? styles.active : undefined} icon={Bot} />
+          ),
+          key: SidebarTabKey.Community,
+          onClick: () => {
+            router.push('/community');
           },
+          title: t('tab.community'),
+        },
         {
           icon: (active: boolean) => (
             <Icon className={active ? styles.active : undefined} icon={User} />

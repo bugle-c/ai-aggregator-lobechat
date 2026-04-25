@@ -62,7 +62,7 @@ export const useCategory = () => {
   const { t: tAuth } = useTranslation('auth');
   const { t: tSubscription } = useTranslation('subscription');
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const { enableSTT, hideDocs, showAiImage, showApiKeyManage, isSimpleUI } =
+  const { enableSTT, hideDocs, showAiImage, showApiKeyManage } =
     useServerConfigStore(featureFlagsSelectors);
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
@@ -169,10 +169,6 @@ export const useCategory = () => {
     });
 
     // AI 配置组 - AI 相关设置
-    // Task 1.2: in simple UI, hide power-user AI tabs (Skill/Plugin store,
-    // Memory config, Image generation settings, TTS/voice). Keep Provider
-    // (so users can plug in their own keys) and Agent (so they can edit
-    // their default persona in a dedicated subpage).
     const aiConfigItems: CategoryItem[] = [
       {
         icon: Brain,
@@ -184,28 +180,26 @@ export const useCategory = () => {
         key: SettingsTabs.Agent,
         label: t('tab.agent'),
       },
-      !isSimpleUI && {
+      {
         icon: Blocks,
         key: SettingsTabs.Skill,
         label: t('tab.skill'),
       },
-      !isSimpleUI && {
+      {
         icon: BrainCircuit,
         key: SettingsTabs.Memory,
         label: t('tab.memory'),
       },
-      showAiImage &&
-        !isSimpleUI && {
-          icon: ImageIcon,
-          key: SettingsTabs.Image,
-          label: t('tab.image'),
-        },
-      enableSTT &&
-        !isSimpleUI && {
-          icon: Mic2,
-          key: SettingsTabs.TTS,
-          label: t('tab.tts'),
-        },
+      showAiImage && {
+        icon: ImageIcon,
+        key: SettingsTabs.Image,
+        label: t('tab.image'),
+      },
+      enableSTT && {
+        icon: Mic2,
+        key: SettingsTabs.TTS,
+        label: t('tab.tts'),
+      },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
@@ -254,7 +248,6 @@ export const useCategory = () => {
     mobile,
     showAiImage,
     showApiKeyManage,
-    isSimpleUI,
     avatarUrl,
     username,
   ]);

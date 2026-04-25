@@ -37,7 +37,7 @@ const Nav = memo(() => {
   const { t } = useTranslation('common');
   const { t: tSub } = useTranslation('subscription');
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const { showMarket, showAiImage, isSimpleUI } = useServerConfigStore(featureFlagsSelectors);
+  const { showMarket, showAiImage } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const adminEmails = useServerConfigStore(serverConfigSelectors.adminEmails);
   const userEmail = useUserStore(userProfileSelectors.email);
@@ -60,16 +60,13 @@ const Nav = memo(() => {
         url: '/',
       },
       {
-        // Task 1.2: Pages is power-user feature, hide in simple UI
-        hidden: isSimpleUI,
         icon: getRouteById('page')!.icon,
         key: SidebarTabKey.Pages,
         title: t('tab.pages'),
         url: '/page',
       },
       {
-        // Task 1.2: Video is power-user feature, hide in simple UI
-        hidden: !enableBusinessFeatures || isSimpleUI,
+        hidden: !enableBusinessFeatures,
         icon: getRouteById('video')!.icon,
         isNew: true,
         key: SidebarTabKey.Video,
@@ -77,16 +74,14 @@ const Nav = memo(() => {
         url: '/video',
       },
       {
-        // Task 1.2: Image generation is power-user feature, hide in simple UI
-        hidden: !showAiImage || isSimpleUI,
+        hidden: !showAiImage,
         icon: getRouteById('image')!.icon,
         key: SidebarTabKey.Image,
         title: t('tab.aiImage'),
         url: '/image',
       },
       {
-        // Task 1.2: Agent Market / Discover hidden in simple UI
-        hidden: !showMarket || isSimpleUI,
+        hidden: !showMarket,
         icon: getRouteById('community')!.icon,
         key: SidebarTabKey.Community,
         title: t('tab.community'),
@@ -109,7 +104,7 @@ const Nav = memo(() => {
         title: t('tab.admin', { defaultValue: 'Admin' }),
       },
     ],
-    [t, tSub, isAdmin, isSimpleUI, showMarket, showAiImage, enableBusinessFeatures],
+    [t, tSub, isAdmin],
   );
 
   const newBadge = (
