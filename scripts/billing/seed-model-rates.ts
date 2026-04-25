@@ -107,6 +107,10 @@ const rows = [
     input_per_1m: rate.inputPer1M,
     output_per_1m: rate.outputPer1M,
     markup: 3,
+    // gpt-5-mini's natural marked-up output ($6/1M) puts it in 'mid' tier,
+    // but it's our standard free-plan model and must be accessible to free
+    // users. Override to 'cheap' so PLAN_MAX_TIER['free']='cheap' allows it.
+    tier_override: id === 'gpt-5-mini' ? 'cheap' : null,
     notes: null as string | null,
   })),
 ];
