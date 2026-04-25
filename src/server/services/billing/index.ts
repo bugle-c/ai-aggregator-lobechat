@@ -54,29 +54,30 @@ export class BillingService {
   };
 
   getOrResetUserBilling = async (): Promise<UserBillingItem> => {
-    const billing = await this.getOrCreateUserBilling();
+    // Ensure row exists (idempotent insert, races safe via onConflict).
+    await this.getOrCreateUserBilling();
 
-    // Lazy monthly reset: if monthStart is before the start of the current month,
-    // reset tokensUsedMonth to 0 and update monthStart
+    // Lazy monthly reset (H1 race fix):
+    // Two concurrent requests crossing midnight could both read the old
+    // monthStart, both decide "needs reset", and both set tokensUsedMonth=0
+    // — wiping a charge that landed in between. Use a *conditional* UPDATE
+    // that only fires when the stored monthStart is genuinely older than
+    // the current period boundary, then re-read.
     const currentMonthStart = new Date();
-    currentMonthStart.setDate(1);
-    currentMonthStart.setHours(0, 0, 0, 0);
+    currentMonthStart.setUTCDate(1);
+    currentMonthStart.setUTCHours(0, 0, 0, 0);
 
-    if (billing.monthStart < currentMonthStart) {
-      const updated = await this.db
-        .update(userBilling)
-        .set({
-          monthStart: currentMonthStart,
-          tokensUsedMonth: 0,
-          updatedAt: new Date(),
-        })
-        .where(eq(userBilling.userId, this.userId))
-        .returning();
+    await this.db.execute(sql`
+      UPDATE user_billing
+      SET tokens_used_month = 0,
+          month_start = ${currentMonthStart},
+          updated_at = now()
+      WHERE user_id = ${this.userId}
+        AND month_start < ${currentMonthStart}
+    `);
 
-      return updated[0]!;
-    }
-
-    return billing;
+    const refreshed = await this.getUserBilling();
+    return refreshed!;
   };
 
   getUserPlanSlug = async (): Promise<string> => {
@@ -110,9 +111,42 @@ export class BillingService {
    * Increment the user's monthly token counter. Pass a `tx` when this must
    * commit/rollback atomically with a sibling write (e.g. usage_logs insert)
    * — see recordTokenUsage and chargeAfterGenerate.
+   *
+   * `opts.limit` (Pkg2, C1 race fix): when set, the UPDATE is conditional —
+   * it only commits if `tokens_used_month + delta <= limit`. The DB's row
+   * lock + WHERE-evaluation guarantees concurrent callers can't both pass
+   * the limit check on stale reads. If 0 rows match (would overshoot, OR
+   * the user_billing row is missing), we throw and the caller's tx rolls back.
+   *
+   * `delta` may be negative (refund / reconcile under-charge → over-charge swap).
+   * The conditional clause skips negative-delta limit checks (a refund can
+   * never overshoot a positive cap).
    */
-  incrementTokensUsed = async (tokens: number, tx?: Transaction): Promise<void> => {
+  incrementTokensUsed = async (
+    tokens: number,
+    tx?: Transaction,
+    opts?: { limit?: number },
+  ): Promise<{ committed: number }> => {
     const client = tx ?? this.db;
+    if (opts?.limit != null && tokens > 0) {
+      const limit = opts.limit;
+      const result: any = await client.execute(sql`
+        UPDATE user_billing
+        SET tokens_used_month = tokens_used_month + ${tokens},
+            updated_at = now()
+        WHERE user_id = ${this.userId}
+          AND tokens_used_month + ${tokens} <= ${limit}
+      `);
+      // node-postgres + drizzle expose rowCount on the result; some
+      // drivers return rowsAffected. Probe both for safety. If the
+      // driver returns nothing, fall through (we still emitted the
+      // UPDATE; better to under-block than to falsely reject).
+      const rowCount = result?.rowCount ?? result?.rowsAffected ?? null;
+      if (rowCount === 0) {
+        throw new Error('Insufficient credits — would exceed monthly limit');
+      }
+      return { committed: tokens };
+    }
     await client
       .update(userBilling)
       .set({
@@ -120,6 +154,7 @@ export class BillingService {
         updatedAt: new Date(),
       })
       .where(eq(userBilling.userId, this.userId));
+    return { committed: tokens };
   };
 
   // ============ Payments ============ //
