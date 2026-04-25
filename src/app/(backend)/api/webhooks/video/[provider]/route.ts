@@ -10,17 +10,26 @@ import {
   type VideoGenerationTaskMetadata,
 } from '@lobechat/types';
 import debug from 'debug';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { type RuntimeVideoGenParams } from 'model-bank';
 import { NextResponse } from 'next/server';
 
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
-import { generationBatches } from '@/database/schemas';
+import { asyncTasks, generationBatches } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { VideoGenerationService } from '@/server/services/generation/video';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
+
+/**
+ * Intermediate status used by atomic-claim to prevent the webhook race
+ * (C4): two callers (e.g. provider webhook + polling cron) entering the
+ * processing block at the same moment. Only one UPDATE that flips
+ * Pending/Processing → ProcessingClaim returns rowCount=1; the other sees
+ * rowCount=0 and bails out cleanly.
+ */
+const ProcessingClaim = 'processing-claim';
 
 const log = debug('lobe-video:webhook');
 
@@ -119,6 +128,29 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
       asyncTask.status === AsyncTaskStatus.Error
     ) {
       log('AsyncTask %s already in terminal state: %s, skipping', asyncTask.id, asyncTask.status);
+      return NextResponse.json({ success: true });
+    }
+
+    // C4: atomic claim. Concurrent webhook + polling-cron deliveries can
+    // both observe Pending/Processing and proceed into the long upload +
+    // chargeAfter block, double-charging the user. Atomically transition
+    // status pending|processing → processing-claim — only one caller wins.
+    const claimed = await db
+      .update(asyncTasks)
+      .set({ status: ProcessingClaim, updatedAt: new Date() })
+      .where(
+        and(
+          eq(asyncTasks.id, asyncTask.id),
+          inArray(asyncTasks.status, [AsyncTaskStatus.Pending, AsyncTaskStatus.Processing]),
+        ),
+      )
+      .returning({ id: asyncTasks.id });
+    if (claimed.length === 0) {
+      log(
+        'AsyncTask %s already claimed by another worker (status=%s), skipping',
+        asyncTask.id,
+        asyncTask.status,
+      );
       return NextResponse.json({ success: true });
     }
 
