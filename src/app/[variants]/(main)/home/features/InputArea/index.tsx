@@ -6,6 +6,7 @@ import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import { SuggestedPrompts } from '@/features/Onboarding';
+import { useIsLightMode } from '@/features/UIMode';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -22,10 +23,13 @@ import SkillInstallBanner from './SkillInstallBanner';
 import StarterList from './StarterList';
 import { useSend } from './useSend';
 
-const leftActions: ActionKeys[] = ['model', 'search', 'fileUpload', 'tools'];
+const leftActionsFull: ActionKeys[] = ['model', 'search', 'fileUpload', 'tools'];
+const leftActionsLight: ActionKeys[] = ['model', 'search', 'fileUpload'];
 
 const InputArea = () => {
   const { loading, send, inboxAgentId } = useSend();
+  const isLight = useIsLightMode();
+  const leftActions = isLight ? leftActionsLight : leftActionsFull;
   const inputActiveMode = useHomeStore((s) => s.inputActiveMode);
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
@@ -137,9 +141,7 @@ const InputArea = () => {
         </DragUploadZone>
       </Flexbox>
 
-      {showOnboardingPrompts && (
-        <SuggestedPrompts onSelect={handlePromptSelect} />
-      )}
+      {showOnboardingPrompts && <SuggestedPrompts onSelect={handlePromptSelect} />}
       {/* Keep StarterList mounted to prevent useInitBuiltinAgent hooks from re-running */}
       <div style={{ display: showSuggestQuestions ? 'none' : undefined }}>
         <StarterList />

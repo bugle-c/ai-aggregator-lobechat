@@ -6,11 +6,13 @@ import React, { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { useIsLightMode } from '@/features/UIMode';
 
 import { useCreateMenuItems } from '../../hooks';
 
 const AddButton = memo(() => {
   const { t: tChat } = useTranslation('chat');
+  const isLight = useIsLightMode();
 
   // Create menu items
   const {
@@ -34,6 +36,8 @@ const AddButton = memo(() => {
   const dropdownItems = useMemo(() => {
     return [createAgentMenuItem(), createGroupChatMenuItem(), createPageMenuItem()];
   }, [createAgentMenuItem, createGroupChatMenuItem, createPageMenuItem]);
+
+  if (isLight) return null;
 
   return (
     <Flexbox horizontal>

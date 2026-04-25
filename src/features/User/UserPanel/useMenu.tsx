@@ -13,6 +13,7 @@ import { type MenuProps } from '@/components/Menu';
 import { DEFAULT_DESKTOP_HOTKEY_CONFIG } from '@/const/desktop';
 import { OFFICIAL_URL } from '@/const/url';
 import DataImporter from '@/features/DataImporter';
+import { useIsLightMode } from '@/features/UIMode';
 import { usePlatform } from '@/hooks/usePlatform';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -54,6 +55,7 @@ export const useMenu = () => {
   ]);
   const businessMenuItems = useBusinessMenuItems(isLogin);
   const { isIOS, isAndroid } = usePlatform();
+  const isLight = useIsLightMode();
 
   const downloadUrl = useMemo(() => {
     if (isIOS) return DOWNLOAD_URL.ios;
@@ -129,7 +131,7 @@ export const useMenu = () => {
 
     ...(isLogin ? settings : []),
     ...businessMenuItems,
-    ...(!isDesktop ? downloadClient : []),
+    ...(!isDesktop && !isLight ? downloadClient : []),
     ...data,
     ...(!hideDocs ? helps : []),
   ].filter(Boolean) as MenuProps['items'];

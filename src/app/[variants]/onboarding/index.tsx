@@ -4,7 +4,6 @@ import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import Loading from '@/components/Loading/BrandTextLoading';
 import { useUserStore } from '@/store/user';
 import { onboardingSelectors } from '@/store/user/selectors';
 
@@ -16,16 +15,17 @@ import ResponseLanguageStep from './features/ResponseLanguageStep';
 import TelemetryStep from './features/TelemetryStep';
 
 const OnboardingPage = memo(() => {
-  const [isUserStateInit, currentStep, goToNextStep, goToPreviousStep] = useUserStore((s) => [
-    s.isUserStateInit,
+  // Render the onboarding flow eagerly. We previously gated the flow on
+  // `isUserStateInit`, which surfaced a 60%-opacity BrandLoading screen and
+  // looked like a "dim, frozen page" if user-state init lagged on first
+  // sign-up. Step state defaults to 1 (TelemetryStep) when no server state
+  // exists yet, so it's safe to render immediately — server sync happens in
+  // the background via the step update queue.
+  const [currentStep, goToNextStep, goToPreviousStep] = useUserStore((s) => [
     onboardingSelectors.currentStep(s),
     s.goToNextStep,
     s.goToPreviousStep,
   ]);
-
-  if (!isUserStateInit) {
-    return <Loading debugId="Onboarding" />;
-  }
 
   const renderStep = () => {
     switch (currentStep) {
