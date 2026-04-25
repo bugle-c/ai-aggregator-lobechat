@@ -7,8 +7,10 @@ import { getRouteById } from '@/config/routes';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useActiveTabKey } from '@/hooks/useActiveTabKey';
 import { SidebarTabKey } from '@/store/global/initialState';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 interface Item {
+  hidden?: boolean;
   icon: any;
   key: SidebarTabKey;
   title: string;
@@ -20,6 +22,7 @@ const BottomMenu = memo(() => {
 
   const navigate = useNavigate();
   const { t } = useTranslation('common');
+  const { isSimpleUI } = useServerConfigStore(featureFlagsSelectors);
 
   const items = useMemo(
     () =>
@@ -31,19 +34,24 @@ const BottomMenu = memo(() => {
           url: '/settings',
         },
         {
+          // Task 1.2: hide Files/Knowledge sidebar entry in simple UI
+          // (file upload remains available inside the chat input).
+          hidden: isSimpleUI,
           icon: getRouteById('resource')!.icon,
           key: SidebarTabKey.Resource,
           title: t('tab.resource'),
           url: '/resource',
         },
         {
+          // Task 1.2: hide Memory tab in simple UI
+          hidden: isSimpleUI,
           icon: getRouteById('memory')!.icon,
           key: SidebarTabKey.Memory,
           title: t('tab.memory'),
           url: '/memory',
         },
-      ].filter(Boolean) as Item[],
-    [t],
+      ].filter((item): item is Item => Boolean(item) && !item.hidden),
+    [t, isSimpleUI],
   );
 
   return (
