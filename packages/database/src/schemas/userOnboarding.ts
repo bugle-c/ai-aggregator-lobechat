@@ -1,4 +1,4 @@
-import { boolean, pgTable, text } from 'drizzle-orm/pg-core';
+import { boolean, pgTable, text, varchar } from 'drizzle-orm/pg-core';
 
 import { timestamptz } from './_helpers';
 import { users } from './user';
@@ -14,6 +14,10 @@ export const userOnboarding = pgTable('user_onboarding', {
   firstLoginSeen: boolean('first_login_seen').notNull().default(false),
   firstMessageSeen: boolean('first_message_seen').notNull().default(false),
   firstToastSeen: boolean('first_toast_seen').notNull().default(false),
+  uiMode: varchar('ui_mode', { length: 8 })
+    .notNull()
+    .default('light')
+    .$type<'light' | 'pro'>(),
   bannerDismissedAt: timestamptz('banner_dismissed_at'),
   createdAt: timestamptz('created_at').notNull().defaultNow(),
   updatedAt: timestamptz('updated_at')
@@ -24,3 +28,4 @@ export const userOnboarding = pgTable('user_onboarding', {
 
 export type UserOnboardingItem = typeof userOnboarding.$inferSelect;
 export type NewUserOnboarding = typeof userOnboarding.$inferInsert;
+export type UiMode = 'light' | 'pro';

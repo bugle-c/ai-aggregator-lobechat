@@ -1,21 +1,26 @@
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
 
-import { userOnboarding } from '@/database/schemas';
 import type { UserOnboardingItem } from '@/database/schemas';
+import { userOnboarding } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
 const onboardingProcedure = authedProcedure.use(serverDatabase);
 
-const fetchOrCreate = async (
-  db: LobeChatDatabase,
-  userId: string,
-): Promise<UserOnboardingItem> => {
-  const rows = await db.select().from(userOnboarding).where(eq(userOnboarding.userId, userId)).limit(1);
+const fetchOrCreate = async (db: LobeChatDatabase, userId: string): Promise<UserOnboardingItem> => {
+  const rows = await db
+    .select()
+    .from(userOnboarding)
+    .where(eq(userOnboarding.userId, userId))
+    .limit(1);
   if (rows[0]) return rows[0];
 
-  await db.insert(userOnboarding).values({ userId }).onConflictDoNothing({ target: userOnboarding.userId });
+  await db
+    .insert(userOnboarding)
+    .values({ userId })
+    .onConflictDoNothing({ target: userOnboarding.userId });
 
   const created = await db
     .select()
@@ -56,4 +61,15 @@ export const userOnboardingRouter = router({
       .where(eq(userOnboarding.userId, ctx.userId));
     return { ok: true };
   }),
+
+  setUiMode: onboardingProcedure
+    .input(z.object({ mode: z.enum(['light', 'pro']) }))
+    .mutation(async ({ ctx, input }) => {
+      await fetchOrCreate(ctx.serverDB, ctx.userId);
+      await ctx.serverDB
+        .update(userOnboarding)
+        .set({ uiMode: input.mode, updatedAt: new Date() })
+        .where(eq(userOnboarding.userId, ctx.userId));
+      return { ok: true, uiMode: input.mode };
+    }),
 });

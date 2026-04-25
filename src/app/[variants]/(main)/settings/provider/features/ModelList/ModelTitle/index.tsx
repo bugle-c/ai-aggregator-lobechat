@@ -5,6 +5,7 @@ import { CircleX, EllipsisVertical, LucideRefreshCcwDot, PlusIcon } from 'lucide
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useIsLightMode } from '@/features/UIMode';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
@@ -22,6 +23,8 @@ const ModelTitle = memo<ModelFetcherProps>(
   ({ provider, showAddNewModel = true, showModelFetcher = true }) => {
     const { t } = useTranslation('modelProvider');
     const { modal, message } = App.useApp();
+    const isLight = useIsLightMode();
+    const effectiveShowAddNewModel = showAddNewModel && !isLight;
     const [
       searchKeyword,
       totalModels,
@@ -125,7 +128,7 @@ const ModelTitle = memo<ModelFetcherProps>(
                       : t('providerModels.list.fetcher.fetch')}
                   </Button>
                 )}
-                {showAddNewModel && (
+                {effectiveShowAddNewModel && (
                   <>
                     <Button
                       icon={PlusIcon}

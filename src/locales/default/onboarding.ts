@@ -85,8 +85,20 @@ export default {
   'suggested.prompt3': '💡 Help me brainstorm an idea for a project',
   'toast.body': 'Charged {{charged}} credits. {{remaining}} of {{total}} left.',
   'toast.title': 'Message sent',
+  'uiMode.light': 'Light',
+  'uiMode.pro': 'Pro',
+  'uiMode.switchFailed': 'Failed to switch UI mode',
+  'uiMode.switchedToLight': 'Light mode enabled. Custom providers hidden.',
+  'uiMode.switchedToPro': 'Pro mode enabled. All providers and advanced settings unlocked.',
   'welcome.body':
-    'You have 20 free credits — about 40 simple questions to ChatGPT. Don\'t hold back: try every model, you can top up at any time.',
+    'You have 20 free credits — enough for ~40 simple ChatGPT-style questions.\n\nYou are in <1>Light mode</1> — the simplest interface. Want to add your own API keys or unlock advanced settings? Switch to <1>Pro</1> in the top-right corner.',
   'welcome.cta': 'Get started',
   'welcome.title': 'Welcome to WebGPT!',
+
+  // ============ Locked-model UX (LockedModelTooltip + UpsellModal) ============
+  'lockedModel.tooltip': 'Available in {{plan}} plan',
+  'upsellModal.body': 'Upgrade to {{plan}} to access this model and other premium options.',
+  'upsellModal.ctaClose': 'Close',
+  'upsellModal.ctaUpgrade': 'Upgrade to {{plan}} — {{price}} ₽/mo',
+  'upsellModal.title': 'Model «{{modelName}}» requires {{plan}} plan',
 };

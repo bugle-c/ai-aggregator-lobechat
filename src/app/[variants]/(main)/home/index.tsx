@@ -5,6 +5,7 @@ import { useLocation } from 'react-router-dom';
 import PageTitle from '@/components/PageTitle';
 import NavHeader from '@/features/NavHeader';
 import { BalanceBadge } from '@/features/Onboarding';
+import { UIModeToggle } from '@/features/UIMode';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
 
@@ -20,6 +21,7 @@ const Home: FC = () => {
       <NavHeader
         right={
           <Flexbox horizontal align={'center'} gap={8}>
+            <UIModeToggle />
             <BalanceBadge />
             <WideScreenButton />
           </Flexbox>

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { getRouteById } from '@/config/routes';
+import { useIsLightMode } from '@/features/UIMode';
 import { useActiveTabKey } from '@/hooks/useActiveTabKey';
 import { useGlobalStore } from '@/store/global';
 import { SidebarTabKey } from '@/store/global/initialState';
@@ -37,15 +38,17 @@ const Nav = memo(() => {
   const { t } = useTranslation('common');
   const { t: tSub } = useTranslation('subscription');
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const { showMarket, showAiImage, isSimpleUI } = useServerConfigStore(featureFlagsSelectors);
+  const { showMarket, showAiImage } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const adminEmails = useServerConfigStore(serverConfigSelectors.adminEmails);
   const userEmail = useUserStore(userProfileSelectors.email);
   const isAdmin = userEmail ? adminEmails.includes(userEmail.toLowerCase()) : false;
+  const isLight = useIsLightMode();
 
   const items: Item[] = useMemo(
     () => [
       {
+        hidden: isLight,
         icon: SearchIcon,
         key: 'search',
         onClick: () => {
@@ -60,16 +63,14 @@ const Nav = memo(() => {
         url: '/',
       },
       {
-        // Task 1.2: Pages is power-user feature, hide in simple UI
-        hidden: isSimpleUI,
+        hidden: isLight,
         icon: getRouteById('page')!.icon,
         key: SidebarTabKey.Pages,
         title: t('tab.pages'),
         url: '/page',
       },
       {
-        // Task 1.2: Video is power-user feature, hide in simple UI
-        hidden: !enableBusinessFeatures || isSimpleUI,
+        hidden: !enableBusinessFeatures,
         icon: getRouteById('video')!.icon,
         isNew: true,
         key: SidebarTabKey.Video,
@@ -77,16 +78,14 @@ const Nav = memo(() => {
         url: '/video',
       },
       {
-        // Task 1.2: Image generation is power-user feature, hide in simple UI
-        hidden: !showAiImage || isSimpleUI,
+        hidden: !showAiImage,
         icon: getRouteById('image')!.icon,
         key: SidebarTabKey.Image,
         title: t('tab.aiImage'),
         url: '/image',
       },
       {
-        // Task 1.2: Agent Market / Discover hidden in simple UI
-        hidden: !showMarket || isSimpleUI,
+        hidden: !showMarket || isLight,
         icon: getRouteById('community')!.icon,
         key: SidebarTabKey.Community,
         title: t('tab.community'),
@@ -100,7 +99,7 @@ const Nav = memo(() => {
         url: '/settings/plans',
       },
       {
-        hidden: !isAdmin,
+        hidden: !isAdmin || isLight,
         icon: ShieldCheckIcon,
         key: 'admin',
         onClick: () => {
@@ -109,7 +108,7 @@ const Nav = memo(() => {
         title: t('tab.admin', { defaultValue: 'Admin' }),
       },
     ],
-    [t, tSub, isAdmin, isSimpleUI, showMarket, showAiImage, enableBusinessFeatures],
+    [t, tSub, isAdmin, isLight, enableBusinessFeatures, showAiImage, showMarket, toggleCommandMenu],
   );
 
   const newBadge = (

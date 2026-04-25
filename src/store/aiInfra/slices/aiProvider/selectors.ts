@@ -19,6 +19,30 @@ const enabledImageModelList = (s: AIProviderStoreState) => s.enabledImageModelLi
 
 const enabledVideoModelList = (s: AIProviderStoreState) => s.enabledVideoModelList || [];
 
+const enabledChatModelList = (s: AIProviderStoreState) => s.enabledChatModelList || [];
+
+const LOBEHUB_PROVIDER_ID = 'lobehub';
+
+const enabledAiProviderListByMode = (uiMode: 'light' | 'pro') => (s: AIProviderStoreState) => {
+  const all = enabledAiProviderList(s);
+  return uiMode === 'light' ? all.filter((p) => p.id === LOBEHUB_PROVIDER_ID) : all;
+};
+
+const enabledImageModelListByMode = (uiMode: 'light' | 'pro') => (s: AIProviderStoreState) => {
+  const all = enabledImageModelList(s);
+  return uiMode === 'light' ? all.filter((p) => p.id === LOBEHUB_PROVIDER_ID) : all;
+};
+
+const enabledVideoModelListByMode = (uiMode: 'light' | 'pro') => (s: AIProviderStoreState) => {
+  const all = enabledVideoModelList(s);
+  return uiMode === 'light' ? all.filter((p) => p.id === LOBEHUB_PROVIDER_ID) : all;
+};
+
+const enabledChatModelListByMode = (uiMode: 'light' | 'pro') => (s: AIProviderStoreState) => {
+  const all = enabledChatModelList(s);
+  return uiMode === 'light' ? all.filter((p) => p.id === LOBEHUB_PROVIDER_ID) : all;
+};
+
 const isProviderEnabled = (id: string) => (s: AIProviderStoreState) =>
   enabledAiProviderList(s).some((i) => i.id === id);
 
@@ -137,8 +161,13 @@ export const aiProviderSelectors = {
   disabledAiProviderList,
   disabledCustomAiProviderList,
   enabledAiProviderList,
+  enabledAiProviderListByMode,
+  enabledChatModelList,
+  enabledChatModelListByMode,
   enabledImageModelList,
+  enabledImageModelListByMode,
   enabledVideoModelList,
+  enabledVideoModelListByMode,
   isActiveProviderApiKeyNotEmpty,
   isActiveProviderEndpointNotEmpty,
   isAiProviderConfigLoading,

@@ -63,7 +63,7 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(({ open, onClose 
       open={open}
       width={540}
       title={
-        <Flexbox align="center" gap={8} horizontal>
+        <Flexbox horizontal align="center" gap={8}>
           <Icon icon={Zap} />
           {t('modal.exhausted.title')}
         </Flexbox>
@@ -76,7 +76,7 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(({ open, onClose 
           {t('modal.exhausted.resetIn', { days: daysUntilReset })} · без доступа до сброса
         </Text>
 
-        <Flexbox gap={12} horizontal>
+        <Flexbox horizontal gap={12}>
           {upgradePlans.map((plan) => {
             const isRecommended = plan.id === recommendedId;
             const multiplier = formatMultiplier(plan.tokenLimit);
@@ -95,7 +95,12 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(({ open, onClose 
                 {isRecommended && (
                   <Tag
                     color="blue"
-                    style={{ left: '50%', position: 'absolute', top: -10, transform: 'translateX(-50%)' }}
+                    style={{
+                      left: '50%',
+                      position: 'absolute',
+                      top: -10,
+                      transform: 'translateX(-50%)',
+                    }}
                   >
                     Рекомендуем
                   </Tag>

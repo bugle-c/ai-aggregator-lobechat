@@ -9,6 +9,8 @@ import { useNavigate } from 'react-router-dom';
 import { ProviderItemRender } from '@/components/ModelSelect';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/slices/aiProvider/selectors';
+import { useUserStore } from '@/store/user';
+import { uiModeSelectors } from '@/store/user/slices/uiMode/selectors';
 import { useVideoStore } from '@/store/video';
 import { videoGenerationConfigSelectors } from '@/store/video/selectors';
 import type { EnabledProviderWithModels } from '@/types/index';
@@ -41,7 +43,10 @@ const ModelSelect = memo(() => {
   ]);
   const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
 
-  const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
+  const uiMode = useUserStore(uiModeSelectors.current);
+  const enabledVideoModelList = useAiInfraStore(
+    aiProviderSelectors.enabledVideoModelListByMode(uiMode),
+  );
 
   const options = useMemo<SelectProps['options']>(() => {
     const getVideoModels = (provider: EnabledProviderWithModels) => {

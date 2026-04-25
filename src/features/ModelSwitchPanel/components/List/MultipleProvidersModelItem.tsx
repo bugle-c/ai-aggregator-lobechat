@@ -22,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
+import { LockedModelTooltip, useModelLockState } from '@/features/UIMode';
 
 import { styles } from '../../styles';
 import { type ModelWithProviders } from '../../types';
@@ -43,6 +44,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const [submenuOpen, setSubmenuOpen] = useState(false);
+    const { data: lockState } = useModelLockState(data.model.id);
 
     useEffect(() => {
       if (isScrolling) {
@@ -59,12 +61,19 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
           className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
           style={{ paddingBlock: 8, paddingInline: 8 }}
         >
-          <ModelItemRender
-            {...data.model}
-            {...data.model.abilities}
-            newBadgeLabel={newLabel}
-            showInfoTag={true}
-          />
+          <LockedModelTooltip
+            isLocked={lockState?.isLocked ?? false}
+            modelName={data.displayName ?? data.model.id}
+            planPriceRub={lockState?.requiredPlan?.priceRub ?? 0}
+            requiredPlan={lockState?.requiredPlan?.name ?? 'Pro'}
+          >
+            <ModelItemRender
+              {...data.model}
+              {...data.model.abilities}
+              newBadgeLabel={newLabel}
+              showInfoTag={true}
+            />
+          </LockedModelTooltip>
         </DropdownMenuSubmenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner anchor={null} placement="right" sideOffset={8}>

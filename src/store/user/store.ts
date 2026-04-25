@@ -17,6 +17,8 @@ import { type PreferenceAction } from './slices/preference/action';
 import { createPreferenceSlice } from './slices/preference/action';
 import { type UserSettingsAction } from './slices/settings/action';
 import { createSettingsSlice } from './slices/settings/action';
+import { type UIModeAction } from './slices/uiMode/action';
+import { createUIModeSlice } from './slices/uiMode/action';
 
 //  ===============  Aggregate createStoreFn ============ //
 
@@ -25,13 +27,15 @@ export type UserStore = UserState &
   PreferenceAction &
   UserAuthAction &
   CommonAction &
-  OnboardingAction;
+  OnboardingAction &
+  UIModeAction;
 
 type UserStoreAction = UserSettingsAction &
   PreferenceAction &
   UserAuthAction &
   CommonAction &
-  OnboardingAction;
+  OnboardingAction &
+  UIModeAction;
 
 const createStore: StateCreator<UserStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<UserStore, [['zustand/devtools', never]]>>
@@ -43,6 +47,7 @@ const createStore: StateCreator<UserStore, [['zustand/devtools', never]]> = (
     createAuthSlice(...parameters),
     createCommonSlice(...parameters),
     createOnboardingSlice(...parameters),
+    createUIModeSlice(...parameters),
   ]),
 });
 

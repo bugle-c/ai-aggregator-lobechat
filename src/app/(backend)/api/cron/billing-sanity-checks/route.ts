@@ -20,8 +20,8 @@ import { and, count, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
 import { asyncTasks, billingPlans, usageLogs, userBilling } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
-import { fetchAllRates } from '@/server/services/billing/rates-source';
 import { sendAlert } from '@/server/services/alerts';
+import { fetchAllRates } from '@/server/services/billing/rates-source';
 
 type CheckSeverity = 'ok' | 'warning' | 'critical' | 'error';
 
@@ -108,8 +108,7 @@ export async function POST(req: Request) {
   try {
     const rates = await fetchAllRates();
     const offenders = rates.filter(
-      (r) =>
-        !Number.isFinite(r.markup) || r.markup < MARKUP_MIN || r.markup > MARKUP_MAX,
+      (r) => !Number.isFinite(r.markup) || r.markup < MARKUP_MIN || r.markup > MARKUP_MAX,
     );
     if (offenders.length > 0) {
       const body = offenders

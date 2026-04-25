@@ -14,8 +14,8 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { agentGroupSelectors, useAgentGroupStore } from '@/store/agentGroup';
 import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/slices/auth/selectors';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import OpeningQuestions from './OpeningQuestions';
 import ToolAuthAlert from './ToolAuthAlert';
@@ -96,9 +96,7 @@ const InboxWelcome = memo(() => {
           openingQuestions.length === 0 &&
           isLogin &&
           onboarding != null &&
-          !onboarding.firstMessageSeen && (
-            <SuggestedPrompts onSelect={handlePromptSelect} />
-          )}
+          !onboarding.firstMessageSeen && <SuggestedPrompts onSelect={handlePromptSelect} />}
         <ToolAuthAlert />
       </Flexbox>
     </>

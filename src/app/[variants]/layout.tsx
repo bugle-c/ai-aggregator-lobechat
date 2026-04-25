@@ -46,18 +46,8 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
     );
   };
 
-  // Task 1.2: surface NEXT_PUBLIC_SIMPLE_UI as a `data-simple-ui` attribute on
-  // <html> so CSS-only hides can target deeply-nested vendor components without
-  // a component refactor (see src/styles/custom-simple.css).
-  const simpleUI = process.env.NEXT_PUBLIC_SIMPLE_UI === 'true';
-
   return (
-    <html
-      suppressHydrationWarning
-      data-simple-ui={simpleUI ? 'true' : undefined}
-      dir={direction}
-      lang={locale}
-    >
+    <html suppressHydrationWarning dir={direction} lang={locale}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: `(${outdateBrowserScript.toString()})();` }} />
         {process.env.DEBUG_REACT_SCAN === '1' && (
