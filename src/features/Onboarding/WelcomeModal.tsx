@@ -51,15 +51,7 @@ const WelcomeModal = memo(() => {
   if (data.firstLoginSeen || localDismissed) return null;
 
   return (
-    <Modal
-      centered
-      closable
-      footer={null}
-      maskClosable
-      open
-      width={520}
-      onCancel={handleClose}
-    >
+    <Modal centered closable maskClosable open footer={null} width={520} onCancel={handleClose}>
       <Flexbox align="center" gap={16} paddingBlock={16} paddingInline={8}>
         <Flexbox
           align="center"

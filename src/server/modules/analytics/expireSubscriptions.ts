@@ -1,7 +1,7 @@
 import { and, eq, isNotNull, lt, not, sql } from 'drizzle-orm';
 
-import { userBilling } from '@/database/schemas/billing';
 import { billingSubscriptionEvents } from '@/database/schemas/analytics';
+import { userBilling } from '@/database/schemas/billing';
 import { type LobeChatDatabase } from '@/database/type';
 import { fetchPlanById } from '@/server/services/billing/plans-source';
 

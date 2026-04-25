@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { POST } from '../route';
+
 /**
  * Smoke tests for the sanity-check cron route. We mock the database
  * layer, rates source, and alert dispatcher so the route can run end
@@ -53,8 +55,6 @@ const {
   whereMock,
 } = mocks;
 
-import { POST } from '../route';
-
 describe('POST /api/cron/billing-sanity-checks', () => {
   beforeEach(() => {
     process.env.CRON_SECRET = 'test-secret';
@@ -72,7 +72,9 @@ describe('POST /api/cron/billing-sanity-checks', () => {
   });
 
   it('returns 401 without auth header', async () => {
-    const res = await POST(new Request('http://localhost/api/cron/billing-sanity-checks', { method: 'POST' }));
+    const res = await POST(
+      new Request('http://localhost/api/cron/billing-sanity-checks', { method: 'POST' }),
+    );
     expect(res.status).toBe(401);
   });
 
@@ -146,9 +148,7 @@ describe('POST /api/cron/billing-sanity-checks', () => {
     const markup = body.checks.find((c: { name: string }) => c.name === 'markup-sanity');
     expect(markup.severity).toBe('warning');
     expect(sendAlertMock).toHaveBeenCalled();
-    const alertCall = sendAlertMock.mock.calls.find((c) =>
-      String(c[0].title).includes('markup'),
-    );
+    const alertCall = sendAlertMock.mock.calls.find((c) => String(c[0].title).includes('markup'));
     expect(alertCall).toBeDefined();
     expect(alertCall![0].severity).toBe('warning');
   });

@@ -1,6 +1,6 @@
 import { type LobeChatDatabase } from '@/database/type';
-import { BillingService } from '@/server/services/billing';
 import { writeSubscriptionEvent } from '@/server/modules/analytics/writeSubscriptionEvent';
+import { BillingService } from '@/server/services/billing';
 
 export async function fulfillPayment(
   db: LobeChatDatabase,

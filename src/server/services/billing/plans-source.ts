@@ -5,24 +5,24 @@
  */
 
 export interface PlanView {
+  dailyCreditLimit: number | null;
   id: number;
-  slug: string;
+  isActive: boolean;
   name: string;
   priceRub: number;
+  slug: string;
   tokenLimit: number;
-  dailyCreditLimit: number | null;
-  isActive: boolean;
 }
 
 interface RawPlanRow {
-  id: number;
-  slug: string;
-  name: string;
-  display_name: string | null;
-  price_rub: number;
-  token_limit: number;
   daily_credit_limit: number | null;
+  display_name: string | null;
+  id: number;
   is_active: boolean;
+  name: string;
+  price_rub: number;
+  slug: string;
+  token_limit: number;
 }
 
 const CACHE_TTL_MS = 60_000;
@@ -51,8 +51,8 @@ async function loadFromSupabase(): Promise<PlanView[]> {
   }
   const res = await fetch(`${url}/rest/v1/plans?select=${SELECT}&order=price_rub.asc`, {
     headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
+      'apikey': key,
+      'Authorization': `Bearer ${key}`,
       'Accept-Profile': 'ai_aggregator',
     },
   });

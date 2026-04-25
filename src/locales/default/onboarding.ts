@@ -94,4 +94,11 @@ export default {
     "You have 20 free credits — about 40 simple questions to ChatGPT. Don't hold back: try every model, you can top up at any time.",
   'welcome.cta': 'Get started',
   'welcome.title': 'Welcome to WebGPT!',
+
+  // ============ Locked-model UX (LockedModelTooltip + UpsellModal) ============
+  'lockedModel.tooltip': 'Available in {{plan}} plan',
+  'upsellModal.body': 'Upgrade to {{plan}} to access this model and other premium options.',
+  'upsellModal.ctaClose': 'Close',
+  'upsellModal.ctaUpgrade': 'Upgrade to {{plan}} — {{price}} ₽/mo',
+  'upsellModal.title': 'Model «{{modelName}}» requires {{plan}} plan',
 };

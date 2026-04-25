@@ -1,5 +1,11 @@
+import { z } from 'zod';
+
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import {
+  getRequiredPlanForModelAsync,
+  isModelAllowedForPlanAsync,
+} from '@/server/modules/billing/model-tiers';
 import { BillingService } from '@/server/services/billing';
 
 const billingProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
@@ -69,4 +75,32 @@ export const spendRouter = router({
       usagePercent: Math.min(usagePercent, 100),
     };
   }),
+
+  // Locked-model UX — returns whether the given modelId is locked for the
+  // current user's plan, plus details on the required plan (name + price)
+  // so the upsell modal can render a CTA without a second roundtrip.
+  requiredPlanForModel: billingProcedure
+    .input(z.object({ modelId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const currentPlanSlug = await ctx.billingService.getUserPlanSlug();
+      const allowed = await isModelAllowedForPlanAsync(input.modelId, currentPlanSlug);
+      if (allowed) {
+        return { isLocked: false as const, requiredPlan: null };
+      }
+
+      const requiredPlanSlug = await getRequiredPlanForModelAsync(input.modelId);
+      const plans = await ctx.billingService.getActivePlans();
+      const requiredPlan = plans.find((p) => p.slug === requiredPlanSlug);
+
+      return {
+        isLocked: true as const,
+        requiredPlan: requiredPlan
+          ? {
+              name: requiredPlan.name,
+              priceRub: requiredPlan.priceRub,
+              slug: requiredPlan.slug,
+            }
+          : { name: requiredPlanSlug, priceRub: 0, slug: requiredPlanSlug },
+      };
+    }),
 });
