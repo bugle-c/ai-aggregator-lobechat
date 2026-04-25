@@ -85,8 +85,13 @@ export default {
   'suggested.prompt3': '💡 Help me brainstorm an idea for a project',
   'toast.body': 'Charged {{charged}} credits. {{remaining}} of {{total}} left.',
   'toast.title': 'Message sent',
+  'uiMode.light': 'Light',
+  'uiMode.pro': 'Pro',
+  'uiMode.switchFailed': 'Failed to switch UI mode',
+  'uiMode.switchedToLight': 'Light mode enabled. Custom providers hidden.',
+  'uiMode.switchedToPro': 'Pro mode enabled. All providers and advanced settings unlocked.',
   'welcome.body':
-    'You have 20 free credits — about 40 simple questions to ChatGPT. Don\'t hold back: try every model, you can top up at any time.',
+    "You have 20 free credits — about 40 simple questions to ChatGPT. Don't hold back: try every model, you can top up at any time.",
   'welcome.cta': 'Get started',
   'welcome.title': 'Welcome to WebGPT!',
 };

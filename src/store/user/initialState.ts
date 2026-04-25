@@ -8,12 +8,15 @@ import { type UserPreferenceState } from './slices/preference/initialState';
 import { initialPreferenceState } from './slices/preference/initialState';
 import { type UserSettingsState } from './slices/settings/initialState';
 import { initialSettingsState } from './slices/settings/initialState';
+import { type UIModeState } from './slices/uiMode/initialState';
+import { initialUIModeState } from './slices/uiMode/initialState';
 
 export type UserState = UserSettingsState &
   UserPreferenceState &
   UserAuthState &
   CommonState &
-  OnboardingState;
+  OnboardingState &
+  UIModeState;
 
 export const initialState: UserState = {
   ...initialSettingsState,
@@ -21,4 +24,5 @@ export const initialState: UserState = {
   ...initialAuthState,
   ...initialCommonState,
   ...initialOnboardingState,
+  ...initialUIModeState,
 };
