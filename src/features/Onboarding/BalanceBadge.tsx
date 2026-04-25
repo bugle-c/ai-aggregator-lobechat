@@ -36,7 +36,7 @@ const BalanceBadge = memo(() => {
   const isEmpty = remaining <= 0;
 
   const handleClick = () => {
-    navigate('/settings/subscription/plans');
+    navigate('/settings/plans');
   };
 
   const color = isEmpty ? 'red' : isLow ? 'orange' : 'green';

@@ -100,7 +100,7 @@ const InboxWelcome = memo(() => {
                   {creditState.nextPlanName} за {creditState.nextPlanPrice} ₽ —{' '}
                   {creditState.nextPlanCredits} кредитов/мес
                 </Text>
-                <Button size="small" onClick={() => navigate('/settings/subscription/plans')}>
+                <Button size="small" onClick={() => navigate('/settings/plans')}>
                   Подробнее
                 </Button>
               </Flexbox>

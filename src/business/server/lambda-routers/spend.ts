@@ -82,25 +82,31 @@ export const spendRouter = router({
   requiredPlanForModel: billingProcedure
     .input(z.object({ modelId: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
-      const currentPlanSlug = await ctx.billingService.getUserPlanSlug();
-      const allowed = await isModelAllowedForPlanAsync(input.modelId, currentPlanSlug);
-      if (allowed) {
+      try {
+        const currentPlanSlug = await ctx.billingService.getUserPlanSlug();
+        const allowed = await isModelAllowedForPlanAsync(input.modelId, currentPlanSlug);
+        if (allowed) {
+          return { isLocked: false as const, requiredPlan: null };
+        }
+
+        const requiredPlanSlug = await getRequiredPlanForModelAsync(input.modelId);
+        const plans = await ctx.billingService.getActivePlans();
+        const requiredPlan = plans.find((p) => p.slug === requiredPlanSlug);
+
+        return {
+          isLocked: true as const,
+          requiredPlan: requiredPlan
+            ? {
+                name: requiredPlan.name,
+                priceRub: requiredPlan.priceRub,
+                slug: requiredPlan.slug,
+              }
+            : { name: requiredPlanSlug, priceRub: 0, slug: requiredPlanSlug },
+        };
+      } catch (err) {
+        // Fallback on any error (e.g., unknown modelId, DB failure) — assume unlocked
+        // to prevent modal picker crashes. useModelLockState has throwOnError=false.
         return { isLocked: false as const, requiredPlan: null };
       }
-
-      const requiredPlanSlug = await getRequiredPlanForModelAsync(input.modelId);
-      const plans = await ctx.billingService.getActivePlans();
-      const requiredPlan = plans.find((p) => p.slug === requiredPlanSlug);
-
-      return {
-        isLocked: true as const,
-        requiredPlan: requiredPlan
-          ? {
-              name: requiredPlan.name,
-              priceRub: requiredPlan.priceRub,
-              slug: requiredPlan.slug,
-            }
-          : { name: requiredPlanSlug, priceRub: 0, slug: requiredPlanSlug },
-      };
     }),
 });

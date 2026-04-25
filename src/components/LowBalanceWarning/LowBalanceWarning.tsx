@@ -40,11 +40,7 @@ const LowBalanceWarning = memo(() => {
             <Button size="small" onClick={() => navigate('/settings/subscription/funds')}>
               {t('warning.topup')}
             </Button>
-            <Button
-              size="small"
-              type="primary"
-              onClick={() => navigate('/settings/subscription/plans')}
-            >
+            <Button size="small" type="primary" onClick={() => navigate('/settings/plans')}>
               {t('warning.upgrade')}
             </Button>
           </Flexbox>

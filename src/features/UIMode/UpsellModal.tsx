@@ -33,7 +33,7 @@ const UpsellModal = memo<Props>(({ modelName, onClose, open, planPriceRub, requi
           type="primary"
           onClick={() => {
             onClose();
-            router.push('/settings/subscription/plans');
+            router.push('/settings/plans');
           }}
         >
           {t('upsellModal.ctaUpgrade', { plan: requiredPlan, price: planPriceRub })}

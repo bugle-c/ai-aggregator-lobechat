@@ -11,7 +11,9 @@ export const useModelLockState = (modelId: string | undefined) => {
     { modelId: modelId ?? '' },
     {
       enabled: !!modelId,
+      retry: false,
       staleTime: 5 * 60 * 1000,
+      throwOnError: false,
     },
   );
 };
