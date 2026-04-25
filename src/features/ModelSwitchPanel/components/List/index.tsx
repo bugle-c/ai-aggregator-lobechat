@@ -22,6 +22,7 @@ interface ListProps {
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
   onOpenChange?: (open: boolean) => void;
   onToggleShowAll?: () => void;
+  planSlug?: string | null;
   provider?: string;
   searchKeyword?: string;
   showAll?: boolean;
@@ -34,6 +35,7 @@ export const List: FC<ListProps> = ({
   onModelChange: onModelChangeProp,
   onOpenChange,
   onToggleShowAll,
+  planSlug,
   provider: providerProp,
   searchKeyword = '',
   showAll = false,
@@ -48,7 +50,7 @@ export const List: FC<ListProps> = ({
     onModelChange: onModelChangeProp,
     onOpenChange,
   });
-  const listItems = useBuildListItems(enabledList, groupMode, searchKeyword, showAll);
+  const listItems = useBuildListItems(enabledList, groupMode, searchKeyword, showAll, planSlug);
 
   const panelHeight = useMemo(
     () =>

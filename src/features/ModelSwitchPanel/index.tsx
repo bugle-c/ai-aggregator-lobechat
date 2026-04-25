@@ -27,6 +27,14 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
     const [internalOpen, setInternalOpen] = useState(false);
     const isOpen = open ?? internalOpen;
 
+    // Bug fix: lifting `showAll` here (instead of inside PanelContent) keeps
+    // the toggle state alive across PanelContent remounts. The dropdown
+    // portal can unmount/remount its children when scroll/focus events
+    // bubble to Radix's outside-click detection — without this, every scroll
+    // tick that briefly closed-then-reopened the popup reset showAll → false.
+    const [showAll, setShowAll] = useState(false);
+    const handleToggleShowAll = useCallback(() => setShowAll((prev) => !prev), []);
+
     const handleOpenChange = useCallback(
       (nextOpen: boolean) => {
         setInternalOpen(nextOpen);
@@ -46,8 +54,10 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                   extraControls={extraControls}
                   model={modelProp}
                   provider={providerProp}
+                  showAll={showAll}
                   onModelChange={onModelChange}
                   onOpenChange={handleOpenChange}
+                  onToggleShowAll={handleToggleShowAll}
                 />
               </DropdownMenuPopup>
             </DropdownMenuPositioner>

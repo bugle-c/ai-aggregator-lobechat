@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { RECOMMENDED_MODELS } from '@/const/recommended-models';
+import { getRecommendedModels } from '@/const/recommended-models';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 import { type GroupMode, type ListItem, type ModelWithProviders } from '../types';
@@ -10,8 +10,10 @@ export const useBuildListItems = (
   groupMode: GroupMode,
   searchKeyword: string = '',
   showAll: boolean = false,
+  planSlug?: string | null,
 ): ListItem[] => {
   return useMemo(() => {
+    const recommendedSource = getRecommendedModels(planSlug);
     if (enabledList.length === 0) {
       return [{ type: 'no-provider' }] as ListItem[];
     }
@@ -35,7 +37,7 @@ export const useBuildListItems = (
     const recommendedItems: ListItem[] = [];
     if (!searchKeyword.trim()) {
       const recModels: ListItem[] = [];
-      for (const rec of RECOMMENDED_MODELS) {
+      for (const rec of recommendedSource) {
         for (const provider of sortedProviders) {
           const found = provider.children.find((m) => m.id === rec.modelId);
           if (found) {
@@ -148,5 +150,5 @@ export const useBuildListItems = (
 
       return [...recommendedItems, ...items];
     }
-  }, [enabledList, groupMode, searchKeyword, showAll]);
+  }, [enabledList, groupMode, searchKeyword, showAll, planSlug]);
 };

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Rnd } from 'react-rnd';
 
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { lambdaQuery } from '@/libs/trpc/client';
 
 import { ENABLE_RESIZING, MAX_WIDTH, MIN_WIDTH } from '../const';
 import { usePanelHandlers } from '../hooks/usePanelHandlers';
@@ -17,7 +18,9 @@ interface PanelContentProps {
   model?: string;
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
   onOpenChange?: (open: boolean) => void;
+  onToggleShowAll?: () => void;
   provider?: string;
+  showAll?: boolean;
 }
 
 export const PanelContent: FC<PanelContentProps> = ({
@@ -25,17 +28,25 @@ export const PanelContent: FC<PanelContentProps> = ({
   model: modelProp,
   onModelChange: onModelChangeProp,
   onOpenChange,
+  onToggleShowAll,
   provider: providerProp,
+  showAll = false,
 }) => {
   const enabledList = useEnabledChatModels();
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [showAll, setShowAll] = useState(false);
   const { groupMode, handleGroupModeChange } = usePanelState();
   const { panelHeight, panelWidth, handlePanelWidthChange } = usePanelSize(enabledList.length);
   const { handleClose } = usePanelHandlers({
     onModelChange: onModelChangeProp,
     onOpenChange,
   });
+
+  // Plan-aware recommended list. staleTime=5min — plan rarely changes
+  // mid-session, and tRPC will dedupe with other consumers (CreditWidget).
+  const { data: creditState } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  });
+  const planSlug = creditState?.planSlug;
 
   return (
     <Rnd
@@ -60,12 +71,13 @@ export const PanelContent: FC<PanelContentProps> = ({
         extraControls={extraControls}
         groupMode={groupMode}
         model={modelProp}
+        planSlug={planSlug}
         provider={providerProp}
         searchKeyword={searchKeyword}
         showAll={showAll}
         onModelChange={onModelChangeProp}
         onOpenChange={onOpenChange}
-        onToggleShowAll={() => setShowAll((prev) => !prev)}
+        onToggleShowAll={onToggleShowAll}
       />
       <Footer onClose={handleClose} />
     </Rnd>
