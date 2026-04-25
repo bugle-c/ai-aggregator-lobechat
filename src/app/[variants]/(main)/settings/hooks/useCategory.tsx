@@ -26,6 +26,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useIsLightMode } from '@/features/UIMode';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { SettingsTabs } from '@/store/global/initialState';
@@ -57,6 +58,16 @@ export interface CategoryGroup {
   title: string;
 }
 
+const LIGHT_ALLOWLIST = new Set<SettingsTabs>([
+  SettingsTabs.Profile,
+  SettingsTabs.Stats,
+  SettingsTabs.Common,
+  SettingsTabs.ChatAppearance,
+  SettingsTabs.Plans,
+  SettingsTabs.Hotkey,
+  SettingsTabs.About,
+]);
+
 export const useCategory = () => {
   const { t } = useTranslation('setting');
   const { t: tAuth } = useTranslation('auth');
@@ -69,6 +80,7 @@ export const useCategory = () => {
     userProfileSelectors.nickName(s),
   ]);
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
+  const isLight = useIsLightMode();
 
   // Process avatar URL for desktop environment
   const avatarUrl = useMemo(() => {
@@ -238,6 +250,15 @@ export const useCategory = () => {
       title: t('group.system'),
     });
 
+    if (isLight) {
+      return groups
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((it) => LIGHT_ALLOWLIST.has(it.key)),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
+
     return groups;
   }, [
     t,
@@ -250,6 +271,7 @@ export const useCategory = () => {
     showApiKeyManage,
     avatarUrl,
     username,
+    isLight,
   ]);
 
   return categoryGroups;

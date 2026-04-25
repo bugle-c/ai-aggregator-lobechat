@@ -1,10 +1,11 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { Outlet, useNavigate, useParams } from 'react-router-dom';
 
 import { isCustomBranding } from '@/const/version';
+import { useIsLightMode } from '@/features/UIMode';
 
 import DesktopLayoutContainer from './_layout/Desktop/Container';
 import Footer from './(list)/Footer';
@@ -14,10 +15,17 @@ import ProviderMenu from './ProviderMenu';
 // Layout component that wraps provider pages with navigation
 export const ProviderLayout = memo(() => {
   const navigate = useNavigate();
+  const isLight = useIsLightMode();
+
+  useEffect(() => {
+    if (isLight) navigate('/settings/profile', { replace: true });
+  }, [isLight, navigate]);
 
   const handleProviderSelect = (providerKey: string) => {
     navigate(`/settings/provider/${providerKey}`);
   };
+
+  if (isLight) return null;
 
   return (
     <Flexbox
@@ -42,10 +50,17 @@ ProviderLayout.displayName = 'ProviderLayout';
 export const ProviderDetailPage = memo(() => {
   const params = useParams<{ providerId: string }>();
   const navigate = useNavigate();
+  const isLight = useIsLightMode();
+
+  useEffect(() => {
+    if (isLight) navigate('/settings/profile', { replace: true });
+  }, [isLight, navigate]);
 
   const handleProviderSelect = (providerKey: string) => {
     navigate(`/settings/provider/${providerKey}`);
   };
+
+  if (isLight) return null;
 
   return (
     <ProviderDetailPageComponent

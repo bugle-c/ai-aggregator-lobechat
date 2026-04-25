@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { getRouteById } from '@/config/routes';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useIsLightMode } from '@/features/UIMode';
 import { useActiveTabKey } from '@/hooks/useActiveTabKey';
 import { SidebarTabKey } from '@/store/global/initialState';
 
@@ -20,6 +21,7 @@ const BottomMenu = memo(() => {
 
   const navigate = useNavigate();
   const { t } = useTranslation('common');
+  const isLight = useIsLightMode();
 
   const items = useMemo(
     () =>
@@ -30,20 +32,20 @@ const BottomMenu = memo(() => {
           title: t('tab.setting'),
           url: '/settings',
         },
-        {
+        !isLight && {
           icon: getRouteById('resource')!.icon,
           key: SidebarTabKey.Resource,
           title: t('tab.resource'),
           url: '/resource',
         },
-        {
+        !isLight && {
           icon: getRouteById('memory')!.icon,
           key: SidebarTabKey.Memory,
           title: t('tab.memory'),
           url: '/memory',
         },
       ].filter(Boolean) as Item[],
-    [t],
+    [t, isLight],
   );
 
   return (
