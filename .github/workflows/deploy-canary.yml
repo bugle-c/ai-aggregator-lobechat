@@ -1,0 +1,93 @@
+# Auto-deploy aggregator to ask.gptweb.ru on push to canary.
+#
+# Pipeline: GHA → SSH to Hetzner → git pull origin canary → docker build →
+# docker compose up -d --force-recreate lobe → smoke probe.
+#
+# Build runs ON the VPS (not in GHA + GHCR) because:
+#   1. lobehub container uses `image: lobechat-custom:latest` from local registry,
+#      so GHCR roundtrip would require docker-compose.yml changes
+#   2. Build cache lives on the VPS — GHA cold builds are slower than incremental
+#      VPS rebuilds against existing layers
+#
+# Secrets required on the repo:
+#   VPS_HOST            — 135.181.115.234
+#   VPS_SSH_KEY         — private key matching deploy@VPS authorized_keys
+#   VPS_SSH_USER        — deploy (defaults to root if not set)
+name: Deploy canary → ask.gptweb.ru
+
+on:
+  push:
+    branches: [canary]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '.github/workflows/**'
+      - '!.github/workflows/deploy-canary.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-canary
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Pull latest code on VPS
+        run: |
+          ssh ${{ secrets.VPS_SSH_USER || 'root' }}@${{ secrets.VPS_HOST }} <<'EOF'
+            set -e
+            sudo -u deploy bash -c '
+              cd /home/deploy/projects/ai-aggregator-lobechat
+              git fetch origin canary
+              git checkout canary
+              git reset --hard origin/canary
+              git log -1 --format="HEAD now at %h %s"
+            '
+          EOF
+
+      - name: Build Docker image on VPS
+        run: |
+          ssh ${{ secrets.VPS_SSH_USER || 'root' }}@${{ secrets.VPS_HOST }} <<'EOF'
+            set -e
+            cd /home/deploy/projects/ai-aggregator-lobechat
+            docker build --tag lobechat-custom:latest --progress=plain . 2>&1 | tail -40
+            docker images --format "{{.Repository}}:{{.Tag}} {{.CreatedAt}}" | grep "^lobechat-custom:latest"
+          EOF
+
+      - name: Restart container
+        run: |
+          ssh ${{ secrets.VPS_SSH_USER || 'root' }}@${{ secrets.VPS_HOST }} <<'EOF'
+            set -e
+            cd /opt/lobechat
+            docker compose up -d --force-recreate lobe 2>&1 | tail -10
+            sleep 8
+            docker ps --filter name=lobehub --format "{{.Names}} | {{.Status}}"
+          EOF
+
+      - name: Smoke check — root + cron route
+        run: |
+          # Root is reachable (any 3xx redirect to /signin = healthy)
+          status=$(curl -s -o /dev/null -w '%{http_code}' https://ask.gptweb.ru)
+          if [ "$status" -lt 200 ] || [ "$status" -ge 500 ]; then
+            echo "::error::ask.gptweb.ru returned HTTP $status"
+            exit 1
+          fi
+          echo "Root: HTTP $status (OK)"
+
+          # Cron route exists (401 expected without Bearer token)
+          cron=$(curl -s -o /dev/null -w '%{http_code}' -X POST https://ask.gptweb.ru/api/cron/poll-stuck-video-jobs)
+          if [ "$cron" != "401" ] && [ "$cron" != "405" ]; then
+            echo "::warning::poll-stuck-video-jobs returned HTTP $cron (expected 401)"
+          else
+            echo "Cron route: HTTP $cron (OK)"
+          fi
