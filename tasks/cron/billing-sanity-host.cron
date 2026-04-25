@@ -1,0 +1,26 @@
+# Run billing sanity checks every hour at :07
+#
+# Install on the Hetzner host (135.181.115.234):
+#   sudo cp tasks/cron/billing-sanity-host.cron /etc/cron.d/billing-sanity-checks
+#   # then replace YOUR_CRON_SECRET with the value from /opt/lobechat/.env
+#   # finally make sure permissions are 0644 and the file ends with a newline
+#   sudo chmod 0644 /etc/cron.d/billing-sanity-checks
+#   sudo systemctl reload cron
+#
+# Logs go to /var/log/billing-sanity.log — rotate with logrotate if growth becomes
+# an issue (one POST/hr → trivial).
+#
+# The endpoint runs four sanity probes:
+#   A) negative-balances     (critical → Telegram)
+#   B) markup-sanity         (warning  → Telegram)
+#   C) reconciliation        (warning  → Telegram)
+#   D) stuck-async-tasks     (warning  → Telegram)
+#
+# Telegram delivery requires TELEGRAM_ALERT_BOT_TOKEN + TELEGRAM_ALERT_CHAT_ID
+# in the app environment. Without them, the route still runs and findings are
+# logged via console.error.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+7 * * * * root curl -fsS -X POST -m 60 -H 'Authorization: Bearer YOUR_CRON_SECRET' https://ask.gptweb.ru/api/cron/billing-sanity-checks >> /var/log/billing-sanity.log 2>&1
