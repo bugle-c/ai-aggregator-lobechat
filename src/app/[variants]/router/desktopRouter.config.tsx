@@ -479,8 +479,9 @@ export const desktopRoutes: RouteConfig[] = [
         path: 'page',
       },
 
-      // Default route - home page (handled by persistent layout)
+      // Default route - home page renders chat agent inline
       {
+        element: dynamicElement(() => import('../(main)/agent'), 'Desktop > Default Chat'),
         index: true,
       },
       // Catch-all route
