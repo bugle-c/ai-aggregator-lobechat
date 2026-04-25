@@ -58,6 +58,18 @@ export const evaluateFeatureFlag = (
   }
 };
 
+/**
+ * Read NEXT_PUBLIC_SIMPLE_UI from environment.
+ * Available on both server and client because it is prefixed with NEXT_PUBLIC_.
+ * When `true`, the UI hides power-user features (market, plugins, voice, files
+ * tabs, advanced model parameters) for casual end-users — see Task 1.2 in
+ * docs/plans/2026-04-24-ux-growth-plan.md.
+ */
+const readSimpleUIFlag = (): boolean => {
+  // eslint-disable-next-line n/no-process-env
+  return process.env.NEXT_PUBLIC_SIMPLE_UI === 'true';
+};
+
 export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   provider_settings: true,
 
@@ -115,6 +127,9 @@ export const mapFeatureFlagsEnvToState = (config: IFeatureFlags, userId?: string
 
     hideGitHub: evaluateFeatureFlag(config.commercial_hide_github, userId),
     hideDocs: evaluateFeatureFlag(config.commercial_hide_docs, userId),
+
+    // Task 1.2 — simple UI mode. NEXT_PUBLIC_SIMPLE_UI=true hides power-user features.
+    isSimpleUI: readSimpleUIFlag(),
   };
 };
 
