@@ -11,6 +11,8 @@ import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/slices/aiProvider/selectors';
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
+import { useUserStore } from '@/store/user';
+import { uiModeSelectors } from '@/store/user/slices/uiMode/selectors';
 import { type EnabledProviderWithModels } from '@/types/index';
 
 import ImageModelItem from './ImageModelItem';
@@ -41,7 +43,10 @@ const ModelSelect = memo(() => {
   ]);
   const setModelAndProviderOnSelect = useImageStore((s) => s.setModelAndProviderOnSelect);
 
-  const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
+  const uiMode = useUserStore(uiModeSelectors.current);
+  const enabledImageModelList = useAiInfraStore(
+    aiProviderSelectors.enabledImageModelListByMode(uiMode),
+  );
 
   const options = useMemo<SelectProps['options']>(() => {
     const getImageModels = (provider: EnabledProviderWithModels) => {
