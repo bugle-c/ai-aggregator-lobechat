@@ -73,4 +73,20 @@ export default {
   'username.title': 'By the way, what should I call you?',
   'username.title2': 'Let’s get to know each other first!',
   'username.title3': 'That way, we can chat more naturally from now on~',
+
+  // ============ Onboarding flow (welcome modal, balance badge, etc.) ============
+  'balance.empty': '💰 0 credits',
+  'balance.emptyTooltip': 'Credits run out — top up to keep chatting',
+  'balance.label': '💰 {{count}} credits',
+  'balance.lowTooltip': 'Running low on credits — want to top up?',
+  'suggested.hint': 'Try one of these prompts to get started',
+  'suggested.prompt1': '✍️ Help me write a work email',
+  'suggested.prompt2': '📚 Explain a complex term in simple words',
+  'suggested.prompt3': '💡 Help me brainstorm an idea for a project',
+  'toast.body': 'Charged {{charged}} credits. {{remaining}} of {{total}} left.',
+  'toast.title': 'Message sent',
+  'welcome.body':
+    'You have 20 free credits — about 40 simple questions to ChatGPT. Don\'t hold back: try every model, you can top up at any time.',
+  'welcome.cta': 'Get started',
+  'welcome.title': 'Welcome to WebGPT!',
 };

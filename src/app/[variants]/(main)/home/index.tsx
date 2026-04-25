@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom';
 
 import PageTitle from '@/components/PageTitle';
 import NavHeader from '@/features/NavHeader';
+import { BalanceBadge } from '@/features/Onboarding';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
 
@@ -16,7 +17,14 @@ const Home: FC = () => {
   return (
     <>
       {isHomeRoute && <PageTitle title="" />}
-      <NavHeader right={<WideScreenButton />} />
+      <NavHeader
+        right={
+          <Flexbox horizontal align={'center'} gap={8}>
+            <BalanceBadge />
+            <WideScreenButton />
+          </Flexbox>
+        }
+      />
       <Flexbox height={'100%'} style={{ overflowY: 'auto', paddingBottom: '16vh' }} width={'100%'}>
         <WideScreenContainer>
           <HomeContent />
