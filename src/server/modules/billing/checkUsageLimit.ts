@@ -146,8 +146,15 @@ export async function checkUsageLimit(
       creditsRemaining: totalAvailable - billing.tokensUsedMonth,
     };
   } catch (error) {
-    console.error('[billing] checkUsageLimit error:', error);
-    return { allowed: true }; // fail-open
+    // Fail-closed: a transient PostgreSQL hiccup must NOT let a free user
+    // bypass tier-gating and reach Sora 2 Pro at $0.50/sec ($25/request).
+    // Better to refuse for ~30s than burn real money on premium models.
+    console.error('[billing] checkUsageLimit error — failing closed for safety:', error);
+    return {
+      allowed: false,
+      creditsRemaining: 0,
+      message: 'Сервис временно недоступен. Попробуйте через минуту.',
+    };
   }
 }
 
