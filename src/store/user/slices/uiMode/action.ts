@@ -1,4 +1,6 @@
 import { lambdaClient } from '@/libs/trpc/client';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { type StoreSetter } from '@/store/types';
 import { type UserStore } from '@/store/user';
 
@@ -31,11 +33,29 @@ export class UIModeActionImpl {
     }
   };
 
-  setUiMode = async (mode: UiMode): Promise<void> => {
+  setUiMode = async (mode: UiMode): Promise<{ modelWasReset?: boolean }> => {
     const prev = this.#get().uiMode;
     this.#set({ uiMode: mode }, false, 'setUiMode/optimistic');
+    let modelWasReset = false;
+
     try {
+      // When switching to Light, check if current agent model is from a non-lobehub provider
+      if (mode === 'light') {
+        const agentStoreState = useAgentStore.getState();
+        const currentProvider = agentSelectors.currentAgentModelProvider(agentStoreState);
+        const activeAgentId = agentSelectors.activeAgentId(agentStoreState);
+
+        if (currentProvider && currentProvider !== 'lobehub' && activeAgentId) {
+          // Reset to a default lobehub model (gpt-5-mini)
+          await agentStoreState.updateAgentConfigById(activeAgentId, {
+            chatConfig: { model: 'gpt-5-mini', provider: 'lobehub' },
+          });
+          modelWasReset = true;
+        }
+      }
+
       await lambdaClient.userOnboarding.setUiMode.mutate({ mode });
+      return { modelWasReset };
     } catch (e) {
       this.#set({ uiMode: prev }, false, 'setUiMode/rollback');
       throw e;

@@ -35,8 +35,11 @@ const UIModeToggle = memo(() => {
       const next = value as UiMode;
       if (next === current) return;
       try {
-        await setUiMode(next);
+        const result = (await setUiMode(next)) as any;
         message.success(next === 'pro' ? t('uiMode.switchedToPro') : t('uiMode.switchedToLight'));
+        if (result?.modelWasReset) {
+          message.info(t('uiMode.modelResetToWebGPT'));
+        }
       } catch {
         message.error(t('uiMode.switchFailed'));
       }
