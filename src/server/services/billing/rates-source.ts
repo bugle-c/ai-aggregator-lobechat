@@ -43,6 +43,22 @@ let cache: { rates: RateView[]; byId: Map<string, RateView>; expiresAt: number }
 let inflight: Promise<RateView[]> | null = null;
 
 function mapRow(row: RawRateRow): RateView {
+  // Markup defends revenue: real provider cost × markup = what we charge.
+  // An admin typo (0, '', 'нет', '0,5' with Russian decimal comma → NaN,
+  // negative) would silently disable monetisation. Fall back to 3 (the
+  // default markup for the bulk of the catalogue) and log loudly so the
+  // mistake is fixable, but the business doesn't bleed in the meantime.
+  const rawMarkup = Number(row.markup);
+  const markup =
+    Number.isFinite(rawMarkup) && rawMarkup > 0
+      ? rawMarkup
+      : (() => {
+          console.error(
+            `[rates] invalid markup for ${row.model_id}: ${row.markup} → defaulting to 3 (revenue protection)`,
+          );
+          return 3;
+        })();
+
   return {
     modelId: row.model_id,
     provider: row.provider,
@@ -50,7 +66,7 @@ function mapRow(row: RawRateRow): RateView {
     inputPer1M: row.input_per_1m !== null ? Number(row.input_per_1m) : null,
     outputPer1M: row.output_per_1m !== null ? Number(row.output_per_1m) : null,
     perUnit: row.per_unit !== null ? Number(row.per_unit) : null,
-    markup: Number(row.markup),
+    markup,
     tierOverride: row.tier_override,
     isActive: row.is_active,
   };

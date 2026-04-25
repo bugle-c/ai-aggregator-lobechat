@@ -98,6 +98,79 @@ describe('fetchRate — stale-on-error', () => {
   });
 });
 
+describe('mapRow markup validation', () => {
+  // mapRow is internal; we exercise it through fetchRate and assert the
+  // normalised RateView.markup field.
+  function rowWithMarkup(markup: unknown) {
+    return {
+      ...OPUS_ROW,
+      // RawRateRow types markup as string but admins / migrations can land
+      // anything in the column (numeric, NaN, bad locale strings) — the cast
+      // mirrors the runtime reality we're defending against.
+      markup: markup as string,
+    };
+  }
+
+  it('falls back to 3 when markup is 0 (admin typo)', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [rowWithMarkup('0')],
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const rate = await fetchRate('claude-opus-4-6');
+    expect(rate?.markup).toBe(3);
+    expect(errorSpy).toHaveBeenCalled();
+    const logged = errorSpy.mock.calls.flat().join(' ');
+    expect(logged).toMatch(/invalid markup/i);
+    expect(logged).toMatch(/revenue protection/i);
+
+    errorSpy.mockRestore();
+  });
+
+  it('falls back to 3 when markup is NaN ("0,5" Russian decimal comma)', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [rowWithMarkup('0,5')],
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const rate = await fetchRate('claude-opus-4-6');
+    expect(rate?.markup).toBe(3);
+    expect(errorSpy).toHaveBeenCalled();
+
+    errorSpy.mockRestore();
+  });
+
+  it('falls back to 3 when markup is negative', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [rowWithMarkup('-1')],
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const rate = await fetchRate('claude-opus-4-6');
+    expect(rate?.markup).toBe(3);
+    expect(errorSpy).toHaveBeenCalled();
+
+    errorSpy.mockRestore();
+  });
+
+  it('uses provided markup when valid (e.g. 2.5)', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [rowWithMarkup('2.5')],
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const rate = await fetchRate('claude-opus-4-6');
+    expect(rate?.markup).toBe(2.5);
+    expect(errorSpy).not.toHaveBeenCalled();
+
+    errorSpy.mockRestore();
+  });
+});
+
 describe('fetchAllRates', () => {
   it('returns all active rows (server-side filter is_active=eq.true)', async () => {
     mockFetch.mockResolvedValueOnce({
