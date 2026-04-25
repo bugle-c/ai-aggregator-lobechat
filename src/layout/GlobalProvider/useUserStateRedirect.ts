@@ -7,7 +7,6 @@ import { getDesktopOnboardingCompleted } from '@/app/[variants]/(desktop)/deskto
 import { isDesktop } from '@/const/version';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
-import { onboardingSelectors } from '@/store/user/selectors';
 import { type UserInitializationState } from '@/types/user';
 
 const redirectIfNotOn = (currentPath: string, path: string) => {
@@ -59,12 +58,13 @@ export const useDesktopUserStateRedirect = () => {
 };
 
 export const useWebUserStateRedirect = () =>
-  useCallback((state: UserInitializationState) => {
-    const { pathname } = window.location;
-
-    if (!onboardingSelectors.needsOnboarding(state)) return;
-
-    redirectIfNotOn(pathname, '/onboarding');
+  useCallback((_state: UserInitializationState) => {
+    // Onboarding redirect disabled for WebGPT — the upstream LobeChat
+    // onboarding flow (TelemetryStep, FullNameStep, etc.) is replaced by our
+    // lightweight Welcome modal that fires on the first chat visit
+    // (`src/features/Onboarding/WelcomeModal.tsx`, Task 1.3). The /onboarding
+    // route still exists but is no longer auto-routed to.
+    return;
   }, []);
 
 export const useUserStateRedirect = () => {
