@@ -75,6 +75,10 @@ export const userBilling = pgTable(
     tokensUsedMonth: integer('tokens_used_month').notNull().default(0),
     monthStart: timestamptz('month_start').notNull().defaultNow(),
     subscriptionExpiresAt: timestamptz('subscription_expires_at'),
+    // Phase 2.3 — set when "subscription expires soon" reminder email is
+    // sent. Reset to NULL on plan change / renewal so reminder re-fires
+    // next cycle.
+    expiryReminderSentAt: timestamptz('expiry_reminder_sent_at'),
     ...timestamps,
   },
   (table) => [index('user_billing_user_id_idx').on(table.userId)],

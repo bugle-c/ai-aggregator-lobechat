@@ -92,6 +92,10 @@ export class BillingService {
       .set({
         planId,
         subscriptionExpiresAt: expiresAt,
+        // Phase 2.3: clear so the "expires soon" reminder fires again next
+        // cycle (whether this call is a fresh subscription, a renewal that
+        // pushed expiry forward, or a downgrade to free).
+        expiryReminderSentAt: null,
         updatedAt: new Date(),
       })
       .where(eq(userBilling.userId, this.userId));

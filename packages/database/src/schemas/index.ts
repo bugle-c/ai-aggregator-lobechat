@@ -12,6 +12,7 @@ export * from './chatGroup';
 export * from './credit-holds';
 export * from './file';
 export * from './generation';
+export * from './lifecycle';
 export * from './message';
 export * from './nextauth';
 export * from './oidc';
