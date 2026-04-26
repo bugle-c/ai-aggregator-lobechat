@@ -1,5 +1,6 @@
 import { type LobeChatDatabase } from '@/database/type';
 import { writeSubscriptionEvent } from '@/server/modules/analytics/writeSubscriptionEvent';
+import { sendSubscriptionConfirmation } from '@/server/modules/lifecycle/sendConfirmation';
 import { rewardReferralsOnFirstPayment } from '@/server/modules/referrals/rewardOnFirstPayment';
 import { BillingService } from '@/server/services/billing';
 
@@ -40,6 +41,19 @@ export async function fulfillPayment(
     });
 
     console.info(`[billing] Subscription activated: user=${payment.userId} plan=${payment.planId}`);
+
+    // Phase 2.3 — fire-and-forget confirmation email. Wrapped: email never
+    // breaks fulfill.
+    try {
+      await sendSubscriptionConfirmation(db, {
+        userId: payment.userId,
+        planName: toPlan?.name ?? 'WebGPT',
+        expiresAt,
+        creditAmount: toPlan?.tokenLimit ?? 0,
+      });
+    } catch (error) {
+      console.error('[billing] subscription confirmation email error:', error);
+    }
   } else if (payment.type === 'topup' && payment.tokensAmount) {
     await billingService.getOrCreateUserBilling();
     await billingService.addTokenBalance(payment.tokensAmount);
