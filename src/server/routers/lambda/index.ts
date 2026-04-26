@@ -2,6 +2,7 @@
  * This file contains the root router of WebGPT tRPC-backend
  */
 import { accountDeletionRouter } from '@/business/server/lambda-routers/accountDeletion';
+import { promoRouter } from '@/business/server/lambda-routers/promo';
 import { referralRouter } from '@/business/server/lambda-routers/referral';
 import { spendRouter } from '@/business/server/lambda-routers/spend';
 import { subscriptionRouter } from '@/business/server/lambda-routers/subscription';
@@ -98,6 +99,7 @@ export const lambdaRouter = router({
   video: videoRouter,
   /* eslint-disable sort-keys-fix/sort-keys-fix */
   accountDeletion: accountDeletionRouter,
+  promo: promoRouter,
   referral: referralRouter,
   spend: spendRouter,
   subscription: subscriptionRouter,
