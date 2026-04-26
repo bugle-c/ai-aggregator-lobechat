@@ -47,12 +47,24 @@ export const users = pgTable(
     phoneNumberVerified: boolean('phone_number_verified'),
     lastActiveAt: timestamptz('last_active_at').notNull().defaultNow(),
 
+    // ====== Referral program (Phase 2.1) ====== //
+    // 8-char [a-z0-9] code, generated on signup. Unique across users.
+    referralCode: varchar('referral_code', { length: 8 }).unique(),
+    // Direct referrer (the user whose `referral_code` was used at signup).
+    referredByL1: text('referred_by_l1'),
+    // Grand-parent referrer (referredByL1 of the L1 referrer at signup time).
+    // Denormalized for fast L2 reward lookup on first paid event.
+    referredByL2: text('referred_by_l2'),
+
     ...timestamps,
   },
   (table) => [
     index('users_email_idx').on(table.email),
     index('users_username_idx').on(table.username),
     index('users_created_at_idx').on(table.createdAt),
+    index('users_referred_by_l1_idx').on(table.referredByL1),
+    index('users_referred_by_l2_idx').on(table.referredByL2),
+    index('users_referral_code_idx').on(table.referralCode),
     /**
      * Partial index to speed up admin queries on banned users.
      * Only rows with banned=true are indexed.
