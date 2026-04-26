@@ -71,7 +71,7 @@ const handleDeeplink = async (body: IssueBody, secret: string): Promise<NextResp
     .setAudience('bot-bridge')
     .sign(new TextEncoder().encode(secret));
 
-  const url = `${appEnv.APP_URL}/auth/bot-bridge/consume?t=${encodeURIComponent(token)}`;
+  const url = `${appEnv.APP_URL}/api/auth/bot-bridge/consume?t=${encodeURIComponent(token)}`;
   return json({ token, url }, 200);
 };
 
