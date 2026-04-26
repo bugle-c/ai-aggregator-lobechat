@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   index,
   integer,
@@ -45,6 +46,8 @@ export const billingPayments = pgTable(
     planId: integer('plan_id').references(() => billingPlans.id),
     tokensAmount: integer('tokens_amount'),
     metadata: jsonb('metadata').default({}),
+    botNotifyPending: boolean('bot_notify_pending').notNull().default(false),
+    botNotifiedAt: timestamptz('bot_notified_at'),
     ...timestamps,
   },
   (table) => [
@@ -75,6 +78,14 @@ export const userBilling = pgTable(
     tokensUsedMonth: integer('tokens_used_month').notNull().default(0),
     monthStart: timestamptz('month_start').notNull().defaultNow(),
     subscriptionExpiresAt: timestamptz('subscription_expires_at'),
+    // Bot integration: chat_id for DM delivery (bigint — TG group IDs can exceed int32)
+    tgBotChatId: bigint('tg_bot_chat_id', { mode: 'number' }),
+    botNotifyPending: boolean('bot_notify_pending').notNull().default(false),
+    botNotifyType: text('bot_notify_type'),
+    zeroCreditsNotifiedAt: timestamptz('zero_credits_notified_at'),
+    expiryWarningSentAt: timestamptz('expiry_warning_sent_at'),
+    upgradeHintSentAt: timestamptz('upgrade_hint_sent_at'),
+    lowCreditsHintSentAt: timestamptz('low_credits_hint_sent_at'),
     ...timestamps,
   },
   (table) => [index('user_billing_user_id_idx').on(table.userId)],
