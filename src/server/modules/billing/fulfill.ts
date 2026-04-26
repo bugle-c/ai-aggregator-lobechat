@@ -1,5 +1,6 @@
 import { type LobeChatDatabase } from '@/database/type';
 import { writeSubscriptionEvent } from '@/server/modules/analytics/writeSubscriptionEvent';
+import { rewardReferralsOnFirstPayment } from '@/server/modules/referrals/rewardOnFirstPayment';
 import { BillingService } from '@/server/services/billing';
 
 export async function fulfillPayment(
@@ -45,6 +46,16 @@ export async function fulfillPayment(
     console.info(
       `[billing] Topup fulfilled: user=${payment.userId} credits=${payment.tokensAmount}`,
     );
+  }
+
+  // Referral rewards: triggered ONLY on the user's first successful payment.
+  // The check (count succeeded == 1) lives inside rewardReferralsOnFirstPayment
+  // so subsequent payments are no-ops. Wrapped in try/catch — referral rewards
+  // are nice-to-have, must not break payment fulfillment if they fail.
+  try {
+    await rewardReferralsOnFirstPayment(db, payment.userId);
+  } catch (error) {
+    console.error('[billing] referral reward hook error:', error);
   }
 }
 
