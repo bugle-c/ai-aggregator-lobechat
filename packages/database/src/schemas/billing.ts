@@ -1,5 +1,6 @@
 import {
   bigint,
+  bigserial,
   boolean,
   index,
   integer,
@@ -134,3 +135,23 @@ export const promoRedemptions = pgTable(
 
 export type PromoRedemptionItem = typeof promoRedemptions.$inferSelect;
 export type NewPromoRedemption = typeof promoRedemptions.$inferInsert;
+
+// ============ Message Feedback ============ //
+
+export const messageFeedback = pgTable(
+  'message_feedback',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    messageId: text('message_id').notNull(),
+    rating: text('rating').notNull(), // 'up' | 'down' (CHECK constraint enforced at DB)
+    source: text('source').notNull().default('web'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (table) => [index('message_feedback_user_msg_idx').on(table.userId, table.messageId)],
+);
+
+export type MessageFeedbackItem = typeof messageFeedback.$inferSelect;
+export type NewMessageFeedback = typeof messageFeedback.$inferInsert;
