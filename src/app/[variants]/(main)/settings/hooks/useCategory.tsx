@@ -64,6 +64,7 @@ const LIGHT_ALLOWLIST = new Set<SettingsTabs>([
   SettingsTabs.Common,
   SettingsTabs.ChatAppearance,
   SettingsTabs.Plans,
+  SettingsTabs.Referral,
   SettingsTabs.Hotkey,
   SettingsTabs.About,
 ]);
