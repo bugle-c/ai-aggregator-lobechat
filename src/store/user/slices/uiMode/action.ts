@@ -34,32 +34,49 @@ export class UIModeActionImpl {
   };
 
   setUiMode = async (mode: UiMode): Promise<{ modelWasReset?: boolean }> => {
-    const prev = this.#get().uiMode;
-    this.#set({ uiMode: mode }, false, 'setUiMode/optimistic');
-    let modelWasReset = false;
+    const state = this.#get();
+    const prev = state.uiMode;
 
+    // 1. No-op when already in target mode (guard against repeated clicks)
+    if (prev === mode) return {};
+
+    // 2. Reject concurrent mutations — wait for in-flight request to finish
+    if (state.uiModeLoading) return {};
+
+    this.#set({ uiMode: mode, uiModeLoading: true }, false, 'setUiMode/optimistic');
+
+    // 3. Persist the mode first — this is the critical operation
     try {
-      // When switching to Light, check if current agent model is from a non-lobehub provider
-      if (mode === 'light') {
+      await lambdaClient.userOnboarding.setUiMode.mutate({ mode });
+    } catch (e) {
+      // Mode persistence failed → full rollback (and release the lock)
+      this.#set({ uiMode: prev, uiModeLoading: false }, false, 'setUiMode/rollback');
+      throw e;
+    }
+
+    // 4. Best-effort model reset on Pro→Light. MUST NOT fail the mode switch.
+    let modelWasReset = false;
+    if (mode === 'light') {
+      try {
         const agentStoreState = useAgentStore.getState();
         const currentProvider = agentSelectors.currentAgentModelProvider(agentStoreState);
         const activeAgentId = agentSelectors.activeAgentId(agentStoreState);
 
         if (currentProvider && currentProvider !== 'lobehub' && activeAgentId) {
-          // Reset to a default lobehub model (gpt-5-mini)
           await agentStoreState.updateAgentConfigById(activeAgentId, {
             chatConfig: { model: 'gpt-5-mini', provider: 'lobehub' },
           });
           modelWasReset = true;
         }
+      } catch (e) {
+        // Non-fatal: server-side mode is already saved. Log + continue.
+        console.warn('[uiMode] best-effort model reset failed on Light switch:', e);
       }
-
-      await lambdaClient.userOnboarding.setUiMode.mutate({ mode });
-      return { modelWasReset };
-    } catch (e) {
-      this.#set({ uiMode: prev }, false, 'setUiMode/rollback');
-      throw e;
     }
+
+    // 5. Always release the lock at the end
+    this.#set({ uiModeLoading: false }, false, 'setUiMode/done');
+    return { modelWasReset };
   };
 }
 
