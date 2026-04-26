@@ -93,3 +93,44 @@ export const userBilling = pgTable(
 
 export type UserBillingItem = typeof userBilling.$inferSelect;
 export type NewUserBilling = typeof userBilling.$inferInsert;
+
+// ============ Promo Codes ============ //
+
+export const promoCodes = pgTable('promo_codes', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  type: text('type').notNull(), // 'plan_upgrade' | 'token_bonus' (CHECK constraint at DB)
+  planId: integer('plan_id').references(() => billingPlans.id),
+  tokenAmount: integer('token_amount'),
+  durationDays: integer('duration_days'),
+  maxUses: integer('max_uses').notNull().default(1),
+  usedCount: integer('used_count').notNull().default(0),
+  expiresAt: timestamptz('expires_at'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdBy: text('created_by'),
+  createdAt: timestamptz('created_at').notNull().defaultNow(),
+});
+
+export type PromoCodeItem = typeof promoCodes.$inferSelect;
+export type NewPromoCode = typeof promoCodes.$inferInsert;
+
+export const promoRedemptions = pgTable(
+  'promo_redemptions',
+  {
+    id: serial('id').primaryKey(),
+    promoId: integer('promo_id')
+      .notNull()
+      .references(() => promoCodes.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    redeemedAt: timestamptz('redeemed_at').notNull().defaultNow(),
+  },
+  (table) => [
+    // UNIQUE (promo_id, user_id) — enforced at DB; mirrors the migration
+    index('promo_redemptions_promo_user_idx').on(table.promoId, table.userId),
+  ],
+);
+
+export type PromoRedemptionItem = typeof promoRedemptions.$inferSelect;
+export type NewPromoRedemption = typeof promoRedemptions.$inferInsert;
