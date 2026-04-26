@@ -27,6 +27,7 @@ export const subscriptionRouter = router({
 
       const payment = await ctx.billingService.createPayment({
         amountRub: plan.priceRub,
+        metadata: ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : null,
         planId: plan.id,
         type: 'subscription',
       });
@@ -39,7 +40,11 @@ export const subscriptionRouter = router({
         amountRub: plan.priceRub,
         customerEmail: user?.email || undefined,
         description: `Подписка ${plan.name} — WebGPT`,
-        metadata: { payment_id: payment.id, type: 'subscription' },
+        metadata: {
+          payment_id: payment.id,
+          type: 'subscription',
+          ...(ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : {}),
+        },
         returnUrl,
       });
 

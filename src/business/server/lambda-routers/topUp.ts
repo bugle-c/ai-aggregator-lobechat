@@ -23,6 +23,7 @@ export const topUpRouter = router({
 
       const payment = await ctx.billingService.createPayment({
         amountRub: pkg.amountRub,
+        metadata: ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : null,
         tokensAmount: pkg.credits,
         type: 'topup',
       });
@@ -35,7 +36,11 @@ export const topUpRouter = router({
         amountRub: pkg.amountRub,
         customerEmail: user?.email || undefined,
         description: `Пополнение ${pkg.label} — WebGPT`,
-        metadata: { payment_id: payment.id, type: 'topup' },
+        metadata: {
+          payment_id: payment.id,
+          type: 'topup',
+          ...(ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : {}),
+        },
         returnUrl,
       });
 
