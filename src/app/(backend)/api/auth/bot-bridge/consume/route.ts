@@ -60,14 +60,15 @@ const isSafeReturnPath = (p: unknown): p is string =>
 
 export async function GET(req: NextRequest) {
   const authSecret = authEnv.AUTH_SECRET;
-  if (!authSecret) return errorRedirect('server_misconfigured');
+  const jwtSecret = process.env.BOT_BRIDGE_JWT_SECRET;
+  if (!authSecret || !jwtSecret) return errorRedirect('server_misconfigured');
 
   const token = req.nextUrl.searchParams.get('t');
   if (!token) return errorRedirect('missing_token');
 
   let payload: { returnPath?: string; sub?: string; tgUserId?: number };
   try {
-    const verified = await jwtVerify(token, new TextEncoder().encode(authSecret), {
+    const verified = await jwtVerify(token, new TextEncoder().encode(jwtSecret), {
       audience: 'bot-bridge',
     });
     payload = verified.payload as typeof payload;

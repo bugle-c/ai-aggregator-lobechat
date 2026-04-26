@@ -54,7 +54,7 @@ const lookupUserByTgId = async (tgUserId: number) => {
   return row ?? null;
 };
 
-const handleDeeplink = async (body: IssueBody, secret: string): Promise<NextResponse> => {
+const handleDeeplink = async (body: IssueBody, jwtSecret: string): Promise<NextResponse> => {
   const { tgUserId, scope, returnPath, ttlSec } = body;
   if (typeof tgUserId !== 'number' || !scope || !returnPath) {
     return json({ error: 'missing_fields' }, 400);
@@ -69,13 +69,13 @@ const handleDeeplink = async (body: IssueBody, secret: string): Promise<NextResp
     .setExpirationTime(`${ttl}s`)
     .setSubject(user.id)
     .setAudience('bot-bridge')
-    .sign(new TextEncoder().encode(secret));
+    .sign(new TextEncoder().encode(jwtSecret));
 
   const url = `${appEnv.APP_URL}/api/auth/bot-bridge/consume?t=${encodeURIComponent(token)}`;
   return json({ token, url }, 200);
 };
 
-const handleSessionToken = async (body: IssueBody, secret: string): Promise<NextResponse> => {
+const handleSessionToken = async (body: IssueBody, authSecret: string): Promise<NextResponse> => {
   const { tgUserId } = body;
   if (typeof tgUserId !== 'number') {
     return json({ error: 'missing_fields' }, 400);
@@ -87,7 +87,7 @@ const handleSessionToken = async (body: IssueBody, secret: string): Promise<Next
   const session = await ctx.internalAdapter.createSession(user.id, false);
   if (!session?.token) return json({ error: 'session_create_failed' }, 500);
 
-  const sessionToken = await signForBetterAuth(session.token, secret);
+  const sessionToken = await signForBetterAuth(session.token, authSecret);
   const expiresAt =
     session.expiresAt instanceof Date
       ? session.expiresAt.toISOString()
@@ -98,9 +98,10 @@ const handleSessionToken = async (body: IssueBody, secret: string): Promise<Next
 
 export async function POST(req: NextRequest) {
   const bridgeSecret = process.env.BOT_BRIDGE_SECRET;
+  const jwtSecret = process.env.BOT_BRIDGE_JWT_SECRET;
   const authSecret = authEnv.AUTH_SECRET;
 
-  if (!bridgeSecret || !authSecret) {
+  if (!bridgeSecret || !jwtSecret || !authSecret) {
     return json({ error: 'server_misconfigured' }, 500);
   }
 
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest) {
     return json({ error: 'invalid_json' }, 400);
   }
 
-  if (body.mode === 'deeplink') return handleDeeplink(body, authSecret);
+  if (body.mode === 'deeplink') return handleDeeplink(body, jwtSecret);
   if (body.mode === 'session_token') return handleSessionToken(body, authSecret);
   return json({ error: 'invalid_mode' }, 400);
 }
