@@ -83,9 +83,56 @@ fi
 
 log "Target category for today: $TARGET_CAT ($TARGET_CAT_NAME)"
 
-# Step 1: Get next keyword — prefer one hinted for this category, else fall back to /next.
+# Step 0.5: For 'news' category, try hype news from agent-news-007 first.
+# Falls through to keyword pipeline if no suitable event or service unavailable.
 KEYWORD=""
 KEYWORD_ID=""
+NEWS_EVENT_ID=""
+NEWS_TITLE=""
+NEWS_SUMMARY=""
+NEWS_ANGLE=""
+NEWS_PRIMARY_URL=""
+NEWS_SOURCES=""
+
+if [[ "$TARGET_CAT" == "news" ]] && [[ -n "${AGENT_NEWS_API_KEY:-}" ]] && [[ -n "${AGENT_NEWS_URL:-}" ]]; then
+    log "Querying agent-news-007 for hype news (category=news)..."
+    AN_RESP=$(curl -sf --max-time 20 -X POST "${AGENT_NEWS_URL}/api/v1/get-news-for-project" \
+        -H "x-api-key: ${AGENT_NEWS_API_KEY}" \
+        -H "content-type: application/json" \
+        -d '{"project_id":"gptweb","limit":5,"min_score":70,"min_hype":0,"exclude_delivered":true}' 2>/dev/null) || AN_RESP=""
+
+    if [[ -n "$AN_RESP" ]]; then
+        eval "$(echo "$AN_RESP" | python3 -c "
+import json, sys, shlex
+try:
+    d = json.load(sys.stdin)
+    if d.get('status') == 'ok' and d.get('news'):
+        n = d['news'][0]
+        sources = n.get('all_sources', []) or []
+        sources_str = ' | '.join(f\"{s.get('name','?')}: {s.get('url','')}\" for s in sources[:5])
+        print(f'NEWS_EVENT_ID={shlex.quote(n.get(\"event_id\",\"\"))}')
+        print(f'NEWS_TITLE={shlex.quote(n.get(\"title\",\"\"))}')
+        print(f'NEWS_SUMMARY={shlex.quote(n.get(\"summary\") or \"\")}')
+        print(f'NEWS_ANGLE={shlex.quote(n.get(\"suggested_angle\") or \"\")}')
+        print(f'NEWS_PRIMARY_URL={shlex.quote(n.get(\"primary_url\") or \"\")}')
+        print(f'NEWS_SOURCES={shlex.quote(sources_str)}')
+except Exception:
+    pass
+" 2>/dev/null)"
+    fi
+
+    if [[ -n "$NEWS_EVENT_ID" ]]; then
+        AN_DETAIL=$(echo "$AN_RESP" | python3 -c "import json,sys; d=json.load(sys.stdin)['news'][0]; print(f\"rel={d['relevance_score']}, hype={d['hype_score']:.0f}\")" 2>/dev/null || true)
+        log "Hype news selected: '${NEWS_TITLE:0:90}' (event=${NEWS_EVENT_ID:0:8}, ${AN_DETAIL})"
+        KEYWORD="$NEWS_TITLE"
+    else
+        log "No suitable hype news for category 'news' — falling back to keyword pipeline"
+    fi
+fi
+
+# Step 1: Get next keyword — prefer one hinted for this category, else fall back to /next.
+# (Skipped when news-driven path produced a topic above.)
+if [[ -z "$NEWS_EVENT_ID" ]]; then
 KW_CAT_MATCH=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_keywords?select=id,keyword&status=eq.pending&category_slug=eq.${TARGET_CAT}&order=priority.asc,impressions.desc&limit=1" "${SUPA_HDRS[@]}" 2>/dev/null)
 if [[ -n "$KW_CAT_MATCH" && "$KW_CAT_MATCH" != "[]" ]]; then
     KEYWORD=$(echo "$KW_CAT_MATCH" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['keyword'] if d else '')")
@@ -105,17 +152,22 @@ else
     KEYWORD_ID=$(echo "$KEYWORD_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
     log "Keyword (fallback): '$KEYWORD' (id=$KEYWORD_ID)"
 fi
+fi  # close: if [[ -z "$NEWS_EVENT_ID" ]]
 
 if [[ -z "${KEYWORD:-}" ]]; then
-    log "ERROR: Failed to obtain keyword"
+    log "ERROR: Failed to obtain keyword or news topic"
     notify_failure "generate-article" "Failed to obtain keyword for category $TARGET_CAT" "$LOG_FILE"
     exit 1
 fi
 
-# Step 1.75: Build or reuse cluster for this keyword (Wordstat + LLM relevance filter)
-CLUSTER_ID=$("${SCRIPT_DIR}/cluster-builder.sh" "$KEYWORD" "$TARGET_CAT" 2>>"$LOG_FILE" || echo "")
-if [[ -z "$CLUSTER_ID" ]]; then
-    log "WARN: cluster-builder failed for keyword '$KEYWORD', falling back to single-keyword mode"
+# Step 1.75: Build or reuse cluster for this keyword (Wordstat + LLM relevance filter).
+# Skipped when news-driven — news titles are not Wordstat-friendly long-tails.
+CLUSTER_ID=""
+if [[ -z "$NEWS_EVENT_ID" ]]; then
+    CLUSTER_ID=$("${SCRIPT_DIR}/cluster-builder.sh" "$KEYWORD" "$TARGET_CAT" 2>>"$LOG_FILE" || echo "")
+    if [[ -z "$CLUSTER_ID" ]]; then
+        log "WARN: cluster-builder failed for keyword '$KEYWORD', falling back to single-keyword mode"
+    fi
 fi
 
 RELATED_LIST=""
@@ -165,11 +217,19 @@ for line in sys.stdin:
 " 2>/dev/null)
     if [[ -n "$DUP_CHECK" ]]; then
         log "SKIP: keyword '$KEYWORD' too similar to existing article in $TARGET_CAT: $DUP_CHECK"
-        curl -sf -X PATCH "${SUPABASE_URL}/rest/v1/blog_keywords?id=eq.${KEYWORD_ID}" \
-            "${SUPA_HDRS[@]}" \
-            -H "Content-Profile: ai_aggregator" \
-            -H "Content-Type: application/json" \
-            -d "{\"status\":\"duplicate\",\"updated_at\":\"$(date -u +%FT%TZ)\"}" >/dev/null 2>&1 || true
+        if [[ -n "$KEYWORD_ID" ]]; then
+            curl -sf -X PATCH "${SUPABASE_URL}/rest/v1/blog_keywords?id=eq.${KEYWORD_ID}" \
+                "${SUPA_HDRS[@]}" \
+                -H "Content-Profile: ai_aggregator" \
+                -H "Content-Type: application/json" \
+                -d "{\"status\":\"duplicate\",\"updated_at\":\"$(date -u +%FT%TZ)\"}" >/dev/null 2>&1 || true
+        elif [[ -n "$NEWS_EVENT_ID" ]]; then
+            # mark hype event as consumed so it won't be re-suggested
+            curl -sf --max-time 10 -X POST "${AGENT_NEWS_URL}/api/v1/mark-consumed" \
+                -H "x-api-key: ${AGENT_NEWS_API_KEY}" \
+                -H "content-type: application/json" \
+                -d "{\"project_id\":\"gptweb\",\"event_ids\":[\"${NEWS_EVENT_ID}\"]}" >/dev/null 2>&1 || true
+        fi
         log "=== Article generation skipped (duplicate) ==="
         exit 0
     fi
@@ -178,13 +238,30 @@ fi
 # Step 2: Generate article via Claude Code — category is FORCED to target.
 log "Generating article with Claude Code for category '$TARGET_CAT'..."
 
+# When news-driven, build a context block that anchors the article to the actual event.
+NEWS_PROMPT_BLOCK=""
+if [[ -n "$NEWS_EVENT_ID" ]]; then
+    NEWS_PROMPT_BLOCK="
+
+HYPE NEWS CONTEXT — this article is news-driven from a real, currently-trending event tracked across multiple sources by agent-news-007:
+- Event title (oригинал): ${NEWS_TITLE}
+- Краткое содержание: ${NEWS_SUMMARY:-(нет)}
+- Suggested angle (от агрегатора): ${NEWS_ANGLE}
+- Primary source: ${NEWS_PRIMARY_URL}
+- All tracked sources: ${NEWS_SOURCES}
+
+Treat this as a real, current event. Frame the article around what happened, when, why it matters specifically for WebGPT users, and practical implications they can apply right now. Cite at least 2 of the listed sources directly with descriptive anchor text (NOT 'тут', 'здесь', 'подробнее'). Use the suggested angle as a starting frame but feel free to expand or refocus.
+
+Output language is Russian, but you may keep proper nouns (model names, company names, product names) in their original spelling."
+fi
+
 PROMPT="You are an expert SEO copywriter for WebGPT (ask.gptweb.ru), a Russian-language platform that provides access to AI tools like ChatGPT, Claude, Gemini, and DeepSeek.
 
 CRITICAL BRAND RULES:
 - The brand is ALWAYS spelled \"WebGPT\" (capital W, lowercase eb, capital GPT). Never \"WeGPT\", \"Web GPT\", \"Wegpt\", \"WEBGPT\", or any other variation.
 - If the keyword contains a misspelling of the brand (e.g. \"wegpt ru\", \"web gpt\", \"вебгпт\") — treat it as a misspelled search for WebGPT. Write the article in Russian using the correct brand \"WebGPT\" throughout. DO NOT invent a separate product called \"WeGPT\".
 - Canonical domains: ask.gptweb.ru (app), gptweb.ru (marketing).
-
+${NEWS_PROMPT_BLOCK}
 Write a comprehensive SEO article in Russian for the keyword: \"${KEYWORD}\"
 
 PRIMARY KEYWORD: \"${KEYWORD}\"
@@ -303,7 +380,7 @@ TMPFILE=$(mktemp /tmp/blog-article-XXXXXX.json)
 echo "$ARTICLE_JSON" | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
-data['keyword_id'] = '${KEYWORD_ID}'
+data['keyword_id'] = '${KEYWORD_ID}' or None
 data['cluster_id'] = int('${CLUSTER_ID}') if '${CLUSTER_ID}' else None
 data['auto_publish'] = False
 print(json.dumps(data, ensure_ascii=False))
@@ -378,6 +455,15 @@ case "$GATE_EXIT" in
             exit 1
         fi
         log "Post ${POST_ID} published. URL: https://gptweb.ru/blog/${TARGET_CAT}/${POST_SLUG}"
+        # Notify agent-news-007 that the hype event has been consumed (best-effort)
+        if [[ -n "$NEWS_EVENT_ID" ]]; then
+            curl -sf --max-time 10 -X POST "${AGENT_NEWS_URL}/api/v1/mark-consumed" \
+                -H "x-api-key: ${AGENT_NEWS_API_KEY}" \
+                -H "content-type: application/json" \
+                -d "{\"project_id\":\"gptweb\",\"event_ids\":[\"${NEWS_EVENT_ID}\"],\"used_for_article_url\":\"https://gptweb.ru/blog/${TARGET_CAT}/${POST_SLUG}\"}" >/dev/null 2>&1 \
+                && log "agent-news-007: marked event ${NEWS_EVENT_ID:0:8} as consumed" \
+                || log "WARN: agent-news-007 mark_consumed failed (non-blocking)"
+        fi
         ;;
     1)
         log "Pre-publish gate FAILED — post ${POST_ID} left as draft for human review"
