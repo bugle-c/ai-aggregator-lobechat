@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 
 import { usageLogs } from '@/database/schemas/analytics';
+import { userBilling } from '@/database/schemas/billing';
 import { type LobeChatDatabase } from '@/database/type';
 import { BillingService } from '@/server/services/billing';
 
@@ -158,6 +159,53 @@ export async function checkUsageLimit(
   }
 }
 
+/**
+ * After a successful deduction, check if the user has run out of credits and
+ * flag them for a zero_credits bot notification (at most once per UTC day).
+ * Runs outside the billing transaction — a failure here must NOT affect billing.
+ */
+async function maybeFlagZeroCredits(db: LobeChatDatabase, userId: string): Promise<void> {
+  try {
+    const rows = await db
+      .select({
+        planId: userBilling.planId,
+        tokenBalance: userBilling.tokenBalance,
+        tokensUsedMonth: userBilling.tokensUsedMonth,
+        tgBotChatId: userBilling.tgBotChatId,
+        zeroCreditsNotifiedAt: userBilling.zeroCreditsNotifiedAt,
+      })
+      .from(userBilling)
+      .where(eq(userBilling.userId, userId))
+      .limit(1);
+
+    const row = rows[0];
+    if (!row || !row.tgBotChatId) return; // no bot registered — nothing to do
+
+    const billingService = new BillingService(db, userId);
+    const plan = await billingService.getPlanById(row.planId);
+    const totalAvailable = (plan?.tokenLimit ?? 0) + row.tokenBalance;
+
+    if (row.tokensUsedMonth < totalAvailable) return; // still has credits
+
+    // Gate: one notification per UTC day maximum
+    const todayUtc = new Date();
+    todayUtc.setUTCHours(0, 0, 0, 0);
+    if (row.zeroCreditsNotifiedAt && row.zeroCreditsNotifiedAt >= todayUtc) return;
+
+    await db
+      .update(userBilling)
+      .set({
+        zeroCreditsNotifiedAt: new Date(),
+        botNotifyPending: true,
+        botNotifyType: 'zero_credits',
+      })
+      .where(eq(userBilling.userId, userId));
+  } catch (err) {
+    // Non-fatal: notification missed is better than crashing a chat request
+    console.error(`[billing] maybeFlagZeroCredits error for user=${userId}:`, err);
+  }
+}
+
 export interface RecordTokenUsageExtras {
   cacheReadTokens?: number;
   cacheWrite1hTokens?: number;
@@ -223,6 +271,10 @@ export async function recordTokenUsage(
     console.info(
       `[billing] charged ${credits} credits: user=${userId} model=${modelId || 'unknown'} in=${tokensUsed} out=${outputTokens || 0} cw5m=${opts?.cacheWrite5mTokens ?? 0} cw1h=${opts?.cacheWrite1hTokens ?? 0} cr=${opts?.cacheReadTokens ?? 0}`,
     );
+
+    // Post-transaction: flag user for zero_credits bot notification if applicable.
+    // Fire-and-forget — must not block the response or interfere with billing tx.
+    void maybeFlagZeroCredits(db, userId);
   } catch (error) {
     // Transaction rolled back → user NOT billed, no log row written. This is
     // correct behaviour (the alternative is phantom credits), but we need a

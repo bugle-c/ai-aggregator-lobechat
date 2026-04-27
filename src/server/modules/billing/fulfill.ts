@@ -1,3 +1,6 @@
+import { eq } from 'drizzle-orm';
+
+import { billingPayments } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
 import { writeSubscriptionEvent } from '@/server/modules/analytics/writeSubscriptionEvent';
 import { sendSubscriptionConfirmation } from '@/server/modules/lifecycle/sendConfirmation';
@@ -39,6 +42,12 @@ export async function fulfillPayment(
       currentExpiresAt: currentBilling.subscriptionExpiresAt ?? null,
       paymentId: payment.id,
     });
+
+    // Flag for bot notification sweep (cron notify-bot-pending will deliver)
+    await db
+      .update(billingPayments)
+      .set({ botNotifyPending: true })
+      .where(eq(billingPayments.id, payment.id));
 
     console.info(`[billing] Subscription activated: user=${payment.userId} plan=${payment.planId}`);
 

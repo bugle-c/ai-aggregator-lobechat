@@ -1,4 +1,6 @@
 import {
+  bigint,
+  bigserial,
   boolean,
   index,
   integer,
@@ -45,6 +47,8 @@ export const billingPayments = pgTable(
     planId: integer('plan_id').references(() => billingPlans.id),
     tokensAmount: integer('tokens_amount'),
     metadata: jsonb('metadata').default({}),
+    botNotifyPending: boolean('bot_notify_pending').notNull().default(false),
+    botNotifiedAt: timestamptz('bot_notified_at'),
     ...timestamps,
   },
   (table) => [
@@ -75,10 +79,14 @@ export const userBilling = pgTable(
     tokensUsedMonth: integer('tokens_used_month').notNull().default(0),
     monthStart: timestamptz('month_start').notNull().defaultNow(),
     subscriptionExpiresAt: timestamptz('subscription_expires_at'),
-    // Phase 2.3 — set when "subscription expires soon" reminder email is
-    // sent. Reset to NULL on plan change / renewal so reminder re-fires
-    // next cycle.
-    expiryReminderSentAt: timestamptz('expiry_reminder_sent_at'),
+    // Bot integration: chat_id for DM delivery (bigint — TG group IDs can exceed int32)
+    tgBotChatId: bigint('tg_bot_chat_id', { mode: 'number' }),
+    botNotifyPending: boolean('bot_notify_pending').notNull().default(false),
+    botNotifyType: text('bot_notify_type'),
+    zeroCreditsNotifiedAt: timestamptz('zero_credits_notified_at'),
+    expiryWarningSentAt: timestamptz('expiry_warning_sent_at'),
+    upgradeHintSentAt: timestamptz('upgrade_hint_sent_at'),
+    lowCreditsHintSentAt: timestamptz('low_credits_hint_sent_at'),
     ...timestamps,
   },
   (table) => [index('user_billing_user_id_idx').on(table.userId)],
@@ -86,3 +94,64 @@ export const userBilling = pgTable(
 
 export type UserBillingItem = typeof userBilling.$inferSelect;
 export type NewUserBilling = typeof userBilling.$inferInsert;
+
+// ============ Promo Codes ============ //
+
+export const promoCodes = pgTable('promo_codes', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  type: text('type').notNull(), // 'plan_upgrade' | 'token_bonus' (CHECK constraint at DB)
+  planId: integer('plan_id').references(() => billingPlans.id),
+  tokenAmount: integer('token_amount'),
+  durationDays: integer('duration_days'),
+  maxUses: integer('max_uses').notNull().default(1),
+  usedCount: integer('used_count').notNull().default(0),
+  expiresAt: timestamptz('expires_at'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdBy: text('created_by'),
+  createdAt: timestamptz('created_at').notNull().defaultNow(),
+});
+
+export type PromoCodeItem = typeof promoCodes.$inferSelect;
+export type NewPromoCode = typeof promoCodes.$inferInsert;
+
+export const promoRedemptions = pgTable(
+  'promo_redemptions',
+  {
+    id: serial('id').primaryKey(),
+    promoId: integer('promo_id')
+      .notNull()
+      .references(() => promoCodes.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    redeemedAt: timestamptz('redeemed_at').notNull().defaultNow(),
+  },
+  (table) => [
+    // UNIQUE (promo_id, user_id) — enforced at DB; mirrors the migration
+    index('promo_redemptions_promo_user_idx').on(table.promoId, table.userId),
+  ],
+);
+
+export type PromoRedemptionItem = typeof promoRedemptions.$inferSelect;
+export type NewPromoRedemption = typeof promoRedemptions.$inferInsert;
+
+// ============ Message Feedback ============ //
+
+export const messageFeedback = pgTable(
+  'message_feedback',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    messageId: text('message_id').notNull(),
+    rating: text('rating').notNull(), // 'up' | 'down' (CHECK constraint enforced at DB)
+    source: text('source').notNull().default('web'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (table) => [index('message_feedback_user_msg_idx').on(table.userId, table.messageId)],
+);
+
+export type MessageFeedbackItem = typeof messageFeedback.$inferSelect;
+export type NewMessageFeedback = typeof messageFeedback.$inferInsert;
