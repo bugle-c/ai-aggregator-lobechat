@@ -72,17 +72,35 @@ if [[ -n "$ALREADY" && "$ALREADY" != "[]" ]]; then
     exit 0
 fi
 
-# Step 1: Pull freshest hype news from agent-news-007
-log "Querying agent-news-007 for hype news..."
-AN_RESP=$(curl -sf --max-time 30 -X POST "${AGENT_NEWS_URL}/api/v1/get-news-for-project" \
-    -H "x-api-key: ${AGENT_NEWS_API_KEY}" \
-    -H "content-type: application/json" \
-    -d '{"project_id":"gptweb","limit":5,"min_score":70,"min_hype":0,"exclude_delivered":true}' 2>/dev/null) || AN_RESP=""
+# Step 1: Pull freshest hype news from agent-news-007.
+# We try a high-relevance pass first (>=70), then fall back to >=60 if the
+# strict pass yields nothing. Long timeout because the service may need to
+# classify previously-unseen events on demand (LLM call per event).
+fetch_news() {
+    local min_score="$1"
+    curl -sf --max-time 90 -X POST "${AGENT_NEWS_URL}/api/v1/get-news-for-project" \
+        -H "x-api-key: ${AGENT_NEWS_API_KEY}" \
+        -H "content-type: application/json" \
+        -d "{\"project_id\":\"gptweb\",\"limit\":5,\"min_score\":${min_score},\"min_hype\":0,\"exclude_delivered\":true}" 2>/dev/null
+}
+
+log "Querying agent-news-007 (min_score=70 — strict pass)..."
+AN_RESP=$(fetch_news 70) || AN_RESP=""
 
 if [[ -z "$AN_RESP" ]]; then
-    log "ERROR: agent-news-007 unreachable or returned empty"
+    log "ERROR: agent-news-007 unreachable (network/timeout on first pass)"
     notify_failure "generate-hype-article" "agent-news-007 unreachable" "$LOG_FILE"
     exit 1
+fi
+
+# If strict pass returned ok but empty news, try relaxed pass (60)
+EMPTY_OK=$(echo "$AN_RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print('1' if d.get('status')=='ok' and not d.get('news') else '')" 2>/dev/null)
+if [[ -n "$EMPTY_OK" ]]; then
+    log "Strict pass returned no news — retrying with min_score=60..."
+    AN_RESP_FALLBACK=$(fetch_news 60) || AN_RESP_FALLBACK=""
+    if [[ -n "$AN_RESP_FALLBACK" ]]; then
+        AN_RESP="$AN_RESP_FALLBACK"
+    fi
 fi
 
 NEWS_EVENT_ID=""
