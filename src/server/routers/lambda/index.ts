@@ -7,6 +7,7 @@ import { promoRouter } from '@/business/server/lambda-routers/promo';
 import { referralRouter } from '@/business/server/lambda-routers/referral';
 import { spendRouter } from '@/business/server/lambda-routers/spend';
 import { subscriptionRouter } from '@/business/server/lambda-routers/subscription';
+import { topicBotRouter } from '@/business/server/lambda-routers/topicBot';
 import { topUpRouter } from '@/business/server/lambda-routers/topUp';
 import { userOnboardingRouter } from '@/business/server/lambda-routers/userOnboarding';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
@@ -103,6 +104,7 @@ export const lambdaRouter = router({
   feedback: feedbackRouter,
   promo: promoRouter,
   referral: referralRouter,
+  topicBot: topicBotRouter,
   spend: spendRouter,
   subscription: subscriptionRouter,
   topUp: topUpRouter,
