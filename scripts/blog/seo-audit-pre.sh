@@ -86,23 +86,47 @@ d=json.load(open('${ABS_JSON}'))
 print(d.get('summary', {}).get('score', d.get('overall_score', 0)))
 " 2>/dev/null || echo "0")
 
+# Some FAILs are expected artifacts of auditing a preview URL rather than the
+# real public URL — e.g. yandex-canonical-consistency fails because canonical
+# points to /blog/<cat>/<slug> while we're fetching /blog/preview/<id>. The
+# google twin fails for the same reason. We whitelist these so they don't
+# block publication; they will resolve themselves once the post is live at
+# its canonical URL.
+PREVIEW_EXEMPT_IDS="yandex-canonical-consistency,google-canonical-alignment,page-canonical-matches-final-url"
+
 FAIL_COUNT=$(python3 -c "
 import json
 d=json.load(open('${ABS_JSON}'))
-fails=[f for f in d.get('findings', []) if f.get('status')=='FAIL']
+exempt = set('${PREVIEW_EXEMPT_IDS}'.split(','))
+fails=[f for f in d.get('findings', [])
+       if f.get('status')=='FAIL' and f.get('id') not in exempt]
 print(len(fails))
 " 2>/dev/null || echo "0")
 
 FAIL_TITLES=$(python3 -c "
 import json
 d=json.load(open('${ABS_JSON}'))
-fails=[f.get('title','?') for f in d.get('findings',[]) if f.get('status')=='FAIL']
+exempt = set('${PREVIEW_EXEMPT_IDS}'.split(','))
+fails=[f.get('title','?') for f in d.get('findings',[])
+       if f.get('status')=='FAIL' and f.get('id') not in exempt]
 print('; '.join(fails[:5]))
 " 2>/dev/null || echo "")
 
-log "Score: $SCORE/100  |  FAIL findings: $FAIL_COUNT"
+EXEMPT_FAIL_TITLES=$(python3 -c "
+import json
+d=json.load(open('${ABS_JSON}'))
+exempt = set('${PREVIEW_EXEMPT_IDS}'.split(','))
+fails=[f.get('title','?') for f in d.get('findings',[])
+       if f.get('status')=='FAIL' and f.get('id') in exempt]
+print('; '.join(fails[:3]))
+" 2>/dev/null || echo "")
+
+log "Score: $SCORE/100  |  blocking FAILs: $FAIL_COUNT"
 if [[ -n "$FAIL_TITLES" ]]; then
-    log "FAILs: $FAIL_TITLES"
+    log "Blocking FAILs: $FAIL_TITLES"
+fi
+if [[ -n "$EXEMPT_FAIL_TITLES" ]]; then
+    log "Exempt (preview-artifact) FAILs ignored: $EXEMPT_FAIL_TITLES"
 fi
 
 if (( SCORE >= THRESHOLD )) && (( FAIL_COUNT <= MAX_FAILS )); then
