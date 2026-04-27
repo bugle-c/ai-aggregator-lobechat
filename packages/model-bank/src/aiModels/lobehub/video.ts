@@ -4,6 +4,15 @@ import {
   type VideoModelParamsSchema,
 } from '../../standard-parameters/video';
 import { type AIVideoModelCard } from '../../types/aiModel';
+import { wavespeedVideoModels } from '../wavespeed';
+
+/**
+ * Pull `enabled` upstream wavespeed video entries (Sora 2, Sora 2 Pro, Veo
+ * 3.1 Fast/Pro, Kling 2.6/3.0 Pro, Seedance 2.0 Fast, Hailuo, Wan 2.7,
+ * Runway Gen-4 Turbo, Aleph) so the WebGPT (lobehub) provider exposes the
+ * same set the admin rate catalogue prices.
+ */
+const wavespeedVideoEntries: AIVideoModelCard[] = wavespeedVideoModels.filter((m) => m.enabled);
 
 export const seedance15ProParams: VideoModelParamsSchema = {
   aspectRatio: {
@@ -49,4 +58,5 @@ export const lobehubVideoModels: AIVideoModelCard[] = [
     releasedAt: '2025-12-15',
     type: 'video',
   },
+  ...wavespeedVideoEntries,
 ];

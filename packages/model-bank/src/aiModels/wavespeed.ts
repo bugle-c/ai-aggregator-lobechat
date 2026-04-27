@@ -6,7 +6,7 @@ import type { AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
 // Model slugs match WaveSpeed API paths: POST /api/v3/{id}
 // Docs: https://wavespeed.ai/docs
 
-const wavespeedImageModels: AIImageModelCard[] = [
+export const wavespeedImageModels: AIImageModelCard[] = [
   {
     description: 'Google Gemini 3 Pro Image — state-of-the-art with native reasoning, 4K output.',
     displayName: 'Nano Banana Pro',
@@ -179,7 +179,7 @@ const wavespeedImageModels: AIImageModelCard[] = [
   },
 ];
 
-const wavespeedVideoModels: AIVideoModelCard[] = [
+export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
     description: 'OpenAI Sora 2 — 720p cinematic text-to-video with native audio.',
     displayName: 'Sora 2',

@@ -122,11 +122,54 @@ export async function fetchAllRates(): Promise<RateView[]> {
   return getRates();
 }
 
+/**
+ * Resolve the model rate, tolerating several ID conventions:
+ *
+ * 1. Exact match (`gpt-5-mini` → row with that exact id).
+ * 2. Catalog uses bare ids (`gpt-5-mini`); admin uses prefixed ids
+ *    (`openai/gpt-5-mini`). When input is bare, scan cache for any row whose
+ *    id ends with `/<input>`.
+ * 3. Reverse case — input prefixed but cache has bare. Strip first segment.
+ * 4. Light dash↔dot normalisation (`claude-sonnet-4-5-20250929` →
+ *    `claude-sonnet-4.5`) so versioned catalog ids match dot-style admin ids.
+ * 5. Final fallback: `__default__` row.
+ *
+ * Without this, the by-provider lock indicator over-locks free users:
+ * every chat model whose id doesn't match admin's prefixed convention
+ * resolves to `__default__` ($75/1M output → premium) and is gated.
+ */
 export async function fetchRate(modelId: string): Promise<RateView | undefined> {
   await getRates();
   const byId = cache?.byId;
   if (!byId) return undefined;
-  return byId.get(modelId) ?? byId.get('__default__');
+
+  const exact = byId.get(modelId);
+  if (exact) return exact;
+
+  if (!modelId.includes('/')) {
+    for (const [key, rate] of byId) {
+      if (key.endsWith('/' + modelId)) return rate;
+    }
+  } else {
+    const stripped = modelId.split('/').slice(1).join('/');
+    const dropPrefix = byId.get(stripped);
+    if (dropPrefix) return dropPrefix;
+  }
+
+  // dash/dot normalisation — strip trailing date and rewrite version dashes
+  const stripDateSuffix = modelId.replace(/-\d{8}$/, '');
+  const dotted = stripDateSuffix.replace(/-(\d+)-(\d+)(?=$|-)/g, '-$1.$2');
+  if (dotted !== modelId) {
+    const dot = byId.get(dotted);
+    if (dot) return dot;
+    if (!dotted.includes('/')) {
+      for (const [key, rate] of byId) {
+        if (key.endsWith('/' + dotted)) return rate;
+      }
+    }
+  }
+
+  return byId.get('__default__');
 }
 
 /** Test / admin utility to force cache reload. */

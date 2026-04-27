@@ -1,11 +1,21 @@
 import type { AIImageModelCard } from '../../types/aiModel';
 import { huanyuanImageParamsSchema, qwenEditParamsSchema, qwenImageParamsSchema } from '../fal';
+import { wavespeedImageModels } from '../wavespeed';
 import {
   gptImage1Schema,
   imagenBaseParameters,
   nanoBananaParameters,
   nanoBananaProParameters,
 } from './utils';
+
+/**
+ * Models pulled in from upstream `wavespeed.ts` so the WebGPT (lobehub)
+ * provider exposes everything that has an active rate in admin
+ * `model_rates` (sora, veo, kling, flux, recraft, …). Only image models with
+ * `enabled: true` upstream are forwarded; the lobehub-curated entries below
+ * keep precedence for ids that already exist (deduped by id at the end).
+ */
+const wavespeedImageEntries: AIImageModelCard[] = wavespeedImageModels.filter((m) => m.enabled);
 
 export const lobehubImageModels: AIImageModelCard[] = [
   {
@@ -268,4 +278,9 @@ export const lobehubImageModels: AIImageModelCard[] = [
     releasedAt: '2025-08-04',
     type: 'image',
   },
+  // Wavespeed-routed models (Sora's image cousin, Veo image-gen analogue,
+  // Flux, Recraft, Ideogram, Z-Image, GPT Image 2). Listed last so any
+  // duplicate id falls back to the curated entry above via the dedupe step
+  // in `getImageModelList`.
+  ...wavespeedImageEntries,
 ];
