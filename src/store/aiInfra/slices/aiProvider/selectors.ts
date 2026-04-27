@@ -40,7 +40,20 @@ const enabledVideoModelListByMode = (uiMode: 'light' | 'pro') => (s: AIProviderS
 
 const enabledChatModelListByMode = (uiMode: 'light' | 'pro') => (s: AIProviderStoreState) => {
   const all = enabledChatModelList(s);
-  return uiMode === 'light' ? all.filter((p) => p.id === LOBEHUB_PROVIDER_ID) : all;
+  if (uiMode !== 'light') return all;
+
+  // Light mode: only the lobehub provider AND drop image-output-only models
+  // (Nano Banana Pro, Nano Banana, Gemini 2.0 Image-Gen). These are
+  // technically `type: 'chat'` upstream because they support multimodal
+  // chat-with-image-output, but in our split UX they belong on /image, not
+  // in the chat selector. Pro mode keeps them so power users can still pick
+  // them inside chat workflows.
+  return all
+    .filter((p) => p.id === LOBEHUB_PROVIDER_ID)
+    .map((provider) => ({
+      ...provider,
+      children: provider.children.filter((m) => !m.abilities?.imageOutput),
+    }));
 };
 
 const isProviderEnabled = (id: string) => (s: AIProviderStoreState) =>

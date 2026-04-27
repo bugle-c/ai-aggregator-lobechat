@@ -101,6 +101,82 @@ const RecommendedModelRow = memo<RecommendedModelRowProps>(
 
 RecommendedModelRow.displayName = 'RecommendedModelRow';
 
+/**
+ * `provider-model-item` row used in byProvider mode. Wraps `ModelItemRender`
+ * in `LockedModelTooltip` so the lock indicator + upsell modal work in this
+ * mode the same way they do for byModel rows. Without this wrapper, free
+ * users see premium models with no lock affordance.
+ */
+interface ProviderModelRowProps {
+  activeKey: string;
+  detailOpen: boolean;
+  extraControls?: (modelId: string, providerId: string) => ReactNode;
+  item: Extract<ListItem, { type: 'provider-model-item' }>;
+  newLabel: string;
+  onClose: () => void;
+  onModelChange: (modelId: string, providerId: string) => Promise<void>;
+  setDetailOpen: (open: boolean) => void;
+}
+
+const ProviderModelRow = memo<ProviderModelRowProps>(
+  ({
+    activeKey,
+    detailOpen,
+    extraControls,
+    item,
+    newLabel,
+    setDetailOpen,
+    onClose,
+    onModelChange,
+  }) => {
+    const key = menuKey(item.provider.id, item.model.id);
+    const isActive = key === activeKey;
+    const { data: lockState } = useModelLockState(item.model.id);
+    const isLocked = lockState?.isLocked ?? false;
+
+    return (
+      <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
+        <DropdownMenuSubmenuTrigger
+          className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
+          style={{ paddingBlock: 8, paddingInline: 8 }}
+          onClick={async () => {
+            if (isLocked) return;
+            setDetailOpen(false);
+            await onModelChange(item.model.id, item.provider.id);
+            onClose();
+          }}
+        >
+          <LockedModelTooltip
+            isLocked={isLocked}
+            modelName={item.model.displayName ?? item.model.id}
+            planPriceRub={lockState?.requiredPlan?.priceRub ?? 0}
+            requiredPlan={lockState?.requiredPlan?.name ?? 'Pro'}
+          >
+            <ModelItemRender
+              {...item.model}
+              {...item.model.abilities}
+              showInfoTag
+              newBadgeLabel={newLabel}
+            />
+          </LockedModelTooltip>
+        </DropdownMenuSubmenuTrigger>
+        <DropdownMenuPortal>
+          <DropdownMenuPositioner anchor={null} placement="right" sideOffset={8}>
+            <DropdownMenuPopup className={styles.detailPopup}>
+              <ModelDetailPanel
+                extraControls={extraControls?.(item.model.id, item.provider.id)}
+                model={item.model}
+              />
+            </DropdownMenuPopup>
+          </DropdownMenuPositioner>
+        </DropdownMenuPortal>
+      </DropdownMenuSubmenuRoot>
+    );
+  },
+);
+
+ProviderModelRow.displayName = 'ProviderModelRow';
+
 interface ListItemRendererProps {
   activeKey: string;
   extraControls?: (modelId: string, providerId: string) => ReactNode;
@@ -205,39 +281,18 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
       }
 
       case 'provider-model-item': {
-        const key = menuKey(item.provider.id, item.model.id);
-        const isActive = key === activeKey;
-
         return (
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
-            <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
-              <DropdownMenuSubmenuTrigger
-                className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
-                style={{ paddingBlock: 8, paddingInline: 8 }}
-                onClick={async () => {
-                  setDetailOpen(false);
-                  onModelChange(item.model.id, item.provider.id);
-                  onClose();
-                }}
-              >
-                <ModelItemRender
-                  {...item.model}
-                  {...item.model.abilities}
-                  showInfoTag
-                  newBadgeLabel={newLabel}
-                />
-              </DropdownMenuSubmenuTrigger>
-              <DropdownMenuPortal>
-                <DropdownMenuPositioner anchor={null} placement="right" sideOffset={8}>
-                  <DropdownMenuPopup className={styles.detailPopup}>
-                    <ModelDetailPanel
-                      extraControls={extraControls?.(item.model.id, item.provider.id)}
-                      model={item.model}
-                    />
-                  </DropdownMenuPopup>
-                </DropdownMenuPositioner>
-              </DropdownMenuPortal>
-            </DropdownMenuSubmenuRoot>
+            <ProviderModelRow
+              activeKey={activeKey}
+              detailOpen={detailOpen}
+              extraControls={extraControls}
+              item={item}
+              newLabel={newLabel}
+              setDetailOpen={setDetailOpen}
+              onClose={onClose}
+              onModelChange={onModelChange}
+            />
           </Flexbox>
         );
       }
