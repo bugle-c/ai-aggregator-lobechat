@@ -70,21 +70,36 @@ JSON_OUT=$(node "${AUDIT_DIR}/scripts/run-audit.js" \
     --engines google,yandex \
     --output "$OUT_DIR/" 2>&1) || true
 
-# run-audit.js prints "JSON: <path>" line — extract that file
+# run-audit.js prints "JSON: <path>" line — extract that file (path may be
+# absolute or relative depending on how --output was passed).
 JSON_PATH=$(echo "$JSON_OUT" | grep -oE 'JSON:\s+\S+' | awk '{print $2}' | tail -1)
-if [[ -z "$JSON_PATH" || ! -f "$AUDIT_DIR/$JSON_PATH" ]]; then
+if [[ -z "$JSON_PATH" ]]; then
     log "WARN: audit produced no JSON output. Raw:"
     log "$JSON_OUT"
     exit 0
 fi
 
-ABS_JSON="${AUDIT_DIR}/${JSON_PATH}"
-SCORE=$(python3 -c "import json,sys;d=json.load(open('${ABS_JSON}'));print(d.get('overall_score', d.get('score', 0)))" 2>/dev/null || echo "0")
-FAIL_COUNT=$(python3 -c "
-import json,sys
+if [[ "$JSON_PATH" = /* ]]; then
+    ABS_JSON="$JSON_PATH"
+else
+    ABS_JSON="${AUDIT_DIR}/${JSON_PATH}"
+fi
+
+if [[ ! -f "$ABS_JSON" ]]; then
+    log "WARN: JSON output not found at $ABS_JSON. Raw:"
+    log "$JSON_OUT"
+    exit 0
+fi
+SCORE=$(python3 -c "
+import json
 d=json.load(open('${ABS_JSON}'))
-findings=d.get('findings', [])
-fails=[f for f in findings if f.get('status')=='FAIL']
+print(d.get('summary', {}).get('score', d.get('overall_score', 0)))
+" 2>/dev/null || echo "0")
+
+FAIL_COUNT=$(python3 -c "
+import json
+d=json.load(open('${ABS_JSON}'))
+fails=[f for f in d.get('findings', []) if f.get('status')=='FAIL']
 print(len(fails))
 " 2>/dev/null || echo "0")
 
