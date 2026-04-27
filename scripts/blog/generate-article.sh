@@ -214,6 +214,18 @@ Requirements:
 - Write engaging, practical content with real examples and actionable advice
 - Avoid generic filler text — every paragraph should have value
 
+SEO/GEO STRUCTURE REQUIREMENTS (mandatory, audited automatically after publish):
+1. ANSWER-FIRST INTRO: The very first <p> after no heading must be a 80-150 word definitional answer block. It MUST start with the topic followed by 'это', 'представляет собой', 'означает', 'помогает', 'позволяет' or 'это сервис/инструмент/способ'. Example: 'X — это <определение>. Он помогает <задача>. В этом материале мы разбираем <план>.'
+2. QUESTION-LED H2 HEADINGS: At least 4 of the H2 headings must be question-style. Use Russian patterns like: 'Что такое X?', 'Как X работает?', 'Почему X важно?', 'Сколько стоит X?', 'Кому подойдёт X?', 'Когда использовать X?'. Avoid declarative-only H2.
+3. FAQ SECTION AT THE END: The final H2 must be 'Часто задаваемые вопросы' with 3-5 H3 subheadings, each phrased as a real user question, followed by a 2-4 sentence answer. This will be auto-wrapped into FAQPage JSON-LD by the publishing pipeline.
+4. SOURCES: Include 3-5 outbound links to authoritative sources (official documentation, research, OpenAI/Anthropic blog, RBC, Habr, Ведомости). Use anchor text that describes the destination — never 'тут', 'здесь', 'подробнее', 'далее', 'читать'.
+5. INTERNAL LINKS: Include 2-3 internal links to other relevant blog posts using descriptive anchors (slugs unknown to you — use placeholder pattern '/blog/<category>/<slug>' that an editor will fix; describe in anchor what the linked article is about).
+6. DEFINITION LIST WHERE APPLICABLE: When comparing 3+ items or listing terminology, prefer <dl><dt>термин</dt><dd>пояснение</dd></dl> over <ul>. AI answer engines extract <dl> blocks well.
+7. REGIONAL SIGNAL: Mention that the service/topic works in Russia/СНГ at least once in the first 500 words — this is a Yandex regional signal.
+8. AUTHORITY SIGNAL: Include at least one quoted statistic with a source attribution like 'по данным <источник>'.
+9. PARAGRAPH BALANCE: Avoid paragraphs longer than 100 words. Mix prose with lists every 2-3 paragraphs.
+10. META DESCRIPTION: Must include the primary keyword AND a clear value proposition. Word-overlap with title should be <60% (avoid duplicating title).
+
 CRITICAL: Return ONLY a valid JSON object. No markdown code blocks, no extra text before or after.
 {
   \"title\": \"SEO-optimized headline in Russian\",
@@ -322,5 +334,17 @@ fi
 
 POST_ID=$(echo "$RESPONSE_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id','?'))" 2>/dev/null) || true
 POST_STATUS=$(echo "$RESPONSE_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('status','?'))" 2>/dev/null) || true
+POST_SLUG=$(echo "$RESPONSE_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('slug',''))" 2>/dev/null) || true
 log "Article saved. Post ID: ${POST_ID:-unknown}  status=${POST_STATUS:-unknown}  category=${TARGET_CAT}"
+
+# Fire-and-forget post-publish SEO audit. Runs in background so the cron slot
+# completes promptly; the audit script handles its own logging + alerts.
+if [[ "$POST_STATUS" = "published" && -n "$POST_SLUG" ]]; then
+    POST_URL="https://gptweb.ru/blog/${TARGET_CAT}/${POST_SLUG}"
+    log "Scheduling post-publish SEO audit for $POST_URL (background)"
+    nohup "${SCRIPT_DIR}/seo-audit-post.sh" "$POST_URL" "$POST_ID" \
+        >> "/home/deploy/.claude/logs/blog-seo-audit.log" 2>&1 &
+    disown
+fi
+
 log "=== Article generation complete ==="
