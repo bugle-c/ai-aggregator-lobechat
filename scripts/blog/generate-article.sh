@@ -295,8 +295,9 @@ fi
 
 log "Article generated successfully"
 
-# Step 3: Send to API for processing (images + DB insert + auto-publish)
-log "Saving article via API (auto_publish=true)..."
+# Step 3: Send to API as DRAFT first. We pre-publish-audit the rendered
+# preview URL, and only flip to published when it passes the SEO gate.
+log "Saving article via API as draft (auto_publish=false)..."
 
 TMPFILE=$(mktemp /tmp/blog-article-XXXXXX.json)
 echo "$ARTICLE_JSON" | python3 -c "
@@ -304,7 +305,7 @@ import json, sys
 data = json.load(sys.stdin)
 data['keyword_id'] = '${KEYWORD_ID}'
 data['cluster_id'] = int('${CLUSTER_ID}') if '${CLUSTER_ID}' else None
-data['auto_publish'] = True
+data['auto_publish'] = False
 print(json.dumps(data, ensure_ascii=False))
 " > "$TMPFILE" 2>/dev/null
 
@@ -335,16 +336,61 @@ fi
 POST_ID=$(echo "$RESPONSE_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id','?'))" 2>/dev/null) || true
 POST_STATUS=$(echo "$RESPONSE_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('status','?'))" 2>/dev/null) || true
 POST_SLUG=$(echo "$RESPONSE_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('slug',''))" 2>/dev/null) || true
-log "Article saved. Post ID: ${POST_ID:-unknown}  status=${POST_STATUS:-unknown}  category=${TARGET_CAT}"
+log "Draft saved. Post ID: ${POST_ID:-unknown}  status=${POST_STATUS:-unknown}  slug=${POST_SLUG}  category=${TARGET_CAT}"
 
-# Fire-and-forget post-publish SEO audit. Runs in background so the cron slot
-# completes promptly; the audit script handles its own logging + alerts.
-if [[ "$POST_STATUS" = "published" && -n "$POST_SLUG" ]]; then
-    POST_URL="https://gptweb.ru/blog/${TARGET_CAT}/${POST_SLUG}"
-    log "Scheduling post-publish SEO audit for $POST_URL (background)"
-    nohup "${SCRIPT_DIR}/seo-audit-post.sh" "$POST_URL" "$POST_ID" \
-        >> "/home/deploy/.claude/logs/blog-seo-audit.log" 2>&1 &
-    disown
+# Step 4: Pre-publish SEO audit gate. Only promote draft → published if the
+# auditor passes (score >= threshold AND zero FAIL findings). Otherwise the
+# row stays as draft and an admin can review/fix manually.
+if [[ -z "$POST_ID" || "$POST_ID" = "?" ]]; then
+    log "ERROR: Post ID missing from API response — aborting before audit"
+    notify_failure "generate-article" "Post ID missing from blog-generate response" "$LOG_FILE"
+    exit 1
 fi
+
+if [[ -z "${BLOG_PREVIEW_TOKEN:-}" ]]; then
+    log "WARN: BLOG_PREVIEW_TOKEN not set — skipping pre-publish gate, leaving as draft"
+    notify_failure "generate-article" "BLOG_PREVIEW_TOKEN missing; post ${POST_ID} left as draft" "$LOG_FILE"
+    exit 1
+fi
+
+PREVIEW_URL="https://gptweb.ru/blog/preview/${POST_ID}?token=${BLOG_PREVIEW_TOKEN}"
+log "Running pre-publish SEO audit on $PREVIEW_URL"
+
+set +e
+"${SCRIPT_DIR}/seo-audit-pre.sh" "$PREVIEW_URL" "$POST_ID"
+GATE_EXIT=$?
+set -e
+
+case "$GATE_EXIT" in
+    0)
+        log "Pre-publish gate PASSED — promoting draft to published"
+        PUB_RESPONSE=$(curl -s -X POST "${API_URL}/api/cron/blog-publish" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json" \
+            -w "\n%{http_code}" \
+            -d "{\"post_id\":\"${POST_ID}\"}" 2>>"$LOG_FILE") || true
+        PUB_HTTP=$(echo "$PUB_RESPONSE" | tail -1)
+        PUB_BODY=$(echo "$PUB_RESPONSE" | sed '$d')
+        if [[ "$PUB_HTTP" != "200" && "$PUB_HTTP" != "201" ]]; then
+            log "ERROR: blog-publish returned HTTP $PUB_HTTP — post ${POST_ID} stays as draft"
+            log "Response: ${PUB_BODY:0:300}"
+            notify_failure "generate-article" "blog-publish HTTP $PUB_HTTP for post ${POST_ID}. Body: ${PUB_BODY:0:200}" "$LOG_FILE"
+            exit 1
+        fi
+        log "Post ${POST_ID} published. URL: https://gptweb.ru/blog/${TARGET_CAT}/${POST_SLUG}"
+        ;;
+    1)
+        log "Pre-publish gate FAILED — post ${POST_ID} left as draft for human review"
+        notify_failure "generate-article" \
+            "Post ${POST_ID} (${POST_SLUG}) failed pre-publish SEO audit. Title: ${ARTICLE_TITLE:-unknown}. Review at https://ask.gptweb.ru/admin/blog/${POST_ID}" \
+            "$LOG_FILE"
+        ;;
+    *)
+        log "Pre-publish auditor errored (exit ${GATE_EXIT}) — post ${POST_ID} left as draft"
+        notify_failure "generate-article" \
+            "Pre-publish auditor errored for post ${POST_ID} (exit ${GATE_EXIT}). Manually review." \
+            "$LOG_FILE"
+        ;;
+esac
 
 log "=== Article generation complete ==="
