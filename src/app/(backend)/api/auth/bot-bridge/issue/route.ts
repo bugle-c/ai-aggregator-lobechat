@@ -1,9 +1,9 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { SignJWT } from 'jose';
 import { type NextRequest, NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
-import { users } from '@/database/schemas/betterAuth';
+import { account, users } from '@/database/schemas/betterAuth';
 import { serverDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
@@ -45,13 +45,25 @@ const signForBetterAuth = async (value: string, secret: string): Promise<string>
 };
 
 const lookupUserByTgId = async (tgUserId: number) => {
+  // Primary path: Telegram-linked Better Auth account (provider_id='telegram',
+  // account_id=<tgUserId>). Covers users who linked TG via OAuth/Login Widget
+  // regardless of their primary email/Google/etc. account.
+  const [byAccount] = await serverDB
+    .select({ id: account.userId })
+    .from(account)
+    .where(and(eq(account.providerId, 'telegram'), eq(account.accountId, String(tgUserId))))
+    .limit(1);
+  if (byAccount) return { id: byAccount.id };
+
+  // Fallback: synthetic-email users created via /api/auth/telegram/confirm
+  // (older bot-only signup path).
   const email = `tg_${tgUserId}@${TG_EMAIL_DOMAIN}`;
-  const [row] = await serverDB
+  const [byEmail] = await serverDB
     .select({ id: users.id })
     .from(users)
     .where(eq(users.email, email))
     .limit(1);
-  return row ?? null;
+  return byEmail ?? null;
 };
 
 const handleDeeplink = async (body: IssueBody, jwtSecret: string): Promise<NextResponse> => {
