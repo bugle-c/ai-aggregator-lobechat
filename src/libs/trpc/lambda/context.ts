@@ -41,6 +41,8 @@ export interface AuthContext {
   marketAccessToken?: string;
   // Add OIDC authentication information
   oidcAuth?: OIDCAuth | null;
+  // Phase 2.2 pricing A/B variant captured from `_pricing_variant` cookie
+  pricingVariant?: 'A' | 'B' | null;
   resHeaders?: Headers;
   traceContext?: OtContext;
   userAgent?: string;
@@ -56,6 +58,7 @@ export const createContextInner = async (params?: {
   clientIp?: string | null;
   marketAccessToken?: string;
   oidcAuth?: OIDCAuth | null;
+  pricingVariant?: 'A' | 'B' | null;
   traceContext?: OtContext;
   userAgent?: string;
   userId?: string | null;
@@ -68,6 +71,7 @@ export const createContextInner = async (params?: {
     clientIp: params?.clientIp,
     marketAccessToken: params?.marketAccessToken,
     oidcAuth: params?.oidcAuth,
+    pricingVariant: params?.pricingVariant ?? null,
     resHeaders: responseHeaders,
     traceContext: params?.traceContext,
     userAgent: params?.userAgent,
@@ -105,6 +109,12 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   const cookieHeader = request.headers.get('cookie');
   const cookies = cookieHeader ? parse(cookieHeader) : {};
   const marketAccessToken = cookies['mp_token'];
+  // Phase 2.2 pricing A/B: capture _pricing_variant cookie set by
+  // webgpt-landing middleware on first landing visit. Persisted into
+  // billing_payments.metadata.pricing_variant for conversion attribution.
+  const pricingVariantRaw = cookies['_pricing_variant'];
+  const pricingVariant: 'A' | 'B' | null =
+    pricingVariantRaw === 'A' || pricingVariantRaw === 'B' ? pricingVariantRaw : null;
   // Extract upstream trace context for parent linking
   const traceContext = extractTraceContext(request.headers);
 
@@ -113,6 +123,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
     authorizationHeader: authorization,
     clientIp,
     marketAccessToken,
+    pricingVariant,
     userAgent,
   };
   log('WebGPT Authorization header: %s', authorization ? 'exists' : 'not found');

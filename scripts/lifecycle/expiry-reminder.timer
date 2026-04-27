@@ -1,0 +1,13 @@
+[Unit]
+Description=Daily WebGPT subscription expiry reminder at 10:00 MSK
+Documentation=file:/home/deploy/projects/ai-aggregator-lobechat/scripts/lifecycle/README.md
+
+[Timer]
+# 07:00 UTC = 10:00 MSK (UTC+3, no DST in Russia).
+OnCalendar=*-*-* 07:00:00 UTC
+RandomizedDelaySec=600
+Persistent=true
+Unit=expiry-reminder.service
+
+[Install]
+WantedBy=timers.target

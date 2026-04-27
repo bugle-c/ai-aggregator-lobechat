@@ -1,0 +1,28 @@
+[Unit]
+Description=WebGPT subscription expiry reminder (Phase 2.3)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+# Optional shared env file with DATABASE_URL, BREVO_API_KEY, APP_URL.
+# Create as root:
+#   sudo tee /etc/webgpt-lifecycle.env <<'EOF'
+#   DATABASE_URL=postgres://...
+#   BREVO_API_KEY=xkeysib-...
+#   APP_URL=https://ask.gptweb.ru
+#   EOF
+#   sudo chmod 600 /etc/webgpt-lifecycle.env
+EnvironmentFile=-/etc/webgpt-lifecycle.env
+WorkingDirectory=/home/deploy/projects/ai-aggregator-lobechat
+ExecStart=/home/deploy/projects/ai-aggregator-lobechat/scripts/lifecycle/expiry-reminder.sh
+StandardOutput=journal
+StandardError=journal
+# 10 minute hard cap — script should normally finish in <60s.
+TimeoutStartSec=600
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

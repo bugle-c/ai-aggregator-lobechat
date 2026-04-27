@@ -205,9 +205,8 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
 
             // Write UTM attribution (non-blocking on error)
             try {
-              const { writeAttribution } = await import(
-                '@/server/modules/analytics/writeAttribution'
-              );
+              const { writeAttribution } =
+                await import('@/server/modules/analytics/writeAttribution');
               const req = ctx?.request;
               const cookieHeader = req?.headers.get('cookie') || '';
               const parseJSON = (raw: string | undefined) => {
@@ -230,6 +229,29 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
               });
             } catch (error) {
               console.error('[analytics] attribution hook error:', error);
+            }
+
+            // Process referral signup (non-blocking on error). Reads `_ref`
+            // cookie set by landing middleware, runs anti-abuse checks,
+            // creates referrals rows + +20 welcome bonus + a fresh
+            // referral_code for the new user. NEVER throws — referral
+            // hiccups must not break signup.
+            try {
+              const { processReferralSignup } = await import('@/server/modules/referrals/onSignup');
+              const req = ctx?.request;
+              const cookieHeader = req?.headers.get('cookie') ?? null;
+              const ip =
+                req?.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+                req?.headers.get('x-real-ip') ||
+                null;
+              await processReferralSignup(serverDB, {
+                newUserId: user.id,
+                newUserEmail: user.email,
+                cookieHeader,
+                ip,
+              });
+            } catch (error) {
+              console.error('[referrals] signup hook error:', error);
             }
           },
         },

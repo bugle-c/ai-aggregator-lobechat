@@ -3,6 +3,8 @@ import { eq } from 'drizzle-orm';
 import { billingPayments } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
 import { writeSubscriptionEvent } from '@/server/modules/analytics/writeSubscriptionEvent';
+import { sendSubscriptionConfirmation } from '@/server/modules/lifecycle/sendConfirmation';
+import { rewardReferralsOnFirstPayment } from '@/server/modules/referrals/rewardOnFirstPayment';
 import { BillingService } from '@/server/services/billing';
 
 export async function fulfillPayment(
@@ -48,12 +50,35 @@ export async function fulfillPayment(
       .where(eq(billingPayments.id, payment.id));
 
     console.info(`[billing] Subscription activated: user=${payment.userId} plan=${payment.planId}`);
+
+    // Phase 2.3 — fire-and-forget confirmation email. Wrapped: email never
+    // breaks fulfill.
+    try {
+      await sendSubscriptionConfirmation(db, {
+        userId: payment.userId,
+        planName: toPlan?.name ?? 'WebGPT',
+        expiresAt,
+        creditAmount: toPlan?.tokenLimit ?? 0,
+      });
+    } catch (error) {
+      console.error('[billing] subscription confirmation email error:', error);
+    }
   } else if (payment.type === 'topup' && payment.tokensAmount) {
     await billingService.getOrCreateUserBilling();
     await billingService.addTokenBalance(payment.tokensAmount);
     console.info(
       `[billing] Topup fulfilled: user=${payment.userId} credits=${payment.tokensAmount}`,
     );
+  }
+
+  // Referral rewards: triggered ONLY on the user's first successful payment.
+  // The check (count succeeded == 1) lives inside rewardReferralsOnFirstPayment
+  // so subsequent payments are no-ops. Wrapped in try/catch — referral rewards
+  // are nice-to-have, must not break payment fulfillment if they fail.
+  try {
+    await rewardReferralsOnFirstPayment(db, payment.userId);
+  } catch (error) {
+    console.error('[billing] referral reward hook error:', error);
   }
 }
 

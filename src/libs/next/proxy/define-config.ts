@@ -32,6 +32,32 @@ export function defineConfig() {
       return NextResponse.next();
     }
 
+    // Referral capture: ?ref=<8-char-code> → cookie `_ref` for 30 days, then
+    // 302 to clean URL. Read at signup time by `processReferralSignup`. Bad
+    // codes are stripped silently (no DB call here — middleware runs per
+    // request and validation against `users.referral_code` happens at
+    // signup). Phase 2.1 referral program.
+    const refRaw = url.searchParams.get('ref');
+    if (refRaw) {
+      const REF_CODE_RE = /^[a-z0-9]{8}$/;
+      const ref = refRaw.toLowerCase();
+      const cleanUrl = url.clone ? url.clone() : new URL(request.url);
+      cleanUrl.searchParams.delete('ref');
+      const response = NextResponse.redirect(cleanUrl);
+      if (REF_CODE_RE.test(ref)) {
+        response.cookies.set({
+          httpOnly: false,
+          maxAge: 60 * 60 * 24 * 30,
+          name: '_ref',
+          path: '/',
+          sameSite: 'lax',
+          secure: process.env.NODE_ENV === 'production',
+          value: ref,
+        });
+      }
+      return response;
+    }
+
     // locale has three levels
     // 1. search params
     // 2. cookie

@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Tag } from '@lobehub/ui';
-import { CreditCard, HomeIcon, SearchIcon, ShieldCheckIcon } from 'lucide-react';
+import { CreditCard, Gift, HomeIcon, SearchIcon, ShieldCheckIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -97,6 +97,15 @@ const Nav = memo(() => {
         key: 'plans',
         title: tSub('sidebar.plans'),
         url: '/settings/plans',
+      },
+      {
+        // Visible in BOTH Light and Pro modes when business features are on,
+        // sitting between Тарифы (above) and Настройки (BottomMenu below).
+        hidden: !enableBusinessFeatures,
+        icon: Gift,
+        key: 'referral',
+        title: tSub('sidebar.referral'),
+        url: '/settings/referral',
       },
       {
         hidden: !isAdmin || isLight,
