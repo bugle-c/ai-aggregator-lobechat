@@ -108,6 +108,13 @@ export const promoCodes = pgTable('promo_codes', {
   usedCount: integer('used_count').notNull().default(0),
   expiresAt: timestamptz('expires_at'),
   isActive: boolean('is_active').notNull().default(true),
+  /**
+   * If true, this promo is the one rendered on the public blog CTA. A
+   * partial unique index in the DB enforces at most one row with this
+   * flag (`promo_codes_use_in_blog_unique_idx WHERE use_in_blog`), so
+   * the landing never has to pick between competing rows.
+   */
+  useInBlog: boolean('use_in_blog').notNull().default(false),
   createdBy: text('created_by'),
   createdAt: timestamptz('created_at').notNull().defaultNow(),
 });

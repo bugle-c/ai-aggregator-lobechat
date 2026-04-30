@@ -665,6 +665,13 @@
       "when": 1778500000000,
       "tag": "0094_lifecycle_hooks",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1778586400000,
+      "tag": "0095_promo_use_in_blog",
+      "breakpoints": true
     }
   ],
   "version": "6"
