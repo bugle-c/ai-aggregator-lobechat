@@ -224,6 +224,11 @@ export function defineConfig() {
     '/api/agent(.*)',
     '/api/dev(.*)',
     '/api/cron(.*)',
+    // Public read-only endpoints consumed by the marketing landing
+    // (gptweb.ru). Examples: /api/public/blog-promo. Add any new
+    // unauthenticated GETs under /api/public/* — they bypass the
+    // sign-in gate. Do NOT put anything that mutates state here.
+    '/api/public(.*)',
     '/webapi(.*)',
     '/trpc(.*)',
     // version

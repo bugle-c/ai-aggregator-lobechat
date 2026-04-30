@@ -68,6 +68,32 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
           <Analytics />
           {inVercel && <SpeedInsights />}
         </Suspense>
+        {/*
+          Yandex Metrika 106801684 — same counter as gptweb.ru landing.
+          Lets attribution flow as a single funnel: a visit that lands on
+          gptweb.ru with utm_source=yandex and walks to ask.gptweb.ru/register
+          shows up as one session in Metrika reports. Initialised with
+          `trackHash` and `trackLinks` so SPA navigation inside the
+          aggregator is logged automatically.
+        */}
+        <Script id="yandex-metrika-aggregator" strategy="afterInteractive">{`
+          (function(m,e,t,r,i,k,a){
+            m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+            m[i].l=1*new Date();
+            for(var j=0;j<document.scripts.length;j++){if(document.scripts[j].src===r){return;}}
+            k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+          })(window,document,'script','https://mc.yandex.ru/metrika/tag.js?id=106801684','ym');
+          ym(106801684,'init',{ssr:true,webvisor:true,clickmap:true,trackHash:true,accurateTrackBounce:true,trackLinks:true});
+        `}</Script>
+        <noscript>
+          <div>
+            <img
+              alt=""
+              src="https://mc.yandex.ru/watch/106801684"
+              style={{ position: 'absolute', left: '-9999px' }}
+            />
+          </div>
+        </noscript>
       </body>
     </html>
   );
