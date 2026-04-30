@@ -237,6 +237,61 @@ export async function POST(req: Request) {
     });
   }
 
+  // --- E) billing-coverage --------------------------------------------------
+  // Catches the class of bug where the chat path is silently bypassing
+  // recordTokenUsage (AgentRuntime/RuntimeExecutors refactor in upstream
+  // LobeChat slipped through 2026-04 — 341 messages, 5 usage_logs rows
+  // before the leak was caught). Compares assistant messages vs usage_logs
+  // rows in the last hour. Anything below `MIN_COVERAGE_RATIO` while there
+  // is non-trivial traffic is alerted as critical.
+  try {
+    const coverageRows = await db.execute(sql`
+      WITH msg AS (
+        SELECT count(*)::int AS n
+        FROM messages
+        WHERE role = 'assistant'
+          AND created_at > now() - interval '1 hour'
+          AND model IS NOT NULL
+      ),
+      usg AS (
+        SELECT count(*)::int AS n
+        FROM usage_logs
+        WHERE created_at > now() - interval '1 hour'
+      )
+      SELECT msg.n AS msgs, usg.n AS logs FROM msg, usg
+    `);
+    const row = (coverageRows as unknown as Array<{ msgs: number; logs: number }>)[0];
+    const msgs = Number(row?.msgs ?? 0);
+    const logs = Number(row?.logs ?? 0);
+    const MIN_TRAFFIC = 5; // don't alert at low volume — too noisy
+    const MIN_COVERAGE_RATIO = 0.5;
+    const ratio = msgs > 0 ? logs / msgs : 1;
+    if (msgs >= MIN_TRAFFIC && ratio < MIN_COVERAGE_RATIO) {
+      checks.push({
+        details: { messages: msgs, ratio, usageLogs: logs },
+        name: 'billing-coverage',
+        severity: 'critical',
+      });
+      await sendAlert({
+        body: `Billing pipeline silently dropping rows.\n\nLast hour:\n  assistant messages: ${msgs}\n  usage_logs rows:    ${logs}\n  coverage ratio:     ${(ratio * 100).toFixed(1)}%\n\nThreshold: <${MIN_COVERAGE_RATIO * 100}% coverage at ≥${MIN_TRAFFIC} msgs/h is a leak — every message charges OpenRouter without debiting the user.`,
+        severity: 'critical',
+        title: '🚨 Billing coverage gap — chat bypassing usage_logs',
+      });
+    } else {
+      checks.push({
+        details: { messages: msgs, ratio, usageLogs: logs },
+        name: 'billing-coverage',
+        severity: 'ok',
+      });
+    }
+  } catch (err) {
+    checks.push({
+      error: err instanceof Error ? err.message : String(err),
+      name: 'billing-coverage',
+      severity: 'error',
+    });
+  }
+
   return Response.json({
     checks,
     scannedAt: new Date().toISOString(),

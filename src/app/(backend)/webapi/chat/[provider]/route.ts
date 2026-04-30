@@ -72,11 +72,34 @@ export const POST = checkAuth(
         traceOptions = createTraceOptions(data, { provider, trace: tracePayload });
       }
 
+      // Capture provider usage via the runtime's onCompletion hook. The
+      // earlier approach cloned response.body and hand-parsed `data:` chunks
+      // as OpenAI-style streaming, but the runtime already transforms the
+      // upstream stream (lobehub→OpenRouter wraps gpt-5 reasoning chunks,
+      // Anthropic uses content_block_delta, etc.), so the cloned body never
+      // carried `usage` in the shape the parser expected. Result:
+      // observedOutputChars=0 → `empty-stream` skip → 6 days of chat
+      // bypassing usage_logs (caught 2026-04 audit). The same callback hook
+      // is what the new AgentRuntime uses in RuntimeExecutors.
+      let capturedUsage: any = undefined;
+      let capturedTextLen = 0;
+
       const response = await modelRuntime.chat(data, {
         user: userId,
         ...traceOptions,
         signal: req.signal,
-      });
+        callback: {
+          onCompletion: async (completionData: any) => {
+            if (completionData?.usage) capturedUsage = completionData.usage;
+            if (typeof completionData?.text === 'string') {
+              capturedTextLen = completionData.text.length;
+            }
+          },
+          onText: async (text: string) => {
+            if (typeof text === 'string') capturedTextLen += text.length;
+          },
+        },
+      } as any);
 
       // Charge credits after streaming completes (fire-and-forget)
       if (response instanceof Response) {
@@ -153,6 +176,43 @@ export const POST = checkAuth(
                   // Not JSON, skip
                 }
               }
+            }
+
+            // Prefer runtime callback usage when present — it's already
+            // normalised across providers. The hand-parsed stream values
+            // remain a fallback for runtimes whose callback path doesn't
+            // surface usage (legacy custom providers).
+            if (capturedUsage) {
+              const u = capturedUsage as Record<string, any>;
+              usageData = {
+                input: Number(u.prompt_tokens ?? u.input_tokens ?? u.inputTextTokens ?? 0) || 0,
+                output:
+                  Number(u.completion_tokens ?? u.output_tokens ?? u.outputTextTokens ?? 0) || 0,
+                cacheWrite5m:
+                  Number(
+                    u.cache_creation?.ephemeral_5m_input_tokens ??
+                      u.cache_creation_input_tokens ??
+                      u.inputCacheMissTokens ??
+                      0,
+                  ) || 0,
+                cacheWrite1h:
+                  Number(u.cache_creation?.ephemeral_1h_input_tokens ?? 0) || 0,
+                cacheRead:
+                  Number(
+                    u.cache_read_input_tokens ??
+                      u.prompt_tokens_details?.cached_tokens ??
+                      u.cached_content_token_count ??
+                      u.inputCachedTokens ??
+                      0,
+                  ) || 0,
+                cost: typeof u.cost === 'number' ? u.cost : undefined,
+              };
+            }
+            // Always trust the runtime's text-length tally over our parser's
+            // chunk inspection — it sees the post-transform text the user
+            // actually got rendered.
+            if (capturedTextLen > observedOutputChars) {
+              observedOutputChars = capturedTextLen;
             }
 
             const { decideChargeAfterStream } =

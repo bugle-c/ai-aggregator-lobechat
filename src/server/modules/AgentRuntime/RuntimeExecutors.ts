@@ -487,6 +487,83 @@ export const createRuntimeExecutors = (
 
         newState.usage = usage;
         if (cost) newState.cost = cost;
+
+        // Charge credits + write usage_logs row.
+        //
+        // Upstream LobeChat moved chat from /webapi/chat/[provider] (where
+        // recordTokenUsage was wired) to this AgentRuntime path. Without
+        // this hook, every chat completes without writing usage_logs and
+        // without debiting user credits — the entire monetisation pipeline
+        // silently broke when the AgentRuntime refactor landed
+        // (2026-04 audit: 341 messages, 5 usage_logs rows, $0.004 charged).
+        //
+        // Fire-and-forget by design: never let billing fail user-visible
+        // chat. Errors are logged but swallowed.
+        if (ctx.userId) {
+          (async () => {
+            try {
+              const u = currentStepUsage as Record<string, any>;
+              const inputTokens =
+                Number(u.prompt_tokens ?? u.input_tokens ?? u.inputTokens ?? 0) || 0;
+              const outputTokens =
+                Number(u.completion_tokens ?? u.output_tokens ?? u.outputTokens ?? 0) || 0;
+              const cacheWrite5m =
+                Number(
+                  u.cache_creation?.ephemeral_5m_input_tokens ??
+                    u.cache_creation_input_tokens ??
+                    u.cacheWrite5mTokens ??
+                    0,
+                ) || 0;
+              const cacheWrite1h =
+                Number(
+                  u.cache_creation?.ephemeral_1h_input_tokens ??
+                    u.cacheWrite1hTokens ??
+                    0,
+                ) || 0;
+              const cacheRead =
+                Number(
+                  u.cache_read_input_tokens ??
+                    u.prompt_tokens_details?.cached_tokens ??
+                    u.cached_content_token_count ??
+                    u.cacheReadTokens ??
+                    0,
+                ) || 0;
+              const providerCostUsd =
+                typeof u.cost === 'number' ? u.cost : undefined;
+
+              if (inputTokens === 0 && outputTokens === 0) {
+                console.info(
+                  `[billing/runtime] skipping charge (no usage): user=${ctx.userId} model=${llmPayload.model}`,
+                );
+                return;
+              }
+
+              const { recordTokenUsage } = await import(
+                '@/server/modules/billing/checkUsageLimit'
+              );
+              await recordTokenUsage(
+                ctx.serverDB,
+                ctx.userId!,
+                inputTokens,
+                llmPayload.model,
+                outputTokens,
+                {
+                  cacheReadTokens: cacheRead,
+                  cacheWrite1hTokens: cacheWrite1h,
+                  cacheWrite5mTokens: cacheWrite5m,
+                  kind: 'chat',
+                  provider: llmPayload.provider,
+                  providerCostUsd,
+                },
+              );
+            } catch (err) {
+              console.error(
+                `[billing/runtime] recordTokenUsage failed for user=${ctx.userId} model=${llmPayload.model}:`,
+                err,
+              );
+            }
+          })();
+        }
       }
 
       return {
