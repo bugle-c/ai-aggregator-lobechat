@@ -12,20 +12,32 @@ interface LobehubRouterRuntimeOptions {
   routers: (options: any, runtimeContext: { model?: string }) => Promise<RouterInstance[]>;
 }
 
-// Map lobehub short model IDs to OpenRouter format (provider/model)
+// Map lobehub short model IDs to OpenRouter slugs (provider/model).
+//
+// The ENTIRE Anthropic block previously used dash-style version numbers
+// (`anthropic/claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, …). OpenRouter
+// rejects those with `is not a valid model ID` 400s. Their canonical slugs
+// use dot-style versions (`anthropic/claude-sonnet-4.6`). The MiniMax slugs
+// were also mis-cased — OpenRouter normalises to lowercase `minimax/minimax-m2.5`.
+// DeepSeek `deepseek-chat`/`deepseek-reasoner` are no longer published on
+// OpenRouter; the latest equivalents are `deepseek/deepseek-v3.2` (chat) and
+// `deepseek/deepseek-v3.2-speciale` (reasoning).
+//
+// Verified against `GET https://openrouter.ai/api/v1/models` on 2026-04-30.
 const OPENROUTER_MODEL_MAP: Record<string, string> = {
-  // Anthropic
-  'claude-sonnet-4-6': 'anthropic/claude-sonnet-4-6',
-  'claude-sonnet-4-5-20250929': 'anthropic/claude-sonnet-4-5-20250929',
-  'claude-sonnet-4-20250514': 'anthropic/claude-sonnet-4-20250514',
+  // Anthropic — dot-style versions; legacy date-suffixed catalogue ids fold
+  // into the closest active OpenRouter release.
+  'claude-sonnet-4-6': 'anthropic/claude-sonnet-4.6',
+  'claude-sonnet-4-5-20250929': 'anthropic/claude-sonnet-4.5',
+  'claude-sonnet-4-20250514': 'anthropic/claude-sonnet-4',
   'claude-3-7-sonnet-20250219': 'anthropic/claude-3.7-sonnet',
-  'claude-opus-4-6': 'anthropic/claude-opus-4-6',
-  'claude-opus-4-5-20251101': 'anthropic/claude-opus-4-5-20251101',
-  'claude-opus-4-1-20250805': 'anthropic/claude-opus-4-1-20250805',
-  'claude-opus-4-20250514': 'anthropic/claude-opus-4-20250514',
-  'claude-haiku-4-5-20251001': 'anthropic/claude-haiku-4-5-20251001',
-  'claude-3-5-haiku-20241022': 'anthropic/claude-3-5-haiku-20241022',
-  // OpenAI
+  'claude-opus-4-6': 'anthropic/claude-opus-4.6',
+  'claude-opus-4-5-20251101': 'anthropic/claude-opus-4.5',
+  'claude-opus-4-1-20250805': 'anthropic/claude-opus-4.1',
+  'claude-opus-4-20250514': 'anthropic/claude-opus-4',
+  'claude-haiku-4-5-20251001': 'anthropic/claude-haiku-4.5',
+  'claude-3-5-haiku-20241022': 'anthropic/claude-3.5-haiku',
+  // OpenAI — already correct
   'gpt-5.2': 'openai/gpt-5.2',
   'gpt-5.1': 'openai/gpt-5.1',
   'gpt-5': 'openai/gpt-5',
@@ -43,26 +55,28 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'o4-mini': 'openai/o4-mini',
   // Google
   'gemini-3.1-pro-preview': 'google/gemini-3.1-pro-preview',
-  'gemini-3-pro-preview': 'google/gemini-3-pro-preview',
+  // OpenRouter only ships `gemini-3.1-pro-preview` — alias the older catalog
+  // id to it so existing chats don't 400 on selector change.
+  'gemini-3-pro-preview': 'google/gemini-3.1-pro-preview',
   'gemini-3-flash-preview': 'google/gemini-3-flash-preview',
   'gemini-3-pro-image-preview': 'google/gemini-3-pro-image-preview',
   'gemini-2.5-pro': 'google/gemini-2.5-pro',
   'gemini-2.5-flash': 'google/gemini-2.5-flash',
-  'gemini-2.5-flash-image-preview': 'google/gemini-2.5-flash-preview-05-20',
+  'gemini-2.5-flash-image-preview': 'google/gemini-2.5-flash-image-preview',
   'gemini-2.0-flash-exp-image-generation': 'google/gemini-2.0-flash-exp:free',
-  // DeepSeek
-  'deepseek-chat': 'deepseek/deepseek-chat',
-  'deepseek-reasoner': 'deepseek/deepseek-reasoner',
+  // DeepSeek — `deepseek-chat`/`deepseek-reasoner` are retired on OpenRouter.
+  'deepseek-chat': 'deepseek/deepseek-v3.2',
+  'deepseek-reasoner': 'deepseek/deepseek-v3.2-speciale',
   // xAI
   'grok-4': 'x-ai/grok-4',
   // Moonshot
   'kimi-k2.5': 'moonshotai/kimi-k2.5',
   'kimi-k2-0711-preview': 'moonshotai/kimi-k2-0711-preview',
-  // MiniMax
-  'MiniMax-M2.5': 'minimax/MiniMax-M2.5',
-  'MiniMax-M2.5-highspeed': 'minimax/MiniMax-M2.5-highspeed',
-  'MiniMax-M2.1': 'minimax/MiniMax-M2.1',
-  'MiniMax-M2.1-highspeed': 'minimax/MiniMax-M2.1-highspeed',
+  // MiniMax — lowercase, dot-style
+  'MiniMax-M2.5': 'minimax/minimax-m2.5',
+  'MiniMax-M2.5-highspeed': 'minimax/minimax-m2.5-highspeed',
+  'MiniMax-M2.1': 'minimax/minimax-m2.1',
+  'MiniMax-M2.1-highspeed': 'minimax/minimax-m2.1-highspeed',
 };
 
 export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
