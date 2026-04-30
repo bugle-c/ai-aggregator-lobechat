@@ -3,11 +3,13 @@ import { CREDITS_PER_DOLLAR } from '@lobechat/const/currency';
 import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, Popover, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
+import { Lock } from 'lucide-react';
 import { type AiModelForSelect } from 'model-bank';
 import numeral from 'numeral';
 import { memo, useMemo } from 'react';
 
 import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
+import { useModelLockState } from '@/features/UIMode';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
@@ -116,8 +118,22 @@ const ImageModelItem = memo<ImageModelItemProps>(
       );
     }, [description, priceLabel, isDarkMode]);
 
+    // Plan-aware lock: greys out + prepends a lock icon for image models
+    // the current user's plan can't reach. Mirrors the chat selector's
+    // LockedModelTooltip wrapping. Without this, free users see Nano Banana
+    // Pro / GPT Image 2 / etc. listed identically to free-tier models, click
+    // them, and silently 403 from chargeBeforeGenerate.
+    const { data: lockState } = useModelLockState(model.id);
+    const isLocked = !!lockState?.isLocked;
+
     const content = (
-      <Flexbox horizontal align={'center'} gap={8} style={{ overflow: 'hidden' }}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        gap={8}
+        style={{ overflow: 'hidden', opacity: isLocked ? 0.55 : 1 }}
+      >
+        {isLocked && <Lock size={12} style={{ flexShrink: 0 }} />}
         <ModelIcon model={model.id} size={20} />
         <Text ellipsis title={model.displayName || model.id}>
           {model.displayName || model.id}

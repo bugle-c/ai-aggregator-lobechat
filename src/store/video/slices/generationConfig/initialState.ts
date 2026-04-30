@@ -7,8 +7,15 @@ import {
 } from 'model-bank';
 import { seedance15ProParams } from 'model-bank/lobehub';
 
+// Use a model that has an active rate in admin model_rates so
+// chargeBeforeGenerate can route it correctly. The previous default
+// `seedance-1-5-pro-251215` is not in model_rates → fetchRate falls back
+// to __default__ → tier='premium' → silent 403 for everyone but pro_max.
+// `bytedance/seedance-2.0-fast/text-to-video` ($0.077/sec → mid-tier) is
+// the cheapest active text-to-video and is reachable from Basic upwards;
+// free users now see the locked-model indicator instead of a silent skip.
 export const DEFAULT_AI_VIDEO_PROVIDER = ModelProvider.LobeHub;
-export const DEFAULT_AI_VIDEO_MODEL = 'seedance-1-5-pro-251215';
+export const DEFAULT_AI_VIDEO_MODEL = 'bytedance/seedance-2.0-fast/text-to-video';
 
 export interface VideoGenerationConfigState {
   parameters: RuntimeVideoGenParams;

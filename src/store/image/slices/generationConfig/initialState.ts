@@ -1,12 +1,16 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { type ModelParamsSchema, type RuntimeImageGenParams } from 'model-bank';
-import { extractDefaultValues, ModelProvider } from 'model-bank';
+import { extractDefaultValues } from 'model-bank';
 import { nanoBananaProParameters } from 'model-bank/google';
 
 import { DEFAULT_IMAGE_CONFIG } from '@/const/settings';
 
-export const DEFAULT_AI_IMAGE_PROVIDER = ModelProvider.Google;
-export const DEFAULT_AI_IMAGE_MODEL = 'gemini-3-pro-image-preview:image';
+// Cheapest active image rate ($0.015/img → cheap-tier) so free-plan users
+// don't hit a silent 403 from chargeBeforeGenerate on first /image visit.
+// Nano Banana Pro ($0.35/img → premium) was the previous default — silent
+// failure for everyone except pro_max.
+export const DEFAULT_AI_IMAGE_PROVIDER = 'lobehub';
+export const DEFAULT_AI_IMAGE_MODEL = 'wavespeed-ai/flux-schnell';
 
 export interface GenerationConfigState {
   parameters: RuntimeImageGenParams;
