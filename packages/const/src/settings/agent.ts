@@ -12,7 +12,13 @@ import { DEFAULT_MODEL } from './llm';
 export const DEFAUTT_AGENT_TTS_CONFIG: LobeAgentTTSConfig = {
   showAllLocaleVoice: false,
   sttLocale: 'auto',
-  ttsService: 'openai',
+  // Edge TTS is free and bundled (Microsoft Edge speech service via
+  // @lobehub/tts). OpenAI TTS would require a direct OPENAI_API_KEY which
+  // we don't carry — chat traffic goes through lobehub→OpenRouter and
+  // OpenRouter does not proxy /audio/speech. Until we add a paid TTS
+  // provider with credit metering, default to Edge so the "Озвучить текст"
+  // button works out of the box at zero cost.
+  ttsService: 'edge',
   voice: {
     openai: 'alloy',
   },
