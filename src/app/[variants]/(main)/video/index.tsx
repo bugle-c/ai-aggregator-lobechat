@@ -7,6 +7,7 @@ import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
 
+import PlanGateBanner from './features/PlanGateBanner';
 import VideoWorkspace from './features/VideoWorkspace';
 
 const DesktopVideoPage = memo(() => {
@@ -14,6 +15,7 @@ const DesktopVideoPage = memo(() => {
     <>
       <NavHeader right={<WideScreenButton />} />
       <Flexbox height={'100%'} style={{ overflowY: 'auto', position: 'relative' }} width={'100%'}>
+        <PlanGateBanner />
         <WideScreenContainer height={'100%'} wrapperStyle={{ height: '100%' }}>
           <VideoWorkspace />
         </WideScreenContainer>

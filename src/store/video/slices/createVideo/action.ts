@@ -112,6 +112,23 @@ export const createCreateVideoSlice: StateCreator<
         false,
         'createVideo/clearPrompt',
       );
+    } catch (err) {
+      // Surface chargeBeforeGenerate errors so plan/daily/monthly limits
+      // and "model not allowed on free" failures aren't silent.
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : 'Не удалось создать видео';
+      try {
+        message.error(msg);
+      } catch {
+        if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+          window.alert(msg);
+        }
+      }
+      throw err;
     } finally {
       // 7. Reset all creating states
       if (isNewTopic) {

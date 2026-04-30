@@ -40,6 +40,17 @@ const UIModeToggle = memo(() => {
         if (result?.modelWasReset) {
           message.info(t('uiMode.modelResetToWebGPT'));
         }
+        // Hard reload to recover from the post-toggle render glitch:
+        // changing `uiMode` re-mounts the (main) layout, and the
+        // NavPanelPortal subscription dropped during re-mount leaves the
+        // sidebar's children unrendered (the DOM is intact — clicks even
+        // hit links — but icons/text show as black-on-black until the
+        // user manually F5s). Easier than rooting out the race in the
+        // portal mechanism. Adds a brief flash but guarantees a clean UI.
+        if (typeof window !== 'undefined') {
+          // Tiny delay so the success-toast renders first.
+          setTimeout(() => window.location.reload(), 250);
+        }
       } catch {
         message.error(t('uiMode.switchFailed'));
       }

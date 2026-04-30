@@ -312,6 +312,27 @@ export class ConversationLifecycleActionImpl {
         if (!isAbort) {
           this.#get().updateOperationMetadata(operationId, { inputSendErrorMsg: e.message });
           this.#get().mainInputEditor?.setDocument('markdown', message);
+
+          // Surface the error as a notification — the metadata field above
+          // is only consumed by an unwired UI hook, so without this toast
+          // the user sees the spinner clear and nothing else (no error,
+          // no failure indicator). Common culprits the user MUST see:
+          //   - "Дневной лимит достигнут (10 кредитов / 24ч). ..."
+          //   - "Месячный лимит достигнут (X кредитов). ..."
+          //   - "Модель ... недоступна на тарифе 'free'..."
+          // Lazy-import antd to avoid pulling it into the SSR bundle of this
+          // store slice (it's already loaded on the chat page anyway).
+          if (typeof window !== 'undefined') {
+            import('antd').then(({ notification }) => {
+              notification.error({
+                description: e.message,
+                duration: 8,
+                message: 'Не удалось отправить сообщение',
+              });
+            }).catch(() => {
+              if (typeof window.alert === 'function') window.alert(e.message);
+            });
+          }
         }
       }
     } finally {

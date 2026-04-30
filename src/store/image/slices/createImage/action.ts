@@ -105,6 +105,28 @@ export class CreateImageActionImpl {
         false,
         'createImage/clearPrompt',
       );
+    } catch (err) {
+      // Surface chargeBeforeGenerate errors (plan limits, daily caps,
+      // missing rates) — the spinner just stops without this toast and the
+      // user has no idea why their click did nothing.
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : 'Не удалось создать изображение';
+      if (typeof window !== 'undefined') {
+        import('antd').then(({ notification }) => {
+          notification.error({
+            description: msg,
+            duration: 8,
+            message: 'Ошибка генерации изображения',
+          });
+        }).catch(() => {
+          if (typeof window.alert === 'function') window.alert(msg);
+        });
+      }
+      throw err;
     } finally {
       // 8. Reset all creating states
       if (isNewTopic) {
