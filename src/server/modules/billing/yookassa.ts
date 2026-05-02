@@ -8,17 +8,36 @@ interface CreatePaymentParams {
   description: string;
   metadata?: Record<string, string>;
   returnUrl: string;
+  /**
+   * Subscription-type initial payment: ask YooKassa to save the payment
+   * method so we can charge the card on each renewal cycle without
+   * redirecting the user back to the YooKassa form. The webhook
+   * (`payment.succeeded`) carries the resulting `payment_method.id`,
+   * which we persist on `user_billing.payment_method_id`.
+   *
+   * Top-ups should NOT pass this — one-shot payments don't need a saved
+   * method and saving it would clutter YooKassa's payment-method list.
+   */
+  savePaymentMethod?: boolean;
+  /**
+   * Recurring charge: when present, YooKassa attempts a no-redirect
+   * charge against the previously-saved method. Only valid alongside an
+   * empty `confirmation` (server-side flow). Used by the
+   * renew-due-subscriptions cron.
+   */
+  paymentMethodId?: string;
 }
 
 interface YookassaPaymentResponse {
-  confirmation: { confirmation_url: string };
+  confirmation?: { confirmation_url: string };
   id: string;
   status: string;
+  payment_method?: { id?: string; saved?: boolean; type?: string };
 }
 
 export async function createYookassaPayment(
   params: CreatePaymentParams,
-): Promise<{ paymentId: string; paymentUrl: string }> {
+): Promise<{ paymentId: string; paymentUrl: string | null; status: string }> {
   const shopId = billingEnv.YOOKASSA_SHOP_ID;
   const secretKey = billingEnv.YOOKASSA_SECRET_KEY;
   if (!shopId || !secretKey) throw new Error('YooKassa credentials not configured');
@@ -26,16 +45,14 @@ export async function createYookassaPayment(
   const idempotenceKey = crypto.randomUUID();
   const auth = Buffer.from(`${shopId}:${secretKey}`).toString('base64');
 
+  const isRecurring = !!params.paymentMethodId;
+
   const body: Record<string, unknown> = {
     amount: {
       currency: 'RUB',
       value: params.amountRub.toFixed(2),
     },
     capture: true,
-    confirmation: {
-      return_url: params.returnUrl,
-      type: 'redirect',
-    },
     description: params.description,
     metadata: params.metadata || {},
     receipt: {
@@ -58,6 +75,22 @@ export async function createYookassaPayment(
     },
   };
 
+  if (isRecurring) {
+    // Server-initiated charge against an already-saved card. No redirect:
+    // YooKassa moves the funds straight away; webhook fires with
+    // payment.succeeded on success.
+    body.payment_method_id = params.paymentMethodId;
+  } else {
+    body.confirmation = { return_url: params.returnUrl, type: 'redirect' };
+    if (params.savePaymentMethod) {
+      // Tells YooKassa to remember the card token so future recurring
+      // charges can run without redirecting the user. The webhook on the
+      // initial succeeded payment carries `payment_method.id`, which we
+      // persist on user_billing.
+      body.save_payment_method = true;
+    }
+  }
+
   const res = await fetch('https://api.yookassa.ru/v3/payments', {
     body: JSON.stringify(body),
     headers: {
@@ -76,6 +109,7 @@ export async function createYookassaPayment(
   const data: YookassaPaymentResponse = await res.json();
   return {
     paymentId: data.id,
-    paymentUrl: data.confirmation.confirmation_url,
+    paymentUrl: data.confirmation?.confirmation_url ?? null,
+    status: data.status,
   };
 }

@@ -1,15 +1,26 @@
 import { eq } from 'drizzle-orm';
 
-import { billingPayments } from '@/database/schemas';
+import { billingPayments, userBilling } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
 import { writeSubscriptionEvent } from '@/server/modules/analytics/writeSubscriptionEvent';
 import { sendSubscriptionConfirmation } from '@/server/modules/lifecycle/sendConfirmation';
 import { rewardReferralsOnFirstPayment } from '@/server/modules/referrals/rewardOnFirstPayment';
 import { BillingService } from '@/server/services/billing';
 
+export interface FulfillOptions {
+  /**
+   * `payment_method.id` from the YooKassa webhook when the payment was
+   * created with `save_payment_method: true`. Persisted on
+   * user_billing.payment_method_id so the renew-due-subscriptions cron
+   * can charge the same card on each cycle without redirecting the user.
+   */
+  savedPaymentMethodId?: string;
+}
+
 export async function fulfillPayment(
   db: LobeChatDatabase,
   yookassaPaymentId: string,
+  options: FulfillOptions = {},
 ): Promise<void> {
   const payment = await BillingService.getPaymentByYookassaId(db, yookassaPaymentId);
   if (!payment) {
@@ -32,6 +43,33 @@ export async function fulfillPayment(
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
     await billingService.updatePlan(payment.planId, expiresAt);
+
+    // Persist the saved payment method (if YooKassa returned one) so the
+    // auto-renew cron can charge the same card on each cycle. Also clear
+    // any prior cancellation flags — a fresh subscription payment
+    // implicitly re-opts into auto-renewal.
+    if (options.savedPaymentMethodId) {
+      await db
+        .update(userBilling)
+        .set({
+          paymentMethodId: options.savedPaymentMethodId,
+          autoRenew: true,
+          cancelledAt: null,
+          cancelReasonCode: null,
+        })
+        .where(eq(userBilling.userId, payment.userId));
+      console.info(
+        `[billing] Saved payment method for user=${payment.userId} method_id=${options.savedPaymentMethodId.slice(0, 8)}…`,
+      );
+    } else if (currentBilling.cancelledAt) {
+      // Recurring renewal payment — webhook usually omits the saved-flag
+      // because the method was saved on the original. Still clear stale
+      // cancellation flags from a previous cycle.
+      await db
+        .update(userBilling)
+        .set({ autoRenew: true, cancelledAt: null, cancelReasonCode: null })
+        .where(eq(userBilling.userId, payment.userId));
+    }
 
     await writeSubscriptionEvent(db, {
       userId: payment.userId,

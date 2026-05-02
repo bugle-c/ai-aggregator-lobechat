@@ -8,6 +8,7 @@ interface YookassaWebhookPayload {
   object: {
     id: string;
     metadata?: Record<string, string>;
+    payment_method?: { id?: string; saved?: boolean; type?: string };
     status: string;
   };
   type: string;
@@ -22,7 +23,13 @@ export const POST = async (req: Request): Promise<NextResponse> => {
 
     switch (payload.event) {
       case 'payment.succeeded': {
-        await fulfillPayment(db, payload.object.id);
+        // Pass the saved payment_method.id (when present) through to
+        // fulfill so it can persist on user_billing for the renew loop.
+        const savedMethodId =
+          payload.object.payment_method?.saved && payload.object.payment_method.id
+            ? payload.object.payment_method.id
+            : undefined;
+        await fulfillPayment(db, payload.object.id, { savedPaymentMethodId: savedMethodId });
         break;
       }
       case 'payment.canceled': {

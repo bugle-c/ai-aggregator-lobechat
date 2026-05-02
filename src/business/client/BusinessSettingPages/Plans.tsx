@@ -1,13 +1,22 @@
 'use client';
 
 import { Flexbox, Grid } from '@lobehub/ui';
-import { Button, Card, Divider, Progress, Spin, Tag, Typography } from 'antd';
+import { App, Button, Card, Divider, Input, Modal, Progress, Radio, Spin, Tag, Typography } from 'antd';
 import { Check } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
-import { lambdaQuery } from '@/libs/trpc/client';
+import { lambdaQuery, lambdaClient } from '@/libs/trpc/client';
+
+const CANCEL_REASONS: { code: string; label: string }[] = [
+  { code: 'too_expensive', label: 'Слишком дорого' },
+  { code: 'not_using', label: 'Перестал пользоваться' },
+  { code: 'missing_feature', label: 'Не хватает функций' },
+  { code: 'switched', label: 'Перешёл на другой сервис' },
+  { code: 'temporary', label: 'Временно — потом вернусь' },
+  { code: 'other', label: 'Другое' },
+];
 
 const { Text, Title } = Typography;
 
@@ -26,11 +35,39 @@ const PLAN_FEATURES: Record<string, string[]> = {
 
 const Plans = memo(() => {
   const { t } = useTranslation('subscription');
+  const { message } = App.useApp();
+  const utils = lambdaQuery.useUtils();
+
+  // Cancellation modal state — kept inside the component so the modal
+  // closes correctly on success and re-opens on the next click.
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState<string>('not_using');
+  const [cancelText, setCancelText] = useState('');
+  const [cancelling, setCancelling] = useState(false);
 
   const { data: plans, isLoading: plansLoading } = lambdaQuery.subscription.getPlans.useQuery();
   const { data: billing, isLoading: billingLoading } =
     lambdaQuery.subscription.getBillingState.useQuery();
   const { data: packages } = lambdaQuery.topUp.getPackages.useQuery();
+
+  const handleCancelSubmit = async () => {
+    setCancelling(true);
+    try {
+      await lambdaClient.subscription.cancelSubscription.mutate({
+        reasonCode: cancelReason as any,
+        reasonText: cancelText.trim() || undefined,
+      });
+      message.success('Подписка будет активна до окончания оплаченного периода');
+      setCancelOpen(false);
+      setCancelText('');
+      // Refresh billing state so the banner re-renders with cancelled flag.
+      await utils.subscription.getBillingState.invalidate();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Не удалось отменить');
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const subscribeMutation = lambdaQuery.subscription.createPayment.useMutation({
     onSuccess: (data) => {
@@ -93,7 +130,82 @@ const Plans = memo(() => {
         <Text style={{ marginTop: 4 }} type="secondary">
           План: {creditLimit} кредитов | Пополнения: {creditBalance} кредитов
         </Text>
+
+        {currentPlan && currentPlan.priceRub > 0 && (
+          <>
+            <Divider style={{ margin: '12px 0' }} />
+            {billing?.cancelledAt ? (
+              <Flexbox horizontal align="center" justify="space-between" gap={12}>
+                <Text type="warning">
+                  Подписка отменена. Доступ сохраняется до{' '}
+                  {billing.subscriptionExpiresAt
+                    ? new Date(billing.subscriptionExpiresAt).toLocaleDateString('ru-RU')
+                    : '—'}
+                  . После этой даты — план «Старт».
+                </Text>
+              </Flexbox>
+            ) : billing?.autoRenew && billing.hasSavedPaymentMethod ? (
+              <Flexbox horizontal align="center" justify="space-between" gap={12}>
+                <Text type="secondary">
+                  Подписка продлевается автоматически. Списание {currentPlan.priceRub} ₽
+                  каждый месяц до отмены.
+                </Text>
+                <Button danger size="small" onClick={() => setCancelOpen(true)}>
+                  Отменить подписку
+                </Button>
+              </Flexbox>
+            ) : (
+              <Flexbox horizontal align="center" justify="space-between" gap={12}>
+                <Text type="secondary">
+                  Авто-продление не настроено — подписка истечёт по окончании периода.
+                </Text>
+              </Flexbox>
+            )}
+          </>
+        )}
       </Card>
+
+      <Modal
+        title="Отменить подписку?"
+        open={cancelOpen}
+        confirmLoading={cancelling}
+        okText="Отменить подписку"
+        okButtonProps={{ danger: true }}
+        cancelText="Передумал"
+        onCancel={() => setCancelOpen(false)}
+        onOk={handleCancelSubmit}
+        width={460}
+      >
+        <Text type="secondary">
+          Доступ к платным функциям сохранится до{' '}
+          {billing?.subscriptionExpiresAt
+            ? new Date(billing.subscriptionExpiresAt).toLocaleDateString('ru-RU')
+            : '—'}
+          . После этой даты вы вернётесь на тариф «Старт». Расскажите, почему уходите —
+          это поможет нам стать лучше:
+        </Text>
+        <Radio.Group
+          value={cancelReason}
+          onChange={(e) => setCancelReason(e.target.value)}
+          style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}
+        >
+          {CANCEL_REASONS.map((r) => (
+            <Radio key={r.code} value={r.code}>
+              {r.label}
+            </Radio>
+          ))}
+        </Radio.Group>
+        {cancelReason === 'other' && (
+          <Input.TextArea
+            placeholder="Расскажите подробнее (необязательно)"
+            value={cancelText}
+            onChange={(e) => setCancelText(e.target.value)}
+            rows={3}
+            maxLength={500}
+            style={{ marginTop: 12 }}
+          />
+        )}
+      </Modal>
 
       {/* Plan comparison */}
       <Title level={5} style={{ marginBottom: 0, marginTop: 24 }}>

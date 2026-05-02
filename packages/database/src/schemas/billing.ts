@@ -87,6 +87,15 @@ export const userBilling = pgTable(
     expiryWarningSentAt: timestamptz('expiry_warning_sent_at'),
     upgradeHintSentAt: timestamptz('upgrade_hint_sent_at'),
     lowCreditsHintSentAt: timestamptz('low_credits_hint_sent_at'),
+    // Auto-renew loop. When `autoRenew=true` and `subscriptionExpiresAt`
+    // approaches, the renew-due-subscriptions cron charges the saved
+    // YooKassa payment method and pushes the expiry forward one billing
+    // cycle. Cancellation flips this to false; the subscription stays
+    // active until expiry, then passively returns to free.
+    autoRenew: boolean('auto_renew').notNull().default(true),
+    paymentMethodId: text('payment_method_id'),
+    cancelledAt: timestamptz('cancelled_at'),
+    cancelReasonCode: text('cancel_reason_code'),
     ...timestamps,
   },
   (table) => [index('user_billing_user_id_idx').on(table.userId)],

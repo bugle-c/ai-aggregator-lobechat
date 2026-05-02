@@ -672,6 +672,13 @@
       "when": 1778586400000,
       "tag": "0095_promo_use_in_blog",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1778587200000,
+      "tag": "0096_auto_renew_subscription",
+      "breakpoints": true
     }
   ],
   "version": "6"
