@@ -170,7 +170,11 @@ export const lobehubImageModels: AIImageModelCard[] = [
     description:
       'ByteDance-Seedream-5.0-lite by BytePlus features web-retrieval-augmented generation for real-time information, enhanced complex prompt interpretation, and improved reference consistency for professional visual creation.',
     displayName: 'Seedream 5 Lite',
-    enabled: true,
+    // Disabled: Seedream 5.0-lite is hosted on Volcengine ARK only, and we do
+    // not have a VOLCENGINE/ARK key configured on prod. The lobehub router
+    // has no path for this id, so leaving it enabled produced 404s. The
+    // 4.5 variants (via Fal/Wavespeed) cover the same use case.
+    enabled: false,
     id: 'seedream-5-0-260128',
     parameters: {
       imageUrls: { default: [], maxCount: 14, maxFileSize: 10 * 1024 * 1024 },

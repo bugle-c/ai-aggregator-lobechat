@@ -1,9 +1,7 @@
 interface RouterInstance {
   apiType: string;
   models?: string[];
-  options:
-    | Record<string, any>
-    | Record<string, any>[];
+  options: Record<string, any> | Record<string, any>[];
   transformModel?: (model: string) => string;
 }
 
@@ -79,10 +77,69 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'MiniMax-M2.1-highspeed': 'minimax/minimax-m2.1-highspeed',
 };
 
+/**
+ * Image-model routing for the lobehub provider.
+ *
+ * The catalog at `model-bank/aiModels/lobehub/image.ts` exposes ~14 curated
+ * image models PLUS every Wavespeed image model with `enabled: true` (flux,
+ * recraft, ideogram, sora, kling, …). Each model needs to land at a different
+ * upstream — OpenRouter does not implement `images.generate` and silently
+ * returned `{}` (no `data` array), causing the user-visible
+ * `Invalid image response: missing or empty data array` error.
+ *
+ * The match is by id-prefix/exact id. Order matters: `fal-ai/` is checked
+ * before the generic slashed-id rule because Fal endpoints overlap with
+ * Wavespeed naming.
+ */
+const isFalModel = (model: string) => model.startsWith('fal-ai/');
+const isOpenAIDirectImage = (model: string) =>
+  model.startsWith('gpt-image-') || model.startsWith('dall-e-');
+const isGoogleDirectImage = (model: string) =>
+  model.startsWith('imagen-') || model.endsWith(':image');
+// Wavespeed IDs always have a `/` and are not handled by the rules above.
+const isWavespeedModel = (model: string) => model.includes('/') && !isFalModel(model);
+
 export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
   id: 'lobehub',
 
-  routers: async (_options, { model: _model }) => {
+  routers: async (_options, { model }) => {
+    // Image models — route to the actual upstream that hosts them.
+    if (model) {
+      if (isOpenAIDirectImage(model)) {
+        const key = process.env.OPENAI_API_KEY;
+        if (!key) return [];
+        return [{ apiType: 'openai' as const, options: { apiKey: key } }];
+      }
+
+      if (isGoogleDirectImage(model)) {
+        const key = process.env.GOOGLE_API_KEY;
+        if (!key) return [];
+        // Strip the `:image` suffix the catalog uses to disambiguate the
+        // chat-vs-image variant of Gemini multimodal models. The Google
+        // SDK expects the bare model id.
+        return [
+          {
+            apiType: 'google' as const,
+            options: { apiKey: key },
+            transformModel: (m: string) => m.replace(/:image$/, ''),
+          },
+        ];
+      }
+
+      if (isFalModel(model)) {
+        const key = process.env.FAL_API_KEY;
+        if (!key) return [];
+        return [{ apiType: 'fal' as const, options: { apiKey: key } }];
+      }
+
+      if (isWavespeedModel(model)) {
+        const key = process.env.WAVESPEED_API_KEY;
+        if (!key) return [];
+        return [{ apiType: 'wavespeed' as const, options: { apiKey: key } }];
+      }
+    }
+
+    // Default — chat models go through OpenRouter with the legacy mapping.
     const openrouterKey = process.env.OPENROUTER_API_KEY;
     if (!openrouterKey) return [];
 
@@ -93,7 +150,7 @@ export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
           apiKey: openrouterKey,
           baseURL: 'https://openrouter.ai/api/v1',
         },
-        transformModel: (model: string) => OPENROUTER_MODEL_MAP[model] || model,
+        transformModel: (m: string) => OPENROUTER_MODEL_MAP[m] || m,
       },
     ];
   },

@@ -11,6 +11,7 @@ import { LobeOpenAI } from '../../providers/openai';
 import { LobeQwenAI } from '../../providers/qwen';
 import { LobeVertexAI } from '../../providers/vertexai';
 import { LobeVolcengineAI } from '../../providers/volcengine';
+import { LobeWaveSpeedAI } from '../../providers/wavespeed';
 import { LobeXAI } from '../../providers/xai';
 import type { ApiType, RuntimeClass } from './apiTypes';
 
@@ -28,5 +29,6 @@ export const baseRuntimeMap = {
   qwen: LobeQwenAI,
   vertexai: LobeVertexAI,
   volcengine: LobeVolcengineAI,
+  wavespeed: LobeWaveSpeedAI,
   xai: LobeXAI,
 } satisfies Record<ApiType, RuntimeClass>;

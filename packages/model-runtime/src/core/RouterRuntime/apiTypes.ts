@@ -14,6 +14,7 @@ export type ApiType =
   | 'qwen'
   | 'vertexai'
   | 'volcengine'
+  | 'wavespeed'
   | 'xai';
 
 export type RuntimeClass = new (options?: any) => LobeRuntimeAI;
