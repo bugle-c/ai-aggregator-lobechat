@@ -240,32 +240,41 @@ CRITICAL: Return ONLY a valid JSON object. No markdown code blocks, no extra tex
   \"meta_keywords\": \"comma,separated,keywords,source:hype\"
 }"
 
-STDOUT_FILE=$(mktemp /tmp/claude-stdout-XXXXXX.txt)
-STDERR_FILE=$(mktemp /tmp/claude-stderr-XXXXXX.txt)
+# Try Claude CLI + JSON parse up to 2 times. A non-zero exit (transient
+# rate-limit / API error) typically returns within seconds with a tiny
+# error-shaped JSON that the parser can't extract; retrying after a short
+# backoff catches the common case. Parse failures on a successful exit also
+# get retried because the LLM occasionally returns non-JSON wrapper text.
+RAW_OUTPUT=""
+CLI_STDERR=""
+CLI_EXIT=0
+ARTICLE_JSON=""
+PARSE_EXIT=0
+MAX_CLAUDE_ATTEMPTS=2
+for try in $(seq 1 $MAX_CLAUDE_ATTEMPTS); do
+    STDOUT_FILE=$(mktemp /tmp/claude-stdout-XXXXXX.txt)
+    STDERR_FILE=$(mktemp /tmp/claude-stderr-XXXXXX.txt)
+    timeout 480 "$CLAUDE_CMD" --print -p "$PROMPT" --output-format json \
+        > "$STDOUT_FILE" 2> "$STDERR_FILE"
+    CLI_EXIT=$?
+    RAW_OUTPUT=$(cat "$STDOUT_FILE")
+    CLI_STDERR=$(cat "$STDERR_FILE")
+    rm -f "$STDOUT_FILE" "$STDERR_FILE"
 
-timeout 480 "$CLAUDE_CMD" --print -p "$PROMPT" --output-format json \
-    > "$STDOUT_FILE" 2> "$STDERR_FILE"
-CLI_EXIT=$?
+    if [[ $CLI_EXIT -ne 0 || -z "$RAW_OUTPUT" ]]; then
+        log "Claude CLI try ${try}/${MAX_CLAUDE_ATTEMPTS} failed (exit=$CLI_EXIT, bytes=$(printf '%s' "$RAW_OUTPUT" | wc -c))"
+        [[ -n "$CLI_STDERR" ]] && log "Stderr: ${CLI_STDERR:0:500}"
+        if [[ $try -lt $MAX_CLAUDE_ATTEMPTS ]]; then
+            log "Sleeping 30s before retry..."
+            sleep 30
+        fi
+        ARTICLE_JSON=""
+        continue
+    fi
 
-RAW_OUTPUT=$(cat "$STDOUT_FILE")
-CLI_STDERR=$(cat "$STDERR_FILE")
-rm -f "$STDOUT_FILE" "$STDERR_FILE"
+    log "Claude returned $(echo "$RAW_OUTPUT" | wc -c) bytes on try ${try}"
 
-if [[ $CLI_EXIT -ne 0 ]]; then
-    log "ERROR: Claude CLI exited with code $CLI_EXIT"
-    [[ -n "$CLI_STDERR" ]] && log "Stderr: ${CLI_STDERR:0:500}"
-fi
-
-if [[ -z "$RAW_OUTPUT" ]]; then
-    log "ERROR: Claude returned empty response"
-    [[ -n "$CLI_STDERR" ]] && log "Stderr: ${CLI_STDERR:0:500}"
-    notify_failure "generate-hype-article" "Claude returned empty (exit=$CLI_EXIT). Event: ${NEWS_EVENT_ID:0:8}" "$LOG_FILE"
-    exit 1
-fi
-
-log "Claude returned $(echo "$RAW_OUTPUT" | wc -c) bytes"
-
-ARTICLE_JSON=$(echo "$RAW_OUTPUT" | python3 -c "
+    ARTICLE_JSON=$(echo "$RAW_OUTPUT" | python3 -c "
 import json, sys, re
 data = json.load(sys.stdin)
 result = data.get('result', '').strip()
@@ -288,12 +297,23 @@ if missing:
     print(f'ERROR: Missing fields: {missing}', file=sys.stderr); sys.exit(1)
 print(json.dumps(article, ensure_ascii=False))
 " 2>&1)
+    PARSE_EXIT=$?
 
-PARSE_EXIT=$?
-if [[ $PARSE_EXIT -ne 0 || -z "$ARTICLE_JSON" || "$ARTICLE_JSON" == ERROR:* ]]; then
-    log "ERROR: Failed to extract article JSON (exit=$PARSE_EXIT)"
-    log "Parse output: ${ARTICLE_JSON:0:300}"
-    notify_failure "generate-hype-article" "Failed to parse Claude output. Event: ${NEWS_EVENT_ID:0:8}" "$LOG_FILE"
+    if [[ $PARSE_EXIT -eq 0 && -n "$ARTICLE_JSON" && "$ARTICLE_JSON" != ERROR:* ]]; then
+        break
+    fi
+
+    log "Parse failed on try ${try}/${MAX_CLAUDE_ATTEMPTS} (exit=$PARSE_EXIT): ${ARTICLE_JSON:0:200}"
+    ARTICLE_JSON=""
+    if [[ $try -lt $MAX_CLAUDE_ATTEMPTS ]]; then
+        log "Sleeping 30s before retry..."
+        sleep 30
+    fi
+done
+
+if [[ -z "$ARTICLE_JSON" ]]; then
+    log "ERROR: Failed to obtain valid article JSON after ${MAX_CLAUDE_ATTEMPTS} attempts (last cli_exit=$CLI_EXIT, last parse_exit=$PARSE_EXIT)"
+    notify_failure "generate-hype-article" "Claude failed after ${MAX_CLAUDE_ATTEMPTS} attempts (cli=$CLI_EXIT, parse=$PARSE_EXIT). Event: ${NEWS_EVENT_ID:0:8}. Stderr: ${CLI_STDERR:0:200}" "$LOG_FILE"
     exit 1
 fi
 
