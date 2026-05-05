@@ -83,57 +83,19 @@ fi
 
 log "Target category for today: $TARGET_CAT ($TARGET_CAT_NAME)"
 
-# Step 1: Get next keyword — prefer one hinted for this category, else fall back to /next.
+# Step 1: Find a non-duplicate keyword. Loop with limited attempts so a single
+# duplicate hit doesn't waste the slot. Each iteration: fetch a candidate, run
+# the dedup pre-check; if dup, mark skipped (using a status value that satisfies
+# the blog_keywords_status_check constraint) and try the next candidate. Cluster
+# build is deferred until a non-dup candidate is chosen so we don't build clusters
+# for keywords we'll immediately discard.
 KEYWORD=""
 KEYWORD_ID=""
-KW_CAT_MATCH=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_keywords?select=id,keyword&status=eq.pending&category_slug=eq.${TARGET_CAT}&order=priority.asc,impressions.desc&limit=1" "${SUPA_HDRS[@]}" 2>/dev/null)
-if [[ -n "$KW_CAT_MATCH" && "$KW_CAT_MATCH" != "[]" ]]; then
-    KEYWORD=$(echo "$KW_CAT_MATCH" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['keyword'] if d else '')")
-    KEYWORD_ID=$(echo "$KW_CAT_MATCH" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
-    log "Keyword (category-hinted): '$KEYWORD' (id=$KEYWORD_ID)"
-else
-    log "No category-hinted keyword for '$TARGET_CAT', falling back to global queue"
-    KEYWORD_JSON=$(curl -sf "${API_URL}/api/cron/blog-keywords/next" \
-        -H "Authorization: Bearer ${CRON_SECRET}" || echo "")
-    if [[ -z "$KEYWORD_JSON" || "$KEYWORD_JSON" == "null" ]]; then
-        log "No pending keywords at all. Triggering collection..."
-        curl -sf -X POST "${API_URL}/api/cron/blog-keywords" \
-            -H "Authorization: Bearer ${CRON_SECRET}" || true
-        exit 0
-    fi
-    KEYWORD=$(echo "$KEYWORD_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin).get('keyword',''))" 2>/dev/null)
-    KEYWORD_ID=$(echo "$KEYWORD_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
-    log "Keyword (fallback): '$KEYWORD' (id=$KEYWORD_ID)"
-fi
-
-if [[ -z "${KEYWORD:-}" ]]; then
-    log "ERROR: Failed to obtain keyword"
-    notify_failure "generate-article" "Failed to obtain keyword for category $TARGET_CAT" "$LOG_FILE"
-    exit 1
-fi
-
-# Step 1.75: Build or reuse cluster for this keyword (Wordstat + LLM relevance filter)
-CLUSTER_ID=$("${SCRIPT_DIR}/cluster-builder.sh" "$KEYWORD" "$TARGET_CAT" 2>>"$LOG_FILE" || echo "")
-if [[ -z "$CLUSTER_ID" ]]; then
-    log "WARN: cluster-builder failed for keyword '$KEYWORD', falling back to single-keyword mode"
-fi
-
+CLUSTER_ID=""
 RELATED_LIST=""
-if [[ -n "$CLUSTER_ID" ]]; then
-    RELATED_LIST=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_clusters?id=eq.${CLUSTER_ID}&select=related_keywords" \
-        "${SUPA_HDRS[@]}" 2>/dev/null | python3 -c "
-import json, sys
-try:
-    d = json.load(sys.stdin)
-    for r in (d[0].get('related_keywords', []) if d else []):
-        print(f'- {r}')
-except Exception:
-    pass
-" 2>/dev/null)
-    [[ -n "$RELATED_LIST" ]] && log "using cluster id=$CLUSTER_ID, primary='$KEYWORD', related=$(echo "$RELATED_LIST" | wc -l)"
-fi
+MAX_KEYWORD_ATTEMPTS=5
 
-# Step 1.5: Dedup guard — fetch titles in TARGET category so LLM avoids topical duplicates
+# Pre-load published titles in target category once — same dedup corpus for all attempts.
 EXISTING_TITLES=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_posts?select=title&status=eq.published&category_id=eq.${TARGET_CAT_ID}&order=created_at.desc&limit=60" "${SUPA_HDRS[@]}" 2>/dev/null | python3 -c "
 import json, sys
 try:
@@ -146,11 +108,65 @@ except Exception:
 " 2>/dev/null)
 [[ -n "$EXISTING_TITLES" ]] && log "Loaded $(echo "$EXISTING_TITLES" | wc -l) existing titles in $TARGET_CAT for dedup context"
 
-# Pre-check: is the keyword an obvious dupe of an existing title in THIS category?
-if [[ -n "$EXISTING_TITLES" ]]; then
-    DUP_CHECK=$(echo "$EXISTING_TITLES" | python3 -c "
-import sys, re
-kw = '''${KEYWORD}'''.lower()
+# Mark a keyword as skipped so the queue advances. Surfaces non-2xx HTTP codes
+# in the log so a future schema change (e.g., status enum revision) doesn't go
+# unnoticed and re-trigger the duplicate-keyword loop bug.
+mark_keyword_skipped() {
+    local kw_id="$1"
+    local reason="$2"
+    local http_code body_file
+    body_file=$(mktemp /tmp/skip-resp-XXXXXX.txt)
+    http_code=$(curl -s -o "$body_file" -w "%{http_code}" -X PATCH "${SUPABASE_URL}/rest/v1/blog_keywords?id=eq.${kw_id}" \
+        "${SUPA_HDRS[@]}" \
+        -H "Content-Profile: ai_aggregator" \
+        -H "Content-Type: application/json" \
+        -d "{\"status\":\"skipped\",\"updated_at\":\"$(date -u +%FT%TZ)\"}" 2>/dev/null)
+    if [[ "$http_code" =~ ^2 ]]; then
+        log "Marked keyword id=${kw_id} as skipped (${reason}, HTTP ${http_code})"
+    else
+        local body
+        body=$(cat "$body_file" 2>/dev/null)
+        log "WARN: failed to mark keyword id=${kw_id} skipped (HTTP ${http_code}, reason=${reason}): ${body:0:200}"
+    fi
+    rm -f "$body_file"
+}
+
+for attempt in $(seq 1 $MAX_KEYWORD_ATTEMPTS); do
+    CANDIDATE_KEYWORD=""
+    CANDIDATE_ID=""
+
+    KW_CAT_MATCH=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_keywords?select=id,keyword&status=eq.pending&category_slug=eq.${TARGET_CAT}&order=priority.asc,impressions.desc&limit=1" "${SUPA_HDRS[@]}" 2>/dev/null)
+    if [[ -n "$KW_CAT_MATCH" && "$KW_CAT_MATCH" != "[]" ]]; then
+        CANDIDATE_KEYWORD=$(echo "$KW_CAT_MATCH" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['keyword'] if d else '')")
+        CANDIDATE_ID=$(echo "$KW_CAT_MATCH" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
+        log "Attempt ${attempt}/${MAX_KEYWORD_ATTEMPTS} keyword (category-hinted): '$CANDIDATE_KEYWORD' (id=$CANDIDATE_ID)"
+    else
+        [[ $attempt -eq 1 ]] && log "No category-hinted keyword for '$TARGET_CAT', falling back to global queue"
+        KEYWORD_JSON=$(curl -sf "${API_URL}/api/cron/blog-keywords/next" \
+            -H "Authorization: Bearer ${CRON_SECRET}" || echo "")
+        if [[ -z "$KEYWORD_JSON" || "$KEYWORD_JSON" == "null" ]]; then
+            log "No pending keywords at all. Triggering collection..."
+            curl -sf -X POST "${API_URL}/api/cron/blog-keywords" \
+                -H "Authorization: Bearer ${CRON_SECRET}" || true
+            exit 0
+        fi
+        CANDIDATE_KEYWORD=$(echo "$KEYWORD_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin).get('keyword',''))" 2>/dev/null)
+        CANDIDATE_ID=$(echo "$KEYWORD_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
+        log "Attempt ${attempt}/${MAX_KEYWORD_ATTEMPTS} keyword (fallback): '$CANDIDATE_KEYWORD' (id=$CANDIDATE_ID)"
+    fi
+
+    if [[ -z "$CANDIDATE_KEYWORD" || -z "$CANDIDATE_ID" ]]; then
+        log "ERROR: Failed to obtain keyword on attempt ${attempt}"
+        notify_failure "generate-article" "Failed to obtain keyword for category $TARGET_CAT" "$LOG_FILE"
+        exit 1
+    fi
+
+    # Pre-check: is the candidate an obvious dupe of an existing title in THIS category?
+    DUP_CHECK=""
+    if [[ -n "$EXISTING_TITLES" ]]; then
+        DUP_CHECK=$(echo "$EXISTING_TITLES" | KW="$CANDIDATE_KEYWORD" python3 -c "
+import sys, re, os
+kw = os.environ.get('KW', '').lower()
 kw_words = set(re.findall(r'[а-яёa-z0-9]{4,}', kw))
 if len(kw_words) < 2:
     sys.exit(0)
@@ -163,16 +179,44 @@ for line in sys.stdin:
         print(line.strip())
         sys.exit(0)
 " 2>/dev/null)
-    if [[ -n "$DUP_CHECK" ]]; then
-        log "SKIP: keyword '$KEYWORD' too similar to existing article in $TARGET_CAT: $DUP_CHECK"
-        curl -sf -X PATCH "${SUPABASE_URL}/rest/v1/blog_keywords?id=eq.${KEYWORD_ID}" \
-            "${SUPA_HDRS[@]}" \
-            -H "Content-Profile: ai_aggregator" \
-            -H "Content-Type: application/json" \
-            -d "{\"status\":\"duplicate\",\"updated_at\":\"$(date -u +%FT%TZ)\"}" >/dev/null 2>&1 || true
-        log "=== Article generation skipped (duplicate) ==="
-        exit 0
     fi
+    if [[ -n "$DUP_CHECK" ]]; then
+        log "DUP: keyword '$CANDIDATE_KEYWORD' too similar to existing in $TARGET_CAT: $DUP_CHECK"
+        mark_keyword_skipped "$CANDIDATE_ID" "duplicate vs ${TARGET_CAT}"
+        continue
+    fi
+
+    # Candidate passed dedup. Lock in keyword and build cluster.
+    KEYWORD="$CANDIDATE_KEYWORD"
+    KEYWORD_ID="$CANDIDATE_ID"
+
+    # Step 1.75: Build or reuse cluster for this keyword (Wordstat + LLM relevance filter)
+    CLUSTER_ID=$("${SCRIPT_DIR}/cluster-builder.sh" "$KEYWORD" "$TARGET_CAT" 2>>"$LOG_FILE" || echo "")
+    if [[ -z "$CLUSTER_ID" ]]; then
+        log "WARN: cluster-builder failed for keyword '$KEYWORD', falling back to single-keyword mode"
+    fi
+
+    RELATED_LIST=""
+    if [[ -n "$CLUSTER_ID" ]]; then
+        RELATED_LIST=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_clusters?id=eq.${CLUSTER_ID}&select=related_keywords" \
+            "${SUPA_HDRS[@]}" 2>/dev/null | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    for r in (d[0].get('related_keywords', []) if d else []):
+        print(f'- {r}')
+except Exception:
+    pass
+" 2>/dev/null)
+        [[ -n "$RELATED_LIST" ]] && log "using cluster id=$CLUSTER_ID, primary='$KEYWORD', related=$(echo "$RELATED_LIST" | wc -l)"
+    fi
+    break
+done
+
+if [[ -z "${KEYWORD:-}" ]]; then
+    log "All ${MAX_KEYWORD_ATTEMPTS} keyword candidates were duplicates — slot exhausted, queue advanced"
+    log "=== Article generation skipped (all candidates duplicates) ==="
+    exit 0
 fi
 
 # Step 2: Generate article via Claude Code — category is FORCED to target.
@@ -238,26 +282,39 @@ CRITICAL: Return ONLY a valid JSON object. No markdown code blocks, no extra tex
   \"meta_keywords\": \"comma,separated,keywords,in,russian\"
 }"
 
-STDOUT_FILE=$(mktemp /tmp/claude-stdout-XXXXXX.txt)
-STDERR_FILE=$(mktemp /tmp/claude-stderr-XXXXXX.txt)
+# Try Claude CLI up to 2 times. A non-zero exit (e.g. transient API/rate-limit
+# error) typically returns within seconds with a tiny error JSON that the parser
+# can't extract — retrying once after a short backoff catches the common case
+# without lengthening the slot. The next scheduled timer slot is the long-tail
+# retry path if both attempts here fail.
+RAW_OUTPUT=""
+CLI_STDERR=""
+CLI_EXIT=0
+MAX_CLAUDE_ATTEMPTS=2
+for try in $(seq 1 $MAX_CLAUDE_ATTEMPTS); do
+    STDOUT_FILE=$(mktemp /tmp/claude-stdout-XXXXXX.txt)
+    STDERR_FILE=$(mktemp /tmp/claude-stderr-XXXXXX.txt)
+    timeout 480 "$CLAUDE_CMD" --print -p "$PROMPT" --output-format json \
+        > "$STDOUT_FILE" 2> "$STDERR_FILE"
+    CLI_EXIT=$?
+    RAW_OUTPUT=$(cat "$STDOUT_FILE")
+    CLI_STDERR=$(cat "$STDERR_FILE")
+    rm -f "$STDOUT_FILE" "$STDERR_FILE"
 
-timeout 480 "$CLAUDE_CMD" --print -p "$PROMPT" --output-format json \
-    > "$STDOUT_FILE" 2> "$STDERR_FILE"
-CLI_EXIT=$?
-
-RAW_OUTPUT=$(cat "$STDOUT_FILE")
-CLI_STDERR=$(cat "$STDERR_FILE")
-rm -f "$STDOUT_FILE" "$STDERR_FILE"
-
-if [[ $CLI_EXIT -ne 0 ]]; then
-    log "ERROR: Claude CLI exited with code $CLI_EXIT"
+    if [[ $CLI_EXIT -eq 0 && -n "$RAW_OUTPUT" ]]; then
+        break
+    fi
+    log "Claude CLI try ${try}/${MAX_CLAUDE_ATTEMPTS} failed (exit=$CLI_EXIT, bytes=$(printf '%s' "$RAW_OUTPUT" | wc -c))"
     [[ -n "$CLI_STDERR" ]] && log "Stderr: ${CLI_STDERR:0:500}"
-fi
+    if [[ $try -lt $MAX_CLAUDE_ATTEMPTS ]]; then
+        log "Sleeping 30s before retry..."
+        sleep 30
+    fi
+done
 
-if [[ -z "$RAW_OUTPUT" ]]; then
-    log "ERROR: Claude Code returned empty response"
-    [[ -n "$CLI_STDERR" ]] && log "Stderr: ${CLI_STDERR:0:500}"
-    notify_failure "generate-article" "Claude Code returned empty response (exit=$CLI_EXIT). Keyword: ${KEYWORD:-unknown}" "$LOG_FILE"
+if [[ $CLI_EXIT -ne 0 || -z "$RAW_OUTPUT" ]]; then
+    log "ERROR: Claude CLI exhausted ${MAX_CLAUDE_ATTEMPTS} attempts (last exit=$CLI_EXIT)"
+    notify_failure "generate-article" "Claude CLI failed after ${MAX_CLAUDE_ATTEMPTS} attempts (exit=$CLI_EXIT). Keyword: ${KEYWORD:-unknown}. Stderr: ${CLI_STDERR:0:200}" "$LOG_FILE"
     exit 1
 fi
 
