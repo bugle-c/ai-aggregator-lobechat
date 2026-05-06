@@ -212,6 +212,23 @@ export function defineConfig() {
       }
     }
 
+    // Pricing A/B: assign 50/50 once and lock for 180 days. Read by the
+    // tRPC lambda context (libs/trpc/lambda/context.ts) and stamped on
+    // every billing_payments row as metadata.pricing_variant for the
+    // /admin/finance/pricing-experiments dashboard. Without this nobody
+    // ever set the cookie — only 1/4 paid users had a variant pre-fix.
+    const existingVariant = request.cookies.get('_pricing_variant')?.value;
+    if (existingVariant !== 'A' && existingVariant !== 'B') {
+      const variant: 'A' | 'B' = Math.random() < 0.5 ? 'A' : 'B';
+      rewrite.cookies.set('_pricing_variant', variant, {
+        httpOnly: false,
+        maxAge: 60 * 60 * 24 * 180,
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+      });
+    }
+
     return rewrite;
   };
 
