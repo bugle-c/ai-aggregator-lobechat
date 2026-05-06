@@ -134,11 +134,15 @@ export const subscriptionRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { userBilling } = await import('@/database/schemas');
       const { eq } = await import('drizzle-orm');
+      const { writeSubscriptionEvent } =
+        await import('@/server/modules/analytics/writeSubscriptionEvent');
       const billing = await ctx.billingService.getOrCreateUserBilling();
 
       if (billing.planId === 1) {
         throw new Error('Подписка не активна — отменять нечего.');
       }
+
+      const fromPlan = await ctx.billingService.getPlanById(billing.planId);
 
       await ctx.serverDB
         .update(userBilling)
@@ -154,6 +158,24 @@ export const subscriptionRouter = router({
         reasonCode: input.reasonCode,
         reasonText: input.reasonText ?? null,
         planIdBefore: billing.planId,
+      });
+
+      // Phase 2.4 — record a `cancelled` event in billing_subscription_events
+      // so the MRR chart in /admin/finance, churn rate in /economics, and
+      // cohort retention all see this opt-out. Without this the row only
+      // exists in user_billing.cancelled_at, which the analytics dashboard
+      // never reads. classifySubscriptionEvent emits eventType='cancelled'
+      // with mrrDelta=-fromPlanPrice when toPlanPrice is 0 — passing 0 +
+      // toPlanId=1 (free) reflects "user opted out of recurring billing;
+      // after subscriptionExpiresAt they fall to free".
+      await writeSubscriptionEvent(ctx.serverDB, {
+        userId: ctx.userId,
+        fromPlanId: billing.planId,
+        toPlanId: 1,
+        fromPlanPrice: fromPlan?.priceRub ?? 0,
+        toPlanPrice: 0,
+        currentExpiresAt: billing.subscriptionExpiresAt ?? null,
+        paymentId: null,
       });
 
       return {
