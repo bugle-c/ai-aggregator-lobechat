@@ -110,7 +110,31 @@ export async function expireSubscriptions(db: LobeChatDatabase): Promise<number>
 
   let written = 0;
   for (const row of expired) {
-    // Skip if we already logged a 'cancelled' event after this expiry.
+    const plan = await fetchPlanById(row.planId);
+
+    // Phase 2.5 — ALWAYS reset user_billing if plan_id != 1 and expired.
+    //
+    // The user_billing reset is idempotent — it's safe to run on every
+    // tick. We do it OUTSIDE the event-dedup guard because the old
+    // version of this cron used to write the analytics event without
+    // updating user_billing, leaving users like `48b6e949-…` stuck on
+    // plan_id=2 with an Apr-1 expiry and a `cancelled` event from
+    // Apr 20 — the dedup guard would skip them forever otherwise.
+    //
+    // tokenBalance left untouched on purpose — separately-purchased
+    // top-ups stay valid through plan downgrade.
+    await db
+      .update(userBilling)
+      .set({
+        planId: 1,
+        subscriptionExpiresAt: null,
+        autoRenew: false,
+      })
+      .where(eq(userBilling.userId, row.userId));
+
+    // Now the analytics-event-dedup guard: only ONE `cancelled` event
+    // per expiry epoch. If we already logged one for this row, don't
+    // double-write — but the user_billing reset above already happened.
     const existing = await db
       .select({ id: billingSubscriptionEvents.id })
       .from(billingSubscriptionEvents)
@@ -123,27 +147,6 @@ export async function expireSubscriptions(db: LobeChatDatabase): Promise<number>
       )
       .limit(1);
     if (existing.length > 0) continue;
-
-    const plan = await fetchPlanById(row.planId);
-
-    // Phase 2.5 — actually MOVE the user back to Free.
-    //
-    // Previous bug: this loop only wrote a `cancelled` analytics event but
-    // left `user_billing.plan_id` and `subscription_expires_at` unchanged.
-    // Result: paid users whose subscription expired kept their paid quota
-    // and features forever. Audit found ≥1 user (`48b6e949-…`) on plan_id=2
-    // with expires_at=2026-04-01 still being treated as paid 35 days later.
-    //
-    // Now we update user_billing alongside the event write. We do NOT touch
-    // tokenBalance — top-ups paid for separately stay valid.
-    await db
-      .update(userBilling)
-      .set({
-        planId: 1,
-        subscriptionExpiresAt: null,
-        autoRenew: false,
-      })
-      .where(eq(userBilling.userId, row.userId));
 
     await writeSubscriptionEvent(db, {
       userId: row.userId,
