@@ -502,7 +502,13 @@ export const createRuntimeExecutors = (
         if (ctx.userId) {
           (async () => {
             try {
-              const u = currentStepUsage as Record<string, any>;
+              const u = (currentStepUsage ?? {}) as Record<string, any>;
+              // Diagnostic: log exact shape of usage for any chat where we
+              // can't derive non-zero tokens. Helps trace lobehub→OpenRouter
+              // chat that produces a clean response but no usage chunk
+              // (audit found gpt-4o-mini through OpenRouter loses usage).
+              // Truncated to first 400 chars to keep logs cheap.
+              const usageDebug = JSON.stringify(currentStepUsage ?? null).slice(0, 400);
               const inputTokens =
                 Number(u.prompt_tokens ?? u.input_tokens ?? u.inputTokens ?? 0) || 0;
               const outputTokens =
@@ -515,11 +521,8 @@ export const createRuntimeExecutors = (
                     0,
                 ) || 0;
               const cacheWrite1h =
-                Number(
-                  u.cache_creation?.ephemeral_1h_input_tokens ??
-                    u.cacheWrite1hTokens ??
-                    0,
-                ) || 0;
+                Number(u.cache_creation?.ephemeral_1h_input_tokens ?? u.cacheWrite1hTokens ?? 0) ||
+                0;
               const cacheRead =
                 Number(
                   u.cache_read_input_tokens ??
@@ -528,19 +531,19 @@ export const createRuntimeExecutors = (
                     u.cacheReadTokens ??
                     0,
                 ) || 0;
-              const providerCostUsd =
-                typeof u.cost === 'number' ? u.cost : undefined;
+              const providerCostUsd = typeof u.cost === 'number' ? u.cost : undefined;
 
               if (inputTokens === 0 && outputTokens === 0) {
                 console.info(
-                  `[billing/runtime] skipping charge (no usage): user=${ctx.userId} model=${llmPayload.model}`,
+                  `[billing/runtime] skipping charge (no usage): user=${ctx.userId} model=${llmPayload.model} provider=${llmPayload.provider} usage_shape=${usageDebug}`,
                 );
                 return;
               }
-
-              const { recordTokenUsage } = await import(
-                '@/server/modules/billing/checkUsageLimit'
+              console.info(
+                `[billing/runtime] charging: user=${ctx.userId} model=${llmPayload.model} in=${inputTokens} out=${outputTokens}`,
               );
+
+              const { recordTokenUsage } = await import('@/server/modules/billing/checkUsageLimit');
               await recordTokenUsage(
                 ctx.serverDB,
                 ctx.userId!,

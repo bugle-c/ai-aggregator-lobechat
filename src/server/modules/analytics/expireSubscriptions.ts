@@ -126,6 +126,25 @@ export async function expireSubscriptions(db: LobeChatDatabase): Promise<number>
 
     const plan = await fetchPlanById(row.planId);
 
+    // Phase 2.5 — actually MOVE the user back to Free.
+    //
+    // Previous bug: this loop only wrote a `cancelled` analytics event but
+    // left `user_billing.plan_id` and `subscription_expires_at` unchanged.
+    // Result: paid users whose subscription expired kept their paid quota
+    // and features forever. Audit found ≥1 user (`48b6e949-…`) on plan_id=2
+    // with expires_at=2026-04-01 still being treated as paid 35 days later.
+    //
+    // Now we update user_billing alongside the event write. We do NOT touch
+    // tokenBalance — top-ups paid for separately stay valid.
+    await db
+      .update(userBilling)
+      .set({
+        planId: 1,
+        subscriptionExpiresAt: null,
+        autoRenew: false,
+      })
+      .where(eq(userBilling.userId, row.userId));
+
     await writeSubscriptionEvent(db, {
       userId: row.userId,
       fromPlanId: row.planId,

@@ -247,12 +247,23 @@ export async function recordTokenUsage(
 
     const billingService = new BillingService(db, userId);
 
+    // Compute the cap so incrementTokensUsed can guard against TOCTOU.
+    // checkUsageLimit ran at request start; concurrent streams from the
+    // same user could each pass that check and then both bump
+    // tokensUsedMonth past the cap. The conditional-UPDATE guard inside
+    // incrementTokensUsed (`tokens_used_month + delta <= limit`) closes
+    // that window — but only when we tell it the cap. Image-charge
+    // already passes limit; chat-charge previously did not.
+    const billing = await billingService.getOrCreateUserBilling();
+    const plan = await billingService.getPlanById(billing.planId);
+    const limit = (plan?.tokenLimit ?? 0) + (billing.tokenBalance ?? 0);
+
     // Atomic: increment monthly counter + insert usage_logs row. If either
     // fails, rollback — otherwise we end up with phantom credits (the counter
     // moves but no audit row exists). See writeUsageLog.ts for history.
     const { writeUsageLog } = await import('@/server/modules/analytics/writeUsageLog');
     await db.transaction(async (tx) => {
-      await billingService.incrementTokensUsed(credits, tx);
+      await billingService.incrementTokensUsed(credits, tx, { limit });
       await writeUsageLog(tx, {
         userId,
         model: modelId || 'unknown',
