@@ -24,7 +24,7 @@ const vpnPromoUrl = 'https://t.me/freeip_pashavinbot';
 
 const VpnPromoStrip = () => (
   <a
-    aria-label="VPN Pashavin — открыть Telegram-бота"
+    aria-label="Бесплатный VPN — открыть Telegram-бота"
     data-testid="vpn-pashavin-top-strip"
     href={vpnPromoUrl}
     rel="noopener noreferrer"
@@ -51,7 +51,7 @@ const VpnPromoStrip = () => (
       zIndex: 2147483000,
     }}
   >
-    <span style={{ color: 'rgba(34, 211, 238, 0.9)', fontWeight: 600 }}>VPN Pashavin</span>
+    <span style={{ color: 'rgba(34, 211, 238, 0.9)', fontWeight: 600 }}>Бесплатный VPN</span>
     <span style={{ opacity: 0.76 }}>стабильный доступ к нейросетям и рабочим сервисам</span>
     <span style={{ color: 'rgba(125, 211, 252, 0.95)', fontWeight: 600 }}>
       t.me/freeip_pashavinbot
