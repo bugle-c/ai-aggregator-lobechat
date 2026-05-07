@@ -44,11 +44,10 @@ const VpnPromoStrip = () => (
       left: 0,
       letterSpacing: '0.01em',
       lineHeight: '28px',
-      position: 'fixed',
+      position: 'relative',
       right: 0,
       textDecoration: 'none',
-      top: 0,
-      zIndex: 2147483000,
+      zIndex: 10,
     }}
   >
     <span style={{ color: 'rgba(34, 211, 238, 0.9)', fontWeight: 600 }}>Бесплатный VPN</span>
