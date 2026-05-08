@@ -7,6 +7,7 @@ declare global {
   namespace NodeJS {
     interface ProcessEnv {
       EMAIL_SERVICE_PROVIDER?: string;
+      EMAIL_WELCOME_ENABLED?: string;
       RESEND_API_KEY?: string;
       RESEND_FROM?: string;
       SMTP_FROM?: string;
@@ -23,6 +24,7 @@ export const getEmailConfig = () => {
   return createEnv({
     server: {
       EMAIL_SERVICE_PROVIDER: z.enum(['nodemailer', 'resend']).optional(),
+      EMAIL_WELCOME_ENABLED: z.boolean().optional().default(true),
       RESEND_API_KEY: z.string().optional(),
       RESEND_FROM: z.string().optional(),
       SMTP_FROM: z.string().optional(),
@@ -41,6 +43,9 @@ export const getEmailConfig = () => {
       SMTP_PASS: process.env.SMTP_PASS,
       EMAIL_SERVICE_PROVIDER: process.env.EMAIL_SERVICE_PROVIDER
         ? process.env.EMAIL_SERVICE_PROVIDER.toLowerCase()
+        : undefined,
+      EMAIL_WELCOME_ENABLED: process.env.EMAIL_WELCOME_ENABLED
+        ? process.env.EMAIL_WELCOME_ENABLED === 'true'
         : undefined,
       RESEND_API_KEY: process.env.RESEND_API_KEY,
       RESEND_FROM: process.env.RESEND_FROM,

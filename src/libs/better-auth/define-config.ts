@@ -18,16 +18,19 @@ import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { businessEmailValidator } from '@/business/server/better-auth';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
+import { emailEnv } from '@/envs/email';
 import {
   getMagicLinkEmailTemplate,
   getResetPasswordEmailTemplate,
   getVerificationEmailTemplate,
   getVerificationOTPEmailTemplate,
+  getWelcomeEmailTemplate,
 } from '@/libs/better-auth/email-templates';
 import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
 import { createSecondaryStorage, getTrustedOrigins } from '@/libs/better-auth/utils/config';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
+import { assessSignupEmail, shouldSendWelcomeEmail } from '@/server/modules/auth/signupLifecycle';
 import { EmailService } from '@/server/services/email';
 import { UserService } from '@/server/services/user';
 
@@ -85,7 +88,19 @@ const enabledSSOProviders = parseSSOProviders(authEnv.AUTH_SSO_PROVIDERS);
 const { socialProviders, genericOAuthProviders } = initBetterAuthSSOProviders();
 
 async function customEmailValidator(email: string): Promise<boolean> {
-  return ENABLE_BUSINESS_FEATURES ? businessEmailValidator(email) : validateEmail(email);
+  const baseValid = ENABLE_BUSINESS_FEATURES ? await businessEmailValidator(email) : validateEmail(email);
+  if (!baseValid) return false;
+
+  const assessment = assessSignupEmail(email);
+  if (assessment.suspicious) {
+    console.warn('[auth] suspicious signup email', {
+      domain: assessment.domain,
+      reasons: assessment.reasons,
+      blocked: authEnv.AUTH_BLOCK_SUSPICIOUS_SIGNUPS,
+    });
+  }
+
+  return authEnv.AUTH_BLOCK_SUSPICIOUS_SIGNUPS ? !assessment.suspicious : true;
 }
 
 interface CustomBetterAuthOptions {
@@ -252,6 +267,26 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
               });
             } catch (error) {
               console.error('[referrals] signup hook error:', error);
+            }
+
+            // Send welcome email after account bootstrap. Non-blocking for signup:
+            // missing provider config or provider failure must never break registration.
+            try {
+              if (shouldSendWelcomeEmail(emailEnv)) {
+                const template = getWelcomeEmailTemplate({
+                  appUrl: appEnv.APP_URL || 'https://ask.gptweb.ru',
+                  userName: user.name,
+                });
+                const emailService = new EmailService();
+                await emailService.sendMail({
+                  to: user.email,
+                  ...template,
+                });
+              } else {
+                console.info('[auth] welcome email skipped: email provider is not configured or disabled');
+              }
+            } catch (error) {
+              console.error('[auth] welcome email error:', error);
             }
           },
         },
