@@ -7,8 +7,9 @@ const DEFAULT_APP_URL = 'https://ask.gptweb.ru';
 
 export const getWelcomeEmailTemplate = ({ appUrl = DEFAULT_APP_URL, userName }: WelcomeEmailParams = {}) => {
   const safeAppUrl = appUrl.replace(/\/$/, '');
-  const chatUrl = `${safeAppUrl}/`;
-  const plansUrl = `${safeAppUrl}/settings/plans`;
+  const campaign = 'welcome_signup';
+  const chatUrl = `${safeAppUrl}/?utm_source=brevo&utm_medium=email&utm_campaign=${campaign}&utm_content=open_app`;
+  const plansUrl = `${safeAppUrl}/settings/plans?utm_source=brevo&utm_medium=email&utm_campaign=${campaign}&utm_content=plans`;
   const greeting = userName ? `${userName}, добро пожаловать в WebGPT!` : 'Добро пожаловать в WebGPT!';
 
   return {

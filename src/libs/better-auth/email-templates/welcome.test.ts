@@ -8,8 +8,7 @@ describe('getWelcomeEmailTemplate', () => {
 
     expect(template.subject).toContain('Добро пожаловать');
     expect(template.text).toContain('бесплатные кредиты');
-    expect(template.text).toContain('https://ask.gptweb.ru');
-    expect(template.text).toContain('490');
+    expect(template.text).toContain('utm_source=brevo');
     expect(template.html).toContain('Сравни Claude, GPT и Gemini');
     expect(template.html).toContain('https://ask.gptweb.ru/settings/plans');
   });

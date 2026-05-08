@@ -33,7 +33,7 @@ export const assessSignupEmail = (email: string): SignupEmailAssessment => {
 
   if (!domain || !local) reasons.push('invalid_shape');
   if (DISPOSABLE_DOMAINS.has(domain)) reasons.push('disposable_domain');
-  if (/^(?:gmaij|gmai|gmial|gmail\.cjm|mal|mali)\./.test(domain)) reasons.push('typo_domain');
+  if (/^(?:gmaij|gmai|gmial|mal|mali)\.|^gmail\.cjm$/.test(domain)) reasons.push('typo_domain');
   if (local.includes('+')) reasons.push('plus_alias');
   if (/^(?:test|demo|bot|spam|fake|user)\d{3,}/.test(local)) reasons.push('patterned_local_part');
   if (/\d{8,}/.test(local)) reasons.push('long_digit_sequence');
