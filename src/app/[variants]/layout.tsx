@@ -3,6 +3,7 @@ import './initialize';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { type ResolvingViewport } from 'next';
+import dynamic from 'next/dynamic';
 import Script from 'next/script';
 import { type ReactNode } from 'react';
 import { Suspense } from 'react';
@@ -22,7 +23,9 @@ const inVercel = process.env.VERCEL === '1';
 
 const vpnPromoUrl = 'https://t.me/freeip_pashavinbot';
 
-const VpnPromoStrip = () => (
+const MobileVpnPromo = dynamic(() => import('@/features/MobileVpnPromo'), { ssr: false });
+
+const DesktopVpnPromoStrip = () => (
   <a
     aria-label="Бесплатный VPN — открыть Telegram-бота"
     data-testid="vpn-pashavin-top-strip"
@@ -57,6 +60,16 @@ const VpnPromoStrip = () => (
     </span>
   </a>
 );
+
+/**
+ * Renders the desktop strip (full text, dark gradient, fixed at top) on
+ * desktop and the compact dismissable {@link MobileVpnPromo} on mobile.
+ * `isMobile` comes from `RouteVariants.deserializeVariants` in the
+ * layout — keeping this prop-driven so the layout stays a server
+ * component.
+ */
+const VpnPromoStrip = ({ isMobile }: { isMobile: boolean }) =>
+  isMobile ? <MobileVpnPromo /> : <DesktopVpnPromoStrip />;
 
 export interface RootLayoutProps extends DynamicLayoutProps {
   children: ReactNode;
@@ -97,7 +110,7 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
         )}
       </head>
       <body>
-        <VpnPromoStrip />
+        <VpnPromoStrip isMobile={isMobile} />
         {ENABLE_BUSINESS_FEATURES ? (
           <BusinessGlobalProvider>{renderContent()}</BusinessGlobalProvider>
         ) : (
