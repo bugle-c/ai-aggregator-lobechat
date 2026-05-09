@@ -23,7 +23,11 @@ const inVercel = process.env.VERCEL === '1';
 
 const vpnPromoUrl = 'https://t.me/freeip_pashavinbot';
 
-const MobileVpnPromo = dynamic(() => import('@/features/MobileVpnPromo'), { ssr: false });
+// `ssr: false` is forbidden in Server Components (this layout is async).
+// MobileVpnPromo is already 'use client' and starts with dismissed=true,
+// so SSR renders nothing — useEffect on the client reveals it if no
+// cookie is set. No hydration flash, no server-rendering harm.
+const MobileVpnPromo = dynamic(() => import('@/features/MobileVpnPromo'));
 
 const DesktopVpnPromoStrip = () => (
   <a
