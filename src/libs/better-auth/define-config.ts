@@ -209,14 +209,28 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       user: {
         create: {
           after: async (user, ctx) => {
+            // Diagnostic: previously 70 signups in 24h produced ZERO welcome
+            // emails or any other signup-side log lines. nodemailer uses
+            // `debug()` so its successes are silent; better-auth itself
+            // doesn't log either. Surface enough breadcrumbs to know
+            // whether the hook fires, which step throws, and whether
+            // welcome actually attempts a send.
+            console.info(`[auth] signup hook fired user=${user.id} email=${user.email}`);
             const userService = new UserService(serverDB);
-            await userService.initUser({
-              email: user.email,
-              id: user.id,
-              username: user.username as string | null,
-              createdAt: user.createdAt,
-              // TODO: if add phone plugin, we should fill phone here
-            });
+            try {
+              await userService.initUser({
+                email: user.email,
+                id: user.id,
+                username: user.username as string | null,
+                createdAt: user.createdAt,
+                // TODO: if add phone plugin, we should fill phone here
+              });
+            } catch (error) {
+              console.error(`[auth] initUser FAILED user=${user.id}:`, error);
+              // Don't re-throw — let the rest of the hooks try anyway.
+              // The user row already exists from better-auth core; we
+              // just lose their billing_user / lifecycle bootstrap.
+            }
 
             // Write UTM attribution (non-blocking on error)
             try {
@@ -273,20 +287,26 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
             // missing provider config or provider failure must never break registration.
             try {
               if (shouldSendWelcomeEmail(emailEnv)) {
+                console.info(`[auth] welcome email start user=${user.id}`);
                 const template = getWelcomeEmailTemplate({
                   appUrl: appEnv.APP_URL || 'https://ask.gptweb.ru',
                   userName: user.name,
                 });
                 const emailService = new EmailService();
-                await emailService.sendMail({
+                const result = await emailService.sendMail({
                   to: user.email,
                   ...template,
                 });
+                console.info(
+                  `[auth] welcome email sent user=${user.id} messageId=${result?.messageId ?? 'n/a'}`,
+                );
               } else {
-                console.info('[auth] welcome email skipped: email provider is not configured or disabled');
+                console.info(
+                  `[auth] welcome email skipped (provider not configured / disabled) user=${user.id}`,
+                );
               }
             } catch (error) {
-              console.error('[auth] welcome email error:', error);
+              console.error(`[auth] welcome email error user=${user.id}:`, error);
             }
           },
         },
