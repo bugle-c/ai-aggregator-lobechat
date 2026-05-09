@@ -4,6 +4,8 @@ import { ChevronRight, Zap } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { useTrackUpsell } from './useTrackUpsell';
+
 const COOKIE_NAME = 'upgrade_pill_dismissed_at';
 const REACTIVATE_AFTER_DAYS = 7;
 
@@ -43,16 +45,23 @@ const MobileUpgradePill = memo<Props>(({ shouldRender }) => {
   // Start dismissed so we don't briefly flash the pill before useEffect
   // reads the cookie. It un-dismisses itself on first effect tick.
   const [dismissed, setDismissed] = useState(true);
+  const { click, impression } = useTrackUpsell();
 
   useEffect(() => {
     setDismissed(isDismissedRecently());
   }, []);
 
-  if (!shouldRender || dismissed) return null;
+  const visible = shouldRender && !dismissed;
+  useEffect(() => {
+    if (visible) impression('home_pill');
+  }, [visible, impression]);
+
+  if (!visible) return null;
 
   return (
     <Link
       onClick={() => {
+        click('home_pill');
         dismissNow();
         setDismissed(true);
       }}

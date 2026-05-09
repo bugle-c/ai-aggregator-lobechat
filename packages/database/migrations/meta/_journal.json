@@ -679,6 +679,13 @@
       "when": 1778587200000,
       "tag": "0096_auto_renew_subscription",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1778800000000,
+      "tag": "0097_upsell_tracking",
+      "breakpoints": true
     }
   ],
   "version": "6"

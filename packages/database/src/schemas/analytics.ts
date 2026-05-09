@@ -133,3 +133,54 @@ export const billingSubscriptionEvents = pgTable(
 
 export type BillingSubscriptionEventItem = typeof billingSubscriptionEvents.$inferSelect;
 export type NewBillingSubscriptionEvent = typeof billingSubscriptionEvents.$inferInsert;
+
+// ============ Upsell tracking (mobile-redesign Phase 1) ============ //
+//
+// Two thin event tables that capture the impression → click → paid
+// funnel per upsell source (`plan_limit_chat`, `locked_model`,
+// `balance_nudge`, `home_pill`, `welcome_email`). The
+// /finance/pricing-experiments admin page joins these against
+// billing_payments to compute conversion per source.
+
+export const upsellImpressions = pgTable(
+  'upsell_impressions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    source: varchar('source', { length: 32 }).notNull(),
+    modelBlocked: text('model_blocked'),
+    planOffered: text('plan_offered'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    index('upsell_imp_user_idx').on(table.userId),
+    index('upsell_imp_source_idx').on(table.source),
+    index('upsell_imp_created_idx').on(table.createdAt),
+  ],
+);
+
+export type UpsellImpressionItem = typeof upsellImpressions.$inferSelect;
+export type NewUpsellImpression = typeof upsellImpressions.$inferInsert;
+
+export const upsellClicks = pgTable(
+  'upsell_clicks',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    source: varchar('source', { length: 32 }).notNull(),
+    targetPlan: text('target_plan'),
+    clickedAt: timestamptz('clicked_at').notNull().defaultNow(),
+  },
+  (table) => [
+    index('upsell_click_user_idx').on(table.userId),
+    index('upsell_click_source_idx').on(table.source),
+    index('upsell_click_created_idx').on(table.clickedAt),
+  ],
+);
+
+export type UpsellClickItem = typeof upsellClicks.$inferSelect;
+export type NewUpsellClick = typeof upsellClicks.$inferInsert;

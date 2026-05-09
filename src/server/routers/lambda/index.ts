@@ -9,6 +9,7 @@ import { spendRouter } from '@/business/server/lambda-routers/spend';
 import { subscriptionRouter } from '@/business/server/lambda-routers/subscription';
 import { topicBotRouter } from '@/business/server/lambda-routers/topicBot';
 import { topUpRouter } from '@/business/server/lambda-routers/topUp';
+import { upsellRouter } from '@/business/server/lambda-routers/upsell';
 import { userOnboardingRouter } from '@/business/server/lambda-routers/userOnboarding';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
@@ -108,6 +109,7 @@ export const lambdaRouter = router({
   spend: spendRouter,
   subscription: subscriptionRouter,
   topUp: topUpRouter,
+  upsell: upsellRouter,
   userOnboarding: userOnboardingRouter,
   /* eslint-enable sort-keys-fix/sort-keys-fix */
 });

@@ -2,8 +2,10 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { Button, Drawer, Typography } from 'antd';
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+
+import { useTrackUpsell } from './useTrackUpsell';
 
 const { Text, Title } = Typography;
 
@@ -25,8 +27,19 @@ interface Props {
 const LockedModelUpsellSheet = memo<Props>(
   ({ modelDescription, modelId, onClose, open, requiredPlanName, requiredPlanPriceRub }) => {
     const navigate = useNavigate();
+    const { click, impression } = useTrackUpsell();
+
+    useEffect(() => {
+      if (open) {
+        impression('locked_model', {
+          modelBlocked: modelId,
+          planOffered: requiredPlanName,
+        });
+      }
+    }, [open, modelId, requiredPlanName, impression]);
 
     const goToPlans = () => {
+      click('locked_model', { targetPlan: requiredPlanName });
       onClose();
       navigate('/settings/subscription/plans?utm_source=locked_model');
     };
