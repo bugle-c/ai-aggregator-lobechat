@@ -13,12 +13,17 @@ interface SettingsItem {
   label: string;
 }
 
+// Routes verified against SettingsTabs enum in store/global/initialState.ts
+// — only existing tabs are listed here. `/settings/customization` was a
+// dead link from the spec.
 const ITEMS: SettingsItem[] = [
   { href: '/settings/profile', label: 'Профиль' },
-  { href: '/settings/subscription/plans', label: 'Подписка и тарифы' },
+  { href: '/settings/plans', label: 'Подписка и тарифы' },
+  { href: '/settings/funds', label: 'Пополнить баланс' },
+  { href: '/settings/billing', label: 'История платежей' },
+  { href: '/settings/usage', label: 'Использование кредитов' },
   { href: '/settings/referral', label: 'Реферальная программа' },
-  { href: '/settings/customization', label: 'Персонализация' },
-  { href: '/settings/billing', label: 'Платежи' },
+  { href: '/settings/common', label: 'Общие настройки' },
   { href: '/settings/about', label: 'О сервисе' },
 ];
 

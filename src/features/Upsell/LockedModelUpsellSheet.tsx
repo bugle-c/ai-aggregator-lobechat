@@ -41,7 +41,7 @@ const LockedModelUpsellSheet = memo<Props>(
     const goToPlans = () => {
       click('locked_model', { targetPlan: requiredPlanName });
       onClose();
-      navigate('/settings/subscription/plans?utm_source=locked_model');
+      navigate('/settings/plans?utm_source=locked_model');
     };
 
     return (

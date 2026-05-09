@@ -60,7 +60,7 @@ export default function useRenderBusinessChatErrorMessageExtra(
     <Block padding={16} style={{ width: '100%' }} variant={'outlined'}>
       <div style={{ marginBottom: 12, fontSize: 14, lineHeight: 1.5 }}>{message}</div>
       <Link
-        href="/settings/subscription/plans?utm_source=plan_limit_chat"
+        href="/settings/plans?utm_source=plan_limit_chat"
         onClick={() => click('plan_limit_chat', { targetPlan: body.requiredPlan })}
         style={{ textDecoration: 'none' }}
       >

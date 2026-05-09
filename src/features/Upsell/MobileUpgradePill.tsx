@@ -38,7 +38,7 @@ interface Props {
 /**
  * Persistent upgrade pill rendered on the mobile home screen above the
  * input area. Free users who have used >50% of their monthly credits
- * get a one-tap path to /settings/subscription/plans. Cookie remembers
+ * get a one-tap path to /settings/plans. Cookie remembers
  * dismissal for 7 days; after that the pill comes back.
  */
 const MobileUpgradePill = memo<Props>(({ shouldRender }) => {
@@ -78,7 +78,7 @@ const MobileUpgradePill = memo<Props>(({ shouldRender }) => {
         padding: '10px 14px',
         textDecoration: 'none',
       }}
-      to="/settings/subscription/plans?utm_source=home_pill"
+      to="/settings/plans?utm_source=home_pill"
     >
       <Zap size={16} />
       <span style={{ flex: 1 }}>Перейди на Pro — больше моделей, без лимитов</span>

@@ -18,7 +18,7 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
  * Colors:
  *   green  -> plenty of credits
  *   orange -> ≤ 5 remaining (tooltip nudges top-up)
- *   red    -> 0 remaining (clicks to /settings/subscription/plans)
+ *   red    -> 0 remaining (clicks to /settings/plans)
  */
 const BalanceBadge = memo(() => {
   const { t } = useTranslation('onboarding');

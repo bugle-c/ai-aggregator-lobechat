@@ -21,7 +21,7 @@ interface Props {
  * have no idea whether 50 credits is a lot or a little. This sheet
  * explains what 1 credit buys (chat msg, image, video) and offers two
  * paths to top up: ad-hoc (Купить ещё → /settings/billing) or upgrade
- * (Перейти на Pro → /settings/subscription/plans).
+ * (Перейти на Pro → /settings/plans).
  *
  * Caller controls open state (typically the BalanceBadge wrapper). On
  * first dismiss, the badge can persist a `balance_explained_seen` cookie
@@ -64,7 +64,7 @@ const BalanceExplainSheet = memo<Props>(({ monthlyResetDate, onClose, open, rema
           block
           onClick={() => {
             onClose();
-            navigate('/settings/subscription/plans?utm_source=balance_sheet');
+            navigate('/settings/plans?utm_source=balance_sheet');
           }}
           size="large"
           type="primary"

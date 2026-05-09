@@ -75,7 +75,7 @@ export default memo<Props>(({ className, tabBarKey }) => {
         ),
         key: 'plans' as SidebarTabKey,
         onClick: () => {
-          router.push('/settings/subscription/plans');
+          router.push('/settings/plans');
         },
         title: tSub('sidebar.plans'),
       },

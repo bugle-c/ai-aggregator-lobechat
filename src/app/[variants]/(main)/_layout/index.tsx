@@ -70,10 +70,6 @@ const Layout: FC = () => {
           horizontal
           className={cx(isPWA ? styles.mainContainerPWA : styles.mainContainer)}
           width={'100%'}
-          // Reserve ~72px at the bottom on mobile so content isn't hidden
-          // by the fixed-position MobileTabBar overlay (56px bar + 16px
-          // safe gap). Desktop unchanged.
-          style={isMobile ? { paddingBlockEnd: 72 } : undefined}
           height={
             isDesktop
               ? `calc(100% - ${TITLE_BAR_HEIGHT}px)`
