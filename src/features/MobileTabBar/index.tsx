@@ -2,15 +2,13 @@ import { Icon } from '@lobehub/ui';
 import { type TabBarProps } from '@lobehub/ui/mobile';
 import { TabBar } from '@lobehub/ui/mobile';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Bot, Gem, ImageIcon, MessageSquare, User, Video } from 'lucide-react';
+import { Gem, ImageIcon, MessageSquare, User, Video } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useShowTabBar } from '@/features/MobileGlobalHeader/useShowTabBar';
-import { useIsLightMode } from '@/features/UIMode';
 import { useRouter } from '@/libs/router/navigation';
 import { SidebarTabKey } from '@/store/global/initialState';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 const styles = createStaticStyles(({ css }) => ({
   active: css`
@@ -30,87 +28,91 @@ export default memo<Props>(({ className, tabBarKey }) => {
   const { t } = useTranslation('common');
   const { t: tSub } = useTranslation('subscription');
   const router = useRouter();
-  const isLight = useIsLightMode();
-  const openSettings = () => {
-    router.push(isLight ? '/settings/profile' : '/settings/provider/all');
-  };
-  const { showMarket } = useServerConfigStore(featureFlagsSelectors);
 
+  // Mobile tab bar is intentionally minimal — exactly 5 items regardless
+  // of Light/Pro mode (per spec Q5: kill UIMode-driven mobile branching).
+  // Сообщество, Agent-builder etc. are power-user surfaces unsuited to
+  // a phone screen; they remain reachable from the desktop sidebar.
+  // Settings tab always lands on /settings — that route renders the
+  // mobile list-of-links (MobileSettingsList) on small screens, so the
+  // user gets a back-able overview instead of being dumped into provider
+  // config.
   const items: TabBarProps['items'] = useMemo(
-    () =>
-      [
-        {
-          icon: (active: boolean) => (
-            <Icon className={active ? styles.active : undefined} icon={MessageSquare} />
-          ),
-          key: SidebarTabKey.Chat,
-          onClick: () => {
-            router.push('/agent');
-          },
-          title: t('tab.chat'),
+    () => [
+      {
+        icon: (active: boolean) => (
+          <Icon className={active ? styles.active : undefined} icon={MessageSquare} />
+        ),
+        key: SidebarTabKey.Chat,
+        onClick: () => {
+          router.push('/');
         },
-        // Image / Video / Plans visible in BOTH Light and Pro modes.
-        // Previously gated to `isLight && {...}` which hid them on mobile
-        // for Pro users — opposite of the desktop nav (which shows them
-        // for everyone) and the natural expectation that "Pro = more, not
-        // less". UX audit found these tabs at near-zero usage; one
-        // contributing factor was the invert-bug.
-        {
-          icon: (active: boolean) => (
-            <Icon className={active ? styles.active : undefined} icon={ImageIcon} />
-          ),
-          key: SidebarTabKey.Image,
-          onClick: () => {
-            router.push('/image');
-          },
-          title: t('tab.aiImage'),
+        title: t('tab.chat'),
+      },
+      {
+        icon: (active: boolean) => (
+          <Icon className={active ? styles.active : undefined} icon={ImageIcon} />
+        ),
+        key: SidebarTabKey.Image,
+        onClick: () => {
+          router.push('/image');
         },
-        {
-          icon: (active: boolean) => (
-            <Icon className={active ? styles.active : undefined} icon={Video} />
-          ),
-          key: SidebarTabKey.Video,
-          onClick: () => {
-            router.push('/video');
-          },
-          title: t('tab.video'),
+        title: t('tab.aiImage'),
+      },
+      {
+        icon: (active: boolean) => (
+          <Icon className={active ? styles.active : undefined} icon={Video} />
+        ),
+        key: SidebarTabKey.Video,
+        onClick: () => {
+          router.push('/video');
         },
-        {
-          icon: (active: boolean) => (
-            <Icon className={active ? styles.active : undefined} icon={Gem} />
-          ),
-          key: 'plans' as SidebarTabKey,
-          onClick: () => {
-            router.push('/settings/plans');
-          },
-          title: tSub('sidebar.plans'),
+        title: t('tab.video'),
+      },
+      {
+        icon: (active: boolean) => (
+          <Icon className={active ? styles.active : undefined} icon={Gem} />
+        ),
+        key: 'plans' as SidebarTabKey,
+        onClick: () => {
+          router.push('/settings/subscription/plans');
         },
-        !isLight &&
-          showMarket && {
-            icon: (active: boolean) => (
-              <Icon className={active ? styles.active : undefined} icon={Bot} />
-            ),
-            key: SidebarTabKey.Community,
-            onClick: () => {
-              router.push('/community');
-            },
-            title: t('tab.community'),
-          },
-        {
-          icon: (active: boolean) => (
-            <Icon className={active ? styles.active : undefined} icon={User} />
-          ),
-          key: SidebarTabKey.Setting,
-          onClick: openSettings,
-          title: t('tab.setting'),
+        title: tSub('sidebar.plans'),
+      },
+      {
+        icon: (active: boolean) => (
+          <Icon className={active ? styles.active : undefined} icon={User} />
+        ),
+        key: SidebarTabKey.Setting,
+        onClick: () => {
+          router.push('/settings');
         },
-      ].filter(Boolean) as TabBarProps['items'],
-    [t, tSub, isLight, showMarket],
+        title: t('tab.setting'),
+      },
+    ],
+    [t, tSub, router],
   );
 
   // Hide on chat threads (`/chat/[topicId]`) so messages have full
   // vertical space. Visible everywhere else, including settings sub-pages.
   if (!visible) return null;
 
-  return <TabBar safeArea activeKey={tabBarKey} className={className} items={items} />;
+  // Pin to viewport bottom as an overlay so it doesn't shrink the
+  // content area. Pages that need to avoid hiding the last bit of
+  // content under the bar should add `paddingBlockEnd` accordingly
+  // (~72px = 56px bar + 16px safe gap).
+  return (
+    <div
+      style={{
+        backgroundColor: 'var(--ant-color-bg-container)',
+        borderBlockStart: '1px solid var(--ant-color-border-secondary)',
+        bottom: 0,
+        insetInline: 0,
+        position: 'fixed',
+        zIndex: 50,
+      }}
+    >
+      <TabBar safeArea activeKey={tabBarKey} className={className} items={items} />
+    </div>
+  );
 });

@@ -2,6 +2,7 @@
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
+import { Drawer } from 'antd';
 import { cx } from 'antd-style';
 import { type FC } from 'react';
 import { lazy, Suspense } from 'react';
@@ -25,6 +26,8 @@ import { usePlatform } from '@/hooks/usePlatform';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
 import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { HotkeyScopeEnum } from '@/types/hotkey';
 
@@ -43,6 +46,8 @@ const Layout: FC = () => {
   const { isPWA } = usePlatform();
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
   const isMobile = useIsMobile();
+  const showLeftPanel = useGlobalStore(systemStatusSelectors.showLeftPanel);
+  const toggleLeftPanel = useGlobalStore((s) => s.toggleLeftPanel);
   const {
     initialValues: feedbackInitialValues,
     isOpen: isFeedbackModalOpen,
@@ -65,6 +70,10 @@ const Layout: FC = () => {
           horizontal
           className={cx(isPWA ? styles.mainContainerPWA : styles.mainContainer)}
           width={'100%'}
+          // Reserve ~72px at the bottom on mobile so content isn't hidden
+          // by the fixed-position MobileTabBar overlay (56px bar + 16px
+          // safe gap). Desktop unchanged.
+          style={isMobile ? { paddingBlockEnd: 72 } : undefined}
           height={
             isDesktop
               ? `calc(100% - ${TITLE_BAR_HEIGHT}px)`
@@ -73,9 +82,24 @@ const Layout: FC = () => {
                 : '100%'
           }
         >
-          {/* Hide the desktop left sidebar on mobile — it can still be
-              opened via swipe/menu icons; user must explicitly request it */}
+          {/* Desktop: NavPanel inline. Mobile: same NavPanel rendered
+              inside an antd Drawer triggered by the burger button in
+              MobileGlobalHeader. `showLeftPanel` is the existing global
+              state that the burger toggles. */}
           {!isMobile && <NavPanel />}
+          {isMobile && (
+            <Drawer
+              destroyOnHidden={false}
+              onClose={() => toggleLeftPanel(false)}
+              open={showLeftPanel}
+              placement="left"
+              styles={{ body: { padding: 0 } }}
+              title={null}
+              width={300}
+            >
+              <NavPanel />
+            </Drawer>
+          )}
           <DesktopLayoutContainer>
             <MarketAuthProvider isDesktop={isDesktop}>
               <DesktopHomeLayout>
