@@ -89,7 +89,12 @@ RUN set -e && \
     pnpm i && \
     mkdir -p /deps && \
     cd /deps && \
-    pnpm init && \
+    # `pnpm init` (≥10.20) writes `packageManager: pnpm@^11.0.9` (caret)
+    # which corepack later rejects during `pnpm add`. Skip the init and
+    # provide a minimal package.json without the offending field. Same
+    # net effect (a stub package for adding pg + drizzle-orm) without
+    # the chicken-and-egg corepack failure.
+    echo '{"name":"deps","version":"1.0.0","private":true}' > package.json && \
     pnpm add pg drizzle-orm
 
 COPY . .
