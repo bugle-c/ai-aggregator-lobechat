@@ -6,6 +6,7 @@ import { Bot, Gem, ImageIcon, MessageSquare, User, Video } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShowTabBar } from '@/features/MobileGlobalHeader/useShowTabBar';
 import { useIsLightMode } from '@/features/UIMode';
 import { useRouter } from '@/libs/router/navigation';
 import { SidebarTabKey } from '@/store/global/initialState';
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export default memo<Props>(({ className, tabBarKey }) => {
+  const visible = useShowTabBar();
   const { t } = useTranslation('common');
   const { t: tSub } = useTranslation('subscription');
   const router = useRouter();
@@ -105,6 +107,10 @@ export default memo<Props>(({ className, tabBarKey }) => {
       ].filter(Boolean) as TabBarProps['items'],
     [t, tSub, isLight, showMarket],
   );
+
+  // Hide on chat threads (`/chat/[topicId]`) so messages have full
+  // vertical space. Visible everywhere else, including settings sub-pages.
+  if (!visible) return null;
 
   return <TabBar safeArea activeKey={tabBarKey} className={className} items={items} />;
 });
