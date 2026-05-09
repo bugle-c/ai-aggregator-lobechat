@@ -5,6 +5,7 @@ import { Activity, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useIsDark } from '@/hooks/useIsDark';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { useHomeStore } from '@/store/home';
 
 import HomeAgentIdSync from './HomeAgentIdSync';
@@ -24,6 +25,7 @@ const Layout: FC<LayoutProps> = ({ children }) => {
   const isHomeRoute = pathname === '/';
   const [hasActivated, setHasActivated] = useState(isHomeRoute);
   const setNavigate = useHomeStore((s) => s.setNavigate);
+  const isMobile = useIsMobile();
   const content = children ?? <Outlet />;
 
   useEffect(() => {
@@ -48,7 +50,10 @@ const Layout: FC<LayoutProps> = ({ children }) => {
   return (
     <Activity mode={isHomeRoute ? 'visible' : 'hidden'} name="DesktopHomeLayout">
       <Flexbox className={styles.absoluteContainer} height={'100%'} width={'100%'}>
-        <Sidebar />
+        {/* Mobile: hide DesktopHomeLayout Sidebar (topics/agents list).
+            User sees the burger in MobileGlobalHeader to invoke the
+            broader NavPanel as a Drawer when needed. */}
+        {!isMobile && <Sidebar />}
         <Flexbox
           className={isDarkMode ? styles.contentDark : styles.contentLight}
           flex={1}
