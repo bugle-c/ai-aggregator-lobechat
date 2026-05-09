@@ -17,8 +17,10 @@ import DesktopNavigationBridge from '@/features/DesktopNavigationBridge';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
+import MobileTabBar from '@/features/MobileTabBar';
 import NavPanel from '@/features/NavPanel';
 import { useFeedbackModal } from '@/hooks/useFeedbackModal';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePlatform } from '@/hooks/usePlatform';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
 import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
@@ -40,6 +42,7 @@ const CloudBanner = dynamic(() => import('@/features/AlertBanner/CloudBanner'));
 const Layout: FC = () => {
   const { isPWA } = usePlatform();
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
+  const isMobile = useIsMobile();
   const {
     initialValues: feedbackInitialValues,
     isOpen: isFeedbackModalOpen,
@@ -70,7 +73,9 @@ const Layout: FC = () => {
                 : '100%'
           }
         >
-          <NavPanel />
+          {/* Hide the desktop left sidebar on mobile — it can still be
+              opened via swipe/menu icons; user must explicitly request it */}
+          {!isMobile && <NavPanel />}
           <DesktopLayoutContainer>
             <MarketAuthProvider isDesktop={isDesktop}>
               <DesktopHomeLayout>
@@ -83,6 +88,9 @@ const Layout: FC = () => {
           </DesktopLayoutContainer>
         </Flexbox>
       </DndContextWrapper>
+      {/* Mobile bottom tab bar — only on mobile, hidden on chat threads
+          via internal useShowTabBar hook. */}
+      {isMobile && <MobileTabBar />}
       <Suspense fallback={null}>
         <HotkeyHelperPanel />
         <RegisterHotkeys />
