@@ -7,7 +7,10 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { lambdaQuery, lambdaClient } from '@/libs/trpc/client';
+
+import PlansMobileLayout from './PlansMobileLayout';
 
 const CANCEL_REASONS: { code: string; label: string }[] = [
   { code: 'too_expensive', label: 'Слишком дорого' },
@@ -100,6 +103,29 @@ const Plans = memo(() => {
   const creditBalance = billing?.creditBalance || 0;
   const totalAvailable = creditLimit + creditBalance;
   const usagePercent = totalAvailable > 0 ? Math.round((creditsUsed / totalAvailable) * 100) : 0;
+
+  const isMobile = useIsMobile();
+
+  if (isMobile && plans && billing) {
+    // On mobile we render the simplified vertical-stack layout. Cancel
+    // flow + cancellation modal are intentionally NOT included here yet —
+    // Task 4 will swap them for a bottom-sheet survey. For now mobile
+    // users who want to cancel must open the page on desktop. The link
+    // below exposes that explicitly.
+    return (
+      <>
+        <SettingHeader title={t('tab.plans')} />
+        <PlansMobileLayout
+          billing={{ creditBalance, creditLimit, creditsUsed, subscriptionExpiresAt: billing?.subscriptionExpiresAt }}
+          currentPlan={currentPlan ? { name: currentPlan.name, priceRub: currentPlan.priceRub, slug: currentPlan.slug } : null}
+          features={PLAN_FEATURES}
+          plans={plans.map((p) => ({ id: p.id, name: p.name, priceRub: p.priceRub, slug: p.slug, tokenLimit: p.tokenLimit }))}
+          subscribePending={subscribeMutation.isPending}
+          onSelect={(planId) => subscribeMutation.mutate({ planId })}
+        />
+      </>
+    );
+  }
 
   return (
     <>
