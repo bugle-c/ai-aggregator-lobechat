@@ -6,10 +6,15 @@ import { memo } from 'react';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
+import ImageWorkspaceMobile from './ImageWorkspaceMobile';
 import ImageWorkspace from './features/ImageWorkspace';
 
-const DesktopImagePage = memo(() => {
+const ImagePage = memo(() => {
+  const isMobile = useIsMobile();
+  if (isMobile) return <ImageWorkspaceMobile />;
+
   return (
     <>
       <NavHeader right={<WideScreenButton />} />
@@ -22,6 +27,6 @@ const DesktopImagePage = memo(() => {
   );
 });
 
-DesktopImagePage.displayName = 'DesktopImagePage';
+ImagePage.displayName = 'ImagePage';
 
-export default DesktopImagePage;
+export default ImagePage;

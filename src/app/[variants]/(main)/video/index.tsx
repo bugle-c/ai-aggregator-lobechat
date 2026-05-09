@@ -6,11 +6,16 @@ import { memo } from 'react';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
+import VideoWorkspaceMobile from './VideoWorkspaceMobile';
 import PlanGateBanner from './features/PlanGateBanner';
 import VideoWorkspace from './features/VideoWorkspace';
 
-const DesktopVideoPage = memo(() => {
+const VideoPage = memo(() => {
+  const isMobile = useIsMobile();
+  if (isMobile) return <VideoWorkspaceMobile />;
+
   return (
     <>
       <NavHeader right={<WideScreenButton />} />
@@ -24,6 +29,6 @@ const DesktopVideoPage = memo(() => {
   );
 });
 
-DesktopVideoPage.displayName = 'DesktopVideoPage';
+VideoPage.displayName = 'VideoPage';
 
-export default DesktopVideoPage;
+export default VideoPage;
