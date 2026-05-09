@@ -1,33 +1,28 @@
-import { useResponsive } from 'antd-style';
-import { useEffect, useMemo, useState } from 'react';
+import { useServerConfigStore } from '@/store/serverConfig';
 
 /**
- * Stable boolean indicating whether we're rendering on a mobile-width
- * viewport.
+ * Whether the current request is from a mobile-class device.
  *
- * antd-style's `useResponsive` returns `mobile=undefined` during SSR and
- * `mobile=true|false` after first client effect — feeding that
- * fluctuating value directly into conditional renders triggered React
- * error #310 (hook count mismatch between SSR and the post-hydration
- * client render) for components down-tree that mounted/unmounted with
- * the change.
+ * Reads the SSR-time UA-detected `isMobile` from `serverConfig` store
+ * (populated by `RouteVariants.deserializeVariants` in the root layout
+ * → propagated through GlobalProvider → StoreInitialization.tsx).
  *
- * We solve this by:
- *   1. Returning `false` until the component has fully mounted on the
- *      client (so SSR and first-paint agree),
- *   2. Then committing the actual breakpoint value on the second tick.
+ * Why not `antd-style.useResponsive()`:
+ *   - That hook returns `mobile=undefined` during SSR and a real
+ *     boolean after first client tick. Feeding the fluctuating value
+ *     into conditional renders crashed components with React error
+ *     #310 ("Rendered more hooks than during the previous render"),
+ *     because `useBreakpoint` itself uses different hooks on the two
+ *     ticks.
+ *   - The store-backed value is stable from the very first render,
+ *     identical on server and client, and is the same source the
+ *     legacy (mobile) route already uses for its own detection.
  *
- * The tiny visual flash of "desktop layout, then mobile layout" is
- * preferable to a runtime crash. Mobile users see one re-render,
- * desktop users see one re-render with no visible difference.
+ * Caveat: window-resize on a desktop browser doesn't flip this flag —
+ * it's UA-based, not breakpoint-based. For mobile browsers the UA is
+ * stable anyway, so this is fine for our use cases (rendering mobile
+ * tab-bar, hiding sidebars, etc.).
  */
 export const useIsMobile = (): boolean => {
-  const { mobile } = useResponsive();
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
-
-  return useMemo(() => hydrated && !!mobile, [hydrated, mobile]);
+  return !!useServerConfigStore((s) => s.isMobile);
 };
