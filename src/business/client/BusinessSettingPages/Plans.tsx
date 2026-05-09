@@ -7,6 +7,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
+import MobileCancelFlow from '@/features/Upsell/MobileCancelFlow';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { lambdaQuery, lambdaClient } from '@/libs/trpc/client';
 
@@ -107,21 +108,61 @@ const Plans = memo(() => {
   const isMobile = useIsMobile();
 
   if (isMobile && plans && billing) {
-    // On mobile we render the simplified vertical-stack layout. Cancel
-    // flow + cancellation modal are intentionally NOT included here yet —
-    // Task 4 will swap them for a bottom-sheet survey. For now mobile
-    // users who want to cancel must open the page on desktop. The link
-    // below exposes that explicitly.
+    // Mobile: vertical-stack layout + bottom-sheet cancel flow. Active
+    // paid users see a "Отменить подписку" button below the plan list.
+    const isActivePaid =
+      currentPlan != null &&
+      currentPlan.priceRub > 0 &&
+      !billing?.cancelledAt;
+
     return (
       <>
         <SettingHeader title={t('tab.plans')} />
         <PlansMobileLayout
-          billing={{ creditBalance, creditLimit, creditsUsed, subscriptionExpiresAt: billing?.subscriptionExpiresAt }}
-          currentPlan={currentPlan ? { name: currentPlan.name, priceRub: currentPlan.priceRub, slug: currentPlan.slug } : null}
+          billing={{
+            creditBalance,
+            creditLimit,
+            creditsUsed,
+            subscriptionExpiresAt: billing?.subscriptionExpiresAt,
+          }}
+          currentPlan={
+            currentPlan
+              ? {
+                  name: currentPlan.name,
+                  priceRub: currentPlan.priceRub,
+                  slug: currentPlan.slug,
+                }
+              : null
+          }
           features={PLAN_FEATURES}
-          plans={plans.map((p) => ({ id: p.id, name: p.name, priceRub: p.priceRub, slug: p.slug, tokenLimit: p.tokenLimit }))}
+          plans={plans.map((p) => ({
+            id: p.id,
+            name: p.name,
+            priceRub: p.priceRub,
+            slug: p.slug,
+            tokenLimit: p.tokenLimit,
+          }))}
           subscribePending={subscribeMutation.isPending}
           onSelect={(planId) => subscribeMutation.mutate({ planId })}
+        />
+        {isActivePaid && (
+          <div style={{ paddingBlock: 8, paddingInline: 16 }}>
+            <Button block danger onClick={() => setCancelOpen(true)}>
+              Отменить подписку
+            </Button>
+          </div>
+        )}
+        <MobileCancelFlow
+          loading={cancelling}
+          onClose={() => setCancelOpen(false)}
+          onConfirm={async (reasonCode, reasonText) => {
+            setCancelReason(reasonCode);
+            setCancelText(reasonText);
+            // Reuse the existing handler — it reads cancelReason/cancelText
+            // from state, so we set them above first.
+            await handleCancelSubmit();
+          }}
+          open={cancelOpen}
         />
       </>
     );

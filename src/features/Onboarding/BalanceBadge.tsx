@@ -1,10 +1,12 @@
 'use client';
 
 import { Tag, Tooltip } from 'antd';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import BalanceExplainSheet from '@/features/MobileGlobalHeader/BalanceExplainSheet';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -22,6 +24,8 @@ const BalanceBadge = memo(() => {
   const { t } = useTranslation('onboarding');
   const navigate = useNavigate();
   const isLogin = useUserStore(authSelectors.isLogin);
+  const isMobile = useIsMobile();
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const { data } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
     enabled: isLogin,
@@ -36,6 +40,13 @@ const BalanceBadge = memo(() => {
   const isEmpty = remaining <= 0;
 
   const handleClick = () => {
+    // Mobile: open the credit-explainer bottom-sheet (offers context +
+    // both top-up and upgrade paths). Desktop: keep the existing
+    // single-action navigate-to-plans behavior.
+    if (isMobile) {
+      setSheetOpen(true);
+      return;
+    }
     navigate('/settings/plans');
   };
 
@@ -60,13 +71,27 @@ const BalanceBadge = memo(() => {
     </Tag>
   );
 
-  if (isEmpty) {
-    return <Tooltip title={t('balance.emptyTooltip')}>{tag}</Tooltip>;
-  }
-  if (isLow) {
-    return <Tooltip title={t('balance.lowTooltip')}>{tag}</Tooltip>;
-  }
-  return tag;
+  const wrapped = isEmpty ? (
+    <Tooltip title={t('balance.emptyTooltip')}>{tag}</Tooltip>
+  ) : isLow ? (
+    <Tooltip title={t('balance.lowTooltip')}>{tag}</Tooltip>
+  ) : (
+    tag
+  );
+
+  return (
+    <>
+      {wrapped}
+      {isMobile && (
+        <BalanceExplainSheet
+          monthlyResetDate={null}
+          onClose={() => setSheetOpen(false)}
+          open={sheetOpen}
+          remainingCredits={remaining}
+        />
+      )}
+    </>
+  );
 });
 
 BalanceBadge.displayName = 'OnboardingBalanceBadge';
