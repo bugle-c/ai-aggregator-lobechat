@@ -1,4 +1,5 @@
 import Loading from '@/components/Loading/BrandTextLoading';
+import { isMobileRedesignEnabled } from '@/envs/app';
 import dynamic from '@/libs/next/dynamic';
 import { type DynamicLayoutProps } from '@/types/next';
 import { RouteVariants } from '@/utils/server/routeVariants';
@@ -10,14 +11,18 @@ const MobileRouter = dynamic(() => import('./(mobile)'), {
 });
 
 export default async (props: DynamicLayoutProps) => {
-  // Get isMobile from variants parameter on server side
   const isMobile = await RouteVariants.getIsMobile(props);
 
-  // Conditionally load and render based on device type
-  // Using native dynamic import ensures complete code splitting
-  // Mobile and Desktop bundles will be completely separate
+  // Phase 1 of mobile-redesign migration: when the feature flag is on,
+  // mobile users land on the responsive (main) route. The legacy
+  // (mobile) route stays in code as a rollback path until Phase 3.
+  const sp = await props.searchParams;
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(sp ?? {})) {
+    if (typeof v === 'string') params.set(k, v);
+  }
+  const redesign = isMobileRedesignEnabled(params);
 
-  if (isMobile) return <MobileRouter />;
-
+  if (isMobile && !redesign) return <MobileRouter />;
   return <DesktopRouter />;
 };
