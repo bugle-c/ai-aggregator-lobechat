@@ -1,7 +1,10 @@
 import { type ChatMessageError } from '@lobechat/types';
 import { Block, Button } from '@lobehub/ui';
 import Link from 'next/link';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useTrackUpsell } from '@/features/Upsell/useTrackUpsell';
 
 /**
  * Custom renderer for business-specific chat errors.
@@ -20,14 +23,28 @@ export default function useRenderBusinessChatErrorMessageExtra(
   _messageId: string,
 ) {
   const { t } = useTranslation('error');
+  const { click, impression } = useTrackUpsell();
 
-  if (!error || error.type !== 'PlanLimitExceeded') return null;
-
-  const body = (error.body || {}) as {
+  const isPlanLimit = !!error && error.type === 'PlanLimitExceeded';
+  const body = (error?.body || {}) as {
     currentPlan?: string;
     modelId?: string;
     requiredPlan?: string;
   };
+
+  // Fire impression when the renderer mounts for a plan-limit error.
+  // The block stays in the chat lane until the next user message, so
+  // impression-per-mount accurately reflects "user actually saw the upsell".
+  useEffect(() => {
+    if (isPlanLimit) {
+      impression('plan_limit_chat', {
+        modelBlocked: body.modelId,
+        planOffered: body.requiredPlan,
+      });
+    }
+  }, [isPlanLimit, body.modelId, body.requiredPlan, impression]);
+
+  if (!isPlanLimit) return null;
 
   const message = t('response.PlanLimitExceeded.message', {
     currentPlan: body.currentPlan ?? '—',
@@ -42,7 +59,11 @@ export default function useRenderBusinessChatErrorMessageExtra(
   return (
     <Block padding={16} style={{ width: '100%' }} variant={'outlined'}>
       <div style={{ marginBottom: 12, fontSize: 14, lineHeight: 1.5 }}>{message}</div>
-      <Link href="/settings/subscription/plans" style={{ textDecoration: 'none' }}>
+      <Link
+        href="/settings/subscription/plans?utm_source=plan_limit_chat"
+        onClick={() => click('plan_limit_chat', { targetPlan: body.requiredPlan })}
+        style={{ textDecoration: 'none' }}
+      >
         <Button block type="primary">
           {ctaLabel}
         </Button>
