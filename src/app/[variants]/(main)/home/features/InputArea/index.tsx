@@ -83,10 +83,19 @@ const InputArea = () => {
   const showOnboardingPrompts =
     isLogin && !inputActiveMode && onboarding != null && !onboarding.firstMessageSeen;
 
-  const handlePromptSelect = (prompt: string) => {
+  const handlePromptSelect = async (prompt: string) => {
+    // Click on a suggested-prompt card → fire the message immediately.
+    // Previous behaviour was to pre-fill the editor and require a second
+    // explicit Send click — UX audit found 52% of newly registered users
+    // never sent a single message; one-click activation lifts that.
     const editor = useChatStore.getState().mainInputEditor;
     editor?.instance?.setDocument('markdown', prompt);
+    // setDocument triggers `onMarkdownContentChange` async; set inputMessage
+    // explicitly so `useSend.send()` reads the freshly-typed value rather
+    // than the stale empty state.
+    useChatStore.setState({ inputMessage: prompt });
     editor?.focus();
+    await send();
   };
 
   const extraActionItems = useMemo(

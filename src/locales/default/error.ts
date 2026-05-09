@@ -107,6 +107,11 @@ export default {
     'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
   'response.FreePlanLimit':
     'You are currently a free user and cannot use this feature. Please upgrade to a paid plan to continue using it.',
+  'response.PlanLimitExceeded':
+    'This model is not available on your current plan. Upgrade your subscription to unlock it.',
+  'response.PlanLimitExceeded.cta': 'Upgrade to {{plan}}',
+  'response.PlanLimitExceeded.message':
+    'Model «{{model}}» is not available on the «{{currentPlan}}» plan. Upgrade to «{{requiredPlan}}» to use it.',
   'response.GoogleAIBlockReason.BLOCKLIST':
     'Your content contains prohibited terms. Please review and modify your input, then try again.',
   'response.GoogleAIBlockReason.IMAGE_SAFETY':

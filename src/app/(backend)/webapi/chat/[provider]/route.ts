@@ -52,15 +52,20 @@ export const POST = checkAuth(
         const planSlug = await billingService.getUserPlanSlug();
         if (!(await isModelAllowedForPlanAsync(modelId, planSlug))) {
           const requiredPlan = await getRequiredPlanForModelAsync(modelId);
-          return new Response(
-            JSON.stringify({
-              currentPlan: planSlug,
-              errorType: 'PlanLimitExceeded',
-              message: `Модель ${modelId} недоступна на тарифе «${planSlug}». Обновите подписку до «${requiredPlan}».`,
-              requiredPlan,
-            }),
-            { headers: { 'Content-Type': 'application/json' }, status: 403 },
-          );
+          // Wrap in createErrorResponse so the frontend Error renderer
+          // receives `errorType: 'PlanLimitExceeded'` + `body: { ... }` in
+          // its expected shape. The previous raw `new Response(...)`
+          // bypassed createErrorResponse → frontend ErrorContent fell to
+          // default branch → user saw the literal i18n key
+          // `response.PlanLimitExceeded` with no upgrade CTA. Audit found
+          // 16 of 18 plan-blocked users churned silently here.
+          return createErrorResponse(ChatErrorType.PlanLimitExceeded, {
+            currentPlan: planSlug,
+            modelId,
+            provider,
+            requiredPlan,
+            errorMessage: `Модель ${modelId} недоступна на тарифе «${planSlug}». Обновите подписку до «${requiredPlan}».`,
+          });
         }
       }
 

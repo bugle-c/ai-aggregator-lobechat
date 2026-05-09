@@ -8,6 +8,14 @@ export const ChatErrorType = {
   FreePlanLimit: 'FreePlanLimit', // Free plan usage limit
   SubscriptionPlanLimit: 'SubscriptionPlanLimit', // Subscription user limit exceeded
   SubscriptionKeyMismatch: 'SubscriptionKeyMismatch', // Subscription key mismatch
+  /**
+   * Selected model is gated behind a higher plan tier than the user holds.
+   * Backend returns this with `body: { currentPlan, requiredPlan, message }`
+   * so the chat-error renderer can show an upgrade CTA instead of the raw
+   * key. Distinct from FreePlanLimit (overall quota exhausted) — this is
+   * "wrong tier for THIS model".
+   */
+  PlanLimitExceeded: 'PlanLimitExceeded',
 
   SupervisorDecisionFailed: 'SupervisorDecisionFailed', // Supervisor decision failed
 

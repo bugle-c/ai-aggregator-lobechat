@@ -47,7 +47,13 @@ export default memo<Props>(({ className, tabBarKey }) => {
           },
           title: t('tab.chat'),
         },
-        isLight && {
+        // Image / Video / Plans visible in BOTH Light and Pro modes.
+        // Previously gated to `isLight && {...}` which hid them on mobile
+        // for Pro users — opposite of the desktop nav (which shows them
+        // for everyone) and the natural expectation that "Pro = more, not
+        // less". UX audit found these tabs at near-zero usage; one
+        // contributing factor was the invert-bug.
+        {
           icon: (active: boolean) => (
             <Icon className={active ? styles.active : undefined} icon={ImageIcon} />
           ),
@@ -57,7 +63,7 @@ export default memo<Props>(({ className, tabBarKey }) => {
           },
           title: t('tab.aiImage'),
         },
-        isLight && {
+        {
           icon: (active: boolean) => (
             <Icon className={active ? styles.active : undefined} icon={Video} />
           ),
@@ -67,7 +73,7 @@ export default memo<Props>(({ className, tabBarKey }) => {
           },
           title: t('tab.video'),
         },
-        isLight && {
+        {
           icon: (active: boolean) => (
             <Icon className={active ? styles.active : undefined} icon={Gem} />
           ),
