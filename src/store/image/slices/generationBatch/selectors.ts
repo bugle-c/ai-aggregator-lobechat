@@ -26,11 +26,18 @@ const isCurrentGenerationTopicLoaded = (s: ImageStoreState): boolean => {
   return Array.isArray(s.generationBatchesMap[activeTopicId]);
 };
 
+// True iff the user has at least one batch on ANY topic. Used by the
+// new flow page to decide the default tab (`presets` if empty,
+// `feed` if filled).
+const hasAnyBatches = (s: ImageStoreState): boolean =>
+  Object.values(s.generationBatchesMap).some((arr) => Array.isArray(arr) && arr.length > 0);
+
 // ====== aggregate selectors ====== //
 
 export const generationBatchSelectors = {
   getGenerationBatchesByTopicId,
   currentGenerationBatches,
   getGenerationBatchByBatchId,
+  hasAnyBatches,
   isCurrentGenerationTopicLoaded,
 };
