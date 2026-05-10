@@ -11,15 +11,18 @@ import {
   type GenerationTopicState,
   initialGenerationTopicState,
 } from './slices/generationTopic/initialState';
+import { initialPresetState, type PresetState } from './slices/preset/action';
 
 export type VideoStoreState = VideoGenerationConfigState &
   GenerationTopicState &
   GenerationBatchState &
-  CreateVideoState;
+  CreateVideoState &
+  PresetState;
 
 export const initialState: VideoStoreState = {
   ...initialGenerationConfigState,
   ...initialGenerationTopicState,
   ...initialGenerationBatchState,
   ...initialCreateVideoState,
+  ...initialPresetState,
 };

@@ -4,8 +4,8 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
-import { initialState,type VideoStoreState } from './initialState';
-import { createCreateVideoSlice,type CreateVideoAction } from './slices/createVideo/action';
+import { initialState, type VideoStoreState } from './initialState';
+import { createCreateVideoSlice, type CreateVideoAction } from './slices/createVideo/action';
 import {
   createGenerationBatchSlice,
   type GenerationBatchAction,
@@ -18,6 +18,7 @@ import {
   createGenerationTopicSlice,
   type GenerationTopicAction,
 } from './slices/generationTopic/action';
+import { createPresetSlice, type PresetAction } from './slices/preset/action';
 
 //  ===============  aggregate createStoreFn ============ //
 
@@ -27,6 +28,7 @@ export interface VideoStore
     GenerationTopicAction,
     GenerationBatchAction,
     CreateVideoAction,
+    PresetAction,
     VideoStoreState {}
 
 const createStore: StateCreator<VideoStore, [['zustand/devtools', never]]> = (...parameters) => ({
@@ -35,6 +37,7 @@ const createStore: StateCreator<VideoStore, [['zustand/devtools', never]]> = (..
   ...createGenerationTopicSlice(...parameters),
   ...createGenerationBatchSlice(...parameters),
   ...createCreateVideoSlice(...parameters),
+  ...createPresetSlice(...parameters),
 });
 
 //  ===============  implement useStore ============ //
