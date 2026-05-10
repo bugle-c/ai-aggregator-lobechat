@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 
-import { presetsRouter } from './presets';
+import { presetsRouter } from '../presets';
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(),
@@ -127,6 +127,13 @@ const SEEDS: SeedRow[] = [
 // Filter state: each test sets these, the stub honours them when resolving
 // the awaited query chain. We mimic the router's own filter logic so the
 // stub stays a thin pass-through for "did the router pass the right intent".
+//
+// In addition, the stub captures the raw argument the router hands to
+// `.where(...)`. That object is Drizzle's condition tree; we don't introspect
+// it deeply, but having the reference proves the router actually composed and
+// forwarded a where-clause. Tests assert against `lastWhereArg` so a
+// regression like dropping `if (input.modelId) conditions.push(...)` in the
+// router would visibly change the captured tree and fail the assertion.
 // ---------------------------------------------------------------------------
 interface PendingFilter {
   category?: string;
@@ -138,6 +145,7 @@ interface PendingFilter {
 }
 
 let pendingFilter: PendingFilter = {};
+let lastWhereArg: unknown;
 
 const applyFilter = (rows: SeedRow[]): SeedRow[] => {
   let out = rows.filter((r) => r.active);
@@ -162,8 +170,10 @@ class QueryProxy<T> extends Promise<T[]> {
   }
 
   // The chained drizzle methods all return `this` so `await chain` yields
-  // the resolved value from the underlying executor.
-  where(_cond: unknown) {
+  // the resolved value from the underlying executor. We capture the raw
+  // condition tree that the router built so tests can assert it was passed.
+  where(cond: unknown) {
+    lastWhereArg = cond;
     return this;
   }
 
@@ -187,8 +197,31 @@ const buildDbStub = () => ({
 
 beforeEach(() => {
   pendingFilter = {};
+  lastWhereArg = undefined;
   vi.mocked(getServerDB).mockResolvedValue(buildDbStub() as any);
 });
+
+// Walk the captured Drizzle condition tree and collect every primitive value
+// found in any `value` field. Drizzle's `eq(col, val)` produces a node whose
+// shape includes the literal we passed in — searching for that literal proves
+// the router actually built and forwarded the corresponding condition.
+const collectValues = (node: unknown, out: unknown[] = []): unknown[] => {
+  if (node === null || node === undefined) return out;
+  if (typeof node !== 'object') {
+    out.push(node);
+    return out;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) collectValues(child, out);
+    return out;
+  }
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    // Skip column metadata (table/column refs) — we only care about literals.
+    if (key === 'table' || key === 'column' || key === 'schema') continue;
+    collectValues(value, out);
+  }
+  return out;
+};
 
 describe('presetsRouter', () => {
   it('list returns active presets filtered by modality', async () => {
@@ -214,6 +247,14 @@ describe('presetsRouter', () => {
     expect(result.every((p) => p.modelId === 'bytedance/seedance-2.0-fast/text-to-video')).toBe(
       true,
     );
+
+    // Regression guard: the captured where-clause must reference the modelId
+    // we passed in. If the router silently drops
+    // `if (input.modelId) conditions.push(eq(presets.modelId, ...))`,
+    // this literal will no longer appear in the condition tree.
+    expect(lastWhereArg).toBeDefined();
+    const literals = collectValues(lastWhereArg);
+    expect(literals).toContain('bytedance/seedance-2.0-fast/text-to-video');
   });
 
   it('list filters by category', async () => {
@@ -222,6 +263,12 @@ describe('presetsRouter', () => {
     const result = await caller.list({ modality: 'video', category: 'camera' });
     expect(result.length).toBeGreaterThan(0);
     expect(result.every((p) => p.category === 'camera')).toBe(true);
+
+    // Regression guard: same shape as the modelId case — the category literal
+    // must surface in the captured condition tree.
+    expect(lastWhereArg).toBeDefined();
+    const literals = collectValues(lastWhereArg);
+    expect(literals).toContain('camera');
   });
 
   it('list filters by q (case-insensitive title match)', async () => {
@@ -230,6 +277,24 @@ describe('presetsRouter', () => {
     const result = await caller.list({ modality: 'video', q: 'zoom' });
     expect(result.length).toBeGreaterThan(0);
     expect(result.every((p) => p.title.toLowerCase().includes('zoom'))).toBe(true);
+
+    // Regression guard: the ilike pattern (`%zoom%`) must show up in the tree.
+    expect(lastWhereArg).toBeDefined();
+    const literals = collectValues(lastWhereArg);
+    expect(literals).toContain('%zoom%');
+  });
+
+  it('list omits the modelId clause when modelId is not provided', async () => {
+    pendingFilter = { modality: 'video' };
+    const caller = presetsRouter.createCaller({} as any);
+    await caller.list({ modality: 'video' });
+
+    // The where-clause is still composed (active + modality), but the
+    // modelId literal must NOT appear since we didn't pass it.
+    expect(lastWhereArg).toBeDefined();
+    const literals = collectValues(lastWhereArg);
+    expect(literals).not.toContain('bytedance/seedance-2.0-fast/text-to-video');
+    expect(literals).not.toContain('kwaivgi/kling-v3.0-pro/text-to-video');
   });
 
   it('getBySlug returns one preset', async () => {
