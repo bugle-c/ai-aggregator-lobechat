@@ -10,8 +10,6 @@ import MobileFlowFAB from '@/features/Generators/MobileFlowFAB';
 import MobileFlowSheet from '@/features/Generators/MobileFlowSheet';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import MobileGlobalHeader from '@/features/MobileGlobalHeader';
-import { useImageStore } from '@/store/image';
-import { generationBatchSelectors } from '@/store/image/selectors';
 
 import FlowMainArea from './features/FlowMainArea';
 import MobileFlowContent from './features/MobileFlowContent';
@@ -33,8 +31,7 @@ const ImageWorkspaceMobile = memo(() => {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const hasGenerations = useImageStore(generationBatchSelectors.hasAnyBatches);
-  const url = useFlowUrlState(hasGenerations ? 'feed' : 'presets');
+  const url = useFlowUrlState('presets');
 
   // CREATION PAGE — full-screen, replaces gallery
   if (url.view === 'create') {
