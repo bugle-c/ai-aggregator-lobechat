@@ -34,14 +34,25 @@ export const createPresetSlice: StateCreator<
   selectPreset: (preset) => {
     set({ currentPreset: preset }, false, `selectPreset/${preset.slug}`);
 
-    // Try to switch to the preset's model under the user's CURRENT
-    // provider. If the model isn't enabled in this deployment, fail
-    // soft — preset card stays highlighted but user generates with
-    // their currently-selected model. (See image equivalent for full
-    // rationale.)
+    // Try to switch to the preset's model — try current provider
+    // first, fall back to `lobehub` (the aggregator that hosts every
+    // registered video model under one provider id). If neither
+    // works, fail soft. (See image preset slice for rationale.)
     const store = get();
+    const tryApply = (provider: string): boolean => {
+      try {
+        store.setModelAndProviderOnSelect(preset.modelId, provider);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
     try {
-      store.setModelAndProviderOnSelect(preset.modelId, store.provider);
+      const ok = tryApply(store.provider) || (store.provider !== 'lobehub' && tryApply('lobehub'));
+      if (!ok) {
+        throw new Error(`Model "${preset.modelId}" not enabled for any active provider.`);
+      }
 
       const { setParamOnInput } = get();
       for (const [key, value] of Object.entries(preset.paramsLock)) {
@@ -49,7 +60,6 @@ export const createPresetSlice: StateCreator<
         setParamOnInput(key as any, value as any);
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn(
         '[selectPreset] failed to apply model lock for',
         preset.slug,

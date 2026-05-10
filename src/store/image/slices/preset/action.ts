@@ -32,15 +32,27 @@ export class PresetActionImpl {
   selectPreset = (preset: Preset): void => {
     this.#set({ currentPreset: preset }, false, `selectPreset/${preset.slug}`);
 
-    // Try to switch to the preset's model under the user's CURRENT
-    // provider. We don't derive provider from the modelId slug because
-    // installations route models through aggregator providers (e.g.
-    // `lobehub`) that don't match the slug prefix. If the model isn't
-    // enabled for this user, fail soft — keep current model, log,
-    // skip params lock.
+    // Try to switch to the preset's model. Aggregator providers (the
+    // canonical one in this fork is `lobehub`) host every registered
+    // model under the same provider id; the model-bank slug prefix
+    // does NOT identify the runtime provider. We try the user's
+    // currently selected provider first, then fall back to `lobehub`
+    // if it differs. If neither has the model, fail soft.
     const store = this.#get();
+    const tryApply = (provider: string): boolean => {
+      try {
+        store.setModelAndProviderOnSelect(preset.modelId, provider);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
     try {
-      store.setModelAndProviderOnSelect(preset.modelId, store.provider);
+      const ok = tryApply(store.provider) || (store.provider !== 'lobehub' && tryApply('lobehub'));
+      if (!ok) {
+        throw new Error(`Model "${preset.modelId}" not enabled for any active provider.`);
+      }
 
       const { setParamOnInput } = this.#get();
       for (const [key, value] of Object.entries(preset.paramsLock)) {
@@ -52,7 +64,7 @@ export class PresetActionImpl {
       // user's enabled list (e.g. seed slug doesn't match deployment).
       // Don't crash — UI keeps the preset card highlighted but the
       // user generates with their currently-selected model.
-      // eslint-disable-next-line no-console
+
       console.warn(
         '[selectPreset] failed to apply model lock for',
         preset.slug,
