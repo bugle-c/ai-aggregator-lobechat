@@ -205,6 +205,13 @@ beforeEach(() => {
 // found in any `value` field. Drizzle's `eq(col, val)` produces a node whose
 // shape includes the literal we passed in — searching for that literal proves
 // the router actually built and forwarded the corresponding condition.
+//
+// FRAGILITY WARNING: this depends on Drizzle's internal condition-tree shape.
+// If a Drizzle upgrade renames internal fields or wraps literals in a `Param`
+// node that hides the value behind an opaque ref, these assertions can pass
+// for the wrong reason. If you upgrade Drizzle and these tests start passing
+// suspiciously easily, deliberately delete a `conditions.push(...)` line in
+// presets.ts and re-run — at least one filter test must still fail.
 const collectValues = (node: unknown, out: unknown[] = []): unknown[] => {
   if (node === null || node === undefined) return out;
   if (typeof node !== 'object') {
