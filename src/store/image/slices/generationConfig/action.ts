@@ -259,19 +259,36 @@ export class GenerationConfigActionImpl {
   };
 
   setModelAndProviderOnSelect = (model: string, provider: string): void => {
-    const { defaultValues, parametersSchema, initialActiveRatio } = prepareModelConfigState(
-      model,
-      provider,
-    );
+    // Resolve schema if available. Models exposed by aggregator
+    // providers may not have a registered `parameters` definition;
+    // `prepareModelConfigState` then throws ZodError. Degrade
+    // gracefully — keep model+provider but skip schema/defaults so
+    // the UI doesn't crash on click.
+    let resolved: ReturnType<typeof prepareModelConfigState> | null = null;
+    try {
+      resolved = prepareModelConfigState(model, provider);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[setModelAndProviderOnSelect] schema resolve failed for',
+        `${provider}/${model}`,
+        '—',
+        (err as Error)?.message,
+      );
+    }
 
     this.#set(
       {
         model,
         provider,
-        parameters: defaultValues,
-        parametersSchema,
-        isAspectRatioLocked: false,
-        activeAspectRatio: initialActiveRatio,
+        ...(resolved
+          ? {
+              activeAspectRatio: resolved.initialActiveRatio,
+              isAspectRatioLocked: false,
+              parameters: resolved.defaultValues,
+              parametersSchema: resolved.parametersSchema,
+            }
+          : {}),
       },
       false,
       `setModelAndProviderOnSelect/${model}/${provider}`,

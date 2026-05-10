@@ -88,13 +88,34 @@ export const createGenerationConfigSlice: StateCreator<
   },
 
   setModelAndProviderOnSelect: (model, provider) => {
-    const { defaultValues, parametersSchema } = getVideoModelAndDefaults(model, provider);
+    // Resolve schema + defaults if available. When the chosen model
+    // has no registered `parameters` definition (e.g. an aggregator
+    // exposes a model whose schema lives elsewhere), `extractVideo
+    // DefaultValues` throws ZodError — degrade gracefully: keep
+    // model+provider but skip schema/defaults so the UI doesn't crash.
+    let defaultValues: ReturnType<typeof getVideoModelAndDefaults>['defaultValues'] | undefined;
+    let parametersSchema:
+      | ReturnType<typeof getVideoModelAndDefaults>['parametersSchema']
+      | undefined;
+    try {
+      const resolved = getVideoModelAndDefaults(model, provider);
+      defaultValues = resolved.defaultValues;
+      parametersSchema = resolved.parametersSchema;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[setModelAndProviderOnSelect] schema resolve failed for',
+        `${provider}/${model}`,
+        '—',
+        (err as Error)?.message,
+      );
+    }
 
     set(
       {
         model,
-        parameters: defaultValues,
-        parametersSchema,
+        ...(defaultValues ? { parameters: defaultValues } : {}),
+        ...(parametersSchema ? { parametersSchema } : {}),
         provider,
       },
       false,
