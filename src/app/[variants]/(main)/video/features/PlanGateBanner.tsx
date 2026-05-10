@@ -3,8 +3,8 @@
 import { Flexbox } from '@lobehub/ui';
 import { Button, Typography } from 'antd';
 import { Sparkles } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { lambdaQuery } from '@/libs/trpc/client';
 
@@ -24,7 +24,9 @@ import { lambdaQuery } from '@/libs/trpc/client';
  * On any paid plan (basic / pro / pro_max) the banner is hidden.
  */
 const PlanGateBanner = memo(() => {
-  const router = useRouter();
+  // SPA navigation — `next/navigation`'s router doesn't drive the
+  // react-router subtree under (main).
+  const navigate = useNavigate();
   const { data } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   });
@@ -37,8 +39,8 @@ const PlanGateBanner = memo(() => {
     <Flexbox
       horizontal
       align="center"
-      justify="space-between"
       gap={16}
+      justify="space-between"
       style={{
         background: 'linear-gradient(90deg, rgba(99,102,241,0.12), rgba(168,85,247,0.12))',
         border: '1px solid rgba(99,102,241,0.25)',
@@ -53,18 +55,13 @@ const PlanGateBanner = memo(() => {
           <Typography.Text strong style={{ fontSize: 15 }}>
             Видео-генерация — функция платных тарифов
           </Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-            На «Старт» бесплатно доступен только чат и базовые картинки.
-            Откройте Sora 2, Veo 3.1, Kling 3 и другие модели на тарифе
-            Basic — от 490 ₽/мес.
+          <Typography.Text style={{ fontSize: 13 }} type="secondary">
+            На «Старт» бесплатно доступен только чат и базовые картинки. Откройте Sora 2, Veo 3.1,
+            Kling 3 и другие модели на тарифе Basic — от 490 ₽/мес.
           </Typography.Text>
         </Flexbox>
       </Flexbox>
-      <Button
-        size="middle"
-        type="primary"
-        onClick={() => router.push('/settings/plans')}
-      >
+      <Button size="middle" type="primary" onClick={() => navigate('/settings/plans')}>
         Выбрать тариф
       </Button>
     </Flexbox>

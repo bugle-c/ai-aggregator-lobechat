@@ -9,7 +9,8 @@ import { usePathname } from '@/libs/router/navigation';
  * Whether the bottom MobileTabBar should render on the current page.
  *
  * Hidden on:
- * - chat threads (`/chat/[topicId]`) — needs full vertical space for messages
+ * - chat threads (`/agent/<id>`, `/group/<id>`) — needs full vertical
+ *   space for messages; the chat header has its own back-arrow.
  *
  * Shown on:
  * - home (`/`)
@@ -22,8 +23,10 @@ export const useShowTabBar = (): boolean => {
   const pathname = usePathname();
   if (!pathname) return true;
 
-  // Chat thread = `/chat/<id>` with anything after the slash
-  if (/^\/chat\/[^/]+/.test(pathname)) return false;
+  // Chat thread routes on this fork live under `/agent/` and
+  // `/group/`. The legacy `/chat/<id>` pattern is also matched for
+  // forward-compat in case upstream re-introduces it.
+  if (/^\/(?:agent|group|chat)\/[^/]+/.test(pathname)) return false;
 
   return true;
 };

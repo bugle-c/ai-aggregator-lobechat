@@ -34,35 +34,50 @@ const MobileVpnPromo = memo(() => {
 
   return (
     <Flexbox
-      align="center"
       horizontal
+      align="center"
       justify="space-between"
-      paddingBlock={6}
+      paddingBlock={4}
       paddingInline={12}
       style={{
-        background: 'linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%)',
-        color: '#fff',
-        fontSize: 13,
+        // Match the desktop VpnPromoStrip aesthetic — dark glass + a small
+        // accent text. The bright-blue gradient looked alien on iOS where
+        // the rest of the chrome is muted.
+        backdropFilter: 'blur(14px)',
+        background: 'rgba(8, 13, 24, 0.82)',
+        borderBlockEnd: '1px solid rgba(148, 163, 184, 0.16)',
+        color: 'rgba(226, 232, 240, 0.86)',
+        fontSize: 12,
+        letterSpacing: '0.01em',
+        lineHeight: '24px',
+        minHeight: 28,
       }}
     >
       <a
         href="https://t.me/freeip_pashavinbot"
         rel="noopener noreferrer"
-        style={{ color: 'inherit', textDecoration: 'none' }}
+        style={{ color: 'inherit', flex: 1, textDecoration: 'none' }}
         target="_blank"
       >
-        🔓 Бесплатный VPN →
+        <span style={{ color: 'rgba(34, 211, 238, 0.95)', fontWeight: 600 }}>Бесплатный VPN</span>
+        <span style={{ marginInlineStart: 6, opacity: 0.78 }}>стабильный доступ к нейросетям</span>
       </a>
       <button
         aria-label="Закрыть"
+        type="button"
+        style={{
+          background: 'transparent',
+          border: 0,
+          color: 'rgba(226, 232, 240, 0.7)',
+          cursor: 'pointer',
+          padding: 4,
+        }}
         onClick={() => {
           setDismissed();
           setDismissedState(true);
         }}
-        style={{ background: 'transparent', border: 0, color: '#fff', cursor: 'pointer' }}
-        type="button"
       >
-        <X size={16} />
+        <X size={14} />
       </button>
     </Flexbox>
   );
