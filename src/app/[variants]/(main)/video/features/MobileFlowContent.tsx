@@ -5,6 +5,7 @@ import { App, Segmented } from 'antd';
 import { Settings, Sparkles } from 'lucide-react';
 import { memo } from 'react';
 
+import FrameUpload from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/FrameUpload';
 import ModelSelect from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/ModelSelect';
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
 import { useVideoStore } from '@/store/video';
@@ -40,6 +41,16 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const aspect = (parameters?.aspect_ratio as string | undefined) ?? null;
   const duration = (parameters?.duration_sec as number | undefined) ?? null;
 
+  // img2vid / frame-conditioned generation — surface uploaders when
+  // the model schema supports them. `imageUrl` = start frame,
+  // `endImageUrl` = optional end frame.
+  const supportsStartFrame = useVideoStore(
+    videoGenerationConfigSelectors.isSupportedParam('imageUrl'),
+  );
+  const supportsEndFrame = useVideoStore(
+    videoGenerationConfigSelectors.isSupportedParam('endImageUrl'),
+  );
+
   const canGenerate = !isGenerating && promptValue.trim().length > 0;
 
   const handleGenerate = async () => {
@@ -55,6 +66,30 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   return (
     <Flexbox gap={12} style={{ paddingBlockEnd: 'env(safe-area-inset-bottom, 0)' }}>
       <PresetThumbCard preset={preset} onClear={clearPreset} />
+
+      {/* Frame uploads — only rendered when the active video model
+          schema declares support. Two slots side-by-side: start frame
+          and (optional) end frame. */}
+      {(supportsStartFrame || supportsEndFrame) && (
+        <Flexbox horizontal gap={8}>
+          {supportsStartFrame && (
+            <Flexbox flex={1} gap={4}>
+              <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
+                Стартовый кадр
+              </span>
+              <FrameUpload paramName="imageUrl" />
+            </Flexbox>
+          )}
+          {supportsEndFrame && (
+            <Flexbox flex={1} gap={4}>
+              <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
+                Конечный кадр
+              </span>
+              <FrameUpload paramName="endImageUrl" />
+            </Flexbox>
+          )}
+        </Flexbox>
+      )}
 
       <PromptInput />
 

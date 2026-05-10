@@ -5,6 +5,8 @@ import { App, Segmented } from 'antd';
 import { Settings, Sparkles } from 'lucide-react';
 import { memo } from 'react';
 
+import ImageUrl from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ImageUrl';
+import ImageUrlsUpload from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ImageUrlsUpload';
 import ModelSelect from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ModelSelect';
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
 import { useImageStore } from '@/store/image';
@@ -41,6 +43,16 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const promptValue = (parameters?.prompt as string | undefined) ?? '';
   const aspect = (parameters?.aspect_ratio as string | undefined) ?? null;
 
+  // The selected model may support a single reference image (img2img,
+  // FLUX Kontext etc.) and/or multiple reference images. Surface these
+  // uploaders inline when the model schema lists them — otherwise hide.
+  const supportsImageUrl = useImageStore(
+    imageGenerationConfigSelectors.isSupportedParam('imageUrl'),
+  );
+  const supportsImageUrls = useImageStore(
+    imageGenerationConfigSelectors.isSupportedParam('imageUrls'),
+  );
+
   const canGenerate = !isGenerating && promptValue.trim().length > 0;
 
   const handleGenerate = async () => {
@@ -56,6 +68,26 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   return (
     <Flexbox gap={12} style={{ paddingBlockEnd: 'env(safe-area-inset-bottom, 0)' }}>
       <PresetThumbCard preset={preset} onClear={clearPreset} />
+
+      {/* Reference image upload — visible only when the active model
+          schema declares support. Two distinct slots: single ref image
+          (img2img / FLUX Kontext-style) vs multi-image input. */}
+      {supportsImageUrl && (
+        <Flexbox gap={4}>
+          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
+            Референсное изображение
+          </span>
+          <ImageUrl />
+        </Flexbox>
+      )}
+      {supportsImageUrls && (
+        <Flexbox gap={4}>
+          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
+            Референсные изображения
+          </span>
+          <ImageUrlsUpload />
+        </Flexbox>
+      )}
 
       <PromptInput />
 
