@@ -4,6 +4,7 @@ import { type StateCreator } from 'zustand';
 
 import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { message } from '@/components/AntdStaticMethods';
+import { applyPresetTemplate } from '@/features/Generators/applyPresetTemplate';
 import { videoService } from '@/services/video';
 
 import { type VideoStore } from '../../store';
@@ -43,6 +44,14 @@ export const createCreateVideoSlice: StateCreator<
     if (!parameters.prompt) {
       throw new TypeError('prompt is empty');
     }
+
+    // If a preset is active, wrap the user's prompt through its template
+    // so the model receives the curated style + user-typed subject.
+    const preset = store.currentPreset;
+    const finalPrompt = preset?.promptTemplate
+      ? applyPresetTemplate(preset.promptTemplate, parameters.prompt as string)
+      : parameters.prompt;
+    const finalParameters = { ...parameters, prompt: finalPrompt };
 
     // Validate: end frame requires start frame (driven by model schema)
     const parametersSchema = videoGenerationConfigSelectors.parametersSchema(store);
@@ -95,7 +104,7 @@ export const createCreateVideoSlice: StateCreator<
       await videoService.createVideo({
         generationTopicId: finalTopicId!,
         model,
-        params: parameters as any,
+        params: finalParameters as any,
         provider,
       });
 

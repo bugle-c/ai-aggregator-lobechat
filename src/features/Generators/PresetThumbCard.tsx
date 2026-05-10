@@ -38,7 +38,7 @@ const PresetThumbCard = memo<Props>(({ onClear, preset }) => {
   return (
     <Block padding={0} style={{ overflow: 'hidden', position: 'relative' }} variant="filled">
       <div style={{ aspectRatio: '4 / 3' }}>
-        <PresetMP4Player previewUrl={preset.previewUrl} />
+        <PresetMP4Player fallbackLabel={preset.title} previewUrl={preset.previewUrl} />
       </div>
       <Flexbox horizontal align="center" justify="space-between" padding={8}>
         <Flexbox>

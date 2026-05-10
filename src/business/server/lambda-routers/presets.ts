@@ -10,20 +10,31 @@ const modalityEnum = z.enum(['image', 'video']);
 
 const procedure = publicProcedure.use(serverDatabase);
 
-const rowToPreset = (r: typeof presets.$inferSelect): Preset => ({
-  badges: (r.badges as PresetBadge[]) ?? [],
-  category: r.category,
-  description: r.description,
-  id: r.id,
-  modality: r.modality as Preset['modality'],
-  modelId: r.modelId,
-  paramsLock: (r.paramsLock as PresetParamsLock) ?? {},
-  previewUrl: r.previewUrl,
-  promptTemplate: r.promptTemplate,
-  slug: r.slug,
-  sortOrder: r.sortOrder,
-  title: r.title,
-});
+const rowToPreset = (r: typeof presets.$inferSelect): Preset => {
+  // Defensive guard: if a future bad write puts a non-object into
+  // params_lock (null, array, scalar), `Object.entries(...)` in
+  // selectPreset would throw. Force the shape to a plain object.
+  const rawLock = r.paramsLock as unknown;
+  const safeLock: PresetParamsLock =
+    typeof rawLock === 'object' && rawLock !== null && !Array.isArray(rawLock)
+      ? (rawLock as PresetParamsLock)
+      : {};
+
+  return {
+    badges: (r.badges as PresetBadge[]) ?? [],
+    category: r.category,
+    description: r.description,
+    id: r.id,
+    modality: r.modality as Preset['modality'],
+    modelId: r.modelId,
+    paramsLock: safeLock,
+    previewUrl: r.previewUrl,
+    promptTemplate: r.promptTemplate,
+    slug: r.slug,
+    sortOrder: r.sortOrder,
+    title: r.title,
+  };
+};
 
 export const presetsRouter = router({
   getBySlug: procedure

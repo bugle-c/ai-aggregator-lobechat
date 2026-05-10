@@ -13,6 +13,7 @@ import { useVideoStore } from '@/store/video';
 import { presetSelectors } from '@/store/video/slices/preset/selectors';
 
 import FlowMainArea from './features/FlowMainArea';
+import FlowSidebarControls from './features/FlowSidebarControls';
 import PlanGateBanner from './features/PlanGateBanner';
 import PromptInput from './features/PromptInput';
 import VideoWorkspace from './features/VideoWorkspace';
@@ -48,7 +49,7 @@ const VideoPage = memo(() => {
   return (
     <Flexbox horizontal flex={1} height={'100%'} width={'100%'}>
       <FlowSidebar
-        controls={null}
+        controls={<FlowSidebarControls />}
         isGenerating={isGenerating}
         modality="video"
         preset={preset}

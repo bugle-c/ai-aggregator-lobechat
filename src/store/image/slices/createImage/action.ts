@@ -1,6 +1,7 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 
 import { markUserValidAction } from '@/business/client/markUserValidAction';
+import { applyPresetTemplate } from '@/features/Generators/applyPresetTemplate';
 import { imageService } from '@/services/image';
 import { type StoreSetter } from '@/store/types';
 
@@ -49,6 +50,16 @@ export class CreateImageActionImpl {
       throw new TypeError('prompt is empty');
     }
 
+    // If a preset is active, wrap the user's prompt through its template
+    // so the model receives the curated style + user-typed subject.
+    // Without this the preset is cosmetic — same output as a freestyle
+    // generation on the same model.
+    const preset = store.currentPreset;
+    const finalPrompt = preset?.promptTemplate
+      ? applyPresetTemplate(preset.promptTemplate, parameters.prompt as string)
+      : parameters.prompt;
+    const finalParameters = { ...parameters, prompt: finalPrompt };
+
     // Track the final topic ID to use for image creation
     let finalTopicId = activeGenerationTopicId;
 
@@ -89,7 +100,7 @@ export class CreateImageActionImpl {
         provider,
         model,
         imageNum,
-        params: parameters as any,
+        params: finalParameters as any,
       });
 
       // 6. Only refresh generation batches if it's not a new topic
@@ -116,15 +127,17 @@ export class CreateImageActionImpl {
             ? err
             : 'Не удалось создать изображение';
       if (typeof window !== 'undefined') {
-        import('antd').then(({ notification }) => {
-          notification.error({
-            description: msg,
-            duration: 8,
-            message: 'Ошибка генерации изображения',
+        import('antd')
+          .then(({ notification }) => {
+            notification.error({
+              description: msg,
+              duration: 8,
+              message: 'Ошибка генерации изображения',
+            });
+          })
+          .catch(() => {
+            if (typeof window.alert === 'function') window.alert(msg);
           });
-        }).catch(() => {
-          if (typeof window.alert === 'function') window.alert(msg);
-        });
       }
       throw err;
     } finally {

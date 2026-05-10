@@ -41,7 +41,7 @@ const PresetCard = memo<Props>(({ isActive, onClick, preset }) => {
       }}
       onClick={() => onClick(preset)}
     >
-      <PresetMP4Player ariaHidden previewUrl={preset.previewUrl} />
+      <PresetMP4Player ariaHidden fallbackLabel={preset.title} previewUrl={preset.previewUrl} />
 
       {preset.badges.length > 0 && (
         <div

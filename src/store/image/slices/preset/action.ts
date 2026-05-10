@@ -32,16 +32,20 @@ export class PresetActionImpl {
   selectPreset = (preset: Preset): void => {
     this.#set({ currentPreset: preset }, false, `selectPreset/${preset.slug}`);
 
-    // Apply model lock + params lock through the existing config slice.
-    // The image store uses class-based slices; there is no single
-    // `setGenerationConfig` setter — we update `model` directly and route
-    // each preset param through `setParamOnInput`.
-    this.#set({ model: preset.modelId }, false, `selectPreset/applyModel/${preset.modelId}`);
+    // Derive provider from the canonical model_id format
+    // `<provider>/<model>/<modality>`. Bare slugs (e.g. `flux-pro`)
+    // fall back to the currently selected provider. We go through
+    // `setModelAndProviderOnSelect` rather than `set({ model })` so the
+    // model's parameter schema (and default params) get refreshed
+    // before the per-param `setParamOnInput` loop applies the lock.
+    const store = this.#get();
+    const slashIndex = preset.modelId.indexOf('/');
+    const provider = slashIndex > 0 ? preset.modelId.slice(0, slashIndex) : store.provider;
+    store.setModelAndProviderOnSelect(preset.modelId, provider);
 
     const { setParamOnInput } = this.#get();
     for (const [key, value] of Object.entries(preset.paramsLock)) {
       if (value === undefined) continue;
-
       setParamOnInput(key as any, value as any);
     }
   };

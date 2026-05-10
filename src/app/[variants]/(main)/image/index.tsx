@@ -13,6 +13,7 @@ import { useImageStore } from '@/store/image';
 import { presetSelectors } from '@/store/image/slices/preset/selectors';
 
 import FlowMainArea from './features/FlowMainArea';
+import FlowSidebarControls from './features/FlowSidebarControls';
 import ImageWorkspace from './features/ImageWorkspace';
 import PromptInput from './features/PromptInput';
 import ImageWorkspaceMobile from './ImageWorkspaceMobile';
@@ -47,7 +48,7 @@ const ImagePage = memo(() => {
   return (
     <Flexbox horizontal flex={1} height={'100%'} width={'100%'}>
       <FlowSidebar
-        controls={null}
+        controls={<FlowSidebarControls />}
         isGenerating={isGenerating}
         modality="image"
         preset={preset}

@@ -17,8 +17,8 @@ const drawerStyles: ComponentProps<typeof Drawer>['styles'] = {
 const MobileFlowSheet = memo<Props>(({ children, onClose, open }) => {
   return (
     <Drawer
-      destroyOnHidden
       closable={false}
+      destroyOnHidden={false}
       height="80vh"
       open={open}
       placement="bottom"
