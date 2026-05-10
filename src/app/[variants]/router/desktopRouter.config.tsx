@@ -484,8 +484,13 @@ export const desktopRoutes: RouteConfig[] = [
         path: 'page',
       },
 
-      // Default route - home page (rendered by DesktopHomeLayout in MainLayout)
+      // Default route - home page (rendered by DesktopHomeLayout in MainLayout).
+      // The home content is mounted directly inside the parent layout, so the
+      // Outlet at `/` should be empty. Provide an explicit null Component so
+      // react-router doesn't warn "Matched leaf route ... has no element"
+      // — that warning fired on every tab switch.
       {
+        Component: () => null,
         index: true,
       },
       // Catch-all route
