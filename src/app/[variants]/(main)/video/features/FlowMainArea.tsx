@@ -6,7 +6,7 @@ import { memo } from 'react';
 import PresetGallery from '@/features/Generators/PresetGallery';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useVideoStore } from '@/store/video';
-import { generationBatchSelectors } from '@/store/video/selectors';
+import { generationBatchSelectors, videoGenerationTopicSelectors } from '@/store/video/selectors';
 import { presetSelectors } from '@/store/video/slices/preset/selectors';
 
 import GenerationFeed from './GenerationFeed';
@@ -19,6 +19,12 @@ const FlowMainArea = memo(() => {
   const hasGenerations = useVideoStore(generationBatchSelectors.hasAnyBatches);
   const selectPreset = useVideoStore((s) => s.selectPreset);
   const selectedSlug = useVideoStore(presetSelectors.presetSlug);
+
+  // Pull batches for the current topic — without this the feed tab
+  // is empty even when prior generations exist.
+  const activeTopicId = useVideoStore(videoGenerationTopicSelectors.activeGenerationTopicId);
+  const useFetchGenerationBatches = useVideoStore((s) => s.useFetchGenerationBatches);
+  useFetchGenerationBatches(activeTopicId);
 
   const url = useFlowUrlState(hasGenerations ? 'feed' : 'presets');
 

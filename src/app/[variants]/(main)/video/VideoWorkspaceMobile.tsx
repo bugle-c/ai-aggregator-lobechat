@@ -2,7 +2,6 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 
 import MobileFlowFAB from '@/features/Generators/MobileFlowFAB';
 import MobileFlowSheet from '@/features/Generators/MobileFlowSheet';
@@ -13,16 +12,12 @@ import { presetSelectors } from '@/store/video/slices/preset/selectors';
 import FlowMainArea from './features/FlowMainArea';
 import PlanGateBanner from './features/PlanGateBanner';
 import PromptInput from './features/PromptInput';
-import VideoWorkspace from './features/VideoWorkspace';
 
 /**
- * Mobile layout for `/video`. Behind `?new_flow=1`: tabbed
- * Стили/Мои генерации with a floating FAB. Without the flag: legacy
- * stacked feed. PlanGateBanner stays in both paths (free-user upsell).
+ * Mobile layout for `/video`: tabs Стили | Мои генерации with a
+ * floating "Создать ✦" FAB. PlanGateBanner stays at top for free users.
  */
 const VideoWorkspaceMobile = memo(() => {
-  const [params] = useSearchParams();
-  const newFlow = params.get('new_flow') === '1';
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const preset = useVideoStore(presetSelectors.currentPreset);
@@ -30,28 +25,18 @@ const VideoWorkspaceMobile = memo(() => {
   const isGenerating = useVideoStore((s) => s.isCreating);
   const createVideo = useVideoStore((s) => s.createVideo);
 
-  const containerStyle = {
-    overflowY: 'auto' as const,
-    paddingBlockEnd: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
-    position: 'relative' as const,
-  };
-
-  if (!newFlow) {
-    return (
-      <>
-        <MobileGlobalHeader />
-        <Flexbox flex={1} style={containerStyle} width={'100%'}>
-          <PlanGateBanner />
-          <VideoWorkspace />
-        </Flexbox>
-      </>
-    );
-  }
-
   return (
     <>
       <MobileGlobalHeader />
-      <Flexbox flex={1} style={containerStyle} width={'100%'}>
+      <Flexbox
+        flex={1}
+        width={'100%'}
+        style={{
+          overflowY: 'auto',
+          paddingBlockEnd: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
+          position: 'relative',
+        }}
+      >
         <PlanGateBanner />
         <FlowMainArea />
       </Flexbox>
