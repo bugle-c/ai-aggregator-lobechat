@@ -1,7 +1,19 @@
 'use client';
 
 import { Flexbox, Grid } from '@lobehub/ui';
-import { App, Button, Card, Divider, Input, Modal, Progress, Radio, Spin, Tag, Typography } from 'antd';
+import {
+  App,
+  Button,
+  Card,
+  Divider,
+  Input,
+  Modal,
+  Progress,
+  Radio,
+  Spin,
+  Tag,
+  Typography,
+} from 'antd';
 import { Check } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +21,7 @@ import { useTranslation } from 'react-i18next';
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
 import MobileCancelFlow from '@/features/Upsell/MobileCancelFlow';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { lambdaQuery, lambdaClient } from '@/libs/trpc/client';
+import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 
 import PlansMobileLayout from './PlansMobileLayout';
 
@@ -48,6 +60,14 @@ const Plans = memo(() => {
   const [cancelReason, setCancelReason] = useState<string>('not_using');
   const [cancelText, setCancelText] = useState('');
   const [cancelling, setCancelling] = useState(false);
+
+  // IMPORTANT: keep all hooks above any early-return.
+  // useIsMobile() wraps antd-style useResponsive() which calls useRef
+  // internally. Calling it after a conditional return causes React #310
+  // ("Rendered more hooks than during the previous render") when the
+  // loading branch resolves and the component re-renders with one
+  // additional hook in scope.
+  const isMobile = useIsMobile();
 
   const { data: plans, isLoading: plansLoading } = lambdaQuery.subscription.getPlans.useQuery();
   const { data: billing, isLoading: billingLoading } =
@@ -105,20 +125,17 @@ const Plans = memo(() => {
   const totalAvailable = creditLimit + creditBalance;
   const usagePercent = totalAvailable > 0 ? Math.round((creditsUsed / totalAvailable) * 100) : 0;
 
-  const isMobile = useIsMobile();
-
   if (isMobile && plans && billing) {
     // Mobile: vertical-stack layout + bottom-sheet cancel flow. Active
     // paid users see a "Отменить подписку" button below the plan list.
-    const isActivePaid =
-      currentPlan != null &&
-      currentPlan.priceRub > 0 &&
-      !billing?.cancelledAt;
+    const isActivePaid = currentPlan != null && currentPlan.priceRub > 0 && !billing?.cancelledAt;
 
     return (
       <>
         <SettingHeader title={t('tab.plans')} />
         <PlansMobileLayout
+          features={PLAN_FEATURES}
+          subscribePending={subscribeMutation.isPending}
           billing={{
             creditBalance,
             creditLimit,
@@ -134,7 +151,6 @@ const Plans = memo(() => {
                 }
               : null
           }
-          features={PLAN_FEATURES}
           plans={plans.map((p) => ({
             id: p.id,
             name: p.name,
@@ -142,7 +158,6 @@ const Plans = memo(() => {
             slug: p.slug,
             tokenLimit: p.tokenLimit,
           }))}
-          subscribePending={subscribeMutation.isPending}
           onSelect={(planId) => subscribeMutation.mutate({ planId })}
         />
         {isActivePaid && (
@@ -154,6 +169,7 @@ const Plans = memo(() => {
         )}
         <MobileCancelFlow
           loading={cancelling}
+          open={cancelOpen}
           onClose={() => setCancelOpen(false)}
           onConfirm={async (reasonCode, reasonText) => {
             setCancelReason(reasonCode);
@@ -162,7 +178,6 @@ const Plans = memo(() => {
             // from state, so we set them above first.
             await handleCancelSubmit();
           }}
-          open={cancelOpen}
         />
       </>
     );
@@ -202,7 +217,7 @@ const Plans = memo(() => {
           <>
             <Divider style={{ margin: '12px 0' }} />
             {billing?.cancelledAt ? (
-              <Flexbox horizontal align="center" justify="space-between" gap={12}>
+              <Flexbox horizontal align="center" gap={12} justify="space-between">
                 <Text type="warning">
                   Подписка отменена. Доступ сохраняется до{' '}
                   {billing.subscriptionExpiresAt
@@ -212,17 +227,17 @@ const Plans = memo(() => {
                 </Text>
               </Flexbox>
             ) : billing?.autoRenew && billing.hasSavedPaymentMethod ? (
-              <Flexbox horizontal align="center" justify="space-between" gap={12}>
+              <Flexbox horizontal align="center" gap={12} justify="space-between">
                 <Text type="secondary">
-                  Подписка продлевается автоматически. Списание {currentPlan.priceRub} ₽
-                  каждый месяц до отмены.
+                  Подписка продлевается автоматически. Списание {currentPlan.priceRub} ₽ каждый
+                  месяц до отмены.
                 </Text>
                 <Button danger size="small" onClick={() => setCancelOpen(true)}>
                   Отменить подписку
                 </Button>
               </Flexbox>
             ) : (
-              <Flexbox horizontal align="center" justify="space-between" gap={12}>
+              <Flexbox horizontal align="center" gap={12} justify="space-between">
                 <Text type="secondary">
                   Авто-продление не настроено — подписка истечёт по окончании периода.
                 </Text>
@@ -233,28 +248,28 @@ const Plans = memo(() => {
       </Card>
 
       <Modal
-        title="Отменить подписку?"
-        open={cancelOpen}
-        confirmLoading={cancelling}
-        okText="Отменить подписку"
-        okButtonProps={{ danger: true }}
         cancelText="Передумал"
+        confirmLoading={cancelling}
+        okButtonProps={{ danger: true }}
+        okText="Отменить подписку"
+        open={cancelOpen}
+        title="Отменить подписку?"
+        width={460}
         onCancel={() => setCancelOpen(false)}
         onOk={handleCancelSubmit}
-        width={460}
       >
         <Text type="secondary">
           Доступ к платным функциям сохранится до{' '}
           {billing?.subscriptionExpiresAt
             ? new Date(billing.subscriptionExpiresAt).toLocaleDateString('ru-RU')
             : '—'}
-          . После этой даты вы вернётесь на тариф «Старт». Расскажите, почему уходите —
-          это поможет нам стать лучше:
+          . После этой даты вы вернётесь на тариф «Старт». Расскажите, почему уходите — это поможет
+          нам стать лучше:
         </Text>
         <Radio.Group
+          style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}
           value={cancelReason}
           onChange={(e) => setCancelReason(e.target.value)}
-          style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}
         >
           {CANCEL_REASONS.map((r) => (
             <Radio key={r.code} value={r.code}>
@@ -264,12 +279,12 @@ const Plans = memo(() => {
         </Radio.Group>
         {cancelReason === 'other' && (
           <Input.TextArea
+            maxLength={500}
             placeholder="Расскажите подробнее (необязательно)"
+            rows={3}
+            style={{ marginTop: 12 }}
             value={cancelText}
             onChange={(e) => setCancelText(e.target.value)}
-            rows={3}
-            maxLength={500}
-            style={{ marginTop: 12 }}
           />
         )}
       </Modal>
