@@ -15,6 +15,8 @@ import { type GenerationConfigAction } from './slices/generationConfig/action';
 import { createGenerationConfigSlice } from './slices/generationConfig/action';
 import { type GenerationTopicAction } from './slices/generationTopic/action';
 import { createGenerationTopicSlice } from './slices/generationTopic/action';
+import { type PresetAction } from './slices/preset/action';
+import { createPresetSlice } from './slices/preset/action';
 
 //  ===============  aggregate createStoreFn ============ //
 
@@ -24,12 +26,14 @@ export interface ImageStore
     GenerationTopicAction,
     GenerationBatchAction,
     CreateImageAction,
+    PresetAction,
     ImageStoreState {}
 
 type ImageStoreAction = GenerationConfigAction &
   GenerationTopicAction &
   GenerationBatchAction &
-  CreateImageAction;
+  CreateImageAction &
+  PresetAction;
 
 const createStore: StateCreator<ImageStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<ImageStore, [['zustand/devtools', never]]>>
@@ -40,6 +44,7 @@ const createStore: StateCreator<ImageStore, [['zustand/devtools', never]]> = (
     createGenerationTopicSlice(...parameters),
     createGenerationBatchSlice(...parameters),
     createCreateImageSlice(...parameters),
+    createPresetSlice(...parameters),
   ]),
 });
 

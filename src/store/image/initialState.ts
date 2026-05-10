@@ -6,15 +6,18 @@ import { type GenerationConfigState } from './slices/generationConfig/initialSta
 import { initialGenerationConfigState } from './slices/generationConfig/initialState';
 import { type GenerationTopicState } from './slices/generationTopic/initialState';
 import { initialGenerationTopicState } from './slices/generationTopic/initialState';
+import { initialPresetState, type PresetState } from './slices/preset/action';
 
 export type ImageStoreState = GenerationConfigState &
   GenerationTopicState &
   GenerationBatchState &
-  CreateImageState;
+  CreateImageState &
+  PresetState;
 
 export const initialState: ImageStoreState = {
   ...initialGenerationConfigState,
   ...initialGenerationTopicState,
   ...initialGenerationBatchState,
   ...initialCreateImageState,
+  ...initialPresetState,
 };
