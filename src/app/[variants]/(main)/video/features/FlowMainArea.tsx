@@ -1,7 +1,10 @@
 'use client';
 
+import { ActionIcon } from '@lobehub/ui';
 import { Tabs } from 'antd';
+import { ArrowLeft } from 'lucide-react';
 import { memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import PresetGallery from '@/features/Generators/PresetGallery';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
@@ -16,6 +19,7 @@ import GenerationFeed from './GenerationFeed';
  * Mirror of image/features/FlowMainArea.tsx — same UX, different store.
  */
 const FlowMainArea = memo(() => {
+  const navigate = useNavigate();
   const hasGenerations = useVideoStore(generationBatchSelectors.hasAnyBatches);
   const selectPreset = useVideoStore((s) => s.selectPreset);
   const selectedSlug = useVideoStore(presetSelectors.presetSlug);
@@ -59,6 +63,17 @@ const FlowMainArea = memo(() => {
           label: 'Мои генерации',
         },
       ]}
+      tabBarExtraContent={{
+        left: (
+          <ActionIcon
+            aria-label="Назад"
+            icon={ArrowLeft}
+            size="normal"
+            style={{ marginInlineEnd: 8 }}
+            onClick={() => navigate('/')}
+          />
+        ),
+      }}
       onChange={(k) => url.setTab(k === 'presets' ? 'presets' : 'feed')}
     />
   );
