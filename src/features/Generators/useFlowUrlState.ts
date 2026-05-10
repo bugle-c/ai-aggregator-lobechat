@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 export type FlowTab = 'presets' | 'feed';
+export type FlowView = 'create' | undefined;
 
 export interface FlowUrlState {
   category: string | undefined;
@@ -11,6 +12,12 @@ export interface FlowUrlState {
   preset: string | undefined;
   q: string | undefined;
   tab: FlowTab;
+  /** When 'create' the page renders a full-screen creation view
+      (preset + prompt + Generate). Used on mobile after user taps a
+      preset card so the flow mirrors higgsfield's gallery → creation
+      navigation. Desktop ignores this since the sidebar is always
+      visible. */
+  view: FlowView;
 }
 
 export interface FlowUrlSetters {
@@ -19,11 +26,13 @@ export interface FlowUrlSetters {
   setPreset: (v: string | undefined) => void;
   setQ: (v: string | undefined) => void;
   setTab: (v: FlowTab) => void;
+  setView: (v: FlowView) => void;
 }
 
-const COMPACT_KEYS = ['tab', 'model', 'category', 'preset', 'q'] as const;
+const COMPACT_KEYS = ['tab', 'model', 'category', 'preset', 'q', 'view'] as const;
 
 const sanitizeTab = (raw: string | null): FlowTab => (raw === 'presets' ? 'presets' : 'feed');
+const sanitizeView = (raw: string | null): FlowView => (raw === 'create' ? 'create' : undefined);
 
 /**
  * Reads/writes flow page state through search-params:
@@ -45,6 +54,7 @@ export const useFlowUrlState = (defaultTab: FlowTab): FlowUrlState & FlowUrlSett
     preset: params.get('preset') ?? undefined,
     q: params.get('q') ?? undefined,
     tab: params.has('tab') ? sanitizeTab(params.get('tab')) : defaultTab,
+    view: sanitizeView(params.get('view')),
   };
 
   const update = useCallback(
@@ -69,5 +79,6 @@ export const useFlowUrlState = (defaultTab: FlowTab): FlowUrlState & FlowUrlSett
     setPreset: (v) => update('preset', v),
     setQ: (v) => update('q', v),
     setTab: (v) => update('tab', v),
+    setView: (v) => update('view', v),
   };
 };

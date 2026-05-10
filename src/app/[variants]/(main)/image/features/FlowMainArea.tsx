@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 
 import PresetGallery from '@/features/Generators/PresetGallery';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { useImageStore } from '@/store/image';
 import { generationBatchSelectors, generationTopicSelectors } from '@/store/image/selectors';
 import { presetSelectors } from '@/store/image/slices/preset/selectors';
@@ -24,6 +25,7 @@ import GenerationFeed from './GenerationFeed';
  */
 const FlowMainArea = memo(() => {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const hasGenerations = useImageStore(generationBatchSelectors.hasAnyBatches);
   const selectPreset = useImageStore((s) => s.selectPreset);
   const selectedSlug = useImageStore(presetSelectors.presetSlug);
@@ -55,6 +57,10 @@ const FlowMainArea = memo(() => {
               onPresetSelect={(p) => {
                 selectPreset(p);
                 url.setPreset(p.slug);
+                // On mobile, navigate to a full-screen creation view
+                // (matches higgsfield: gallery → /flow/<modality>/prompt).
+                // On desktop the sidebar is always visible so no nav.
+                if (isMobile) url.setView('create');
               }}
             />
           ),
