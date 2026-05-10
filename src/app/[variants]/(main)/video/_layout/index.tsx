@@ -1,12 +1,23 @@
+'use client';
+
 import { Flexbox } from '@lobehub/ui';
 import type { FC } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useSearchParams } from 'react-router-dom';
 
 import Sidebar from './Sidebar';
 import { styles } from './style';
 import TopicSidebar from './TopicSidebar';
 
 const Layout: FC = () => {
+  const [params] = useSearchParams();
+  const newFlow = params.get('new_flow') === '1';
+
+  if (newFlow) {
+    // New flow page renders FlowSidebar + FlowMainArea inside index.tsx;
+    // legacy Sidebar/TopicSidebar are skipped.
+    return <Outlet />;
+  }
+
   return (
     <>
       <Sidebar />
