@@ -10,7 +10,7 @@ import PresetGallery from '@/features/Generators/PresetGallery';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useVideoStore } from '@/store/video';
-import { generationBatchSelectors, videoGenerationTopicSelectors } from '@/store/video/selectors';
+import { videoGenerationTopicSelectors } from '@/store/video/selectors';
 import { presetSelectors } from '@/store/video/slices/preset/selectors';
 
 import GenerationFeed from './GenerationFeed';
@@ -22,7 +22,6 @@ import GenerationFeed from './GenerationFeed';
 const FlowMainArea = memo(() => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const hasGenerations = useVideoStore(generationBatchSelectors.hasAnyBatches);
   const selectPreset = useVideoStore((s) => s.selectPreset);
   const selectedSlug = useVideoStore(presetSelectors.presetSlug);
 
@@ -32,7 +31,8 @@ const FlowMainArea = memo(() => {
   const useFetchGenerationBatches = useVideoStore((s) => s.useFetchGenerationBatches);
   useFetchGenerationBatches(activeTopicId);
 
-  const url = useFlowUrlState(hasGenerations ? 'feed' : 'presets');
+  // Default to the preset gallery — see image equivalent for rationale.
+  const url = useFlowUrlState('presets');
 
   return (
     <Tabs

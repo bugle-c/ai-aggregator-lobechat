@@ -10,7 +10,7 @@ import PresetGallery from '@/features/Generators/PresetGallery';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useImageStore } from '@/store/image';
-import { generationBatchSelectors, generationTopicSelectors } from '@/store/image/selectors';
+import { generationTopicSelectors } from '@/store/image/selectors';
 import { presetSelectors } from '@/store/image/slices/preset/selectors';
 
 import GenerationFeed from './GenerationFeed';
@@ -26,7 +26,6 @@ import GenerationFeed from './GenerationFeed';
 const FlowMainArea = memo(() => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const hasGenerations = useImageStore(generationBatchSelectors.hasAnyBatches);
   const selectPreset = useImageStore((s) => s.selectPreset);
   const selectedSlug = useImageStore(presetSelectors.presetSlug);
 
@@ -36,7 +35,13 @@ const FlowMainArea = memo(() => {
   const useFetchGenerationBatches = useImageStore((s) => s.useFetchGenerationBatches);
   useFetchGenerationBatches(activeTopicId);
 
-  const url = useFlowUrlState(hasGenerations ? 'feed' : 'presets');
+  // Default to the preset gallery on first visit. Previously the
+  // default depended on whether the user had prior generations —
+  // returning users would land on "Мои генерации" and never see the
+  // gallery, which contradicted the higgsfield-style entry pattern
+  // (gallery is THE primary surface). The user can still switch
+  // tabs and the URL `?tab=` is respected when present.
+  const url = useFlowUrlState('presets');
 
   return (
     <Tabs
