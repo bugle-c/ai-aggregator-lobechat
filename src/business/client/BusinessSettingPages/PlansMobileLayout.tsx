@@ -28,17 +28,26 @@ interface Billing {
   subscriptionExpiresAt?: string | null;
 }
 
+interface TopUpPackage {
+  amountRub: number;
+  label: string;
+}
+
 interface Props {
+  billing: Billing;
+  currentPlan?: CurrentPlan | null;
   /** Codes/labels per plan slug — caller passes their localized list. */
   features?: Record<string, string[]>;
-  currentPlan?: CurrentPlan | null;
-  billing: Billing;
   /** ID of the slug we want to highlight as the recommended plan. */
   highlightedSlug?: string;
   loading?: boolean;
+  onSelect: (planId: number) => void;
+  onTopUp?: (amountRub: number) => void;
+  /** Optional top-up packages — appear below plans as a "Пополнить" stack. */
+  packages?: TopUpPackage[];
   plans: Plan[];
   subscribePending?: boolean;
-  onSelect: (planId: number) => void;
+  topUpPending?: boolean;
 }
 
 const formatDate = (d: string) => new Date(d).toLocaleDateString('ru-RU');
@@ -62,8 +71,11 @@ const PlansMobileLayout = memo<Props>(
     highlightedSlug = 'pro',
     loading,
     plans,
+    packages,
     subscribePending,
+    topUpPending,
     onSelect,
+    onTopUp,
   }) => {
     const totalAvailable = billing.creditLimit + billing.creditBalance;
     const usagePercent =
@@ -104,13 +116,13 @@ const PlansMobileLayout = memo<Props>(
             <Block
               key={plan.id}
               padding={16}
+              variant="outlined"
               style={{
                 borderColor: isHighlighted ? 'var(--ant-color-primary)' : undefined,
                 borderWidth: isHighlighted ? 2 : undefined,
               }}
-              variant="outlined"
             >
-              <Flexbox align="center" horizontal justify="space-between">
+              <Flexbox horizontal align="center" justify="space-between">
                 <Title level={5} style={{ margin: 0 }}>
                   {plan.name}
                 </Title>
@@ -132,7 +144,7 @@ const PlansMobileLayout = memo<Props>(
 
               <Flexbox gap={6} paddingBlock={12}>
                 {planFeatures.map((featureKey) => (
-                  <Flexbox align="center" gap={6} horizontal key={featureKey}>
+                  <Flexbox horizontal align="center" gap={6} key={featureKey}>
                     <Check size={14} style={{ color: '#52c41a', flexShrink: 0 }} />
                     <Text style={{ fontSize: 13 }}>{featureKey}</Text>
                   </Flexbox>
@@ -143,15 +155,45 @@ const PlansMobileLayout = memo<Props>(
                 block
                 disabled={isCurrent || plan.priceRub === 0}
                 loading={subscribePending || loading}
-                onClick={() => onSelect(plan.id)}
                 size="large"
                 type={isHighlighted && !isCurrent ? 'primary' : 'default'}
+                onClick={() => onSelect(plan.id)}
               >
                 {isCurrent ? 'Текущий тариф' : plan.priceRub === 0 ? 'Бесплатно' : 'Выбрать'}
               </Button>
             </Block>
           );
         })}
+
+        {packages && packages.length > 0 && onTopUp && (
+          <>
+            <Title level={5} style={{ marginBlockEnd: 0, marginBlockStart: 8 }}>
+              Пополнить кредиты
+            </Title>
+            <Text style={{ marginBlockEnd: 4 }} type="secondary">
+              Разовое пополнение баланса — не подписка. Кредиты не сгорают.
+            </Text>
+            {packages.map((pkg) => (
+              <Block key={pkg.amountRub} padding={16} variant="filled">
+                <Flexbox horizontal align="center" justify="space-between">
+                  <Flexbox>
+                    <Text strong>{pkg.label}</Text>
+                    <Text style={{ fontSize: 13 }} type="secondary">
+                      {pkg.amountRub} ₽
+                    </Text>
+                  </Flexbox>
+                  <Button
+                    loading={topUpPending}
+                    size="middle"
+                    onClick={() => onTopUp(pkg.amountRub)}
+                  >
+                    Купить
+                  </Button>
+                </Flexbox>
+              </Block>
+            ))}
+          </>
+        )}
       </Flexbox>
     );
   },

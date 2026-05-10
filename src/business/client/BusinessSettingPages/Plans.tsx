@@ -136,6 +136,7 @@ const Plans = memo(() => {
         <PlansMobileLayout
           features={PLAN_FEATURES}
           subscribePending={subscribeMutation.isPending}
+          topUpPending={topUpMutation.isPending}
           billing={{
             creditBalance,
             creditLimit,
@@ -151,6 +152,10 @@ const Plans = memo(() => {
                 }
               : null
           }
+          packages={packages?.map((p) => ({
+            amountRub: p.amountRub,
+            label: p.label,
+          }))}
           plans={plans.map((p) => ({
             id: p.id,
             name: p.name,
@@ -159,6 +164,7 @@ const Plans = memo(() => {
             tokenLimit: p.tokenLimit,
           }))}
           onSelect={(planId) => subscribeMutation.mutate({ planId })}
+          onTopUp={(amountRub) => topUpMutation.mutate({ amountRub })}
         />
         {isActivePaid && (
           <div style={{ paddingBlock: 8, paddingInline: 16 }}>

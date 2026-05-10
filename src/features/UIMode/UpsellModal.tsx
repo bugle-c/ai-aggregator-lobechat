@@ -1,9 +1,9 @@
 'use client';
 
 import { Button, Flex, Modal, Typography } from 'antd';
-import { useRouter } from 'next/navigation';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 interface Props {
   modelName: string;
@@ -15,7 +15,10 @@ interface Props {
 
 const UpsellModal = memo<Props>(({ modelName, onClose, open, planPriceRub, requiredPlan }) => {
   const { t } = useTranslation('onboarding');
-  const router = useRouter();
+  // Use react-router-dom's useNavigate — this modal lives under the
+  // SPA-routed `(main)` tree, where `next/navigation` push() doesn't
+  // actually trigger a route change.
+  const navigate = useNavigate();
 
   return (
     <Modal
@@ -33,7 +36,7 @@ const UpsellModal = memo<Props>(({ modelName, onClose, open, planPriceRub, requi
           type="primary"
           onClick={() => {
             onClose();
-            router.push('/settings/plans');
+            navigate('/settings/plans');
           }}
         >
           {t('upsellModal.ctaUpgrade', { plan: requiredPlan, price: planPriceRub })}
