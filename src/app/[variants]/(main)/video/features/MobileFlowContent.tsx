@@ -1,10 +1,11 @@
 'use client';
 
-import { Block, Flexbox } from '@lobehub/ui';
-import { App } from 'antd';
-import { Sparkles } from 'lucide-react';
+import { Flexbox } from '@lobehub/ui';
+import { App, Segmented } from 'antd';
+import { Settings, Sparkles } from 'lucide-react';
 import { memo } from 'react';
 
+import ModelSelect from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/ModelSelect';
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
 import { useVideoStore } from '@/store/video';
 import { videoGenerationConfigSelectors } from '@/store/video/selectors';
@@ -12,15 +13,11 @@ import { presetSelectors } from '@/store/video/slices/preset/selectors';
 
 import PromptInput from './PromptInput';
 
-const prettifyModelId = (modelId: string | undefined): string => {
-  if (!modelId) return '—';
-  const parts = modelId.split('/');
-  const core = parts.length >= 2 ? parts[1] : parts[0];
-  return core
-    .split('-')
-    .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : w))
-    .join(' ');
-};
+const ASPECT_OPTIONS = ['16:9', '9:16', '1:1'];
+const DURATION_OPTIONS = [
+  { label: '5 сек', value: 5 },
+  { label: '10 сек', value: 10 },
+];
 
 interface Props {
   onAfterGenerate: () => void;
@@ -28,8 +25,7 @@ interface Props {
 }
 
 /**
- * Higgsfield-style bottom-sheet content for /video on mobile.
- * Mirror of image equivalent + duration_sec chip.
+ * Mirror of image/MobileFlowContent + duration_sec selector.
  */
 const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const { message } = App.useApp();
@@ -38,7 +34,7 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const clearPreset = useVideoStore((s) => s.clearPreset);
   const isGenerating = useVideoStore((s) => s.isCreating);
   const createVideo = useVideoStore((s) => s.createVideo);
-  const model = useVideoStore(videoGenerationConfigSelectors.model);
+  const setParamOnInput = useVideoStore((s) => s.setParamOnInput);
   const parameters = useVideoStore(videoGenerationConfigSelectors.parameters);
   const promptValue = (parameters?.prompt as string | undefined) ?? '';
   const aspect = (parameters?.aspect_ratio as string | undefined) ?? null;
@@ -62,21 +58,54 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
 
       <PromptInput />
 
-      <Flexbox horizontal gap={8} style={{ flexWrap: 'wrap' }}>
-        <Block clickable padding={'6px 12px'} variant="filled" onClick={onOpenSettings}>
-          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>Модель: </span>
-          <span style={{ fontSize: 12, fontWeight: 600 }}>{prettifyModelId(model)}</span>
-        </Block>
-        {aspect && (
-          <Block clickable padding={'6px 12px'} variant="filled" onClick={onOpenSettings}>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>{aspect}</span>
-          </Block>
-        )}
-        {duration != null && (
-          <Block clickable padding={'6px 12px'} variant="filled" onClick={onOpenSettings}>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>{duration}s</span>
-          </Block>
-        )}
+      <Flexbox gap={8}>
+        <Flexbox gap={4}>
+          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>Модель</span>
+          <ModelSelect />
+        </Flexbox>
+
+        <Flexbox gap={4}>
+          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
+            Соотношение сторон
+          </span>
+          <Segmented
+            block
+            options={ASPECT_OPTIONS}
+            value={aspect ?? '16:9'}
+            onChange={(v) => setParamOnInput('aspect_ratio' as any, v as any)}
+          />
+        </Flexbox>
+
+        <Flexbox gap={4}>
+          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
+            Длительность
+          </span>
+          <Segmented
+            block
+            options={DURATION_OPTIONS}
+            value={duration ?? 5}
+            onChange={(v) => setParamOnInput('duration_sec' as any, v as any)}
+          />
+        </Flexbox>
+
+        <button
+          type="button"
+          style={{
+            alignItems: 'center',
+            background: 'transparent',
+            border: 0,
+            color: 'var(--ant-color-link)',
+            cursor: 'pointer',
+            display: 'flex',
+            fontSize: 13,
+            gap: 6,
+            padding: '4px 0',
+          }}
+          onClick={onOpenSettings}
+        >
+          <Settings size={14} />
+          Дополнительные настройки
+        </button>
       </Flexbox>
 
       <button

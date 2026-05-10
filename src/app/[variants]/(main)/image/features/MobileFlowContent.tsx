@@ -1,10 +1,11 @@
 'use client';
 
-import { Block, Flexbox } from '@lobehub/ui';
-import { App } from 'antd';
-import { Sparkles } from 'lucide-react';
+import { Flexbox } from '@lobehub/ui';
+import { App, Segmented } from 'antd';
+import { Settings, Sparkles } from 'lucide-react';
 import { memo } from 'react';
 
+import ModelSelect from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ModelSelect';
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
@@ -12,15 +13,7 @@ import { presetSelectors } from '@/store/image/slices/preset/selectors';
 
 import PromptInput from './PromptInput';
 
-const prettifyModelId = (modelId: string | undefined): string => {
-  if (!modelId) return '—';
-  const parts = modelId.split('/');
-  const core = parts.length >= 2 ? parts[1] : parts[0];
-  return core
-    .split('-')
-    .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : w))
-    .join(' ');
-};
+const ASPECT_OPTIONS = ['1:1', '16:9', '9:16', '4:3', '3:4'];
 
 interface Props {
   onAfterGenerate: () => void;
@@ -28,11 +21,13 @@ interface Props {
 }
 
 /**
- * Higgsfield-style bottom-sheet content for /image on mobile:
+ * Higgsfield-style mobile creation surface:
  *   1. Preset preview card (or empty placeholder)
  *   2. Prompt input (with its embedded toolbar + sparkles button)
- *   3. Quick chips row: model · aspect ratio (open settings on tap)
- *   4. Big yellow Generate button (disabled when prompt empty)
+ *   3. Inline settings: Model picker + Aspect ratio segmented
+ *   4. "Доп. настройки" link that opens the full ConfigPanel drawer
+ *      (seed / steps / cfg / image upload — power-user knobs)
+ *   5. Big yellow Generate button (disabled when prompt empty)
  */
 const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const { message } = App.useApp();
@@ -41,7 +36,7 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const clearPreset = useImageStore((s) => s.clearPreset);
   const isGenerating = useImageStore((s) => s.isCreating);
   const createImage = useImageStore((s) => s.createImage);
-  const model = useImageStore(imageGenerationConfigSelectors.model);
+  const setParamOnInput = useImageStore((s) => s.setParamOnInput);
   const parameters = useImageStore(imageGenerationConfigSelectors.parameters);
   const promptValue = (parameters?.prompt as string | undefined) ?? '';
   const aspect = (parameters?.aspect_ratio as string | undefined) ?? null;
@@ -64,16 +59,48 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
 
       <PromptInput />
 
-      <Flexbox horizontal gap={8} style={{ flexWrap: 'wrap' }}>
-        <Block clickable padding={'6px 12px'} variant="filled" onClick={onOpenSettings}>
-          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>Модель: </span>
-          <span style={{ fontSize: 12, fontWeight: 600 }}>{prettifyModelId(model)}</span>
-        </Block>
-        {aspect && (
-          <Block clickable padding={'6px 12px'} variant="filled" onClick={onOpenSettings}>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>{aspect}</span>
-          </Block>
-        )}
+      {/* Inline settings — visible at all times so the user knows
+          they can tweak model + aspect right here. Power-user knobs
+          (seed, steps, cfg, image upload) live behind "Доп. настройки". */}
+      <Flexbox gap={8}>
+        <Flexbox gap={4}>
+          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>Модель</span>
+          <ModelSelect />
+        </Flexbox>
+
+        <Flexbox gap={4}>
+          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
+            Соотношение сторон
+          </span>
+          <Segmented
+            block
+            options={ASPECT_OPTIONS}
+            // Pass through to existing param setter so upstream
+            // generation logic and Drizzle-validated config stay
+            // unchanged. `as any` because the param key is loose.
+            value={aspect ?? '1:1'}
+            onChange={(v) => setParamOnInput('aspect_ratio' as any, v as any)}
+          />
+        </Flexbox>
+
+        <button
+          type="button"
+          style={{
+            alignItems: 'center',
+            background: 'transparent',
+            border: 0,
+            color: 'var(--ant-color-link)',
+            cursor: 'pointer',
+            display: 'flex',
+            fontSize: 13,
+            gap: 6,
+            padding: '4px 0',
+          }}
+          onClick={onOpenSettings}
+        >
+          <Settings size={14} />
+          Дополнительные настройки
+        </button>
       </Flexbox>
 
       <button
