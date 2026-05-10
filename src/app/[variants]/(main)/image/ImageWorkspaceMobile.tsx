@@ -1,29 +1,26 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import { Drawer } from 'antd';
 import { memo, useState } from 'react';
 
+import ConfigPanel from '@/app/[variants]/(main)/image/_layout/ConfigPanel';
 import MobileFlowFAB from '@/features/Generators/MobileFlowFAB';
 import MobileFlowSheet from '@/features/Generators/MobileFlowSheet';
 import MobileGlobalHeader from '@/features/MobileGlobalHeader';
-import { useImageStore } from '@/store/image';
-import { presetSelectors } from '@/store/image/slices/preset/selectors';
 
 import FlowMainArea from './features/FlowMainArea';
-import PromptInput from './features/PromptInput';
+import MobileFlowContent from './features/MobileFlowContent';
 
 /**
  * Mobile layout for `/image`: tabs Стили | Мои генерации with a
- * floating "Создать ✦" FAB that opens a bottom-sheet containing the
- * prompt + Generate button.
+ * floating "Создать ✦" FAB that opens a bottom-sheet hosting the
+ * higgsfield-style content (preset preview + prompt + chips +
+ * yellow Generate). Param chips open the settings drawer.
  */
 const ImageWorkspaceMobile = memo(() => {
   const [sheetOpen, setSheetOpen] = useState(false);
-
-  const preset = useImageStore(presetSelectors.currentPreset);
-  const clearPreset = useImageStore((s) => s.clearPreset);
-  const isGenerating = useImageStore((s) => s.isCreating);
-  const createImage = useImageStore((s) => s.createImage);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
     <>
@@ -43,50 +40,26 @@ const ImageWorkspaceMobile = memo(() => {
       <MobileFlowFAB hidden={sheetOpen} onClick={() => setSheetOpen(true)} />
 
       <MobileFlowSheet open={sheetOpen} onClose={() => setSheetOpen(false)}>
-        <Flexbox gap={12}>
-          {preset ? (
-            <button
-              type="button"
-              style={{
-                background: 'transparent',
-                border: 0,
-                color: 'var(--ant-color-text)',
-                cursor: 'pointer',
-                font: 'inherit',
-                textAlign: 'start',
-              }}
-              onClick={clearPreset}
-            >
-              <strong>Стиль:</strong> {preset.title} · ✕
-            </button>
-          ) : (
-            <span style={{ color: 'var(--ant-color-text-tertiary)' }}>Стиль не выбран</span>
-          )}
-
-          <PromptInput />
-
-          <button
-            disabled={isGenerating}
-            type="button"
-            style={{
-              background: 'var(--ant-color-primary)',
-              border: 0,
-              borderRadius: 8,
-              color: '#fff',
-              cursor: 'pointer',
-              fontSize: 16,
-              fontWeight: 600,
-              padding: '14px 16px',
-            }}
-            onClick={async () => {
-              await createImage();
-              setSheetOpen(false);
-            }}
-          >
-            {isGenerating ? 'Создаём…' : 'Создать'}
-          </button>
-        </Flexbox>
+        <MobileFlowContent
+          onAfterGenerate={() => setSheetOpen(false)}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
       </MobileFlowSheet>
+
+      {/* Settings drawer slides from right; opens when the user taps a
+          chip (Модель / aspect) inside the flow sheet. Reuses the
+          existing ConfigPanel for full param control. */}
+      <Drawer
+        destroyOnHidden={false}
+        open={settingsOpen}
+        placement="right"
+        styles={{ body: { padding: 0 } }}
+        title="Настройки"
+        width={'90vw'}
+        onClose={() => setSettingsOpen(false)}
+      >
+        <ConfigPanel />
+      </Drawer>
     </>
   );
 });
