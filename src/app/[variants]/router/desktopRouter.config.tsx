@@ -276,7 +276,12 @@ export const desktopRoutes: RouteConfig[] = [
       {
         children: [
           {
-            element: redirectElement('/settings/profile'),
+            // Mobile sees `MobileSettingsList`, desktop redirects to
+            // `/settings/profile` — both handled inside the component.
+            element: dynamicElement(
+              () => import('../(main)/settings'),
+              'Settings > Index (mobile list / desktop redirect)',
+            ),
             index: true,
           },
           // Provider routes with nested structure

@@ -2,8 +2,8 @@
 
 import { ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
 import { Menu } from 'lucide-react';
-import Link from 'next/link';
 import { memo } from 'react';
+import { Link } from 'react-router-dom';
 
 import { BalanceBadge } from '@/features/Onboarding';
 import { useGlobalStore } from '@/store/global';
@@ -16,9 +16,9 @@ const MobileGlobalHeader = memo(() => {
 
   return (
     <Flexbox
+      horizontal
       align="center"
       gap={12}
-      horizontal
       paddingInline={12}
       style={{
         background: 'var(--ant-color-bg-container)',
@@ -32,12 +32,12 @@ const MobileGlobalHeader = memo(() => {
       <ActionIcon
         aria-label="Открыть меню"
         icon={Menu}
-        onClick={() => toggleLeftPanel(true)}
         size="large"
+        onClick={() => toggleLeftPanel(true)}
       />
       <Link
-        href="/"
         style={{ alignItems: 'center', display: 'flex', flex: 1, gap: 6, textDecoration: 'none' }}
+        to="/"
       >
         <span aria-hidden style={{ fontSize: 20 }}>
           🤯

@@ -1,9 +1,9 @@
 'use client';
 
 import { Block, Flexbox } from '@lobehub/ui';
-import { Image as ImageIcon, Languages, Mic, Video } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Image as ImageIcon, Video } from 'lucide-react';
 import { memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface ChipDef {
   href: string;
@@ -12,20 +12,24 @@ interface ChipDef {
   label: string;
 }
 
+// Only routes that actually exist in `desktopRouter.config.tsx` go here.
+// Earlier `/translate` and `/tts` chips dumped users back to `/` via the
+// catch-all. If we add those product surfaces later, list them again.
 const CHIPS: ChipDef[] = [
   { href: '/image', icon: ImageIcon, key: 'image', label: 'Картинка' },
   { href: '/video', icon: Video, key: 'video', label: 'Видео' },
-  { href: '/translate', icon: Languages, key: 'translate', label: 'Перевод' },
-  { href: '/tts', icon: Mic, key: 'tts', label: 'Озвучка' },
 ];
 
 const MobileFeatureChipsRow = memo(() => {
-  const router = useRouter();
+  // Use react-router-dom navigate — `next/navigation`'s `useRouter().push`
+  // does not drive the SPA router under the (main) tree, so chips
+  // appeared dead.
+  const navigate = useNavigate();
 
   return (
     <Flexbox
-      gap={8}
       horizontal
+      gap={8}
       paddingInline={16}
       style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}
     >
@@ -34,8 +38,8 @@ const MobileFeatureChipsRow = memo(() => {
           clickable
           gap={6}
           key={key}
-          onClick={() => router.push(href)}
           padding={10}
+          variant="filled"
           style={{
             alignItems: 'center',
             display: 'flex',
@@ -43,7 +47,7 @@ const MobileFeatureChipsRow = memo(() => {
             flexShrink: 0,
             minWidth: 110,
           }}
-          variant="filled"
+          onClick={() => navigate(href)}
         >
           <Icon size={18} />
           <span style={{ fontSize: 14 }}>{label}</span>

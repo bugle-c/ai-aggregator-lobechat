@@ -3,7 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import NavHeader from '@/features/NavHeader';
+import MobileGlobalHeader from '@/features/MobileGlobalHeader';
 
 import ImageWorkspace from './features/ImageWorkspace';
 
@@ -17,8 +17,16 @@ import ImageWorkspace from './features/ImageWorkspace';
 const ImageWorkspaceMobile = memo(() => {
   return (
     <>
-      <NavHeader />
-      <Flexbox flex={1} style={{ overflowY: 'auto', position: 'relative' }} width={'100%'}>
+      <MobileGlobalHeader />
+      <Flexbox
+        flex={1}
+        width={'100%'}
+        style={{
+          overflowY: 'auto',
+          paddingBlockEnd: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
+          position: 'relative',
+        }}
+      >
         <ImageWorkspace />
       </Flexbox>
     </>

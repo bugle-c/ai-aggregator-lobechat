@@ -21,9 +21,13 @@ export type UpsellSource =
  *
  * Failures are swallowed — analytics must never break user-visible flows.
  */
+// No-op — analytics failures must not surface to the user. TanStack
+// Query toasts errors by default, so we provide an explicit handler.
+const swallow = () => {};
+
 export const useTrackUpsell = () => {
-  const recordImpression = lambdaQuery.upsell.recordImpression.useMutation();
-  const recordClick = lambdaQuery.upsell.recordClick.useMutation();
+  const recordImpression = lambdaQuery.upsell.recordImpression.useMutation({ onError: swallow });
+  const recordClick = lambdaQuery.upsell.recordClick.useMutation({ onError: swallow });
 
   const impression = useCallback(
     (source: UpsellSource, opts?: { modelBlocked?: string; planOffered?: string }) => {

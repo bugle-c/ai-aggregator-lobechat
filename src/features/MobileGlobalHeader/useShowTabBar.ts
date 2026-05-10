@@ -1,6 +1,9 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+// Use the react-router-dom-backed wrapper — `next/navigation`'s pathname
+// is bound to the Next.js router and does NOT update on SPA navigation
+// inside the (main) tree, so the tab bar would never hide on chat threads.
+import { usePathname } from '@/libs/router/navigation';
 
 /**
  * Whether the bottom MobileTabBar should render on the current page.

@@ -7,7 +7,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useShowTabBar } from '@/features/MobileGlobalHeader/useShowTabBar';
-import { useRouter } from '@/libs/router/navigation';
+import { usePathname, useRouter } from '@/libs/router/navigation';
 import { SidebarTabKey } from '@/store/global/initialState';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -28,6 +28,21 @@ export default memo<Props>(({ className, tabBarKey }) => {
   const { t } = useTranslation('common');
   const { t: tSub } = useTranslation('subscription');
   const router = useRouter();
+  const pathname = usePathname() ?? '/';
+
+  // Derive the active tab from the URL — the parent prop `tabBarKey` is
+  // a `SidebarTabKey` enum that doesn't include the literal `'plans'`
+  // we use for the subscription tab, so highlighting based on prop
+  // alone never lit up the Plans icon. Falling back to pathname keeps
+  // the existing prop-driven highlight for the other tabs working.
+  const activeKey: string | undefined = useMemo(() => {
+    if (pathname.startsWith('/settings/plans')) return 'plans';
+    if (pathname.startsWith('/settings')) return SidebarTabKey.Setting;
+    if (pathname.startsWith('/image')) return SidebarTabKey.Image;
+    if (pathname.startsWith('/video')) return SidebarTabKey.Video;
+    if (pathname === '/' || pathname.startsWith('/chat')) return SidebarTabKey.Chat;
+    return tabBarKey;
+  }, [pathname, tabBarKey]);
 
   // Mobile tab bar is intentionally minimal — exactly 5 items regardless
   // of Light/Pro mode (per spec Q5: kill UIMode-driven mobile branching).
@@ -112,7 +127,7 @@ export default memo<Props>(({ className, tabBarKey }) => {
         zIndex: 50,
       }}
     >
-      <TabBar safeArea activeKey={tabBarKey} className={className} items={items} />
+      <TabBar safeArea activeKey={activeKey} className={className} items={items} />
     </div>
   );
 });

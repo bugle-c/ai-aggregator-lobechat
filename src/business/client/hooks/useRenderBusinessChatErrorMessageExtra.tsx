@@ -1,8 +1,8 @@
 import { type ChatMessageError } from '@lobechat/types';
 import { Block, Button } from '@lobehub/ui';
-import Link from 'next/link';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { useTrackUpsell } from '@/features/Upsell/useTrackUpsell';
 
@@ -24,6 +24,9 @@ export default function useRenderBusinessChatErrorMessageExtra(
 ) {
   const { t } = useTranslation('error');
   const { click, impression } = useTrackUpsell();
+  // SPA navigation — `next/link` would do a full-page reload inside
+  // the (main) react-router subtree.
+  const navigate = useNavigate();
 
   const isPlanLimit = !!error && error.type === 'PlanLimitExceeded';
   const body = (error?.body || {}) as {
@@ -59,15 +62,16 @@ export default function useRenderBusinessChatErrorMessageExtra(
   return (
     <Block padding={16} style={{ width: '100%' }} variant={'outlined'}>
       <div style={{ marginBottom: 12, fontSize: 14, lineHeight: 1.5 }}>{message}</div>
-      <Link
-        href="/settings/plans?utm_source=plan_limit_chat"
-        onClick={() => click('plan_limit_chat', { targetPlan: body.requiredPlan })}
-        style={{ textDecoration: 'none' }}
+      <Button
+        block
+        type="primary"
+        onClick={() => {
+          click('plan_limit_chat', { targetPlan: body.requiredPlan });
+          navigate('/settings/plans?utm_source=plan_limit_chat');
+        }}
       >
-        <Button block type="primary">
-          {ctaLabel}
-        </Button>
-      </Link>
+        {ctaLabel}
+      </Button>
     </Block>
   );
 }

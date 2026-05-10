@@ -22,6 +22,8 @@ import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHead
 import MobileCancelFlow from '@/features/Upsell/MobileCancelFlow';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import PlansMobileLayout from './PlansMobileLayout';
 
@@ -68,18 +70,33 @@ const Plans = memo(() => {
   // loading branch resolves and the component re-renders with one
   // additional hook in scope.
   const isMobile = useIsMobile();
+  const isLogin = useUserStore(authSelectors.isLogin);
 
-  const { data: plans, isLoading: plansLoading } = lambdaQuery.subscription.getPlans.useQuery();
+  // Gate behind auth — these are authedProcedures that throw UNAUTHORIZED
+  // for anonymous users. Without `enabled` the page hits an error
+  // boundary on deep-link arrivals (e.g. ad CTA → /settings/plans).
+  const { data: plans, isLoading: plansLoading } = lambdaQuery.subscription.getPlans.useQuery(
+    undefined,
+    { enabled: isLogin },
+  );
   const { data: billing, isLoading: billingLoading } =
-    lambdaQuery.subscription.getBillingState.useQuery();
-  const { data: packages } = lambdaQuery.topUp.getPackages.useQuery();
+    lambdaQuery.subscription.getBillingState.useQuery(undefined, { enabled: isLogin });
+  const { data: packages } = lambdaQuery.topUp.getPackages.useQuery(undefined, {
+    enabled: isLogin,
+  });
 
-  const handleCancelSubmit = async () => {
+  // Accept reason/text as args so the mobile bottom-sheet flow doesn't
+  // race against state-set timing. Earlier the desktop modal used
+  // closure state and the mobile flow tried to setState then await —
+  // first submit always sent the previous reason.
+  const handleCancelSubmit = async (reasonCodeArg?: string, reasonTextArg?: string) => {
+    const reasonCode = reasonCodeArg ?? cancelReason;
+    const reasonText = (reasonTextArg ?? cancelText).trim() || undefined;
     setCancelling(true);
     try {
       await lambdaClient.subscription.cancelSubscription.mutate({
-        reasonCode: cancelReason as any,
-        reasonText: cancelText.trim() || undefined,
+        reasonCode: reasonCode as any,
+        reasonText,
       });
       message.success('Подписка будет активна до окончания оплаченного периода');
       setCancelOpen(false);
@@ -178,11 +195,11 @@ const Plans = memo(() => {
           open={cancelOpen}
           onClose={() => setCancelOpen(false)}
           onConfirm={async (reasonCode, reasonText) => {
+            // Pass reason directly; setState updates would not flush
+            // before `handleCancelSubmit` reads from closure scope.
             setCancelReason(reasonCode);
             setCancelText(reasonText);
-            // Reuse the existing handler — it reads cancelReason/cancelText
-            // from state, so we set them above first.
-            await handleCancelSubmit();
+            await handleCancelSubmit(reasonCode, reasonText);
           }}
         />
       </>

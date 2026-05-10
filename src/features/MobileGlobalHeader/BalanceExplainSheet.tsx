@@ -20,7 +20,7 @@ interface Props {
  * Currently the badge just shows a number with no context — new users
  * have no idea whether 50 credits is a lot or a little. This sheet
  * explains what 1 credit buys (chat msg, image, video) and offers two
- * paths to top up: ad-hoc (Купить ещё → /settings/billing) or upgrade
+ * paths to top up: ad-hoc (Купить ещё → /settings/funds) or upgrade
  * (Перейти на Pro → /settings/plans).
  *
  * Caller controls open state (typically the BalanceBadge wrapper). On
@@ -33,10 +33,10 @@ const BalanceExplainSheet = memo<Props>(({ monthlyResetDate, onClose, open, rema
   return (
     <Drawer
       height="auto"
-      onClose={onClose}
       open={open}
       placement="bottom"
       styles={{ body: { padding: 0 }, header: { display: 'none' } }}
+      onClose={onClose}
     >
       <Flexbox gap={10} paddingBlock={24} paddingInline={20}>
         <Title level={5} style={{ margin: 0 }}>
@@ -52,22 +52,24 @@ const BalanceExplainSheet = memo<Props>(({ monthlyResetDate, onClose, open, rema
         )}
         <Button
           block
+          type="default"
           onClick={() => {
             onClose();
-            navigate('/settings/billing?utm_source=balance_sheet');
+            // /settings/funds is the top-up page; /settings/billing is
+            // payment HISTORY — the CTA's intent is "buy more credits".
+            navigate('/settings/funds?utm_source=balance_sheet');
           }}
-          type="default"
         >
           Купить ещё
         </Button>
         <Button
           block
+          size="large"
+          type="primary"
           onClick={() => {
             onClose();
             navigate('/settings/plans?utm_source=balance_sheet');
           }}
-          size="large"
-          type="primary"
         >
           Перейти на Pro
         </Button>
