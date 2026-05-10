@@ -2,7 +2,7 @@
 
 import { Block, Flexbox } from '@lobehub/ui';
 import { Typography } from 'antd';
-import { ChevronRight, ExternalLink, LogOut } from 'lucide-react';
+import { ChevronRight, LogOut } from 'lucide-react';
 import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -49,11 +49,11 @@ const MobileSettingsList = memo(() => {
         <Block
           clickable
           key={item.href}
-          onClick={() => navigate(item.href)}
           padding={14}
           variant="filled"
+          onClick={() => navigate(item.href)}
         >
-          <Flexbox align="center" horizontal justify="space-between">
+          <Flexbox horizontal align="center" justify="space-between">
             <Text>{item.label}</Text>
             <ChevronRight size={18} style={{ opacity: 0.5 }} />
           </Flexbox>
@@ -61,26 +61,8 @@ const MobileSettingsList = memo(() => {
       ))}
 
       <Block padding={14} variant="filled">
-        <a
-          href="?mobile_redesign=0"
-          style={{
-            alignItems: 'center',
-            color: 'var(--ant-color-link)',
-            display: 'flex',
-            gap: 8,
-            textDecoration: 'none',
-          }}
-        >
-          <ExternalLink size={16} />
-          <Text style={{ color: 'inherit' }}>Открыть полную версию на компьютере</Text>
-        </a>
-      </Block>
-
-      <Block padding={14} variant="filled">
         <button
-          onClick={() => {
-            window.location.href = '/api/auth/sign-out';
-          }}
+          type="button"
           style={{
             alignItems: 'center',
             background: 'transparent',
@@ -94,7 +76,9 @@ const MobileSettingsList = memo(() => {
             justifyContent: 'flex-start',
             padding: 0,
           }}
-          type="button"
+          onClick={() => {
+            window.location.href = '/api/auth/sign-out';
+          }}
         >
           <LogOut size={16} />
           <Text style={{ color: 'inherit' }}>Выйти</Text>

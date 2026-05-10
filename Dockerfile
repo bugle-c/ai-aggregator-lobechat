@@ -39,13 +39,8 @@ ARG NEXT_PUBLIC_ANALYTICS_UMAMI
 ARG NEXT_PUBLIC_UMAMI_SCRIPT_URL
 ARG NEXT_PUBLIC_UMAMI_WEBSITE_ID
 ARG FEATURE_FLAGS
-# Mobile redesign feature flag — must be available at build time because
-# Next.js inlines `process.env.NEXT_PUBLIC_*` into the server bundle via
-# webpack DefinePlugin. Setting it only at runtime has no effect.
-ARG NEXT_PUBLIC_MOBILE_REDESIGN
 
 ENV NEXT_PUBLIC_BASE_PATH="${NEXT_PUBLIC_BASE_PATH}" \
-    NEXT_PUBLIC_MOBILE_REDESIGN="${NEXT_PUBLIC_MOBILE_REDESIGN}" \
     FEATURE_FLAGS="${FEATURE_FLAGS}"
 
 ENV APP_URL="http://app.com" \

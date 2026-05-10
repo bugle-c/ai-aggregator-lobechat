@@ -38,7 +38,6 @@ export const getAppConfig = () => {
   return createEnv({
     client: {
       NEXT_PUBLIC_ENABLE_SENTRY: z.boolean(),
-      NEXT_PUBLIC_MOBILE_REDESIGN: z.string().optional(),
     },
     server: {
       AGENTS_INDEX_URL: z.string().url(),
@@ -88,7 +87,6 @@ export const getAppConfig = () => {
     runtimeEnv: {
       // Sentry
       NEXT_PUBLIC_ENABLE_SENTRY: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
-      NEXT_PUBLIC_MOBILE_REDESIGN: process.env.NEXT_PUBLIC_MOBILE_REDESIGN,
 
       AGENTS_INDEX_URL: !!process.env.AGENTS_INDEX_URL
         ? process.env.AGENTS_INDEX_URL
@@ -127,14 +125,3 @@ export const getAppConfig = () => {
 };
 
 export const appEnv = getAppConfig();
-
-/**
- * Mobile redesign feature flag. Honors `?mobile_redesign=1` query and
- * `NEXT_PUBLIC_MOBILE_REDESIGN=1` env. During Phase 1 of mobile-redesign
- * migration, controls whether mobile users hit the new responsive
- * `(main)` route or the legacy `(mobile)` route.
- */
-export const isMobileRedesignEnabled = (searchParams?: URLSearchParams) => {
-  if (searchParams?.get('mobile_redesign') === '1') return true;
-  return process.env.NEXT_PUBLIC_MOBILE_REDESIGN === '1';
-};
