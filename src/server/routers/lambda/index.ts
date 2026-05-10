@@ -3,6 +3,7 @@
  */
 import { accountDeletionRouter } from '@/business/server/lambda-routers/accountDeletion';
 import { feedbackRouter } from '@/business/server/lambda-routers/feedback';
+import { presetsRouter } from '@/business/server/lambda-routers/presets';
 import { promoRouter } from '@/business/server/lambda-routers/promo';
 import { referralRouter } from '@/business/server/lambda-routers/referral';
 import { spendRouter } from '@/business/server/lambda-routers/spend';
@@ -103,6 +104,7 @@ export const lambdaRouter = router({
   /* eslint-disable sort-keys-fix/sort-keys-fix */
   accountDeletion: accountDeletionRouter,
   feedback: feedbackRouter,
+  presets: presetsRouter,
   promo: promoRouter,
   referral: referralRouter,
   topicBot: topicBotRouter,
