@@ -21,59 +21,16 @@ import { RouteVariants } from '@/utils/server/routeVariants';
 
 const inVercel = process.env.VERCEL === '1';
 
-const vpnPromoUrl = 'https://t.me/freeip_pashavinbot';
-
 // `ssr: false` is forbidden in Server Components (this layout is async).
-// MobileVpnPromo is already 'use client' and starts with dismissed=true,
+// VpnPromoStrip is already 'use client' and starts with dismissed=true,
 // so SSR renders nothing — useEffect on the client reveals it if no
 // cookie is set. No hydration flash, no server-rendering harm.
-const MobileVpnPromo = dynamic(() => import('@/features/MobileVpnPromo'));
-
-const DesktopVpnPromoStrip = () => (
-  <a
-    aria-label="Бесплатный VPN — открыть Telegram-бота"
-    data-testid="vpn-pashavin-top-strip"
-    href={vpnPromoUrl}
-    rel="noopener noreferrer"
-    target="_blank"
-    style={{
-      alignItems: 'center',
-      backdropFilter: 'blur(14px)',
-      background: 'rgba(8, 13, 24, 0.72)',
-      borderBottom: '1px solid rgba(148, 163, 184, 0.16)',
-      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-      color: 'rgba(226, 232, 240, 0.86)',
-      display: 'flex',
-      fontSize: 12,
-      gap: 8,
-      height: 28,
-      justifyContent: 'center',
-      left: 0,
-      letterSpacing: '0.01em',
-      lineHeight: '28px',
-      position: 'relative',
-      right: 0,
-      textDecoration: 'none',
-      zIndex: 10,
-    }}
-  >
-    <span style={{ color: 'rgba(34, 211, 238, 0.9)', fontWeight: 600 }}>Бесплатный VPN</span>
-    <span style={{ opacity: 0.76 }}>стабильный доступ к нейросетям и рабочим сервисам</span>
-    <span style={{ color: 'rgba(125, 211, 252, 0.95)', fontWeight: 600 }}>
-      t.me/freeip_pashavinbot
-    </span>
-  </a>
-);
-
-/**
- * Renders the desktop strip (full text, dark gradient, fixed at top) on
- * desktop and the compact dismissable {@link MobileVpnPromo} on mobile.
- * `isMobile` comes from `RouteVariants.deserializeVariants` in the
- * layout — keeping this prop-driven so the layout stays a server
- * component.
- */
-const VpnPromoStrip = ({ isMobile }: { isMobile: boolean }) =>
-  isMobile ? <MobileVpnPromo /> : <DesktopVpnPromoStrip />;
+//
+// Single responsive theme-aware strip — earlier we had separate
+// desktop/mobile components; SSR isMobile mis-detection caused the
+// desktop strip to overflow on phones, and the dark glass looked
+// alien in light theme.
+const VpnPromoStrip = dynamic(() => import('@/features/MobileVpnPromo'));
 
 export interface RootLayoutProps extends DynamicLayoutProps {
   children: ReactNode;
@@ -114,7 +71,7 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
         )}
       </head>
       <body>
-        <VpnPromoStrip isMobile={isMobile} />
+        <VpnPromoStrip />
         {ENABLE_BUSINESS_FEATURES ? (
           <BusinessGlobalProvider>{renderContent()}</BusinessGlobalProvider>
         ) : (

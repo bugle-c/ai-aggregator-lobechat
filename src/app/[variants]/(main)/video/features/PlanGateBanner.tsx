@@ -55,7 +55,10 @@ const PlanGateBanner = memo(() => {
           <Typography.Text strong style={{ fontSize: 15 }}>
             Видео-генерация — функция платных тарифов
           </Typography.Text>
-          <Typography.Text style={{ fontSize: 13 }} type="secondary">
+          {/* Skip type="secondary" — on the tinted banner bg the muted
+              grey rendered too pale in light theme. Plain Text uses the
+              default text color which adapts to the theme. */}
+          <Typography.Text style={{ fontSize: 13, opacity: 0.85 }}>
             На «Старт» бесплатно доступен только чат и базовые картинки. Откройте Sora 2, Veo 3.1,
             Kling 3 и другие модели на тарифе Basic — от 490 ₽/мес.
           </Typography.Text>
