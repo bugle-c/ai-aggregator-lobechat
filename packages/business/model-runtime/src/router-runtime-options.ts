@@ -3,6 +3,8 @@ interface RouterInstance {
   models?: string[];
   options: Record<string, any> | Record<string, any>[];
   transformModel?: (model: string) => string;
+  /** Optional payload rewrite — see createRuntime.ts RouterInstance type. */
+  transformPayload?: (payload: any) => any;
 }
 
 interface LobehubRouterRuntimeOptions {
@@ -133,6 +135,14 @@ export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
             apiKey: 'ollama',
             baseURL: 'http://ollama:11434/v1',
           },
+          // Force reasoning_effort='none' so Gemma 4's thinking-mode tokens
+          // (`<|channel>thought ... <channel|>`) stop leaking into the
+          // visible reply. Verified: this is the only knob the OpenAI-compat
+          // surface of Ollama honours for thinking suppression — `think:
+          // false` is silently ignored, system prompts don't help, only
+          // `reasoning_effort: 'none'` actually disables it. Tested directly
+          // against /v1/chat/completions on 2026-05-11.
+          transformPayload: (p: any) => ({ ...p, reasoning_effort: 'none' }),
         },
       ];
     }

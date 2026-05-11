@@ -8,6 +8,7 @@ import { Sparkles } from 'lucide-react';
 import { type KeyboardEvent } from 'react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
@@ -48,6 +49,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const { t } = useTranslation('image');
   const { message } = App.useApp();
   const url = useFlowUrlState('presets');
+  const navigate = useNavigate();
   const { value, setValue } = useGenerationConfigParam('prompt');
   const isCreating = useImageStore(createImageSelectors.isCreating);
   const createImage = useImageStore((s) => s.createImage);
@@ -73,13 +75,14 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
     if (!shouldContinue) return;
 
-    // Switch to the feed tab immediately so the user sees the new
-    // generation card (with its loading state) appear right after they
-    // hit "Создать". Without this the page stays on "Стили" and the
-    // click looks like a no-op until they manually switch tabs.
-    url.setTab('feed');
+    // Route to the resource gallery — one chronological masonry of
+    // every image the user has ever made. The async submit fires
+    // first so the gallery refresh sees the placeholder + cron will
+    // backfill the asset when WaveSpeed finishes.
     message.success({ content: 'Генерация запущена', duration: 1.5 });
-    await createImage();
+    void createImage();
+    navigate('/resource?category=images');
+    void url;
   };
 
   // Auto-fill and auto-send when prompt query parameter is present

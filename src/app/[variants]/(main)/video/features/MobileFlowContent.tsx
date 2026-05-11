@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { App, Segmented } from 'antd';
 import { Settings, Sparkles } from 'lucide-react';
 import { memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import FrameUpload from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/FrameUpload';
 import ModelSelect from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/ModelSelect';
@@ -32,6 +33,7 @@ interface Props {
 const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const { message } = App.useApp();
   const url = useFlowUrlState('presets');
+  const navigate = useNavigate();
 
   const preset = useVideoStore(presetSelectors.currentPreset);
   const clearPreset = useVideoStore((s) => s.clearPreset);
@@ -58,14 +60,12 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const handleGenerate = async () => {
     if (!canGenerate) return;
     try {
-      // Switch to feed + close the create sheet immediately so the
-      // user sees a card appear with its loading state. Without this
-      // the mobile screen looks frozen and they retry, double-charging.
-      url.setTab('feed');
+      // Route to the resource gallery (videos category).
       url.setView(undefined);
       message.success({ content: 'Генерация запущена', duration: 1.5 });
-      await createVideo();
+      void createVideo();
       onAfterGenerate();
+      navigate('/resource?category=videos');
     } catch (err) {
       message.error(err instanceof Error ? err.message : 'Не удалось создать видео');
     }

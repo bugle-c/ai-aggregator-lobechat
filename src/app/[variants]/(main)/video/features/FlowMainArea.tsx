@@ -55,7 +55,10 @@ const FlowMainArea = memo(() => {
             { label: 'Стили', value: 'presets' },
             { label: 'Мои генерации', value: 'feed' },
           ]}
-          onChange={(k) => url.setTab(k === 'presets' ? 'presets' : 'feed')}
+          onChange={(k) => {
+            if (k === 'feed') navigate('/resource?category=videos');
+            else url.setTab('presets');
+          }}
         />
       </Flexbox>
 

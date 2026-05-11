@@ -64,7 +64,15 @@ const FlowMainArea = memo(() => {
             { label: 'Стили', value: 'presets' },
             { label: 'Мои генерации', value: 'feed' },
           ]}
-          onChange={(k) => url.setTab(k === 'presets' ? 'presets' : 'feed')}
+          onChange={(k) => {
+            // "Мои генерации" lives on the resource gallery — one
+            // chronological masonry of every image the user has, no
+            // topics/batches abstraction. The legacy GenerationFeed
+            // inside this page never showed the full history, so we
+            // route over there instead.
+            if (k === 'feed') navigate('/resource?category=images');
+            else url.setTab('presets');
+          }}
         />
       </Flexbox>
 

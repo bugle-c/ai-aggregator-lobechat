@@ -4,35 +4,34 @@
 import type { GoogleGenAIOptions } from '@google/genai';
 import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
-import OpenAI, { ClientOptions } from 'openai';
-import { Stream } from 'openai/streaming';
+import type { ClientOptions } from 'openai';
+import type OpenAI from 'openai';
+import type { Stream } from 'openai/streaming';
 
 import { LobeOpenAI } from '../../providers/openai';
 import { LobeVertexAI } from '../../providers/vertexai';
-import {
+import type {
+  type ChatCompletionErrorPayload,
+  ChatMethodOptions,
+  ChatStreamCallbacks,
+  ChatStreamPayload,
   CreateImagePayload,
   CreateImageResponse,
   CreateVideoPayload,
   CreateVideoResponse,
+  EmbeddingsOptions,
+  EmbeddingsPayload,
   GenerateObjectOptions,
   GenerateObjectPayload,
   HandleCreateVideoWebhookPayload,
   HandleCreateVideoWebhookResult,
   ILobeAgentRuntimeErrorType,
-} from '../../types';
-import {
-  type ChatCompletionErrorPayload,
-  ChatMethodOptions,
-  ChatStreamCallbacks,
-  ChatStreamPayload,
-  EmbeddingsOptions,
-  EmbeddingsPayload,
   TextToSpeechPayload,
 } from '../../types';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { safeParseJSON } from '../../utils/safeParseJSON';
-import { LobeRuntimeAI } from '../BaseAI';
-import {
+import type { LobeRuntimeAI } from '../BaseAI';
+import type {
   CreateImageOptions,
   CreateVideoOptions,
   CustomClientOptions,
@@ -74,6 +73,13 @@ interface RouterInstance {
   options: RouterOptions;
   runtime?: RuntimeClass;
   transformModel?: (model: string) => string;
+  /**
+   * Optional payload rewrite applied right before forwarding to the
+   * underlying runtime. Used by the lobehub router to e.g. force
+   * `reasoning_effort: 'none'` for local Ollama models, since OpenAI-compat
+   * has no other knob to disable Gemma 4 thinking-mode token leakage.
+   */
+  transformPayload?: (payload: any) => any;
 }
 
 type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T;
@@ -301,7 +307,11 @@ export const createRouterRuntime = ({
 
     private async runWithFallback<T>(
       model: string,
-      requestHandler: (runtime: LobeRuntimeAI, transformedModel?: string) => Promise<T>,
+      requestHandler: (
+        runtime: LobeRuntimeAI,
+        transformedModel?: string,
+        matchedRouter?: RouterInstance,
+      ) => Promise<T>,
     ): Promise<T> {
       const matchedRouter = await this.resolveMatchedRouter(model);
       const routerOptions = this.normalizeRouterOptions(matchedRouter);
@@ -328,7 +338,7 @@ export const createRouterRuntime = ({
 
         try {
           const transformedModel = matchedRouter.transformModel?.(model);
-          const result = await requestHandler(runtime, transformedModel);
+          const result = await requestHandler(runtime, transformedModel, matchedRouter);
 
           if (totalOptions > 1 && attempt > 1) {
             log(
@@ -441,11 +451,17 @@ export const createRouterRuntime = ({
      */
     async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
       try {
-        return await this.runWithFallback(payload.model, (runtime, transformedModel) =>
-          runtime.chat!(
-            transformedModel ? { ...payload, model: transformedModel } : payload,
-            options,
-          ),
+        return await this.runWithFallback(
+          payload.model,
+          (runtime, transformedModel, matchedRouter) => {
+            let next: ChatStreamPayload = transformedModel
+              ? { ...payload, model: transformedModel }
+              : payload;
+            if (matchedRouter?.transformPayload) {
+              next = matchedRouter.transformPayload(next);
+            }
+            return runtime.chat!(next, options);
+          },
         );
       } catch (e) {
         if (params.chatCompletion?.handleError) {

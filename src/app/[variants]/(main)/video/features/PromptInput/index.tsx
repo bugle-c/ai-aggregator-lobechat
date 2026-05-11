@@ -8,6 +8,7 @@ import { Sparkles } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import VideoFreeQuotaInfo from '@/business/client/features/VideoFreeQuotaInfo';
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
@@ -47,6 +48,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const { t } = useTranslation('video');
   const { message } = App.useApp();
   const url = useFlowUrlState('presets');
+  const navigate = useNavigate();
   const { value, setValue } = useVideoGenerationConfigParam('prompt');
   const isCreating = useVideoStore(createVideoSelectors.isCreating);
   const createVideo = useVideoStore((s) => s.createVideo);
@@ -62,12 +64,12 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       return;
     }
 
-    // Switch to "Мои генерации" so the user sees the new card appear
-    // with its loading state. Otherwise the click on "Создать" looks
-    // like a no-op while the request flies in the background.
-    url.setTab('feed');
+    // Route to the resource gallery — one chronological masonry of
+    // every video the user has ever made.
     message.success({ content: 'Генерация запущена', duration: 1.5 });
-    await createVideo();
+    void createVideo();
+    navigate('/resource?category=videos');
+    void url;
   };
 
   // Auto-fill and auto-send when prompt query parameter is present
