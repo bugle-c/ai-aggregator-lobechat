@@ -17,10 +17,11 @@ export interface Preset {
   description: string | null;
   id: number;
   modality: PresetModality;
-  modelId: string;
   paramsLock: PresetParamsLock;
   previewUrl: string;
   promptTemplate: string;
+  /** Suggested model. UI surfaces a hint when it differs from the current model. */
+  recommendedModelId: string | null;
   slug: string;
   sortOrder: number;
   title: string;
@@ -29,6 +30,7 @@ export interface Preset {
 export interface PresetListFilters {
   category?: string;
   modality: PresetModality;
-  modelId?: string;
   q?: string;
+  /** Filters by `recommended_model_id`. */
+  recommendedModelId?: string;
 }

@@ -26,10 +26,10 @@ const rowToPreset = (r: typeof presets.$inferSelect): Preset => {
     description: r.description,
     id: r.id,
     modality: r.modality as Preset['modality'],
-    modelId: r.modelId,
     paramsLock: safeLock,
     previewUrl: r.previewUrl,
     promptTemplate: r.promptTemplate,
+    recommendedModelId: r.recommendedModelId,
     slug: r.slug,
     sortOrder: r.sortOrder,
     title: r.title,
@@ -53,13 +53,14 @@ export const presetsRouter = router({
       z.object({
         category: z.string().optional(),
         modality: modalityEnum,
-        modelId: z.string().optional(),
+        recommendedModelId: z.string().optional(),
         q: z.string().min(1).max(80).optional(),
       }),
     )
     .query(async ({ ctx, input }): Promise<Preset[]> => {
       const conditions = [eq(presets.active, true), eq(presets.modality, input.modality)];
-      if (input.modelId) conditions.push(eq(presets.modelId, input.modelId));
+      if (input.recommendedModelId)
+        conditions.push(eq(presets.recommendedModelId, input.recommendedModelId));
       if (input.category) conditions.push(eq(presets.category, input.category));
       if (input.q) conditions.push(ilike(presets.title, `%${input.q}%`));
 

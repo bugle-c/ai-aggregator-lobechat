@@ -15,7 +15,7 @@ const fakePreset: Preset = {
   description: null,
   id: 1,
   modality: 'video',
-  modelId: 'kwaivgi/kling-v3.0-pro/text-to-video',
+  recommendedModelId: 'kwaivgi/kling-v3.0-pro/text-to-video',
   paramsLock: { aspect_ratio: '16:9', duration_sec: 5 },
   previewUrl: 'https://example.com/x.mp4',
   promptTemplate: 'Crash zoom into {{user_prompt}}',

@@ -9,7 +9,7 @@ const fakePreset: Preset = {
   id: 1,
   slug: 'test',
   modality: 'image',
-  modelId: 'flux-pro',
+  recommendedModelId: 'flux-pro',
   category: 'portrait',
   title: 'Test',
   description: null,
@@ -49,12 +49,13 @@ const buildStore = () => {
 };
 
 describe('image preset slice', () => {
-  it('selectPreset sets currentPreset and applies model lock', () => {
+  it('selectPreset sets currentPreset and does NOT auto-switch model', () => {
     const store = buildStore();
     store.getState().selectPreset(fakePreset);
     const s = store.getState();
     expect(s.currentPreset?.slug).toBe('test');
-    expect(s.model).toBe('flux-pro');
+    // The architectural promise: preset selection never yanks the model.
+    expect(s.model).toBeNull();
   });
 
   it('selectPreset routes paramsLock entries through setParamOnInput', () => {

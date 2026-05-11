@@ -43,9 +43,11 @@ const PresetThumbCard = memo<Props>(({ onClear, preset }) => {
       <Flexbox horizontal align="center" justify="space-between" padding={8}>
         <Flexbox>
           <span style={{ fontSize: 13, fontWeight: 600 }}>{preset.title}</span>
-          <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 11 }}>
-            {preset.modelId}
-          </span>
+          {preset.recommendedModelId && (
+            <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 11 }}>
+              Рекомендуется: {preset.recommendedModelId}
+            </span>
+          )}
         </Flexbox>
         <button
           aria-label="Снять стиль"

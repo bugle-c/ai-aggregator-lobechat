@@ -16,7 +16,7 @@ export const presets = pgTable(
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     slug: text('slug').notNull().unique(),
     modality: text('modality').notNull(), // 'image' | 'video' — checked at app level
-    modelId: text('model_id').notNull(),
+    recommendedModelId: text('recommended_model_id'),
     category: text('category').notNull(),
     title: text('title').notNull(),
     description: text('description'),
@@ -37,7 +37,7 @@ export const presets = pgTable(
   (t) => ({
     activeLookup: index('presets_modality_model_idx').on(
       t.modality,
-      t.modelId,
+      t.recommendedModelId,
       t.category,
       t.sortOrder,
     ),

@@ -51,8 +51,8 @@ const PresetGallery = memo<Props>((props) => {
       <PresetGrid
         category={props.category}
         modality={props.modality}
-        modelId={props.modelId}
         q={props.q}
+        recommendedModelId={props.modelId}
         selectedSlug={props.selectedSlug}
         onSelect={props.onPresetSelect}
       />

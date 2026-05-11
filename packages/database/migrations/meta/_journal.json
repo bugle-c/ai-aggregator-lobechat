@@ -714,6 +714,13 @@
       "when": 1779200000000,
       "tag": "0101_presets_v3",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1779300000000,
+      "tag": "0102_presets_recommended_model",
+      "breakpoints": true
     }
   ],
   "version": "6"

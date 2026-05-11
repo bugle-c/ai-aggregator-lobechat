@@ -34,38 +34,13 @@ export const createPresetSlice: StateCreator<
   selectPreset: (preset) => {
     set({ currentPreset: preset }, false, `selectPreset/${preset.slug}`);
 
-    // Try to switch to the preset's model — try current provider
-    // first, fall back to `lobehub` (the aggregator that hosts every
-    // registered video model under one provider id). If neither
-    // works, fail soft. (See image preset slice for rationale.)
-    const store = get();
-    const tryApply = (provider: string): boolean => {
-      try {
-        store.setModelAndProviderOnSelect(preset.modelId, provider);
-        return true;
-      } catch {
-        return false;
-      }
-    };
-
-    try {
-      const ok = tryApply(store.provider) || (store.provider !== 'lobehub' && tryApply('lobehub'));
-      if (!ok) {
-        throw new Error(`Model "${preset.modelId}" not enabled for any active provider.`);
-      }
-
-      const { setParamOnInput } = get();
-      for (const [key, value] of Object.entries(preset.paramsLock)) {
-        if (value === undefined) continue;
-        setParamOnInput(key as any, value as any);
-      }
-    } catch (err) {
-      console.warn(
-        '[selectPreset] failed to apply model lock for',
-        preset.slug,
-        '—',
-        (err as Error)?.message,
-      );
+    // A preset is prompt + params, not a model lock. We surface
+    // recommendedModelId as a hint elsewhere but don't change the
+    // user's model selection here.
+    const { setParamOnInput } = get();
+    for (const [key, value] of Object.entries(preset.paramsLock)) {
+      if (value === undefined) continue;
+      setParamOnInput(key as any, value as any);
     }
   },
 });

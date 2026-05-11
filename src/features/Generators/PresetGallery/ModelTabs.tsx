@@ -50,9 +50,10 @@ const ModelTabs = memo<Props>(({ modality, onSelect, selected }) => {
     const seen = new Set<string>();
     const tabs: { key: string; label: string }[] = [{ key: '__all', label: 'Все' }];
     for (const p of presets) {
-      if (seen.has(p.modelId)) continue;
-      seen.add(p.modelId);
-      tabs.push({ key: p.modelId, label: prettifyModelId(p.modelId) });
+      const id = p.recommendedModelId;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      tabs.push({ key: id, label: prettifyModelId(id) });
     }
     return tabs;
   }, [presets]);
