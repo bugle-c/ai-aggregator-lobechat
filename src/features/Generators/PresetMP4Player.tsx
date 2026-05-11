@@ -78,6 +78,30 @@ const PresetMP4Player = memo<Props>(
 
     if (errored) return <FallbackPlaceholder label={fallbackLabel} />;
 
+    // Static images get an <img>; videos/.mp4 stay on <video autoplay loop>.
+    // Detected by extension in the URL path (ignoring query string).
+    const pathOnly = previewUrl.split('?')[0].toLowerCase();
+    const isImage = /\.(?:png|jpe?g|webp|avif|gif)$/.test(pathOnly);
+
+    if (isImage) {
+      return (
+        <img
+          alt=""
+          aria-hidden={ariaHidden}
+          className={className}
+          loading="lazy"
+          src={previewUrl}
+          style={{
+            display: 'block',
+            height: '100%',
+            objectFit: 'cover',
+            width: '100%',
+          }}
+          onError={() => setErrored(true)}
+        />
+      );
+    }
+
     return (
       <video
         autoPlay
