@@ -28,6 +28,14 @@ const DEFAULT_S3_REGION = 'us-east-1';
 export class S3 {
   private readonly client: S3Client;
 
+  /**
+   * Client used to sign URLs that the browser will hit directly.
+   * Bound to the public endpoint (e.g. https://files.example.com) so
+   * the signed Host header matches what the browser sends. Falls back
+   * to the internal `client` when no public endpoint is configured.
+   */
+  private readonly presignClient: S3Client;
+
   private readonly bucket: string;
 
   private readonly setAcl: boolean;
@@ -39,6 +47,7 @@ export class S3 {
     options?: {
       bucket?: string;
       forcePathStyle?: boolean;
+      presignEndpoint?: string;
       region?: string;
       setAcl?: boolean;
     },
@@ -50,18 +59,20 @@ export class S3 {
     this.bucket = options?.bucket;
     this.setAcl = options?.setAcl || false;
 
-    this.client = new S3Client({
-      credentials: {
-        accessKeyId,
-        secretAccessKey,
-      },
-      endpoint,
+    const baseConfig = {
+      credentials: { accessKeyId, secretAccessKey },
       forcePathStyle: options?.forcePathStyle,
       region: options?.region || DEFAULT_S3_REGION,
       // refs: https://github.com/lobehub/lobe-chat/pull/5479
-      requestChecksumCalculation: 'WHEN_REQUIRED',
-      responseChecksumValidation: 'WHEN_REQUIRED',
-    });
+      requestChecksumCalculation: 'WHEN_REQUIRED' as const,
+      responseChecksumValidation: 'WHEN_REQUIRED' as const,
+    };
+
+    this.client = new S3Client({ ...baseConfig, endpoint });
+    this.presignClient =
+      options?.presignEndpoint && options.presignEndpoint !== endpoint
+        ? new S3Client({ ...baseConfig, endpoint: options.presignEndpoint })
+        : this.client;
   }
 
   public async deleteFile(key: string) {
@@ -139,7 +150,7 @@ export class S3 {
       Key: key,
     });
 
-    return getSignedUrl(this.client, command, { expiresIn: 3600 });
+    return getSignedUrl(this.presignClient, command, { expiresIn: 3600 });
   }
 
   public async createPreSignedUrlForPreview(key: string, expiresIn?: number): Promise<string> {
@@ -148,7 +159,7 @@ export class S3 {
       Key: key,
     });
 
-    return getSignedUrl(this.client, command, {
+    return getSignedUrl(this.presignClient, command, {
       expiresIn: expiresIn ?? fileEnv.S3_PREVIEW_URL_EXPIRE_IN,
     });
   }
@@ -208,6 +219,10 @@ export class FileS3 extends S3 {
     super(fileEnv.S3_ACCESS_KEY_ID, fileEnv.S3_SECRET_ACCESS_KEY, fileEnv.S3_ENDPOINT, {
       bucket: fileEnv.S3_BUCKET,
       forcePathStyle: fileEnv.S3_ENABLE_PATH_STYLE,
+      // Sign browser-facing URLs against the public domain so the Host
+      // header matches what the browser will use. Server-side ops stay
+      // on the internal endpoint for low latency.
+      presignEndpoint: fileEnv.S3_PUBLIC_DOMAIN,
       region: fileEnv.S3_REGION,
       setAcl: fileEnv.S3_SET_ACL,
     });
