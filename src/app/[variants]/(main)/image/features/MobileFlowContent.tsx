@@ -9,6 +9,7 @@ import ImageUrl from '@/app/[variants]/(main)/image/_layout/ConfigPanel/componen
 import ImageUrlsUpload from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ImageUrlsUpload';
 import ModelSelect from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ModelSelect';
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
+import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
 import { presetSelectors } from '@/store/image/slices/preset/selectors';
@@ -33,6 +34,7 @@ interface Props {
  */
 const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const { message } = App.useApp();
+  const url = useFlowUrlState('presets');
 
   const preset = useImageStore(presetSelectors.currentPreset);
   const clearPreset = useImageStore((s) => s.clearPreset);
@@ -58,6 +60,13 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const handleGenerate = async () => {
     if (!canGenerate) return;
     try {
+      // Pre-navigate to the feed tab + close the create sheet so the
+      // user sees the new generation card appear instead of staying on
+      // a frozen create form. Without this they wonder if the click
+      // worked at all (credits get deducted before the result lands).
+      url.setTab('feed');
+      url.setView(undefined);
+      message.success({ content: 'Генерация запущена', duration: 1.5 });
       await createImage();
       onAfterGenerate();
     } catch (err) {

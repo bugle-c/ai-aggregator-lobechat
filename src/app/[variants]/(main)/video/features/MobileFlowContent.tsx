@@ -8,6 +8,7 @@ import { memo } from 'react';
 import FrameUpload from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/FrameUpload';
 import ModelSelect from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/ModelSelect';
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
+import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useVideoStore } from '@/store/video';
 import { videoGenerationConfigSelectors } from '@/store/video/selectors';
 import { presetSelectors } from '@/store/video/slices/preset/selectors';
@@ -30,6 +31,7 @@ interface Props {
  */
 const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const { message } = App.useApp();
+  const url = useFlowUrlState('presets');
 
   const preset = useVideoStore(presetSelectors.currentPreset);
   const clearPreset = useVideoStore((s) => s.clearPreset);
@@ -56,6 +58,12 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const handleGenerate = async () => {
     if (!canGenerate) return;
     try {
+      // Switch to feed + close the create sheet immediately so the
+      // user sees a card appear with its loading state. Without this
+      // the mobile screen looks frozen and they retry, double-charging.
+      url.setTab('feed');
+      url.setView(undefined);
+      message.success({ content: 'Генерация запущена', duration: 1.5 });
       await createVideo();
       onAfterGenerate();
     } catch (err) {

@@ -2,6 +2,7 @@
 
 import { ChatInput } from '@lobehub/editor/react';
 import { Button, Flexbox, TextArea } from '@lobehub/ui';
+import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { Sparkles } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
@@ -10,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import VideoFreeQuotaInfo from '@/business/client/features/VideoFreeQuotaInfo';
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
+import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useUserStore } from '@/store/user';
@@ -43,6 +45,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isDarkMode = useIsDark();
   const { t } = useTranslation('video');
+  const { message } = App.useApp();
+  const url = useFlowUrlState('presets');
   const { value, setValue } = useVideoGenerationConfigParam('prompt');
   const isCreating = useVideoStore(createVideoSelectors.isCreating);
   const createVideo = useVideoStore((s) => s.createVideo);
@@ -58,6 +62,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       return;
     }
 
+    // Switch to "Мои генерации" so the user sees the new card appear
+    // with its loading state. Otherwise the click on "Создать" looks
+    // like a no-op while the request flies in the background.
+    url.setTab('feed');
+    message.success({ content: 'Генерация запущена', duration: 1.5 });
     await createVideo();
   };
 

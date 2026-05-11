@@ -282,6 +282,9 @@ const Plans = memo(() => {
                 <Text type="secondary">
                   Авто-продление не настроено — подписка истечёт по окончании периода.
                 </Text>
+                <Button danger size="small" onClick={() => setCancelOpen(true)}>
+                  Отменить подписку
+                </Button>
               </Flexbox>
             )}
 

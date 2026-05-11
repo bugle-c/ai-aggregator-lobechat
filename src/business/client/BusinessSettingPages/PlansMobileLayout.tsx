@@ -4,6 +4,7 @@ import { Block, Flexbox } from '@lobehub/ui';
 import { Button, Progress, Tag, Typography } from 'antd';
 import { Check } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const { Text, Title } = Typography;
 
@@ -77,6 +78,7 @@ const PlansMobileLayout = memo<Props>(
     onSelect,
     onTopUp,
   }) => {
+    const { t } = useTranslation('subscription');
     const totalAvailable = billing.creditLimit + billing.creditBalance;
     const usagePercent =
       totalAvailable > 0 ? Math.round((billing.creditsUsed / totalAvailable) * 100) : 0;
@@ -146,7 +148,7 @@ const PlansMobileLayout = memo<Props>(
                 {planFeatures.map((featureKey) => (
                   <Flexbox horizontal align="center" gap={6} key={featureKey}>
                     <Check size={14} style={{ color: '#52c41a', flexShrink: 0 }} />
-                    <Text style={{ fontSize: 13 }}>{featureKey}</Text>
+                    <Text style={{ fontSize: 13 }}>{t(featureKey as any)}</Text>
                   </Flexbox>
                 ))}
               </Flexbox>
