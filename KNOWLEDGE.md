@@ -115,6 +115,7 @@ Fork of LobeChat (`lobehub/lobe-chat`) customized for ask.gptweb.ru with YooKass
 - Fixed Docker build: `tsgo --noEmit` fails on `@aws-sdk/client-bedrock-runtime` resolution in workspace — `build:docker` now skips type-check
 
 ### Key env var
+
 - `ADMIN_EMAILS` — comma-separated emails (already in `/opt/lobechat/.env`)
 
 ## Pitfalls
@@ -175,15 +176,15 @@ curl -X POST http://localhost:3210/api/billing/webhook \
 
 ### Files changed
 
-| File | Action |
-|------|--------|
-| `packages/business/const/src/index.ts` | `ENABLE_BUSINESS_FEATURES = true` |
-| `src/business/client/BusinessSettingPages/Plans.tsx` | Rewritten |
-| `src/business/client/BusinessSettingPages/Usage.tsx` | Rewritten |
-| `src/business/client/BusinessSettingPages/Billing.tsx` | Rewritten |
-| `src/business/client/BusinessSettingPages/Funds.tsx` | Rewritten |
-| `src/business/client/BusinessSettingPages/Referral.tsx` | Rewritten |
-| `src/business/client/BusinessSettingPages/SubscriptionIframeWrapper.tsx` | Deleted |
+| File                                                                     | Action                            |
+| ------------------------------------------------------------------------ | --------------------------------- |
+| `packages/business/const/src/index.ts`                                   | `ENABLE_BUSINESS_FEATURES = true` |
+| `src/business/client/BusinessSettingPages/Plans.tsx`                     | Rewritten                         |
+| `src/business/client/BusinessSettingPages/Usage.tsx`                     | Rewritten                         |
+| `src/business/client/BusinessSettingPages/Billing.tsx`                   | Rewritten                         |
+| `src/business/client/BusinessSettingPages/Funds.tsx`                     | Rewritten                         |
+| `src/business/client/BusinessSettingPages/Referral.tsx`                  | Rewritten                         |
+| `src/business/client/BusinessSettingPages/SubscriptionIframeWrapper.tsx` | Deleted                           |
 
 ## Env Vars (in /opt/lobechat/.env)
 
@@ -205,22 +206,23 @@ curl -X POST http://localhost:3210/api/billing/webhook \
 ### Active plans
 
 | slug  | name     | price_rub | token_limit/mo | daily_credit_limit | max_tier |
-|-------|----------|-----------|----------------|---------------------|----------|
-| free  | Старт    | 0         | 20             | 10                  | cheap    |
-| basic | Стандарт | 490       | 2500           | 500                 | mid      |
-| pro   | Про      | 1490      | 8000           | 2000                | premium  |
+| ----- | -------- | --------- | -------------- | ------------------ | -------- |
+| free  | Старт    | 0         | 20             | 10                 | cheap    |
+| basic | Стандарт | 490       | 2500           | 500                | mid      |
+| pro   | Про      | 1490      | 8000           | 2000               | premium  |
 
 ### Credit economics
 
 - `CREDIT_VALUE_RUB = 0.15` ₽ per credit → 1 credit ≈ $0.0015 at `USD_TO_RUB = 100`
 - Break-even credits = `price_rub / CREDIT_VALUE_RUB`. Limits set at 70-80% of break-even for margin:
-  - Basic: break-even 3266, limit 2500 → ~25% gross margin cap
-  - Pro: break-even 9933, limit 8000 → ~20% gross margin cap
+  - Basic: break-even 3266, limit 2500 → \~25% gross margin cap
+  - Pro: break-even 9933, limit 8000 → \~20% gross margin cap
 - Free has no break-even; 20/mo is a taster budget only
 
 ### Model tier gating (`src/server/modules/billing/model-tiers.ts`)
 
 Tier = classification by **output price per 1M tokens**:
+
 - `cheap` ≤ $1 (deepseek-chat, gpt-5-nano/mini, gemini-2.5-flash, gpt-4o-mini, MiniMax)
 - `mid` ≤ $5 (claude-haiku, gpt-4.1-mini, gemini-3-flash, o4-mini, kimi)
 - `high` ≤ $15 (gpt-5.1, gemini-pro, gpt-4.1, o3, claude-sonnet-4-6, grok-4, gpt-5.2)
@@ -234,7 +236,7 @@ Plan → max tier: `free=cheap`, `basic=mid`, `pro=premium`. Unknown models defa
 
 ### Why these numbers — 2026-04-20 audit
 
-- Free user `opttorgrussia@yandex.com` consumed $10 of Claude Opus in one day (22 msgs, 751k chars). `user_billing.tokens_used_month = 10` at the time — **tracker undercounted by ~600×**.
+- Free user `opttorgrussia@yandex.com` consumed $10 of Claude Opus in one day (22 msgs, 751k chars). `user_billing.tokens_used_month = 10` at the time — **tracker undercounted by \~600×**.
 - Root cause: chat route fallback passed `outputTokens=0` when upstream `usageData` was missing.
 - Two fixes landed same day: (A) tier gating — Free can no longer request Opus/premium at all; (B) stream-tallying fallback that counts observed output chars/4 when upstream omits `usage`.
 - Expected: Free capped at ≤ 10 credits/day ≈ 1.5 ₽/day ≈ $0.015 per user per day. Monthly worst case per Free user: 20 credits × 0.15 = 3 ₽.
@@ -243,3 +245,21 @@ Plan → max tier: `free=cheap`, `basic=mid`, `pro=premium`. Unknown models defa
 ### Changing limits
 
 Edit through `/admin/finance/plans` (writes to `ai_aggregator.plans`). Aggregator picks up changes within 60s (cache TTL). Tier → plan mapping lives in `PLAN_MAX_TIER` (`model-tiers.ts`) — adding a new plan = insert row via admin + add entry to `PLAN_MAX_TIER` + rebuild image.
+
+## Phase 12: Ollama (local LLM) — 2026-05-11
+
+Ollama in Docker at `/opt/ollama/` (bound to `127.0.0.1:11434` on host, container on bridge `ollama_default`). LobeChat reaches it via container name `ollama` — `network-service` attaches to `ollama_default` as an external network and `lobe` shares that netns via `network_mode: 'service:network-service'`. **`extra_hosts` cannot be used on a service with `network_mode: service:X`** (Docker rejects: "conflicting options: custom host-to-IP mapping and the network mode") — that's why we joined the network instead of using `host.docker.internal`.
+
+Three models live in `OLLAMA_MODEL_LIST` (`.env`):
+
+| Model id                                                   | Display                 | Tier  | Plan gate |
+| ---------------------------------------------------------- | ----------------------- | ----- | --------- |
+| `gemma4:e4b`                                               | Gemma 4 E4B (бесплатно) | cheap | free+     |
+| `hf.co/TrevorJS/gemma-4-26B-A4B-it-uncensored-GGUF:Q4_K_M` | Gemma 4 26B Uncensored  | mid   | basic+    |
+| `qwen3-coder:30b-32k`                                      | Qwen3-Coder 30B         | mid   | basic+    |
+
+Pricing rows in `ai_aggregator.model_rates` — all three at `input_per_1m=0, output_per_1m=0, markup=1` (no per-token charge; we eat CPU electricity). `tier_override` does the plan-gating. To turn off any model: PUT `is_active=false` via `/webapi/admin/model-rates`, then drop from `OLLAMA_MODEL_LIST` and `docker compose up -d` lobe.
+
+The free Gemma 4 E4B is the only model a `free` plan user can reach (their `PLAN_MAX_TIER` is `cheap`). Free-plan daily caps still apply per `TIER_DAILY_CAPS` — for `free: {}` no caps right now, but since per-token cost is 0 the credit limit is also untouched.
+
+Bot mirror (`gptwebrubot/src/models.ts`) has a `local` category with the same three ids — bot must be kept in sync manually since its model list is hardcoded.
