@@ -22,7 +22,7 @@ export const lobehubImageModels: AIImageModelCard[] = [
     description:
       "Gemini 3 Pro Image (Nano Banana Pro) is Google's image generation model and also supports multimodal chat.",
     displayName: 'Nano Banana Pro',
-    enabled: true,
+    enabled: false,
     id: 'gemini-3-pro-image-preview:image',
     parameters: nanoBananaProParameters,
     pricing: {
@@ -40,6 +40,7 @@ export const lobehubImageModels: AIImageModelCard[] = [
     description:
       "Nano Banana is Google's newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.",
     displayName: 'Nano Banana',
+    enabled: false,
     id: 'gemini-2.5-flash-image-preview:image',
     parameters: nanoBananaParameters,
     pricing: {
@@ -57,6 +58,7 @@ export const lobehubImageModels: AIImageModelCard[] = [
   {
     description: 'Imagen 4th generation text-to-image model series',
     displayName: 'Imagen 4 Fast',
+    enabled: false,
     id: 'imagen-4.0-fast-generate-001',
     organization: 'Deepmind',
     parameters: imagenBaseParameters,
@@ -69,6 +71,7 @@ export const lobehubImageModels: AIImageModelCard[] = [
   {
     description: 'Imagen 4th generation text-to-image model series',
     displayName: 'Imagen 4',
+    enabled: false,
     id: 'imagen-4.0-generate-001',
     organization: 'Deepmind',
     parameters: imagenBaseParameters,
@@ -81,6 +84,7 @@ export const lobehubImageModels: AIImageModelCard[] = [
   {
     description: 'Imagen 4th generation text-to-image model series Ultra version',
     displayName: 'Imagen 4 Ultra',
+    enabled: false,
     id: 'imagen-4.0-ultra-generate-001',
     organization: 'Deepmind',
     parameters: imagenBaseParameters,
@@ -94,7 +98,7 @@ export const lobehubImageModels: AIImageModelCard[] = [
     description:
       'An enhanced GPT Image 1 model with 4× faster generation, more precise editing, and improved text rendering.',
     displayName: 'GPT Image 1.5',
-    enabled: true,
+    enabled: false,
     id: 'gpt-image-1.5',
     parameters: gptImage1Schema,
     pricing: {
@@ -113,6 +117,7 @@ export const lobehubImageModels: AIImageModelCard[] = [
   {
     description: 'ChatGPT native multimodal image generation model.',
     displayName: 'GPT Image 1',
+    enabled: false,
     id: 'gpt-image-1',
     parameters: gptImage1Schema,
     pricing: {
@@ -131,6 +136,7 @@ export const lobehubImageModels: AIImageModelCard[] = [
     description:
       'The latest DALL·E model, released in November 2023, supports more realistic, accurate image generation with stronger detail.',
     displayName: 'DALL·E 3',
+    enabled: false,
     id: 'dall-e-3',
     parameters: {
       prompt: { default: '' },
@@ -205,7 +211,7 @@ export const lobehubImageModels: AIImageModelCard[] = [
     description:
       'Seedream 4.5, built by ByteDance Seed team, supports multi-image editing and composition. Features enhanced subject consistency, precise instruction following, spatial logic understanding, aesthetic expression, poster layout and logo design with high-precision text-image rendering.',
     displayName: 'Seedream 4.5',
-    enabled: true,
+    enabled: false,
     id: 'fal-ai/bytedance/seedream/v4.5',
     parameters: {
       height: { default: 2048, max: 4096, min: 1920, step: 1 },
@@ -224,6 +230,7 @@ export const lobehubImageModels: AIImageModelCard[] = [
     description:
       'Seedream 4.0, built by ByteDance Seed, supports text and image inputs for highly controllable, high-quality image generation from prompts.',
     displayName: 'Seedream 4.0',
+    enabled: false,
     id: 'fal-ai/bytedance/seedream/v4',
     parameters: {
       height: { default: 1024, max: 4096, min: 1024, step: 1 },
@@ -243,7 +250,7 @@ export const lobehubImageModels: AIImageModelCard[] = [
   {
     description: 'A powerful native multimodal image generation model.',
     displayName: 'HunyuanImage 3.0',
-    enabled: true,
+    enabled: false,
     id: 'fal-ai/hunyuan-image/v3',
     parameters: huanyuanImageParamsSchema,
     pricing: {
@@ -257,7 +264,7 @@ export const lobehubImageModels: AIImageModelCard[] = [
     description:
       'A professional image editing model from the Qwen team, supporting semantic and appearance edits, precise Chinese/English text editing, style transfer, rotation, and more.',
     displayName: 'Qwen Edit',
-    enabled: true,
+    enabled: false,
     id: 'fal-ai/qwen-image-edit',
     parameters: qwenEditParamsSchema,
     pricing: {
@@ -272,7 +279,7 @@ export const lobehubImageModels: AIImageModelCard[] = [
     description:
       'A powerful image generation model from the Qwen team with strong Chinese text rendering and diverse visual styles.',
     displayName: 'Qwen Image',
-    enabled: true,
+    enabled: false,
     id: 'fal-ai/qwen-image',
     parameters: qwenImageParamsSchema,
     pricing: {
