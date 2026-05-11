@@ -76,8 +76,20 @@ export class GenerationTopicActionImpl {
   };
 
   summaryGenerationTopicTitle = async (topicId: string, prompts: string[]): Promise<string> => {
-    const topic = generationTopicSelectors.getGenerationTopicById(topicId)(this.#get());
-    if (!topic) throw new Error(`Topic ${topicId} not found`);
+    let topic = generationTopicSelectors.getGenerationTopicById(topicId)(this.#get());
+    // SWR mutate inside internal_createGenerationTopic is async; the
+    // store may not have observed the new topic on the very first tick
+    // after creation. Try once more on the next microtask before giving
+    // up so the title-summary fire-and-forget doesn't reject with
+    // "Topic … not found" (which surfaces as Uncaught in console).
+    if (!topic) {
+      await Promise.resolve();
+      topic = generationTopicSelectors.getGenerationTopicById(topicId)(this.#get());
+    }
+    if (!topic) {
+      console.warn(`[summaryGenerationTopicTitle] topic ${topicId} not in store; skipping summary`);
+      return '';
+    }
 
     const { internal_updateGenerationTopicTitleInSummary, internal_updateGenerationTopicLoading } =
       this.#get();

@@ -204,8 +204,19 @@ export const createGenerationTopicSlice: StateCreator<
   },
 
   summaryGenerationTopicTitle: async (topicId: string, prompts: string[]) => {
-    const topic = generationTopicSelectors.getGenerationTopicById(topicId)(get());
-    if (!topic) throw new Error(`Topic ${topicId} not found`);
+    // SWR mutate inside internal_createGenerationTopic is async; the
+    // store may not have the new topic on the first tick. Retry once
+    // and log-warn instead of throwing so the fire-and-forget caller
+    // doesn't surface an Uncaught rejection.
+    let topic = generationTopicSelectors.getGenerationTopicById(topicId)(get());
+    if (!topic) {
+      await Promise.resolve();
+      topic = generationTopicSelectors.getGenerationTopicById(topicId)(get());
+    }
+    if (!topic) {
+      console.warn(`[summaryGenerationTopicTitle] topic ${topicId} not in store; skipping summary`);
+      return '';
+    }
 
     const { internal_updateGenerationTopicTitleInSummary, internal_updateGenerationTopicLoading } =
       get();
