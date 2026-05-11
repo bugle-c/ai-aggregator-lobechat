@@ -1,23 +1,26 @@
 import type { ModelProviderCard } from '@/types/llm';
 
+// Rebranded 2026-05-11: this provider runs on our own Hetzner server (CPU
+// inference, see /opt/ollama). Keep `id: 'ollama'` for SDK + MODEL_LIST
+// parsing; only the user-facing name/description/URLs change.
 const Ollama: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'deepseek-r1',
-  defaultShowBrowserRequest: true,
+  checkModel: 'gemma4:e4b',
+  defaultShowBrowserRequest: false,
   description:
-    'Ollama offers models across code generation, math, multilingual processing, and chat, supporting both enterprise and local deployments.',
+    'Локальные модели WebGPT на нашем сервере. Без задержек cloud-провайдеров, без лимитов сторонних API. Gemma 4 E4B бесплатна для всех тарифов.',
   id: 'ollama',
-  modelList: { showModelFetcher: true },
-  modelsUrl: 'https://ollama.com/library',
-  name: 'Ollama',
+  modelList: { showModelFetcher: false },
+  modelsUrl: 'https://gptweb.ru',
+  name: 'WebGPT Local',
   settings: {
-    defaultShowBrowserRequest: true,
+    defaultShowBrowserRequest: false,
     sdkType: 'ollama',
     showApiKey: false,
-    showModelFetcher: true,
+    showModelFetcher: false,
   },
   showApiKey: false,
-  url: 'https://ollama.com',
+  url: 'https://gptweb.ru',
 };
 
 export default Ollama;

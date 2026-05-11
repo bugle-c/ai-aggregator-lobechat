@@ -1,9 +1,11 @@
 import { ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
-import { createWaveSpeedImage } from './createImage';
+import { checkWaveSpeedImage, createWaveSpeedImage, submitWaveSpeedImage } from './createImage';
 import { createWaveSpeedVideo } from './video/createVideo';
 import { handleWaveSpeedVideoWebhook } from './video/handleCreateVideoWebhook';
+
+export { checkWaveSpeedImage, submitWaveSpeedImage };
 
 /**
  * WaveSpeed AI runtime.

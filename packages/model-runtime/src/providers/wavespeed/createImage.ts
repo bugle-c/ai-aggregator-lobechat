@@ -101,6 +101,70 @@ export async function createWaveSpeedImage(
  * cases for FLUX / Seedream / Nano Banana / Ideogram / Recraft / Qwen-Image
  * / Imagen / GPT Image / Z-Image.
  */
+/**
+ * Async submit: POST to wavespeed and return the inference id + poll URL.
+ * Caller is responsible for persisting these and polling later
+ * (typically via a cron). Use this when the image router should return
+ * to the browser immediately instead of blocking until the asset is
+ * ready.
+ */
+export async function submitWaveSpeedImage(
+  payload: CreateImagePayload,
+  options: CreateImageOptions,
+): Promise<{ inferenceId: string; pollUrl: string }> {
+  const { model, params } = payload;
+  const baseURL = options.baseURL || 'https://api.wavespeed.ai/api/v3';
+  const body = buildBody(params);
+
+  const res = await fetch(`${baseURL}/${model}`, {
+    body: JSON.stringify(body),
+    headers: {
+      'Authorization': `Bearer ${options.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`WaveSpeed image submit error: ${res.status} ${errorText}`);
+  }
+
+  const data = (await res.json()) as WaveSpeedCreateResponse;
+  if (!data?.data?.id) {
+    throw new Error('Invalid WaveSpeed response: missing data.id');
+  }
+
+  return {
+    inferenceId: data.data.id,
+    pollUrl: data.data.urls?.get ?? `${baseURL}/predictions/${data.data.id}/result`,
+  };
+}
+
+/**
+ * Async check: GET the wavespeed result for an inference. Returns the
+ * raw status plus the image URL when completed (or an error string
+ * when failed). Used by the polling cron to finalize tasks.
+ */
+export async function checkWaveSpeedImage(
+  pollUrl: string,
+  options: { apiKey: string },
+): Promise<{ status: string; imageUrl?: string; error?: string }> {
+  const res = await fetch(pollUrl, {
+    headers: { Authorization: `Bearer ${options.apiKey}` },
+  });
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`WaveSpeed poll error: ${res.status} ${errorText}`);
+  }
+  const data = (await res.json()) as { data: WaveSpeedWebhookBody };
+  return {
+    error: data.data?.error ?? undefined,
+    imageUrl: data.data?.outputs?.[0],
+    status: data.data?.status ?? 'unknown',
+  };
+}
+
 function buildBody(params: CreateImagePayload['params']): Record<string, unknown> {
   const { prompt, imageUrls, imageUrl, width, height, size, seed, cfg, steps, negativePrompt } =
     params as Record<string, unknown> & CreateImagePayload['params'];

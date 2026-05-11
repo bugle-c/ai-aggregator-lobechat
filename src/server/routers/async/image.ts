@@ -1,6 +1,6 @@
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
+import { AgentRuntimeErrorType, submitWaveSpeedImage } from '@lobechat/model-runtime';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -228,6 +228,35 @@ export const imageRouter = router({
       log('Updating task status to Processing: %s', taskId);
       await ctx.asyncTaskModel.update(taskId, { status: AsyncTaskStatus.Processing });
 
+      // Async path for WaveSpeed: submit the request, persist
+      // inference_id, and return to the browser within ~1 sec. The
+      // poll-active-image-jobs cron picks up the result later and
+      // finalizes (downloads asset, charges, marks Success/Error).
+      //
+      // Without this branch a container restart mid-generation leaves
+      // the task pinned at 'processing'; with it the task is
+      // resumable from any new container.
+      const wavespeedApiKey = process.env.WAVESPEED_API_KEY;
+      if (provider === 'wavespeed' && wavespeedApiKey) {
+        try {
+          const { inferenceId, pollUrl } = await submitWaveSpeedImage(
+            { model, params: params as unknown as RuntimeImageGenParams },
+            { apiKey: wavespeedApiKey },
+          );
+          await ctx.asyncTaskModel.update(taskId, {
+            inferenceId,
+            metadata: { pollUrl, asyncSubmit: true },
+          });
+          log('WaveSpeed async submit OK: task=%s inference=%s', taskId, inferenceId);
+          return { success: true, asyncPending: true };
+        } catch (err) {
+          // Fall through to the legacy sync flow so the user still
+          // gets a fresh result (vs hard-failing on a transient submit
+          // error). The sync path also writes to chargeAfterGenerate.
+          log('WaveSpeed async submit failed, falling back to sync: %O', err);
+        }
+      }
+
       // Use AbortController to prevent resource leaks
       const abortController = new AbortController();
       let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -380,7 +409,6 @@ export const imageRouter = router({
         // Clean up timeout timer
         if (timeoutId) {
           clearTimeout(timeoutId);
-          timeoutId = null;
         }
 
         log('Async image generation failed: %O', {
