@@ -12,7 +12,6 @@ import { useNavigate } from 'react-router-dom';
 
 import VideoFreeQuotaInfo from '@/business/client/features/VideoFreeQuotaInfo';
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
-import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useUserStore } from '@/store/user';
@@ -47,7 +46,6 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isDarkMode = useIsDark();
   const { t } = useTranslation('video');
   const { message } = App.useApp();
-  const url = useFlowUrlState('presets');
   const navigate = useNavigate();
   const { value, setValue } = useVideoGenerationConfigParam('prompt');
   const isCreating = useVideoStore(createVideoSelectors.isCreating);
@@ -69,7 +67,6 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     message.success({ content: 'Генерация запущена', duration: 1.5 });
     void createVideo();
     navigate('/resource?category=videos');
-    void url;
   };
 
   // Auto-fill and auto-send when prompt query parameter is present

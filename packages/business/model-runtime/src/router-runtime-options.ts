@@ -135,14 +135,38 @@ export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
             apiKey: 'ollama',
             baseURL: 'http://ollama:11434/v1',
           },
-          // Force reasoning_effort='none' so Gemma 4's thinking-mode tokens
-          // (`<|channel>thought ... <channel|>`) stop leaking into the
-          // visible reply. Verified: this is the only knob the OpenAI-compat
-          // surface of Ollama honours for thinking suppression — `think:
-          // false` is silently ignored, system prompts don't help, only
-          // `reasoning_effort: 'none'` actually disables it. Tested directly
-          // against /v1/chat/completions on 2026-05-11.
-          transformPayload: (p: any) => ({ ...p, reasoning_effort: 'none' }),
+          // Two hardenings before forwarding to Ollama:
+          // 1. `reasoning_effort: 'none'` — the only knob the OpenAI-compat
+          //    surface of Ollama honours to suppress Gemma 4 thinking-mode.
+          //    `think: false` is silently ignored, system prompts don't help.
+          //    Without this, raw `<|channel>thought ... <channel|>` tokens
+          //    leak into the visible reply. Tested directly against
+          //    /v1/chat/completions on 2026-05-11.
+          // 2. Pinned WebGPT system prompt — Gemma 4's training corpus
+          //    includes LobeChat content, so when free-running it sometimes
+          //    signs off as "Lobe" or "Совет от Lobe:". This prompt is
+          //    prepended to (not replacing) whatever the user's agent
+          //    system role is, so per-session customisation still works.
+          transformPayload: (p: any) => {
+            const PINNED_SYSTEM = [
+              'Ты — WebGPT, AI-ассистент сервиса gptweb.ru.',
+              'Никогда не называй себя Lobe, LobeChat или LobeHub — это устаревшие названия движка, на котором ты НЕ работаешь.',
+              'Никогда не подписывайся «Совет от Lobe» или подобным.',
+              'Отвечай напрямую и кратко. Не выводи свои размышления, не используй теги <|channel|>, <|thought|>, <|message|>, <|return|>, не показывай служебные токены.',
+            ].join(' ');
+
+            const messages = Array.isArray(p.messages) ? [...p.messages] : [];
+            if (messages.length > 0 && messages[0]?.role === 'system') {
+              const existing = typeof messages[0].content === 'string' ? messages[0].content : '';
+              messages[0] = {
+                ...messages[0],
+                content: existing ? `${PINNED_SYSTEM}\n\n${existing}` : PINNED_SYSTEM,
+              };
+            } else {
+              messages.unshift({ content: PINNED_SYSTEM, role: 'system' });
+            }
+            return { ...p, messages, reasoning_effort: 'none' };
+          },
         },
       ];
     }

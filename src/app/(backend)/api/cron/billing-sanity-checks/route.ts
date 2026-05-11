@@ -155,10 +155,23 @@ export async function POST(req: Request) {
   // probe — flag if any usage_logs row this month has cost_usd <= 0 with
   // creditsCharged > 0 (meaning we charged the user but recorded zero
   // upstream cost — likely a rate-source miss / bug).
+  //
+  // Free local models are exempt: by design `gemma4:e4b` etc. have
+  // input_per_1m=output_per_1m=0 in model_rates, so cost_usd is always 0.
+  // calculateCreditsAsync also returns 0 for those rows now, but legacy
+  // logs (recorded before that fix landed) still have credits>0 — keep them
+  // out of the alert so we don't page on history.
   try {
     const monthStart = new Date();
     monthStart.setUTCDate(1);
     monthStart.setUTCHours(0, 0, 0, 0);
+
+    const allRates = await fetchAllRates();
+    const freeModelIds = allRates
+      .filter(
+        (r) => (r.inputPer1M ?? 0) === 0 && (r.outputPer1M ?? 0) === 0 && (r.perUnit ?? 0) === 0,
+      )
+      .map((r) => r.modelId);
 
     const zeroCostRows = await db
       .select({
@@ -174,6 +187,7 @@ export async function POST(req: Request) {
           sql`${usageLogs.createdAt} >= ${monthStart.toISOString()}`,
           sql`${usageLogs.costUsd}::numeric <= 0`,
           sql`${usageLogs.creditsCharged} > 0`,
+          freeModelIds.length > 0 ? sql`${usageLogs.model} NOT IN ${freeModelIds}` : sql`true`,
         ),
       )
       .limit(20);

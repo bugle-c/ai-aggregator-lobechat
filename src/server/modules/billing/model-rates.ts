@@ -43,6 +43,16 @@ export async function calculateCreditsAsync(modelId: string, usage: Usage): Prom
     console.warn(`[billing] no rate for model=${modelId}, charging 1 credit floor`);
     return 1;
   }
+  // Free rate — admin set every priced field to zero (see /admin/finance/models
+  // or the model_rates row). Return 0 instead of the usual 1-credit floor so
+  // free local models (e.g. gemma4:e4b) actually charge nothing. Without this,
+  // every "free" call still consumed 1 credit and the
+  // billing-sanity-checks reconciliation check fired
+  // ("credits charged but cost_usd <= 0"). The floor itself stays for the
+  // unknown/no-rate path above — that's a real bug we want to keep catching.
+  const isFreeRate =
+    (rate.inputPer1M ?? 0) === 0 && (rate.outputPer1M ?? 0) === 0 && (rate.perUnit ?? 0) === 0;
+  if (isFreeRate) return 0;
   const costUsd = computeCostUsdFromRate(rate, usage);
   const costRub = costUsd * USD_TO_RUB;
   return Math.max(1, Math.ceil(costRub / CREDIT_VALUE_RUB));

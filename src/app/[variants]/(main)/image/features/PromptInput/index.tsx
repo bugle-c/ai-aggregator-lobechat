@@ -11,7 +11,6 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
-import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useGeminiChineseWarning } from '@/hooks/useGeminiChineseWarning';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
@@ -48,7 +47,6 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isDarkMode = useIsDark();
   const { t } = useTranslation('image');
   const { message } = App.useApp();
-  const url = useFlowUrlState('presets');
   const navigate = useNavigate();
   const { value, setValue } = useGenerationConfigParam('prompt');
   const isCreating = useImageStore(createImageSelectors.isCreating);
@@ -82,7 +80,6 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     message.success({ content: 'Генерация запущена', duration: 1.5 });
     void createImage();
     navigate('/resource?category=images');
-    void url;
   };
 
   // Auto-fill and auto-send when prompt query parameter is present
