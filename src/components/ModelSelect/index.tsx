@@ -1,6 +1,7 @@
+import { BRANDING_LOGO_URL, BRANDING_NAME } from '@lobechat/business-const';
 import { type ChatModelCard } from '@lobechat/types';
 import { type IconAvatarProps } from '@lobehub/icons';
-import { LobeHub, ModelIcon, ProviderIcon } from '@lobehub/icons';
+import { ModelIcon, ProviderIcon } from '@lobehub/icons';
 import { type FlexboxProps } from '@lobehub/ui';
 import { Avatar, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, useResponsive } from 'antd-style';
@@ -335,7 +336,16 @@ export const ProviderItemRender = memo<ProviderItemRenderProps>(
             title={name}
           />
         ) : provider === 'lobehub' ? (
-          <LobeHub.Morden size={size} />
+          // WebGPT brand logo replaces the upstream LobeHub icon for the
+          // umbrella provider (see /opt/lobechat — this fork uses lobehub as
+          // the unified entrypoint for cloud + local models).
+          <Avatar
+            avatar={BRANDING_LOGO_URL}
+            shape={'circle'}
+            size={size}
+            style={isMono ? { filter: 'grayscale(1)' } : {}}
+            title={BRANDING_NAME}
+          />
         ) : (
           <ProviderIcon provider={provider} size={size} type={type} />
         )}

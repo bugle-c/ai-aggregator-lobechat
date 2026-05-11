@@ -236,8 +236,12 @@ export const imageRouter = router({
       // Without this branch a container restart mid-generation leaves
       // the task pinned at 'processing'; with it the task is
       // resumable from any new container.
+      // Aggregator front-end always passes provider='lobehub'; the
+      // underlying image runtime is wavespeed. Try the async submit
+      // whenever WAVESPEED_API_KEY is set — the legacy sync path
+      // remains a fallback if submit fails (non-wavespeed model, etc.).
       const wavespeedApiKey = process.env.WAVESPEED_API_KEY;
-      if (provider === 'wavespeed' && wavespeedApiKey) {
+      if (wavespeedApiKey) {
         try {
           const { inferenceId, pollUrl } = await submitWaveSpeedImage(
             { model, params: params as unknown as RuntimeImageGenParams },

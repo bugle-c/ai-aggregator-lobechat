@@ -105,10 +105,21 @@ export async function POST(req: Request) {
   // --- B) markup-sanity -----------------------------------------------------
   // Read via the existing rates-source cache so we don't open a second
   // Supabase connection. fetchAllRates() returns active rates only.
+  //
+  // Free local models (`gemma4:e4b`, `qwen3-coder:30b-32k`, the uncensored
+  // Gemma) have markup=1 by design — we don't apply a multiplier on $0 of
+  // upstream cost. Skip rows where every priced unit is zero so we don't
+  // page on something that has no economics to police.
   try {
     const rates = await fetchAllRates();
+    const isFreeRate = (r: (typeof rates)[number]) => {
+      const fields = [r.inputPer1M ?? 0, r.outputPer1M ?? 0, r.perUnit ?? 0];
+      return fields.every((v) => v === 0);
+    };
     const offenders = rates.filter(
-      (r) => !Number.isFinite(r.markup) || r.markup < MARKUP_MIN || r.markup > MARKUP_MAX,
+      (r) =>
+        !isFreeRate(r) &&
+        (!Number.isFinite(r.markup) || r.markup < MARKUP_MIN || r.markup > MARKUP_MAX),
     );
     if (offenders.length > 0) {
       const body = offenders

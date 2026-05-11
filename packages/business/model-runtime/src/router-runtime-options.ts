@@ -96,13 +96,47 @@ const isOpenAIDirectImage = (model: string) =>
   model.startsWith('gpt-image-') || model.startsWith('dall-e-');
 const isGoogleDirectImage = (model: string) =>
   model.startsWith('imagen-') || model.endsWith(':image');
+
+// Local models served by Ollama on the same host (see /opt/ollama). Routed
+// here as a separate branch so we don't hit OpenRouter for them. Ollama is
+// OpenAI-compatible — same `apiType: 'openai'`, only the baseURL changes.
+// Reachable as `http://ollama:11434/v1` from the lobe container because
+// `network-service` is attached to the `ollama_default` bridge (see
+// /opt/lobechat/docker-compose.yml).
+const LOCAL_OLLAMA_MODELS = new Set([
+  'gemma4:e4b',
+  'hf.co/TrevorJS/gemma-4-26B-A4B-it-uncensored-GGUF:Q4_K_M',
+  'qwen3-coder:30b-32k',
+]);
+const isLocalOllamaModel = (model: string) => LOCAL_OLLAMA_MODELS.has(model);
+
 // Wavespeed IDs always have a `/` and are not handled by the rules above.
-const isWavespeedModel = (model: string) => model.includes('/') && !isFalModel(model);
+// Local Ollama IDs also contain slashes (`hf.co/...`) so we must filter them
+// out before falling through to wavespeed.
+const isWavespeedModel = (model: string) =>
+  model.includes('/') && !isFalModel(model) && !isLocalOllamaModel(model);
 
 export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
   id: 'lobehub',
 
   routers: async (_options, { model }) => {
+    // Local Ollama models — route to our own server before any other rule.
+    // They look like `<slug>:<tag>` or `hf.co/<repo>:<quant>`, so they can
+    // otherwise collide with wavespeed's slashed-id heuristic.
+    if (model && isLocalOllamaModel(model)) {
+      return [
+        {
+          apiType: 'openai' as const,
+          // Ollama ignores the auth header, but openai SDK requires a
+          // non-empty apiKey. Sending a literal `ollama` is the convention.
+          options: {
+            apiKey: 'ollama',
+            baseURL: 'http://ollama:11434/v1',
+          },
+        },
+      ];
+    }
+
     // Image models — route to the actual upstream that hosts them.
     if (model) {
       if (isOpenAIDirectImage(model)) {
