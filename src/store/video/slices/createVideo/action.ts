@@ -108,10 +108,11 @@ export const createCreateVideoSlice: StateCreator<
         provider,
       });
 
-      // 5. Refresh generation batches to show the new batch
-      if (!isNewTopic) {
-        await get().refreshGenerationBatches();
-      }
+      // 5. Refresh generation batches to show the new batch. Always
+      // run this — previously skipped on new-topic branch but that
+      // left the feed empty for the first SWR tick (~5 sec) which
+      // made the click look like a no-op.
+      await get().refreshGenerationBatches();
 
       // 6. Clear the prompt input after successful video creation
       set(

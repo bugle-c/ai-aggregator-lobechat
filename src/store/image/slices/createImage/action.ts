@@ -103,10 +103,13 @@ export class CreateImageActionImpl {
         params: finalParameters as any,
       });
 
-      // 6. Only refresh generation batches if it's not a new topic
-      if (!isNewTopic) {
-        await this.#get().refreshGenerationBatches();
-      }
+      // 6. Refresh batches for the active topic so the placeholder
+      // card appears right away. Previously this was skipped on the
+      // new-topic branch (the assumption was that the long-running
+      // sync flow would deliver a result before the user noticed).
+      // The async flow returns in ~1 sec; without this refresh the
+      // feed sits empty until the next SWR tick. Always refresh.
+      await this.#get().refreshGenerationBatches();
 
       // 7. Clear the prompt input after successful image creation
       this.#set(
