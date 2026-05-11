@@ -52,7 +52,13 @@ export const subscriptionRouter = router({
         // without bouncing them back to the YooKassa checkout. The
         // succeeded-webhook persists `payment_method.id` to
         // user_billing.payment_method_id.
-        savePaymentMethod: true,
+        //
+        // Requires the YooKassa store to be approved for recurring
+        // payments. Without that approval, including the flag makes YK
+        // reject the whole payment with 403 'forbidden'. Gate it behind
+        // an env so we can ship subscriptions before recurring is
+        // approved, and flip it on later without code changes.
+        savePaymentMethod: process.env.YOOKASSA_RECURRING_ENABLED === '1',
       });
 
       await BillingService.updatePaymentYookassaId(ctx.serverDB, payment.id, paymentId);
