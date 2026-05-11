@@ -63,6 +63,10 @@ const Plans = memo(() => {
   const [cancelText, setCancelText] = useState('');
   const [cancelling, setCancelling] = useState(false);
 
+  // Saved-card removal state. Required by YooKassa for recurring approval.
+  const [removeCardOpen, setRemoveCardOpen] = useState(false);
+  const [removingCard, setRemovingCard] = useState(false);
+
   // IMPORTANT: keep all hooks above any early-return.
   // useIsMobile() wraps antd-style useResponsive() which calls useRef
   // internally. Calling it after a conditional return causes React #310
@@ -89,6 +93,20 @@ const Plans = memo(() => {
   // race against state-set timing. Earlier the desktop modal used
   // closure state and the mobile flow tried to setState then await —
   // first submit always sent the previous reason.
+  const handleRemoveCard = async () => {
+    setRemovingCard(true);
+    try {
+      await lambdaClient.subscription.removePaymentMethod.mutate();
+      message.success('Карта удалена. Авто-продление отключено.');
+      setRemoveCardOpen(false);
+      await utils.subscription.getBillingState.invalidate();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Не удалось удалить карту');
+    } finally {
+      setRemovingCard(false);
+    }
+  };
+
   const handleCancelSubmit = async (reasonCodeArg?: string, reasonTextArg?: string) => {
     const reasonCode = reasonCodeArg ?? cancelReason;
     const reasonText = (reasonTextArg ?? cancelText).trim() || undefined;
@@ -266,9 +284,42 @@ const Plans = memo(() => {
                 </Text>
               </Flexbox>
             )}
+
+            {billing?.hasSavedPaymentMethod && (
+              <>
+                <Divider style={{ margin: '12px 0' }} />
+                <Flexbox horizontal align="center" gap={12} justify="space-between">
+                  <Text type="secondary">
+                    Карта сохранена для автосписания. Можно удалить — текущая подписка останется
+                    активной до конца оплаченного периода.
+                  </Text>
+                  <Button danger size="small" onClick={() => setRemoveCardOpen(true)}>
+                    Удалить карту
+                  </Button>
+                </Flexbox>
+              </>
+            )}
           </>
         )}
       </Card>
+
+      <Modal
+        cancelText="Отмена"
+        confirmLoading={removingCard}
+        okButtonProps={{ danger: true }}
+        okText="Удалить карту"
+        open={removeCardOpen}
+        title="Удалить сохранённую карту?"
+        width={460}
+        onCancel={() => setRemoveCardOpen(false)}
+        onOk={handleRemoveCard}
+      >
+        <Text type="secondary">
+          Авто-продление подписки будет отключено. Доступ к платным функциям сохранится до конца
+          оплаченного периода. Чтобы продолжить пользоваться платным тарифом после этой даты,
+          понадобится оплатить заново.
+        </Text>
+      </Modal>
 
       <Modal
         cancelText="Передумал"

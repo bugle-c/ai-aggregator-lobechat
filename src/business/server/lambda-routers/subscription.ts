@@ -189,4 +189,33 @@ export const subscriptionRouter = router({
         activeUntil: billing.subscriptionExpiresAt,
       };
     }),
+
+  /**
+   * User removes their saved card. Clears `payment_method_id` so the
+   * renew-due-subscriptions cron can no longer auto-charge. Doesn't
+   * cancel the current subscription window — paid access remains until
+   * `subscription_expires_at`.
+   *
+   * Required by YooKassa for recurring-payments approval: there must
+   * be a self-service flow where the user can revoke the saved card.
+   */
+  removePaymentMethod: billingProcedure.mutation(async ({ ctx }) => {
+    const { userBilling } = await import('@/database/schemas');
+    const { eq } = await import('drizzle-orm');
+
+    const billing = await ctx.billingService.getOrCreateUserBilling();
+    if (!billing.paymentMethodId) {
+      return { ok: true, alreadyRemoved: true };
+    }
+
+    await ctx.serverDB
+      .update(userBilling)
+      .set({
+        paymentMethodId: null,
+        autoRenew: false,
+      })
+      .where(eq(userBilling.userId, ctx.userId));
+
+    return { ok: true };
+  }),
 });
