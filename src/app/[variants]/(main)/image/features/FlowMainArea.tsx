@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui';
-import { Tabs } from 'antd';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { Segmented } from 'antd';
 import { ArrowLeft } from 'lucide-react';
 import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -16,12 +16,14 @@ import { presetSelectors } from '@/store/image/slices/preset/selectors';
 import GenerationFeed from './GenerationFeed';
 
 /**
- * Two-tab main area for the new image flow page.
+ * Main area for the new image flow page.
  *
- * - "Стили" — preset gallery (model tabs, category tabs, search, grid)
- * - "Мои генерации" — existing GenerationFeed (unchanged)
+ * Header strip: ← Назад · Segmented [ Стили | Мои генерации ]
+ * Body: matches the active segment — gallery or feed.
  *
- * Default tab depends on whether the user has any prior generations.
+ * Earlier this rendered antd `<Tabs/>`, which looked like a text label
+ * with an underline — users didn't realize it was a toggle. `<Segmented/>`
+ * gives a clear pill-shaped switch matching higgsfield's reference.
  */
 const FlowMainArea = memo(() => {
   const navigate = useNavigate();
@@ -35,62 +37,59 @@ const FlowMainArea = memo(() => {
   const useFetchGenerationBatches = useImageStore((s) => s.useFetchGenerationBatches);
   useFetchGenerationBatches(activeTopicId);
 
-  // Default to the preset gallery on first visit. Previously the
-  // default depended on whether the user had prior generations —
-  // returning users would land on "Мои генерации" and never see the
-  // gallery, which contradicted the higgsfield-style entry pattern
-  // (gallery is THE primary surface). The user can still switch
-  // tabs and the URL `?tab=` is respected when present.
+  // Gallery is the primary surface — see history in previous commits
+  // for why the previous "feed-when-has-generations" default was wrong.
   const url = useFlowUrlState('presets');
 
   return (
-    <Tabs
-      activeKey={url.tab}
-      style={{ height: '100%' }}
-      items={[
-        {
-          children: (
-            <PresetGallery
-              category={url.category}
-              modality="image"
-              modelId={url.modelId}
-              q={url.q}
-              selectedSlug={selectedSlug}
-              onCategoryChange={url.setCategory}
-              onModelChange={url.setModel}
-              onSearchChange={url.setQ}
-              onPresetSelect={(p) => {
-                selectPreset(p);
-                url.setPreset(p.slug);
-                // On mobile, navigate to a full-screen creation view
-                // (matches higgsfield: gallery → /flow/<modality>/prompt).
-                // On desktop the sidebar is always visible so no nav.
-                if (isMobile) url.setView('create');
-              }}
-            />
-          ),
-          key: 'presets',
-          label: 'Стили',
-        },
-        {
-          children: <GenerationFeed />,
-          key: 'feed',
-          label: 'Мои генерации',
-        },
-      ]}
-      tabBarExtraContent={{
-        left: (
-          <ActionIcon
-            aria-label="Назад"
-            icon={ArrowLeft}
-            size="normal"
-            style={{ marginInlineEnd: 8 }}
-            onClick={() => navigate('/')}
+    <Flexbox flex={1} gap={12} height={'100%'} style={{ overflow: 'hidden' }}>
+      <Flexbox
+        horizontal
+        align="center"
+        gap={12}
+        paddingBlock={8}
+        paddingInline={16}
+        style={{ borderBlockEnd: '1px solid var(--ant-color-border-secondary)' }}
+      >
+        <ActionIcon
+          aria-label="Назад"
+          icon={ArrowLeft}
+          size="normal"
+          onClick={() => navigate('/')}
+        />
+        <Segmented
+          size="large"
+          value={url.tab}
+          options={[
+            { label: 'Стили', value: 'presets' },
+            { label: 'Мои генерации', value: 'feed' },
+          ]}
+          onChange={(k) => url.setTab(k === 'presets' ? 'presets' : 'feed')}
+        />
+      </Flexbox>
+
+      <Flexbox flex={1} style={{ overflowY: 'auto' }}>
+        {url.tab === 'presets' ? (
+          <PresetGallery
+            category={url.category}
+            modality="image"
+            modelId={url.modelId}
+            q={url.q}
+            selectedSlug={selectedSlug}
+            onCategoryChange={url.setCategory}
+            onModelChange={url.setModel}
+            onSearchChange={url.setQ}
+            onPresetSelect={(p) => {
+              selectPreset(p);
+              url.setPreset(p.slug);
+              if (isMobile) url.setView('create');
+            }}
           />
-        ),
-      }}
-      onChange={(k) => url.setTab(k === 'presets' ? 'presets' : 'feed')}
-    />
+        ) : (
+          <GenerationFeed />
+        )}
+      </Flexbox>
+    </Flexbox>
   );
 });
 
