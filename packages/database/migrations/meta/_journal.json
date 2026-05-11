@@ -700,6 +700,13 @@
       "when": 1779000000000,
       "tag": "0099_presets_model_id_fix",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1779100000000,
+      "tag": "0100_presets_expansion",
+      "breakpoints": true
     }
   ],
   "version": "6"

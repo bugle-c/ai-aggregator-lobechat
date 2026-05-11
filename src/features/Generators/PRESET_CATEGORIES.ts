@@ -13,6 +13,7 @@ export const VIDEO_CATEGORIES: CategoryDef[] = [
   { label: 'Эффекты', slug: 'effects' },
   { label: 'Персонажи', slug: 'character' },
   { label: 'Атмосфера', slug: 'ambient' },
+  { label: 'Экшн', slug: 'action' },
 ];
 
 export const IMAGE_CATEGORIES: CategoryDef[] = [
@@ -22,6 +23,7 @@ export const IMAGE_CATEGORIES: CategoryDef[] = [
   { label: 'Аниме', slug: 'anime' },
   { label: 'Реализм', slug: 'realistic' },
   { label: 'Продукт', slug: 'product' },
+  { label: 'Арт', slug: 'artistic' },
 ];
 
 export const getCategories = (modality: PresetModality): CategoryDef[] =>
