@@ -7,6 +7,13 @@ interface CreatePaymentParams {
   customerEmail?: string;
   description: string;
   metadata?: Record<string, string>;
+  /**
+   * Recurring charge: when present, YooKassa attempts a no-redirect
+   * charge against the previously-saved method. Only valid alongside an
+   * empty `confirmation` (server-side flow). Used by the
+   * renew-due-subscriptions cron.
+   */
+  paymentMethodId?: string;
   returnUrl: string;
   /**
    * Subscription-type initial payment: ask YooKassa to save the payment
@@ -19,20 +26,13 @@ interface CreatePaymentParams {
    * method and saving it would clutter YooKassa's payment-method list.
    */
   savePaymentMethod?: boolean;
-  /**
-   * Recurring charge: when present, YooKassa attempts a no-redirect
-   * charge against the previously-saved method. Only valid alongside an
-   * empty `confirmation` (server-side flow). Used by the
-   * renew-due-subscriptions cron.
-   */
-  paymentMethodId?: string;
 }
 
 interface YookassaPaymentResponse {
   confirmation?: { confirmation_url: string };
   id: string;
-  status: string;
   payment_method?: { id?: string; saved?: boolean; type?: string };
+  status: string;
 }
 
 export async function createYookassaPayment(
@@ -110,6 +110,42 @@ export async function createYookassaPayment(
   return {
     paymentId: data.id,
     paymentUrl: data.confirmation?.confirmation_url ?? null,
+    status: data.status,
+  };
+}
+
+/**
+ * Fetch the live state of a payment on YooKassa. Used by the
+ * reconcile-pending-payments cron to close rows where the webhook
+ * either fired and we missed it (network blip / server restart) or
+ * never fired (user closed the checkout, YK auto-canceled after their
+ * 7-day TTL).
+ *
+ * Returns null on 404 (payment never existed on YK — typically an old
+ * row that was created locally but the YK request failed mid-flight).
+ */
+export async function fetchYookassaPaymentStatus(yookassaPaymentId: string): Promise<{
+  paymentMethodId?: string;
+  status: string;
+} | null> {
+  const shopId = billingEnv.YOOKASSA_SHOP_ID;
+  const secretKey = billingEnv.YOOKASSA_SECRET_KEY;
+  if (!shopId || !secretKey) throw new Error('YooKassa credentials not configured');
+
+  const auth = Buffer.from(`${shopId}:${secretKey}`).toString('base64');
+  const res = await fetch(`https://api.yookassa.ru/v3/payments/${yookassaPaymentId}`, {
+    headers: { Authorization: `Basic ${auth}` },
+  });
+
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`YooKassa GET error ${res.status}: ${err}`);
+  }
+
+  const data: YookassaPaymentResponse = await res.json();
+  return {
+    paymentMethodId: data.payment_method?.id,
     status: data.status,
   };
 }
