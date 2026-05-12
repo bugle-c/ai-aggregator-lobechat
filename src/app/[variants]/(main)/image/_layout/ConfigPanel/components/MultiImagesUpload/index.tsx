@@ -1,7 +1,7 @@
 'use client';
 
 // Removed Image import - using img tags instead
-import { Center } from '@lobehub/ui';
+import { Center, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Image as ImageIcon, X } from 'lucide-react';
 import { type FC } from 'react';
@@ -16,6 +16,7 @@ import Image from '@/libs/next/Image';
 import { useFileStore } from '@/store/file';
 import { type FileUploadStatus } from '@/types/files/upload';
 
+import LibraryImagePicker from '../LibraryImagePicker';
 import { type ImageItem } from './ImageManageModal';
 import ImageManageModal from './ImageManageModal';
 
@@ -294,27 +295,50 @@ const isLocalBlobUrl = (url: string): boolean => url.startsWith('blob:');
 interface ImageUploadPlaceholderProps {
   isDragOver?: boolean;
   onClick?: () => void;
+  onPickFromLibrary: () => void;
 }
 
-const ImageUploadPlaceholder: FC<ImageUploadPlaceholderProps> = memo(({ isDragOver, onClick }) => {
-  const { t } = useTranslation('components');
+const ImageUploadPlaceholder: FC<ImageUploadPlaceholderProps> = memo(
+  ({ isDragOver, onClick, onPickFromLibrary }) => {
+    const { t } = useTranslation('components');
 
-  return (
-    <Center
-      className={cx(styles.placeholder, isDragOver && 'drag-over')}
-      gap={16}
-      horizontal={false}
-      onClick={onClick}
-    >
-      <ImageIcon className={styles.placeholderIcon} size={48} strokeWidth={1.5} />
-      <div className={styles.placeholderText}>
-        {t('MultiImagesUpload.placeholder.primary')}
-        <br />
-        {t('MultiImagesUpload.placeholder.secondary')}
-      </div>
-    </Center>
-  );
-});
+    return (
+      <>
+        <Center
+          className={cx(styles.placeholder, isDragOver && 'drag-over')}
+          gap={16}
+          horizontal={false}
+          onClick={onClick}
+        >
+          <ImageIcon className={styles.placeholderIcon} size={48} strokeWidth={1.5} />
+          <div className={styles.placeholderText}>
+            {t('MultiImagesUpload.placeholder.primary')}
+            <br />
+            {t('MultiImagesUpload.placeholder.secondary')}
+          </div>
+        </Center>
+        <Flexbox align="center" justify="center" paddingBlock={8} style={{ width: '100%' }}>
+          <a
+            style={{
+              color: cssVar.colorPrimary,
+              cursor: 'pointer',
+              fontSize: 12,
+              textDecoration: 'underline dotted',
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPickFromLibrary();
+            }}
+          >
+            {t('MultiImagesUpload.placeholder.pickFromLibrary', {
+              defaultValue: 'Или выбрать из библиотеки',
+            })}
+          </a>
+        </Flexbox>
+      </>
+    );
+  },
+);
 
 ImageUploadPlaceholder.displayName = 'ImageUploadPlaceholder';
 
@@ -574,6 +598,7 @@ const MultiImagesUpload: FC<MultiImagesUploadProps> = memo(
     const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
     const [displayItems, setDisplayItems] = useState<DisplayItem[]>([]);
     const [modalOpen, setModalOpen] = useState(false);
+    const [pickerOpen, setPickerOpen] = useState(false);
     const configStyles = configPanelStyles;
     const { validateFiles } = useUploadFilesValidation(maxCount, maxFileSize);
 
@@ -815,7 +840,11 @@ const MultiImagesUpload: FC<MultiImagesUploadProps> = memo(
             onDelete={handleDelete}
           />
         ) : (
-          <ImageUploadPlaceholder isDragOver={isDragOver} onClick={handlePlaceholderClick} />
+          <ImageUploadPlaceholder
+            isDragOver={isDragOver}
+            onClick={handlePlaceholderClick}
+            onPickFromLibrary={() => setPickerOpen(true)}
+          />
         )}
 
         {/* Image Management Modal */}
@@ -825,6 +854,19 @@ const MultiImagesUpload: FC<MultiImagesUploadProps> = memo(
           open={modalOpen}
           onClose={handleCloseModal}
           onComplete={handleModalComplete}
+        />
+
+        {/* Library picker modal */}
+        <LibraryImagePicker
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          onPick={(url) => {
+            // Merge with existing value, dedupe, respect maxCount
+            const current = Array.isArray(value) ? value : [];
+            if (current.includes(url)) return;
+            const next = [...current, url].slice(0, maxCount ?? 10);
+            onChange?.({ urls: next });
+          }}
         />
       </div>
     );

@@ -1,6 +1,6 @@
 'use client';
 
-import { Center } from '@lobehub/ui';
+import { Center, Flexbox } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Image as ImageIcon, X } from 'lucide-react';
@@ -14,6 +14,8 @@ import { configPanelStyles } from '@/app/[variants]/(main)/image/_layout/ConfigP
 import Image from '@/libs/next/Image';
 import { useFileStore } from '@/store/file';
 import { type FileUploadStatus } from '@/types/files/upload';
+
+import LibraryImagePicker from './LibraryImagePicker';
 
 // ======== Business Types ======== //
 
@@ -306,33 +308,56 @@ interface PlaceholderProps {
   height?: number;
   isDragOver?: boolean;
   onClick?: () => void;
+  onPickFromLibrary: () => void;
 }
 
-const Placeholder: FC<PlaceholderProps> = memo(({ isDragOver, onClick, height }) => {
-  const configStyles = configPanelStyles;
-  const { t } = useTranslation('components');
+const Placeholder: FC<PlaceholderProps> = memo(
+  ({ isDragOver, onClick, height, onPickFromLibrary }) => {
+    const configStyles = configPanelStyles;
+    const { t } = useTranslation('components');
 
-  return (
-    <Center
-      gap={16}
-      horizontal={false}
-      style={height ? { height } : undefined}
-      className={cx(
-        styles.placeholder,
-        configStyles.dragTransition,
-        isDragOver && configStyles.dragOver,
-      )}
-      onClick={onClick}
-    >
-      <ImageIcon className={styles.placeholderIcon} size={48} strokeWidth={1.5} />
-      <div className={styles.placeholderText}>
-        {t('ImageUpload.placeholder.primary')}
-        <br />
-        {t('ImageUpload.placeholder.secondary')}
-      </div>
-    </Center>
-  );
-});
+    return (
+      <>
+        <Center
+          gap={16}
+          horizontal={false}
+          style={height ? { height } : undefined}
+          className={cx(
+            styles.placeholder,
+            configStyles.dragTransition,
+            isDragOver && configStyles.dragOver,
+          )}
+          onClick={onClick}
+        >
+          <ImageIcon className={styles.placeholderIcon} size={48} strokeWidth={1.5} />
+          <div className={styles.placeholderText}>
+            {t('ImageUpload.placeholder.primary')}
+            <br />
+            {t('ImageUpload.placeholder.secondary')}
+          </div>
+        </Center>
+        <Flexbox align="center" justify="center" paddingBlock={8} style={{ width: '100%' }}>
+          <a
+            style={{
+              color: cssVar.colorPrimary,
+              cursor: 'pointer',
+              fontSize: 12,
+              textDecoration: 'underline dotted',
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPickFromLibrary();
+            }}
+          >
+            {t('ImageUpload.placeholder.pickFromLibrary', {
+              defaultValue: 'Или выбрать из библиотеки',
+            })}
+          </a>
+        </Flexbox>
+      </>
+    );
+  },
+);
 
 Placeholder.displayName = 'Placeholder';
 
@@ -430,6 +455,7 @@ const ImageUpload: FC<ImageUploadProps> = memo(
     const inputRef = useRef<HTMLInputElement>(null);
     const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
     const [uploadState, setUploadState] = useState<UploadState | null>(null);
+    const [pickerOpen, setPickerOpen] = useState(false);
     const { t } = useTranslation('components');
     const { message } = App.useApp();
     const { validateFiles } = useUploadFilesValidation(undefined, maxFileSize);
@@ -644,8 +670,16 @@ const ImageUpload: FC<ImageUploadProps> = memo(
             height={placeholderHeight}
             isDragOver={isDragOver}
             onClick={handleFileSelect}
+            onPickFromLibrary={() => setPickerOpen(true)}
           />
         )}
+
+        {/* Library picker modal */}
+        <LibraryImagePicker
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          onPick={(url) => onChange?.({ url })}
+        />
       </div>
     );
   },
