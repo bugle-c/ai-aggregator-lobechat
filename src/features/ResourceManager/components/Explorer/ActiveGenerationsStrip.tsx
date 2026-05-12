@@ -58,6 +58,7 @@ const useStyles = createStyles(({ css, token }) => ({
       from {
         transform: rotate(0deg);
       }
+
       to {
         transform: rotate(360deg);
       }
@@ -95,15 +96,23 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   closeBtn: css`
     cursor: pointer;
-    padding: 2px;
-    border: 0;
-    background: transparent;
-    color: ${token.colorErrorText};
+
     display: inline-flex;
     align-items: center;
+
+    padding: 2px;
+    border: 0;
     border-radius: 4px;
+
+    color: ${token.colorErrorText};
+
     opacity: 0.7;
-    transition: opacity 0.15s, background 0.15s;
+    background: transparent;
+
+    transition:
+      opacity 0.15s,
+      background 0.15s;
+
     &:hover {
       opacity: 1;
       background: rgb(0 0 0 / 8%);
@@ -183,9 +192,7 @@ const ActiveGenerationsStrip = memo(() => {
     });
   }, []);
 
-  const visible = (data ?? []).filter(
-    (t) => !(t.status === 'error' && dismissed.has(t.id)),
-  );
+  const visible = (data ?? []).filter((t) => !(t.status === 'error' && dismissed.has(t.id)));
   const previousCountRef = useRef(0);
   const count = visible.length;
 
@@ -204,12 +211,22 @@ const ActiveGenerationsStrip = memo(() => {
 
   return (
     <Flexbox horizontal align="center" className={styles.strip} gap={8}>
-      {data!.map((task) =>
+      {visible.map((task) =>
         task.status === 'error' ? (
           <div className={styles.errorTile} key={task.id}>
             <div className={styles.errorTitle}>
-              <AlertCircle size={14} />
-              <span>Ошибка генерации</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <AlertCircle size={14} />
+                Ошибка генерации
+              </span>
+              <button
+                aria-label="Закрыть"
+                className={styles.closeBtn}
+                type="button"
+                onClick={() => dismiss(task.id)}
+              >
+                <X size={14} />
+              </button>
             </div>
             <div className={styles.errorBody}>
               {task.error?.body || task.error?.name || 'Не удалось сгенерировать'}
