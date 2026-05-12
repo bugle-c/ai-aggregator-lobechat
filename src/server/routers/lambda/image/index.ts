@@ -314,6 +314,7 @@ export const imageRouter = router({
     const tasks = await ctx.asyncTaskModel.listActiveByType(AsyncTaskType.ImageGeneration);
     return tasks.map((t) => ({
       createdAt: t.createdAt,
+      error: t.error as { body?: string; name?: string } | null,
       id: t.id,
       status: t.status,
     }));

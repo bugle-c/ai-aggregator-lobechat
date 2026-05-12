@@ -3,13 +3,13 @@
 import { Flexbox } from '@lobehub/ui';
 import { Skeleton } from 'antd';
 import { createStyles } from 'antd-style';
-import { Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
-import { lambdaClient } from '@/libs/trpc/client';
 import { useClientDataSWR } from '@/libs/swr';
+import { lambdaClient } from '@/libs/trpc/client';
 import { revalidateResources } from '@/store/file/slices/resource/hooks';
 import { FilesTabs } from '@/types/files';
 
@@ -18,37 +18,92 @@ const POLL_INTERVAL_MS = 4000;
 const useStyles = createStyles(({ css, token }) => ({
   strip: css`
     margin-block: 8px;
-    padding: 8px 12px;
+    padding-block: 8px;
+    padding-inline: 12px;
     border-radius: ${token.borderRadiusLG}px;
+
     background: ${token.colorFillTertiary};
   `,
   tile: css`
     position: relative;
+
+    overflow: hidden;
+    flex: 0 0 auto;
+
     width: 160px;
     height: 160px;
     border-radius: ${token.borderRadiusLG}px;
-    overflow: hidden;
-    flex: 0 0 auto;
   `,
   overlay: css`
+    pointer-events: none;
+
     position: absolute;
     inset: 0;
+
     display: flex;
     flex-direction: column;
+    gap: 6px;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    color: ${token.colorTextSecondary};
-    background: rgba(0, 0, 0, 0.18);
-    pointer-events: none;
+
     font-size: 12px;
+    color: ${token.colorTextSecondary};
+
+    background: rgb(0 0 0 / 18%);
   `,
   spin: css`
     animation: spin 1.2s linear infinite;
+
     @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
     }
+  `,
+  errorTile: css`
+    position: relative;
+
+    overflow: hidden;
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 6px;
+
+    width: 160px;
+    height: 160px;
+    padding: 10px;
+    border: 1px solid ${token.colorErrorBorder};
+    border-radius: ${token.borderRadiusLG}px;
+
+    font-size: 11px;
+    line-height: 1.35;
+    color: ${token.colorErrorText};
+
+    background: ${token.colorErrorBg};
+  `,
+  errorTitle: css`
+    display: flex;
+    gap: 4px;
+    align-items: center;
+
+    font-size: 12px;
+    font-weight: 600;
+  `,
+  errorBody: css`
+    overflow: hidden;
+    display: -webkit-box;
+    flex: 1;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 5;
+
+    text-overflow: ellipsis;
+  `,
+  errorRefund: css`
+    font-size: 10px;
+    opacity: 0.85;
   `,
 }));
 
@@ -75,11 +130,9 @@ const ActiveGenerationsStrip = memo(() => {
     return [];
   };
 
-  const { data } = useClientDataSWR(
-    kind ? ['active-generations', kind] : null,
-    fetcher,
-    { refreshInterval: POLL_INTERVAL_MS },
-  );
+  const { data } = useClientDataSWR(kind ? ['active-generations', kind] : null, fetcher, {
+    refreshInterval: POLL_INTERVAL_MS,
+  });
 
   const previousCountRef = useRef(0);
   const count = data?.length ?? 0;
@@ -98,19 +151,29 @@ const ActiveGenerationsStrip = memo(() => {
   if (!kind || count === 0) return null;
 
   return (
-    <Flexbox horizontal align="center" gap={8} className={styles.strip}>
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className={styles.tile}>
-          <Skeleton.Image
-            active
-            style={{ width: '100%', height: '100%', borderRadius: 0 }}
-          />
-          <div className={styles.overlay}>
-            <Loader2 size={20} className={styles.spin} />
-            <span>{t('placeholder.generating', { defaultValue: 'Генерация…' })}</span>
+    <Flexbox horizontal align="center" className={styles.strip} gap={8}>
+      {data!.map((task) =>
+        task.status === 'error' ? (
+          <div className={styles.errorTile} key={task.id}>
+            <div className={styles.errorTitle}>
+              <AlertCircle size={14} />
+              <span>Ошибка генерации</span>
+            </div>
+            <div className={styles.errorBody}>
+              {task.error?.body || task.error?.name || 'Не удалось сгенерировать'}
+            </div>
+            <div className={styles.errorRefund}>Кредиты возвращены</div>
           </div>
-        </div>
-      ))}
+        ) : (
+          <div className={styles.tile} key={task.id}>
+            <Skeleton.Image active style={{ width: '100%', height: '100%', borderRadius: 0 }} />
+            <div className={styles.overlay}>
+              <Loader2 className={styles.spin} size={20} />
+              <span>{t('placeholder.generating', { defaultValue: 'Генерация…' })}</span>
+            </div>
+          </div>
+        ),
+      )}
     </Flexbox>
   );
 });

@@ -1,7 +1,7 @@
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import type { AsyncTaskType, UserMemoryExtractionMetadata } from '@lobechat/types';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
-import { and, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lt, or, sql } from 'drizzle-orm';
 
 import type { AsyncTaskSelectItem, NewAsyncTaskItem } from '../schemas';
 import { asyncTasks } from '../schemas';
@@ -68,12 +68,24 @@ export class AsyncTaskModel {
    * (gallery SWR revalidate is triggered by the count drop).
    */
   listActiveByType = async (type: AsyncTaskType) => {
+    // Includes Pending/Processing (the live tiles) and Error tasks that
+    // failed in the last 2 minutes so the strip can briefly show the
+    // failure to the user (red tile with the error message + refund
+    // hint). The recently-failed window is short — after 2 min the row
+    // disappears so the strip doesn't keep stale errors around forever.
+    const recentlyFailedSince = new Date(Date.now() - 2 * 60 * 1000);
     return this.db.query.asyncTasks.findMany({
       orderBy: (t, { desc }) => [desc(t.createdAt)],
       where: and(
         eq(asyncTasks.userId, this.userId),
         eq(asyncTasks.type, type),
-        inArray(asyncTasks.status, [AsyncTaskStatus.Pending, AsyncTaskStatus.Processing]),
+        or(
+          inArray(asyncTasks.status, [AsyncTaskStatus.Pending, AsyncTaskStatus.Processing]),
+          and(
+            eq(asyncTasks.status, AsyncTaskStatus.Error),
+            gte(asyncTasks.updatedAt, recentlyFailedSince),
+          ),
+        ),
       ),
     });
   };

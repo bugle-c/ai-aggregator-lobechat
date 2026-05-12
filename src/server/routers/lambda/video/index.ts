@@ -284,6 +284,7 @@ export const videoRouter = router({
     const tasks = await ctx.asyncTaskModel.listActiveByType(AsyncTaskType.VideoGeneration);
     return tasks.map((t) => ({
       createdAt: t.createdAt,
+      error: t.error as { body?: string; name?: string } | null,
       id: t.id,
       status: t.status,
     }));
