@@ -40,13 +40,15 @@ const PresetGrid = memo<Props>(
     }
 
     return (
+      // CSS columns gives us a masonry-like layout: each card keeps
+      // its own aspect ratio (portrait 3:4, landscape 16:9, square
+      // 1:1, vertical 9:16 etc.) and the layout reflows around them.
+      // A regular CSS grid would stretch everything to the same row
+      // height and lose the visual variety the user asked for.
       <div
         style={{
-          display: 'grid',
-          gap: 12,
-          gridTemplateColumns: isMobile
-            ? 'repeat(2, minmax(0, 1fr))'
-            : 'repeat(auto-fill, minmax(220px, 1fr))',
+          columnCount: isMobile ? 2 : 4,
+          columnGap: 12,
           paddingInline: 16,
         }}
       >

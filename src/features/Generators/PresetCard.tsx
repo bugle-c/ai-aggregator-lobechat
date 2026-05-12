@@ -27,15 +27,36 @@ const BADGE_COLORS: Record<PresetBadge, string> = {
   trending: 'transparent',
 };
 
+/**
+ * Convert a `params_lock.aspect_ratio` string like "3:4" / "16:9" / "1:1"
+ * into a CSS aspect-ratio value ("3 / 4"). Falls back to "3 / 4"
+ * (vertical portrait) when the lock is empty or unparseable — matches
+ * the original hard-coded card shape so untagged presets don't suddenly
+ * change layout.
+ */
+const cardAspectRatio = (preset: Preset): string => {
+  const raw = preset.paramsLock?.aspect_ratio;
+  if (typeof raw === 'string') {
+    const m = raw.match(/^(\d+)\s*[:×x/]\s*(\d+)$/);
+    if (m) return `${m[1]} / ${m[2]}`;
+  }
+  return '3 / 4';
+};
+
 const PresetCard = memo<Props>(({ isActive, onClick, preset }) => {
   return (
     <Block
       clickable
       variant="filled"
       style={{
-        aspectRatio: '3 / 4',
+        aspectRatio: cardAspectRatio(preset),
         border: isActive ? '2px solid var(--ant-color-primary)' : '1px solid transparent',
         borderRadius: 12,
+        // CSS columns layout in PresetGrid does not respect normal
+        // block margins on children — use break-inside to keep each
+        // card whole, and a small bottom margin for vertical gap.
+        breakInside: 'avoid',
+        marginBlockEnd: 12,
         overflow: 'hidden',
         position: 'relative',
       }}
