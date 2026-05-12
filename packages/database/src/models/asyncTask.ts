@@ -68,13 +68,14 @@ export class AsyncTaskModel {
    * (gallery SWR revalidate is triggered by the count drop).
    */
   listActiveByType = async (type: AsyncTaskType) => {
-    // Includes Pending/Processing (the live tiles) and Error tasks that
-    // failed in the last 2 minutes so the strip can briefly show the
-    // failure to the user (red tile with the error message + refund
-    // hint). The recently-failed window is short — after 2 min the row
-    // disappears so the strip doesn't keep stale errors around forever.
-    const recentlyFailedSince = new Date(Date.now() - 2 * 60 * 1000);
+    // Active (live placeholder) tasks always. Plus Error tasks from the
+    // last 7 days so the user sees the failure even if they walked away
+    // for 10 minutes. The client persists a dismissed-ids list in
+    // localStorage and filters out anything the user has clicked × on,
+    // so an undismissed error stays visible across refreshes.
+    const errorFloorSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     return this.db.query.asyncTasks.findMany({
+      limit: 30,
       orderBy: (t, { desc }) => [desc(t.createdAt)],
       where: and(
         eq(asyncTasks.userId, this.userId),
@@ -83,7 +84,7 @@ export class AsyncTaskModel {
           inArray(asyncTasks.status, [AsyncTaskStatus.Pending, AsyncTaskStatus.Processing]),
           and(
             eq(asyncTasks.status, AsyncTaskStatus.Error),
-            gte(asyncTasks.updatedAt, recentlyFailedSince),
+            gte(asyncTasks.updatedAt, errorFloorSince),
           ),
         ),
       ),

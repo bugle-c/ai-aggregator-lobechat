@@ -3,8 +3,8 @@
 import { Flexbox } from '@lobehub/ui';
 import { Skeleton } from 'antd';
 import { createStyles } from 'antd-style';
-import { AlertCircle, Loader2 } from 'lucide-react';
-import { memo, useEffect, useRef } from 'react';
+import { AlertCircle, Loader2, X } from 'lucide-react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
@@ -88,9 +88,26 @@ const useStyles = createStyles(({ css, token }) => ({
     display: flex;
     gap: 4px;
     align-items: center;
+    justify-content: space-between;
 
     font-size: 12px;
     font-weight: 600;
+  `,
+  closeBtn: css`
+    cursor: pointer;
+    padding: 2px;
+    border: 0;
+    background: transparent;
+    color: ${token.colorErrorText};
+    display: inline-flex;
+    align-items: center;
+    border-radius: 4px;
+    opacity: 0.7;
+    transition: opacity 0.15s, background 0.15s;
+    &:hover {
+      opacity: 1;
+      background: rgb(0 0 0 / 8%);
+    }
   `,
   errorBody: css`
     overflow: hidden;
@@ -116,6 +133,19 @@ const useStyles = createStyles(({ css, token }) => ({
  * Only mounts when the user is viewing /resource with category=images or
  * category=videos — outside those views the placeholder is noise.
  */
+const DISMISSED_KEY = 'wgpt:dismissed-error-tasks';
+
+const loadDismissed = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+};
+
 const ActiveGenerationsStrip = memo(() => {
   const { styles } = useStyles();
   const { t } = useTranslation('file');
@@ -134,8 +164,30 @@ const ActiveGenerationsStrip = memo(() => {
     refreshInterval: POLL_INTERVAL_MS,
   });
 
+  // Dismissed-error tracking. Stored in localStorage so refresh /
+  // walking-away-and-coming-back doesn't lose state. Error tiles stay
+  // visible until the user clicks ×.
+  const [dismissed, setDismissed] = useState<Set<string>>(() =>
+    typeof window === 'undefined' ? new Set() : loadDismissed(),
+  );
+  const dismiss = useCallback((id: string) => {
+    setDismissed((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      try {
+        localStorage.setItem(DISMISSED_KEY, JSON.stringify([...next]));
+      } catch {
+        /* quota / disabled storage — fine, in-memory dismissal still works for this session */
+      }
+      return next;
+    });
+  }, []);
+
+  const visible = (data ?? []).filter(
+    (t) => !(t.status === 'error' && dismissed.has(t.id)),
+  );
   const previousCountRef = useRef(0);
-  const count = data?.length ?? 0;
+  const count = visible.length;
 
   // When count drops, at least one task finished — refresh the gallery so
   // the freshly-generated file lands. The list query itself stops returning
