@@ -180,7 +180,11 @@ export const wavespeedImageModels: AIImageModelCard[] = [
   {
     description: 'Nano Banana Pro — edit existing image with same model.',
     displayName: 'Nano Banana Pro Edit',
-    enabled: true,
+    // Auto-routed: a reference image attached to the matching `/text-to-image`
+    // card transparently routes here at the wavespeed runtime layer. See
+    // providers/wavespeed/utils/pairedEndpoint.ts. Hidden from the picker so
+    // the user only sees one card per family.
+    enabled: false,
     id: 'google/nano-banana-pro/edit',
     parameters: {
       imageUrls: { default: [], maxCount: 10 },
@@ -194,7 +198,11 @@ export const wavespeedImageModels: AIImageModelCard[] = [
   {
     description: 'Nano Banana 2 — fast image editing variant.',
     displayName: 'Nano Banana 2 Edit',
-    enabled: true,
+    // Auto-routed: a reference image attached to the matching `/text-to-image`
+    // card transparently routes here at the wavespeed runtime layer. See
+    // providers/wavespeed/utils/pairedEndpoint.ts. Hidden from the picker so
+    // the user only sees one card per family.
+    enabled: false,
     id: 'google/nano-banana-2/edit',
     parameters: {
       imageUrls: { default: [], maxCount: 10 },
@@ -208,7 +216,11 @@ export const wavespeedImageModels: AIImageModelCard[] = [
   {
     description: 'GPT Image 2 — edit existing image with the same reasoning model.',
     displayName: 'GPT Image 2 Edit',
-    enabled: true,
+    // Auto-routed: a reference image attached to the matching `/text-to-image`
+    // card transparently routes here at the wavespeed runtime layer. See
+    // providers/wavespeed/utils/pairedEndpoint.ts. Hidden from the picker so
+    // the user only sees one card per family.
+    enabled: false,
     id: 'openai/gpt-image-2/edit',
     parameters: {
       imageUrls: { default: [], maxCount: 10 },
@@ -437,7 +449,11 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
     description: 'Seedance 2.0 Fast — image-to-video, cheap fast tier.',
     displayName: 'Seedance 2.0 Fast (I2V)',
-    enabled: true,
+    // Auto-routed: a reference image attached to the matching `/text-to-video`
+    // card transparently routes here at the wavespeed runtime layer. See
+    // providers/wavespeed/utils/pairedEndpoint.ts. Hidden from the picker so
+    // the user only sees one card per family.
+    enabled: false,
     id: 'bytedance/seedance-2.0-fast/image-to-video',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.022, strategy: 'fixed', unit: 'second' }],
@@ -447,7 +463,11 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
     description: 'Seedance 2.0 — image-to-video full quality.',
     displayName: 'Seedance 2.0 (I2V)',
-    enabled: true,
+    // Auto-routed: a reference image attached to the matching `/text-to-video`
+    // card transparently routes here at the wavespeed runtime layer. See
+    // providers/wavespeed/utils/pairedEndpoint.ts. Hidden from the picker so
+    // the user only sees one card per family.
+    enabled: false,
     id: 'bytedance/seedance-2.0/image-to-video',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.08, strategy: 'fixed', unit: 'second' }],
@@ -457,7 +477,11 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
     description: 'Kling 3.0 Pro — image-to-video flagship.',
     displayName: 'Kling 3.0 Pro (I2V)',
-    enabled: true,
+    // Auto-routed: a reference image attached to the matching `/text-to-video`
+    // card transparently routes here at the wavespeed runtime layer. See
+    // providers/wavespeed/utils/pairedEndpoint.ts. Hidden from the picker so
+    // the user only sees one card per family.
+    enabled: false,
     id: 'kwaivgi/kling-v3.0-pro/image-to-video',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.2, strategy: 'fixed', unit: 'second' }],
@@ -467,7 +491,11 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
     description: 'Kling 2.6 Pro — image-to-video, cost-effective.',
     displayName: 'Kling 2.6 Pro (I2V)',
-    enabled: true,
+    // Auto-routed: a reference image attached to the matching `/text-to-video`
+    // card transparently routes here at the wavespeed runtime layer. See
+    // providers/wavespeed/utils/pairedEndpoint.ts. Hidden from the picker so
+    // the user only sees one card per family.
+    enabled: false,
     id: 'kwaivgi/kling-v2.6-pro/image-to-video',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.07, strategy: 'fixed', unit: 'second' }],
@@ -477,7 +505,11 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
     description: 'Veo 3.1 — image-to-video flagship from Google.',
     displayName: 'Veo 3.1 (I2V)',
-    enabled: true,
+    // Auto-routed: a reference image attached to the matching `/text-to-video`
+    // card transparently routes here at the wavespeed runtime layer. See
+    // providers/wavespeed/utils/pairedEndpoint.ts. Hidden from the picker so
+    // the user only sees one card per family.
+    enabled: false,
     id: 'google/veo3.1/image-to-video',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.4, strategy: 'fixed', unit: 'second' }],
@@ -487,7 +519,11 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
     description: 'Veo 3.1 Fast — image-to-video cheap tier.',
     displayName: 'Veo 3.1 Fast (I2V)',
-    enabled: true,
+    // Auto-routed: a reference image attached to the matching `/text-to-video`
+    // card transparently routes here at the wavespeed runtime layer. See
+    // providers/wavespeed/utils/pairedEndpoint.ts. Hidden from the picker so
+    // the user only sees one card per family.
+    enabled: false,
     id: 'google/veo3.1-fast/image-to-video',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.12, strategy: 'fixed', unit: 'second' }],
@@ -497,7 +533,11 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
     description: 'Sora 2 — animate a reference image with native audio.',
     displayName: 'Sora 2 (I2V)',
-    enabled: true,
+    // Auto-routed: a reference image attached to the matching `/text-to-video`
+    // card transparently routes here at the wavespeed runtime layer. See
+    // providers/wavespeed/utils/pairedEndpoint.ts. Hidden from the picker so
+    // the user only sees one card per family.
+    enabled: false,
     id: 'openai/sora-2/image-to-video',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
@@ -507,7 +547,11 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
     description: 'Wan 2.7 — image-to-video with edit support.',
     displayName: 'Wan 2.7 (I2V)',
-    enabled: true,
+    // Auto-routed: a reference image attached to the matching `/text-to-video`
+    // card transparently routes here at the wavespeed runtime layer. See
+    // providers/wavespeed/utils/pairedEndpoint.ts. Hidden from the picker so
+    // the user only sees one card per family.
+    enabled: false,
     id: 'alibaba/wan-2.7/image-to-video',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
