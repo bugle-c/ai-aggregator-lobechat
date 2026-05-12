@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import type { WaveSpeedCreateResponse, WaveSpeedWebhookBody } from './type';
+import { resolveImageEndpoint } from './utils/pairedEndpoint';
 
 const log = createDebug('lobe-image:wavespeed');
 
@@ -27,12 +28,20 @@ export async function createWaveSpeedImage(
 ): Promise<CreateImageResponse> {
   const { model, params } = payload;
   const baseURL = options.baseURL || 'https://api.wavespeed.ai/api/v3';
+  const endpointModel = resolveImageEndpoint(model, params as Record<string, unknown>);
+  if (endpointModel !== model) {
+    log(
+      'wavespeed image endpoint: swapped %s → %s (reference image attached)',
+      model,
+      endpointModel,
+    );
+  }
 
   log('Creating image - model: %s, params: %O', model, params);
 
   const body = buildBody(params);
 
-  const createRes = await fetch(`${baseURL}/${model}`, {
+  const createRes = await fetch(`${baseURL}/${endpointModel}`, {
     body: JSON.stringify(body),
     headers: {
       'Authorization': `Bearer ${options.apiKey}`,
@@ -114,9 +123,13 @@ export async function submitWaveSpeedImage(
 ): Promise<{ inferenceId: string; pollUrl: string }> {
   const { model, params } = payload;
   const baseURL = options.baseURL || 'https://api.wavespeed.ai/api/v3';
+  const endpointModel = resolveImageEndpoint(model, params as Record<string, unknown>);
+  if (endpointModel !== model) {
+    log('wavespeed image submit: swapped %s → %s (reference image attached)', model, endpointModel);
+  }
   const body = buildBody(params);
 
-  const res = await fetch(`${baseURL}/${model}`, {
+  const res = await fetch(`${baseURL}/${endpointModel}`, {
     body: JSON.stringify(body),
     headers: {
       'Authorization': `Bearer ${options.apiKey}`,
