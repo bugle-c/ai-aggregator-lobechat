@@ -3,17 +3,20 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { Segmented } from 'antd';
 import { ArrowLeft } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import PresetGallery from '@/features/Generators/PresetGallery';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
+import ResourceExplorer from '@/features/ResourceManager/components/Explorer';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useImageStore } from '@/store/image';
 import { generationTopicSelectors } from '@/store/image/selectors';
 import { presetSelectors } from '@/store/image/slices/preset/selectors';
+import { FilesTabs } from '@/types/files';
 
-import GenerationFeed from './GenerationFeed';
+// GenerationFeed is intentionally not used — see embedded ResourceExplorer.
 
 /**
  * Main area for the new image flow page.
@@ -41,6 +44,15 @@ const FlowMainArea = memo(() => {
   // for why the previous "feed-when-has-generations" default was wrong.
   const url = useFlowUrlState('presets');
 
+  // Prime the resource-manager store to "images" so the embedded
+  // <ResourceExplorer/> below shows the user's image gallery, not
+  // every file they ever uploaded. Without this the embedded gallery
+  // would default to FilesTabs.All.
+  const setCategory = useResourceManagerStore((s) => s.setCategory);
+  useEffect(() => {
+    if (url.tab === 'feed') setCategory(FilesTabs.Images);
+  }, [url.tab, setCategory]);
+
   return (
     <Flexbox flex={1} gap={12} height={'100%'} style={{ overflow: 'hidden' }}>
       <Flexbox
@@ -64,15 +76,7 @@ const FlowMainArea = memo(() => {
             { label: 'Стили', value: 'presets' },
             { label: 'Мои генерации', value: 'feed' },
           ]}
-          onChange={(k) => {
-            // "Мои генерации" lives on the resource gallery — one
-            // chronological masonry of every image the user has, no
-            // topics/batches abstraction. The legacy GenerationFeed
-            // inside this page never showed the full history, so we
-            // route over there instead.
-            if (k === 'feed') navigate('/resource?category=images');
-            else url.setTab('presets');
-          }}
+          onChange={(k) => url.setTab(k === 'presets' ? 'presets' : 'feed')}
         />
       </Flexbox>
 
@@ -94,7 +98,12 @@ const FlowMainArea = memo(() => {
             }}
           />
         ) : (
-          <GenerationFeed />
+          // Embed the resource gallery so "Мои генерации" stays on
+          // the same page as the creation surface — the user no
+          // longer has to bounce to /resource and back to keep
+          // generating. ActiveGenerationsStrip inside Explorer adds
+          // the skeleton placeholder while a generation is in flight.
+          <ResourceExplorer />
         )}
       </Flexbox>
     </Flexbox>

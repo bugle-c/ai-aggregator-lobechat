@@ -4,7 +4,6 @@ import { Flexbox } from '@lobehub/ui';
 import { App, Segmented } from 'antd';
 import { Settings, Sparkles } from 'lucide-react';
 import { memo } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import FrameUpload from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/FrameUpload';
 import ModelSelect from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/ModelSelect';
@@ -33,7 +32,6 @@ interface Props {
 const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const { message } = App.useApp();
   const url = useFlowUrlState('presets');
-  const navigate = useNavigate();
 
   const preset = useVideoStore(presetSelectors.currentPreset);
   const clearPreset = useVideoStore((s) => s.clearPreset);
@@ -60,12 +58,14 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const handleGenerate = async () => {
     if (!canGenerate) return;
     try {
-      // Route to the resource gallery (videos category).
+      // Switch to feed + close the create sheet so the user lands
+      // on the embedded gallery with their previous videos + skeleton
+      // tile for the in-flight one.
+      url.setTab('feed');
       url.setView(undefined);
       message.success({ content: 'Генерация запущена', duration: 1.5 });
       void createVideo();
       onAfterGenerate();
-      navigate('/resource?category=videos');
     } catch (err) {
       message.error(err instanceof Error ? err.message : 'Не удалось создать видео');
     }

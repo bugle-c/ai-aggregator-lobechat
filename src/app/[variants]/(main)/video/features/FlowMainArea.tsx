@@ -3,17 +3,18 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { Segmented } from 'antd';
 import { ArrowLeft } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import PresetGallery from '@/features/Generators/PresetGallery';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
+import ResourceExplorer from '@/features/ResourceManager/components/Explorer';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useVideoStore } from '@/store/video';
 import { videoGenerationTopicSelectors } from '@/store/video/selectors';
 import { presetSelectors } from '@/store/video/slices/preset/selectors';
-
-import GenerationFeed from './GenerationFeed';
+import { FilesTabs } from '@/types/files';
 
 /**
  * Main area for the new video flow page.
@@ -31,6 +32,11 @@ const FlowMainArea = memo(() => {
   useFetchGenerationBatches(activeTopicId);
 
   const url = useFlowUrlState('presets');
+
+  const setCategory = useResourceManagerStore((s) => s.setCategory);
+  useEffect(() => {
+    if (url.tab === 'feed') setCategory(FilesTabs.Videos);
+  }, [url.tab, setCategory]);
 
   return (
     <Flexbox flex={1} gap={12} height={'100%'} style={{ overflow: 'hidden' }}>
@@ -55,10 +61,7 @@ const FlowMainArea = memo(() => {
             { label: 'Стили', value: 'presets' },
             { label: 'Мои генерации', value: 'feed' },
           ]}
-          onChange={(k) => {
-            if (k === 'feed') navigate('/resource?category=videos');
-            else url.setTab('presets');
-          }}
+          onChange={(k) => url.setTab(k === 'presets' ? 'presets' : 'feed')}
         />
       </Flexbox>
 
@@ -80,7 +83,7 @@ const FlowMainArea = memo(() => {
             }}
           />
         ) : (
-          <GenerationFeed />
+          <ResourceExplorer />
         )}
       </Flexbox>
     </Flexbox>

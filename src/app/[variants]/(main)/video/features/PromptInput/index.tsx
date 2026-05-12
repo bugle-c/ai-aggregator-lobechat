@@ -8,10 +8,10 @@ import { Sparkles } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import VideoFreeQuotaInfo from '@/business/client/features/VideoFreeQuotaInfo';
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
+import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useUserStore } from '@/store/user';
@@ -46,7 +46,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isDarkMode = useIsDark();
   const { t } = useTranslation('video');
   const { message } = App.useApp();
-  const navigate = useNavigate();
+  const url = useFlowUrlState('presets');
   const { value, setValue } = useVideoGenerationConfigParam('prompt');
   const isCreating = useVideoStore(createVideoSelectors.isCreating);
   const createVideo = useVideoStore((s) => s.createVideo);
@@ -62,11 +62,12 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       return;
     }
 
-    // Route to the resource gallery — one chronological masonry of
-    // every video the user has ever made.
+    // Switch to "Мои генерации" — the embedded ResourceExplorer
+    // shows all videos including the skeleton tile for the
+    // in-flight one.
+    url.setTab('feed');
     message.success({ content: 'Генерация запущена', duration: 1.5 });
     void createVideo();
-    navigate('/resource?category=videos');
   };
 
   // Auto-fill and auto-send when prompt query parameter is present

@@ -8,9 +8,9 @@ import { Sparkles } from 'lucide-react';
 import { type KeyboardEvent } from 'react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
+import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useGeminiChineseWarning } from '@/hooks/useGeminiChineseWarning';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
@@ -47,7 +47,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isDarkMode = useIsDark();
   const { t } = useTranslation('image');
   const { message } = App.useApp();
-  const navigate = useNavigate();
+  const url = useFlowUrlState('presets');
   const { value, setValue } = useGenerationConfigParam('prompt');
   const isCreating = useImageStore(createImageSelectors.isCreating);
   const createImage = useImageStore((s) => s.createImage);
@@ -73,13 +73,13 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
     if (!shouldContinue) return;
 
-    // Route to the resource gallery — one chronological masonry of
-    // every image the user has ever made. The async submit fires
-    // first so the gallery refresh sees the placeholder + cron will
-    // backfill the asset when WaveSpeed finishes.
+    // Switch to the "Мои генерации" tab — the embedded
+    // ResourceExplorer keeps the user on the same page (no /resource
+    // hop), so the creation surface is one click away while previous
+    // results stay visible.
+    url.setTab('feed');
     message.success({ content: 'Генерация запущена', duration: 1.5 });
     void createImage();
-    navigate('/resource?category=images');
   };
 
   // Auto-fill and auto-send when prompt query parameter is present

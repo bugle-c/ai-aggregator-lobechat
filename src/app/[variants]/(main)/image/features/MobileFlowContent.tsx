@@ -4,7 +4,6 @@ import { Flexbox } from '@lobehub/ui';
 import { App, Segmented } from 'antd';
 import { Settings, Sparkles } from 'lucide-react';
 import { memo } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import ImageUrl from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ImageUrl';
 import ImageUrlsUpload from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ImageUrlsUpload';
@@ -36,7 +35,6 @@ interface Props {
 const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const { message } = App.useApp();
   const url = useFlowUrlState('presets');
-  const navigate = useNavigate();
 
   const preset = useImageStore(presetSelectors.currentPreset);
   const clearPreset = useImageStore((s) => s.clearPreset);
@@ -62,15 +60,14 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const handleGenerate = async () => {
     if (!canGenerate) return;
     try {
-      // Route to the resource gallery — one chronological masonry of
-      // every image the user has ever made. Async submit fires first;
-      // the gallery's auto-refresh will pick up the placeholder and
-      // then the finished asset.
+      // Switch to feed + close the create sheet so the user sees the
+      // embedded ResourceExplorer with their previous gens and the
+      // skeleton tile for the in-flight one.
+      url.setTab('feed');
       url.setView(undefined);
       message.success({ content: 'Генерация запущена', duration: 1.5 });
       void createImage();
       onAfterGenerate();
-      navigate('/resource?category=images');
     } catch (err) {
       message.error(err instanceof Error ? err.message : 'Не удалось создать изображение');
     }
