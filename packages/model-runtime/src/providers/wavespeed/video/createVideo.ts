@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import type { CreateVideoOptions } from '../../../core/openaiCompatibleFactory';
 import type { CreateVideoPayload, CreateVideoResponse } from '../../../types/video';
 import type { WaveSpeedCreateResponse } from '../type';
+import { resolveVideoEndpoint } from '../utils/pairedEndpoint';
 
 const log = createDebug('lobe-video:wavespeed');
 
@@ -22,14 +23,22 @@ export async function createWaveSpeedVideo(
 ): Promise<CreateVideoResponse> {
   const { model, params, callbackUrl } = payload;
   const baseURL = options.baseURL || 'https://api.wavespeed.ai/api/v3';
+  const endpointModel = resolveVideoEndpoint(model, params as Record<string, unknown>);
+  if (endpointModel !== model) {
+    log(
+      'wavespeed video endpoint: swapped %s → %s (reference image attached)',
+      model,
+      endpointModel,
+    );
+  }
 
   log('Creating video - model: %s, params: %O', model, params);
 
   const body = buildBody(params);
 
   const url = callbackUrl
-    ? `${baseURL}/${model}?webhook=${encodeURIComponent(callbackUrl)}`
-    : `${baseURL}/${model}`;
+    ? `${baseURL}/${endpointModel}?webhook=${encodeURIComponent(callbackUrl)}`
+    : `${baseURL}/${endpointModel}`;
 
   const response = await fetch(url, {
     body: JSON.stringify(body),
