@@ -81,5 +81,9 @@ export const initialState: State = {
   selectedFileIds: [],
   sortType: SortType.Desc,
   sorter: 'createdAt',
-  viewMode: 'list',
+  // Default to masonry — the gallery is mostly used for image/video
+  // generations now (post /resource refactor), where thumbnail grid beats a
+  // text list. Users can still flip to list via the toolbar; selection is
+  // persisted to URL so the toggle survives nav.
+  viewMode: 'masonry',
 };

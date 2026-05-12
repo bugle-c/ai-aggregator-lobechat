@@ -9,6 +9,7 @@ import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/featur
 import { sortFileList } from '@/app/[variants]/(main)/resource/features/store/selectors';
 import { useFetchResources, useResourceStore } from '@/store/file/slices/resource/hooks';
 
+import ActiveGenerationsStrip from './ActiveGenerationsStrip';
 import EmptyPlaceholder from './EmptyPlaceholder';
 import Header from './Header';
 import ListView from './ListView';
@@ -100,6 +101,13 @@ const ResourceExplorer = memo(() => {
   return (
     <Flexbox height={'100%'}>
       <Header />
+      {/*
+        Placeholder tiles for in-flight image/video generations. Only renders
+        when category is Images or Videos and the user has at least one
+        pending/processing async_task — see ActiveGenerationsStrip for the
+        SWR poll + auto-revalidate logic.
+      */}
+      <ActiveGenerationsStrip />
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
         {showEmptyStatus ? (
           <EmptyPlaceholder />

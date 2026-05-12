@@ -274,6 +274,20 @@ export const videoRouter = router({
     .query(async ({ ctx, input }) => {
       return getVideoFreeQuota(ctx.userId, input.model);
     }),
+
+  /**
+   * Pending/processing video generation tasks for the current user. Mirrors
+   * `image.listActiveTasks` — see comment there. Polled from the gallery to
+   * render placeholder tiles while wavespeed is rendering.
+   */
+  listActiveTasks: videoProcedure.query(async ({ ctx }) => {
+    const tasks = await ctx.asyncTaskModel.listActiveByType(AsyncTaskType.VideoGeneration);
+    return tasks.map((t) => ({
+      createdAt: t.createdAt,
+      id: t.id,
+      status: t.status,
+    }));
+  }),
 });
 
 export type VideoRouter = typeof videoRouter;

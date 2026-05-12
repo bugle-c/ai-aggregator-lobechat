@@ -303,6 +303,21 @@ export const imageRouter = router({
       success: true,
     };
   }),
+
+  /**
+   * Pending/processing image generation tasks for the current user. Polled
+   * from the gallery (every ~4s) to render placeholder tiles. Once a task
+   * flips to Success/Error it drops off this list — the client detects the
+   * count change and revalidates the file list to bring in the new image.
+   */
+  listActiveTasks: imageProcedure.query(async ({ ctx }) => {
+    const tasks = await ctx.asyncTaskModel.listActiveByType(AsyncTaskType.ImageGeneration);
+    return tasks.map((t) => ({
+      createdAt: t.createdAt,
+      id: t.id,
+      status: t.status,
+    }));
+  }),
 });
 
 export type ImageRouter = typeof imageRouter;

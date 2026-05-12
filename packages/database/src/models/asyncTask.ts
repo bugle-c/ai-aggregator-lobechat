@@ -60,6 +60,24 @@ export class AsyncTaskModel {
     });
   };
 
+  /**
+   * Return ALL pending/processing tasks of a given type for this user. Used by
+   * the gallery placeholder UI — each row becomes one skeleton tile that the
+   * client polls until status flips to Success/Error, at which point the
+   * placeholder disappears and the freshly-generated file shows up in its place
+   * (gallery SWR revalidate is triggered by the count drop).
+   */
+  listActiveByType = async (type: AsyncTaskType) => {
+    return this.db.query.asyncTasks.findMany({
+      orderBy: (t, { desc }) => [desc(t.createdAt)],
+      where: and(
+        eq(asyncTasks.userId, this.userId),
+        eq(asyncTasks.type, type),
+        inArray(asyncTasks.status, [AsyncTaskStatus.Pending, AsyncTaskStatus.Processing]),
+      ),
+    });
+  };
+
   incrementUserMemoryExtractionProgress = async (taskId: string) => {
     const completedExpr = sql<number>`COALESCE(((${asyncTasks.metadata}) -> 'progress' ->> 'completedTopics')::int, 0) + 1`;
     const totalExpr = sql<
