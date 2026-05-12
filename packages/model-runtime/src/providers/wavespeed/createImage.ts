@@ -179,18 +179,39 @@ export async function checkWaveSpeedImage(
 }
 
 function buildBody(params: CreateImagePayload['params']): Record<string, unknown> {
-  const { prompt, imageUrls, imageUrl, width, height, size, seed, cfg, steps, negativePrompt } =
-    params as Record<string, unknown> & CreateImagePayload['params'];
+  const {
+    prompt,
+    imageUrls,
+    imageUrl,
+    width,
+    height,
+    size,
+    aspectRatio,
+    seed,
+    cfg,
+    steps,
+    negativePrompt,
+  } = params as Record<string, unknown> & CreateImagePayload['params'];
 
   const body: Record<string, unknown> = { prompt };
 
   if (imageUrls) body.images = imageUrls;
   else if (imageUrl) body.image = imageUrl;
 
+  // Sizing precedence: explicit `size` > explicit width/height > aspectRatio.
+  // The store's setAspectRatio writes width+height for models whose schema
+  // exposes them, but for models that only declare `aspectRatio` in their
+  // parameter schema (most wavespeed flux/recraft/ideogram catalogue) the
+  // selected ratio used to be silently dropped here — wavespeed then fell
+  // back to its own 1:1 default and the user got a square back regardless
+  // of what they picked. Forward it as the snake-cased `aspect_ratio` that
+  // wavespeed expects.
   if (size) {
     body.size = size;
   } else if (width !== undefined && height !== undefined) {
     body.size = `${width}*${height}`;
+  } else if (typeof aspectRatio === 'string' && aspectRatio.length > 0) {
+    body.aspect_ratio = aspectRatio;
   }
 
   if (seed !== undefined && seed !== null) body.seed = seed;
