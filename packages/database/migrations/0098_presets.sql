@@ -34,10 +34,12 @@ CREATE TABLE IF NOT EXISTS "presets" (
   "created_at"      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   "updated_at"      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS "presets_modality_model_idx"
   ON "presets" ("modality", "model_id", "category", "sort_order")
   WHERE "active" = TRUE;
+--> statement-breakpoint
 
 -- ============ VIDEO PRESETS (12) ============
 INSERT INTO "presets"
@@ -130,6 +132,7 @@ VALUES
    '{"aspect_ratio":"16:9"}'::jsonb,
    'https://files.gptweb.ru/lobe/presets/mood-rain.mp4',
    ARRAY[]::text[], 320);
+--> statement-breakpoint
 
 -- ============ IMAGE PRESETS (12) ============
 INSERT INTO "presets"
@@ -223,3 +226,4 @@ VALUES
    '{"aspect_ratio":"1:1"}'::jsonb,
    'https://files.gptweb.ru/lobe/presets/product-luxury.mp4',
    ARRAY['top_choice'], 420);
+--> statement-breakpoint

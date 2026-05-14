@@ -18,11 +18,13 @@ CREATE TABLE IF NOT EXISTS "upsell_impressions" (
   "plan_offered" text,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
-
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "upsell_imp_user_idx" ON "upsell_impressions" ("user_id");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "upsell_imp_source_idx" ON "upsell_impressions" ("source");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "upsell_imp_created_idx" ON "upsell_impressions" ("created_at");
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "upsell_clicks" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "user_id" text NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
@@ -30,7 +32,9 @@ CREATE TABLE IF NOT EXISTS "upsell_clicks" (
   "target_plan" text,
   "clicked_at" timestamp with time zone DEFAULT now() NOT NULL
 );
-
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "upsell_click_user_idx" ON "upsell_clicks" ("user_id");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "upsell_click_source_idx" ON "upsell_clicks" ("source");
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "upsell_click_created_idx" ON "upsell_clicks" ("clicked_at");

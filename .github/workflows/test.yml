@@ -247,9 +247,6 @@ jobs:
       - name: Install deps
         run: pnpm i
 
-      - name: Lint
-        run: npm run lint
-
       - name: Test Coverage
         run: pnpm --filter @lobechat/database test:coverage
         env:

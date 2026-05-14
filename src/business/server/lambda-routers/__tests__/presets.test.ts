@@ -23,7 +23,7 @@ type SeedRow = {
   description: string | null;
   id: number;
   modality: string;
-  modelId: string;
+  recommendedModelId: string;
   paramsLock: Record<string, unknown>;
   previewUrl: string;
   promptTemplate: string;
@@ -44,7 +44,7 @@ const SEEDS: SeedRow[] = [
     description: 'Aggressive zoom into subject',
     id: 1,
     modality: 'video',
-    modelId: 'bytedance/seedance-2.0-fast/text-to-video',
+    recommendedModelId: 'bytedance/seedance-2.0-fast/text-to-video',
     paramsLock: { duration_sec: 5 },
     previewUrl: 'https://rustfs.gptweb.ru/presets/crash-zoom-in.mp4',
     promptTemplate: 'crash zoom in on {subject}',
@@ -61,7 +61,7 @@ const SEEDS: SeedRow[] = [
     description: 'Pull back to reveal Earth',
     id: 2,
     modality: 'video',
-    modelId: 'bytedance/seedance-2.0-fast/text-to-video',
+    recommendedModelId: 'bytedance/seedance-2.0-fast/text-to-video',
     paramsLock: { duration_sec: 5 },
     previewUrl: 'https://rustfs.gptweb.ru/presets/earth-zoom-out.mp4',
     promptTemplate: 'earth zoom out from {subject}',
@@ -78,7 +78,7 @@ const SEEDS: SeedRow[] = [
     description: 'Frozen-time orbit',
     id: 3,
     modality: 'video',
-    modelId: 'kwaivgi/kling-v3.0-pro/text-to-video',
+    recommendedModelId: 'kwaivgi/kling-v3.0-pro/text-to-video',
     paramsLock: { duration_sec: 5 },
     previewUrl: 'https://rustfs.gptweb.ru/presets/bullet-time.mp4',
     promptTemplate: 'bullet time around {subject}',
@@ -95,7 +95,7 @@ const SEEDS: SeedRow[] = [
     description: 'Building blows up',
     id: 4,
     modality: 'video',
-    modelId: 'bytedance/seedance-2.0-fast/text-to-video',
+    recommendedModelId: 'bytedance/seedance-2.0-fast/text-to-video',
     paramsLock: { duration_sec: 5 },
     previewUrl: 'https://rustfs.gptweb.ru/presets/building-explosion.mp4',
     promptTemplate: '{subject} building explodes',
@@ -112,7 +112,7 @@ const SEEDS: SeedRow[] = [
     description: 'Studio-lit portrait',
     id: 100,
     modality: 'image',
-    modelId: 'flux-pro',
+    recommendedModelId: 'flux-pro',
     paramsLock: { aspect_ratio: '3:4' },
     previewUrl: 'https://rustfs.gptweb.ru/presets/portrait-studio.jpg',
     promptTemplate: 'studio portrait of {subject}',
@@ -132,15 +132,15 @@ const SEEDS: SeedRow[] = [
 // `.where(...)`. That object is Drizzle's condition tree; we don't introspect
 // it deeply, but having the reference proves the router actually composed and
 // forwarded a where-clause. Tests assert against `lastWhereArg` so a
-// regression like dropping `if (input.modelId) conditions.push(...)` in the
+// regression like dropping `if (input.recommendedModelId) conditions.push(...)` in the
 // router would visibly change the captured tree and fail the assertion.
 // ---------------------------------------------------------------------------
 interface PendingFilter {
   category?: string;
   limit?: number;
   modality?: string;
-  modelId?: string;
   q?: string;
+  recommendedModelId?: string;
   slug?: string;
 }
 
@@ -150,7 +150,8 @@ let lastWhereArg: unknown;
 const applyFilter = (rows: SeedRow[]): SeedRow[] => {
   let out = rows.filter((r) => r.active);
   if (pendingFilter.modality) out = out.filter((r) => r.modality === pendingFilter.modality);
-  if (pendingFilter.modelId) out = out.filter((r) => r.modelId === pendingFilter.modelId);
+  if (pendingFilter.recommendedModelId)
+    out = out.filter((r) => r.recommendedModelId === pendingFilter.recommendedModelId);
   if (pendingFilter.category) out = out.filter((r) => r.category === pendingFilter.category);
   if (pendingFilter.q) {
     const needle = pendingFilter.q.toLowerCase();
@@ -240,24 +241,24 @@ describe('presetsRouter', () => {
     expect(result.every((p) => typeof p.previewUrl === 'string')).toBe(true);
   });
 
-  it('list filters by modelId', async () => {
+  it('list filters by recommendedModelId', async () => {
     pendingFilter = {
       modality: 'video',
-      modelId: 'bytedance/seedance-2.0-fast/text-to-video',
+      recommendedModelId: 'bytedance/seedance-2.0-fast/text-to-video',
     };
     const caller = presetsRouter.createCaller({} as any);
     const result = await caller.list({
       modality: 'video',
-      modelId: 'bytedance/seedance-2.0-fast/text-to-video',
+      recommendedModelId: 'bytedance/seedance-2.0-fast/text-to-video',
     });
     expect(result.length).toBeGreaterThan(0);
-    expect(result.every((p) => p.modelId === 'bytedance/seedance-2.0-fast/text-to-video')).toBe(
-      true,
-    );
+    expect(
+      result.every((p) => p.recommendedModelId === 'bytedance/seedance-2.0-fast/text-to-video'),
+    ).toBe(true);
 
-    // Regression guard: the captured where-clause must reference the modelId
+    // Regression guard: the captured where-clause must reference the recommendedModelId
     // we passed in. If the router silently drops
-    // `if (input.modelId) conditions.push(eq(presets.modelId, ...))`,
+    // `if (input.recommendedModelId) conditions.push(eq(presets.recommendedModelId, ...))`,
     // this literal will no longer appear in the condition tree.
     expect(lastWhereArg).toBeDefined();
     const literals = collectValues(lastWhereArg);
@@ -271,7 +272,7 @@ describe('presetsRouter', () => {
     expect(result.length).toBeGreaterThan(0);
     expect(result.every((p) => p.category === 'camera')).toBe(true);
 
-    // Regression guard: same shape as the modelId case — the category literal
+    // Regression guard: same shape as the recommendedModelId case — the category literal
     // must surface in the captured condition tree.
     expect(lastWhereArg).toBeDefined();
     const literals = collectValues(lastWhereArg);
@@ -291,13 +292,13 @@ describe('presetsRouter', () => {
     expect(literals).toContain('%zoom%');
   });
 
-  it('list omits the modelId clause when modelId is not provided', async () => {
+  it('list omits the recommendedModelId clause when recommendedModelId is not provided', async () => {
     pendingFilter = { modality: 'video' };
     const caller = presetsRouter.createCaller({} as any);
     await caller.list({ modality: 'video' });
 
     // The where-clause is still composed (active + modality), but the
-    // modelId literal must NOT appear since we didn't pass it.
+    // recommendedModelId literal must NOT appear since we didn't pass it.
     expect(lastWhereArg).toBeDefined();
     const literals = collectValues(lastWhereArg);
     expect(literals).not.toContain('bytedance/seedance-2.0-fast/text-to-video');

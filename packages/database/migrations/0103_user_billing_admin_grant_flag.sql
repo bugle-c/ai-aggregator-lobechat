@@ -5,6 +5,7 @@
 
 ALTER TABLE user_billing
   ADD COLUMN IF NOT EXISTS is_admin_granted boolean NOT NULL DEFAULT false;
+--> statement-breakpoint
 
 -- Back-fill: the only known admin-granted active sub at the moment is
 -- the user with subscription_expires_at far in 2027. Operators can flip
@@ -13,3 +14,4 @@ UPDATE user_billing
 SET is_admin_granted = true
 WHERE subscription_expires_at > now() + interval '6 months'
   AND plan_id != 1;
+--> statement-breakpoint
