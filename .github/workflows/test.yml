@@ -49,7 +49,7 @@ jobs:
           bun-version: ${{ secrets.BUN_VERSION }}
 
       - name: Install deps
-        run: bun i
+        run: bun i --frozen-lockfile
 
       - name: Test packages with coverage
         run: |
@@ -123,7 +123,7 @@ jobs:
           bun-version: latest
 
       - name: Install deps
-        run: bun i
+        run: bun i --frozen-lockfile
 
       - name: Run tests
         run: bunx vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --shard=${{ matrix.shard }}/2
@@ -152,7 +152,7 @@ jobs:
           bun-version: latest
 
       - name: Install deps
-        run: bun i
+        run: bun i --frozen-lockfile
 
       - name: Download blob reports
         uses: actions/download-artifact@v7
