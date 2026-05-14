@@ -71,6 +71,7 @@
     "./vertexai": "./src/aiModels/vertexai.ts",
     "./vllm": "./src/aiModels/vllm.ts",
     "./volcengine": "./src/aiModels/volcengine.ts",
+    "./wavespeed": "./src/aiModels/wavespeed.ts",
     "./wenxin": "./src/aiModels/wenxin.ts",
     "./xai": "./src/aiModels/xai.ts",
     "./xiaomimimo": "./src/aiModels/xiaomimimo.ts",
