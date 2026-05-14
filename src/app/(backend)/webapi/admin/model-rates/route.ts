@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { TIER_DAILY_CAPS } from '@/server/modules/billing/checkUsageLimit';
+import { getTierMultiplierForRate } from '@/server/modules/billing/compute-cost';
 import { CREDIT_VALUE_RUB, USD_TO_RUB } from '@/server/modules/billing/model-rates';
 import {
   classifyModelTierAsync,
@@ -75,6 +76,7 @@ export async function GET(request: NextRequest) {
       ...r,
       id: r.modelId, // admin UI reads `m.id`; keep alias alongside camelCase modelId
       tier: await classifyModelTierAsync(r.modelId),
+      tierMultiplier: getTierMultiplierForRate(r),
       requiredPlan: await getRequiredPlanForModelAsync(r.modelId),
     })),
   );

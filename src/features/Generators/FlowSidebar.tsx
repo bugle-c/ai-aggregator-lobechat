@@ -67,10 +67,7 @@ const FlowSidebar = memo<Props>(
           type="primary"
           onClick={onGenerate}
         >
-          {label}
-          {creditCost !== undefined && (
-            <span style={{ marginInlineStart: 6, opacity: 0.85 }}>✦ {creditCost}</span>
-          )}
+          {creditCost !== undefined ? `${label}: ${creditCost} кредитов` : label}
         </Button>
       </Flexbox>
     );
