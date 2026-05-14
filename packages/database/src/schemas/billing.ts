@@ -85,6 +85,7 @@ export const userBilling = pgTable(
     botNotifyType: text('bot_notify_type'),
     zeroCreditsNotifiedAt: timestamptz('zero_credits_notified_at'),
     expiryWarningSentAt: timestamptz('expiry_warning_sent_at'),
+    expiryReminderSentAt: timestamptz('expiry_reminder_sent_at'),
     upgradeHintSentAt: timestamptz('upgrade_hint_sent_at'),
     lowCreditsHintSentAt: timestamptz('low_credits_hint_sent_at'),
     // Auto-renew loop. When `autoRenew=true` and `subscriptionExpiresAt`

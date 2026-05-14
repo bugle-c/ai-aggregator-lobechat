@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS "user_billing" (
 	"bot_notify_type" text,
 	"zero_credits_notified_at" timestamp with time zone,
 	"expiry_warning_sent_at" timestamp with time zone,
+	"expiry_reminder_sent_at" timestamp with time zone,
 	"upgrade_hint_sent_at" timestamp with time zone,
 	"low_credits_hint_sent_at" timestamp with time zone,
 	"auto_renew" boolean DEFAULT true NOT NULL,
