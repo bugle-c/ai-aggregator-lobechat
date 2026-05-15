@@ -24,6 +24,11 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   createTraceOptions: vi.fn().mockReturnValue({}),
 }));
 
+vi.mock('@/server/modules/billing/checkUsageLimit', () => ({
+  checkUsageLimit: vi.fn().mockResolvedValue({ allowed: true, creditsRemaining: 100 }),
+  recordTokenUsage: vi.fn(),
+}));
+
 vi.mock('@/envs/auth', async (importOriginal) => {
   const actual = await importOriginal<typeof EnvsAuthModule>();
   return {
@@ -158,6 +163,10 @@ describe('POST handler', () => {
 
       expect(response).toEqual(mockChatResponse);
       expect(mockRuntime.chat).toHaveBeenCalledWith(mockChatPayload, {
+        callback: {
+          onCompletion: expect.any(Function),
+          onText: expect.any(Function),
+        },
         user: expect.any(String),
         signal: expect.anything(),
       });

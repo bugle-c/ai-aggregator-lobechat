@@ -85,7 +85,7 @@ describe('useAgentMeta', () => {
 
     // Should override title with Lobe AI, but preserve avatar from backend
     expect(result.current.avatar).toBe('/icons/icon-lobe.png');
-    expect(result.current.title).toBe('Lobe AI');
+    expect(result.current.title).toBe('WebGPT');
     // Should preserve other properties
     expect(result.current.description).toBe('Inbox description');
   });
@@ -118,7 +118,7 @@ describe('useAgentMeta', () => {
 
     // Should override title with Lobe AI, but preserve avatar from backend
     expect(result.current.avatar).toBe('/icons/icon-lobe.png');
-    expect(result.current.title).toBe('Lobe AI');
+    expect(result.current.title).toBe('WebGPT');
   });
 
   it('should handle empty agentMap gracefully', () => {
