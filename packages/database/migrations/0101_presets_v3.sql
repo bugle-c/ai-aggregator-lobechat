@@ -101,6 +101,7 @@ VALUES
    ARRAY['top_choice','trending'], 390)
 
 ON CONFLICT (slug) DO NOTHING;
+--> statement-breakpoint
 
 -- ============ IMAGE (+8) ============
 INSERT INTO presets
@@ -167,3 +168,4 @@ VALUES
    ARRAY['top_choice'], 620)
 
 ON CONFLICT (slug) DO NOTHING;
+--> statement-breakpoint

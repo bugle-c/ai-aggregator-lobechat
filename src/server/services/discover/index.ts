@@ -65,12 +65,13 @@ import { cloneDeep, countBy, isString, merge, uniq, uniqBy } from 'es-toolkit/co
 import matter from 'gray-matter';
 import urlJoin from 'url-join';
 
-import { WEBGPT_AGENTS } from '@/const/webgpt-agents';
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { normalizeLocale } from '@/locales/resources';
 import { AssistantStore } from '@/server/modules/AssistantStore';
 import { PluginStore } from '@/server/modules/PluginStore';
 import { MarketService } from '@/server/services/market';
+
+import { WEBGPT_AGENTS } from '../../../const/webgpt-agents';
 
 const log = debug('lobe-server:discover');
 
@@ -780,9 +781,10 @@ export class DiscoverService {
       // Prepend WebGPT custom agents on first page when not searching
       let finalItems = transformedItems;
       if (page === 1 && !q && !ownerId) {
-        const filteredCustom = (shouldOmitCategory || !category)
-          ? WEBGPT_AGENTS
-          : WEBGPT_AGENTS.filter((a) => a.category === category);
+        const filteredCustom =
+          shouldOmitCategory || !category
+            ? WEBGPT_AGENTS
+            : WEBGPT_AGENTS.filter((a) => a.category === category);
 
         if (filteredCustom.length > 0) {
           finalItems = [...filteredCustom, ...transformedItems];

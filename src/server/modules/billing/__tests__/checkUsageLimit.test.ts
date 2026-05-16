@@ -82,4 +82,27 @@ describe('checkUsageLimit fail-closed', () => {
     const result = await checkUsageLimit(makeFakeDb(), 'user-3', 'gpt-5-nano');
     expect(result.allowed).toBe(true);
   });
+
+  it('ignores legacy dailyCreditLimit and only enforces monthly credits', async () => {
+    getOrResetUserBillingMock.mockResolvedValueOnce({
+      planId: 2,
+      tokenBalance: 0,
+      tokensUsedMonth: 10,
+    });
+    getPlanByIdMock.mockResolvedValueOnce({
+      slug: 'basic',
+      tokenLimit: 50,
+      dailyCreditLimit: 1,
+    });
+    const dbThatWouldFailIfDailyQueried = {
+      select: vi.fn(() => {
+        throw new Error('daily cap query should not run');
+      }),
+    } as any;
+
+    const result = await checkUsageLimit(dbThatWouldFailIfDailyQueried, 'user-4', 'gpt-5-nano');
+
+    expect(result.allowed).toBe(true);
+    expect(result.creditsRemaining).toBe(40);
+  });
 });

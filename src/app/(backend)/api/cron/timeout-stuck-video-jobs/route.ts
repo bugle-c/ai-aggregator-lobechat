@@ -72,6 +72,7 @@ export async function GET(req: Request) {
             modelId: row.model,
             topicId: row.topicId ?? undefined,
           },
+          model: row.model,
           provider: row.provider,
           userId: row.userId,
         });

@@ -57,7 +57,7 @@ describe('getUILocaleAndResources', () => {
 
     const { getUILocaleAndResources: getWithFallback } = await import('./getUILocaleAndResources');
     const result = await getWithFallback('unknown-locale');
-    expect(result.locale).toBe('en-US');
+    expect(result.locale).toBe('ru-RU');
     expect(result.resources).toBeDefined();
   });
 });

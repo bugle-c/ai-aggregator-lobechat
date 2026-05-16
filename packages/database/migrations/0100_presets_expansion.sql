@@ -121,6 +121,7 @@ VALUES
    'https://files.gptweb.ru/lobe/presets/dance-spin.mp4',
    ARRAY['new'], 440)
 ON CONFLICT (slug) DO NOTHING;
+--> statement-breakpoint
 
 -- ============ IMAGE PRESETS (+17) ============
 INSERT INTO presets
@@ -251,3 +252,4 @@ VALUES
    'https://files.gptweb.ru/lobe/presets/art-pixel.mp4',
    ARRAY['new'], 550)
 ON CONFLICT (slug) DO NOTHING;
+--> statement-breakpoint

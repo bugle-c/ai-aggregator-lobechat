@@ -25,7 +25,7 @@ describe('AssistantStore', () => {
   it('should return the default index URL when no language is provided', () => {
     const agentMarket = new AssistantStore();
     const url = agentMarket['getAgentIndexUrl']();
-    expect(url).toBe(`${baseURL}/index.en-US.json`);
+    expect(url).toBe(`${baseURL}/index.ru-RU.json`);
   });
 
   it('should return the index URL for a not supported language', () => {
@@ -55,7 +55,7 @@ describe('AssistantStore', () => {
   it('should return the agent URL with default language when no language is provided', () => {
     const agentMarket = new AssistantStore();
     const url = agentMarket.getAgentUrl('agent-123');
-    expect(url).toBe(`${baseURL}/agent-123.en-US.json`);
+    expect(url).toBe(`${baseURL}/agent-123.ru-RU.json`);
   });
 
   it('should return the agent URL for a supported language', () => {
@@ -188,7 +188,6 @@ describe('AssistantStore', () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('something else'));
     const store = new AssistantStore();
 
-     
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(store.getAgentIndex()).rejects.toThrow('something else');

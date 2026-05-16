@@ -176,7 +176,10 @@ const Plans = memo(() => {
             creditBalance,
             creditLimit,
             creditsUsed,
-            subscriptionExpiresAt: billing?.subscriptionExpiresAt,
+            subscriptionExpiresAt:
+              billing?.subscriptionExpiresAt instanceof Date
+                ? billing.subscriptionExpiresAt.toISOString()
+                : billing?.subscriptionExpiresAt,
           }}
           currentPlan={
             currentPlan
@@ -333,7 +336,7 @@ const Plans = memo(() => {
         title="Отменить подписку?"
         width={460}
         onCancel={() => setCancelOpen(false)}
-        onOk={handleCancelSubmit}
+        onOk={() => handleCancelSubmit()}
       >
         <Text type="secondary">
           Доступ к платным функциям сохранится до{' '}

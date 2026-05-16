@@ -5,37 +5,13 @@ import {
   type RateView,
 } from '@/server/services/billing/rates-source';
 
-export type ModelTier = 'cheap' | 'mid' | 'high' | 'premium';
+import { classifyTierFromRate, type ModelTier } from './compute-cost';
+
+export type { ModelTier };
 export type PlanSlug = 'free' | 'basic' | 'pro' | 'pro_max';
 
-/**
- * Tier is classified from the **marked-up** price (what WE charge, not what
- * provider charges). Keeps plan-access consistent even if markup changes.
- * Unit-aware thresholds; see design doc §Tier classification.
- */
 function tierFromRate(rate: RateView): ModelTier {
-  if (rate.tierOverride) return rate.tierOverride;
-  const markedUp = rate.markup;
-  if (rate.pricingUnit === 'tokens') {
-    const out = (rate.outputPer1M ?? 0) * markedUp;
-    if (out <= 3) return 'cheap';
-    if (out <= 15) return 'mid';
-    if (out <= 45) return 'high';
-    return 'premium';
-  }
-  if (rate.pricingUnit === 'image') {
-    const u = (rate.perUnit ?? 0) * markedUp;
-    if (u <= 0.03) return 'cheap';
-    if (u <= 0.15) return 'mid';
-    if (u <= 0.6) return 'high';
-    return 'premium';
-  }
-  // second (video)
-  const u = (rate.perUnit ?? 0) * markedUp;
-  if (u <= 0.06) return 'cheap';
-  if (u <= 0.3) return 'mid';
-  if (u <= 1.2) return 'high';
-  return 'premium';
+  return classifyTierFromRate(rate);
 }
 
 export async function classifyModelTierAsync(modelId: string): Promise<ModelTier> {

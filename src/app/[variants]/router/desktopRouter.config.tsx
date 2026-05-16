@@ -490,7 +490,7 @@ export const desktopRoutes: RouteConfig[] = [
       // react-router doesn't warn "Matched leaf route ... has no element"
       // — that warning fired on every tab switch.
       {
-        Component: () => null,
+        element: <></>,
         index: true,
       },
       // Catch-all route

@@ -60,7 +60,7 @@ export const wavespeedImageModels: AIImageModelCard[] = [
     parameters: {
       imageUrls: { default: [], maxCount: 10 },
       prompt: { default: '' },
-      size: { default: '2048*2048' },
+      size: { default: '2048*2048', enum: ['2048*2048'] },
     },
     pricing: {
       units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],

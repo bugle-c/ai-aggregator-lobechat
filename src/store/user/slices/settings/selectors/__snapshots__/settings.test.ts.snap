@@ -52,34 +52,34 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
 {
   "agentMeta": {
     "model": "claude-sonnet-4-5-20250929",
-    "provider": "anthropic",
+    "provider": "lobehub",
   },
   "enableAutoReply": true,
   "generationTopic": {
     "model": "gpt-5-mini",
-    "provider": "openai",
+    "provider": "lobehub",
   },
   "historyCompress": {
     "model": "claude-sonnet-4-5-20250929",
-    "provider": "anthropic",
+    "provider": "lobehub",
   },
   "queryRewrite": {
     "enabled": true,
     "model": "gpt-5-mini",
-    "provider": "openai",
+    "provider": "lobehub",
   },
   "replyMessage": "Custom auto reply",
   "thread": {
     "model": "claude-sonnet-4-5-20250929",
-    "provider": "anthropic",
+    "provider": "lobehub",
   },
   "topic": {
     "model": "gpt-5-mini",
-    "provider": "openai",
+    "provider": "lobehub",
   },
   "translation": {
     "model": "gpt-5-mini",
-    "provider": "openai",
+    "provider": "lobehub",
   },
 }
 `;
@@ -110,7 +110,7 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
       "reasoningBudgetToken": 1024,
       "searchFCModel": {
         "model": "claude-sonnet-4-5-20250929",
-        "provider": "anthropic",
+        "provider": "lobehub",
       },
       "searchMode": "auto",
     },
@@ -123,12 +123,12 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
       "top_p": 1,
     },
     "plugins": [],
-    "provider": "anthropic",
+    "provider": "lobehub",
     "systemRole": "user",
     "tts": {
       "showAllLocaleVoice": false,
       "sttLocale": "auto",
-      "ttsService": "openai",
+      "ttsService": "edge",
       "voice": {
         "openai": "alloy",
       },
@@ -155,7 +155,7 @@ exports[`settingsSelectors > defaultAgentConfig > should merge DEFAULT_AGENT_CON
     "reasoningBudgetToken": 1024,
     "searchFCModel": {
       "model": "claude-sonnet-4-5-20250929",
-      "provider": "anthropic",
+      "provider": "lobehub",
     },
     "searchMode": "auto",
   },
@@ -168,12 +168,12 @@ exports[`settingsSelectors > defaultAgentConfig > should merge DEFAULT_AGENT_CON
     "top_p": 1,
   },
   "plugins": [],
-  "provider": "anthropic",
+  "provider": "lobehub",
   "systemRole": "custom role",
   "tts": {
     "showAllLocaleVoice": false,
     "sttLocale": "auto",
-    "ttsService": "openai",
+    "ttsService": "edge",
     "voice": {
       "openai": "alloy",
     },

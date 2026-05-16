@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
     isActive: true,
   }));
 
-  const writeSubscriptionEventMock = vi.fn(async () => undefined);
+  const writeSubscriptionEventMock = vi.fn(async (..._args: any[]) => undefined);
 
   return { fetchPlanByIdMock, writeSubscriptionEventMock };
 });

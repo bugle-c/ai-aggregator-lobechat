@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useShowTabBar } from '../useShowTabBar';
 
-vi.mock('next/navigation', () => ({ usePathname: () => mockPath }));
+vi.mock('@/libs/router/navigation', () => ({ usePathname: () => mockPath }));
 
 let mockPath = '/';
 

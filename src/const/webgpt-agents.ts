@@ -4,7 +4,7 @@ import { type DiscoverAssistantItem } from '@/types/discover';
  * WebGPT custom agents — always displayed first in the catalog.
  * Focused on Russian market and Russian-speaking users.
  */
-export const WEBGPT_AGENTS: DiscoverAssistantItem[] = [
+export const WEBGPT_AGENTS = [
   {
     author: 'WebGPT',
     avatar: '✍️',
@@ -28,7 +28,8 @@ export const WEBGPT_AGENTS: DiscoverAssistantItem[] = [
 - При написании SEO-текстов запрашивай ключевые слова`,
     },
     createdAt: '2026-03-01',
-    description: 'Профессиональные тексты на русском: статьи, посты, рекламные тексты, рерайт и редактура',
+    description:
+      'Профессиональные тексты на русском: статьи, посты, рекламные тексты, рерайт и редактура',
     homepage: 'https://gptweb.ru',
     identifier: 'webgpt-copywriter',
     knowledgeCount: 0,
@@ -60,7 +61,8 @@ export const WEBGPT_AGENTS: DiscoverAssistantItem[] = [
 - Объясняй почему рекомендация важна и какой эффект ожидать`,
     },
     createdAt: '2026-03-01',
-    description: 'SEO для Яндекса и Google: семантическое ядро, мета-теги, аудит сайта, анализ конкурентов',
+    description:
+      'SEO для Яндекса и Google: семантическое ядро, мета-теги, аудит сайта, анализ конкурентов',
     homepage: 'https://gptweb.ru',
     identifier: 'webgpt-seo',
     knowledgeCount: 0,
@@ -93,7 +95,8 @@ export const WEBGPT_AGENTS: DiscoverAssistantItem[] = [
 - Используй эмодзи уместно, не перегружая текст`,
     },
     createdAt: '2026-03-01',
-    description: 'Контент и продвижение в VK, Telegram и Дзен: посты, контент-планы, таргет, аналитика',
+    description:
+      'Контент и продвижение в VK, Telegram и Дзен: посты, контент-планы, таргет, аналитика',
     homepage: 'https://gptweb.ru',
     identifier: 'webgpt-smm',
     knowledgeCount: 0,
@@ -126,7 +129,8 @@ export const WEBGPT_AGENTS: DiscoverAssistantItem[] = [
 - При неоднозначности ссылайся на судебную практику`,
     },
     createdAt: '2026-03-01',
-    description: 'Консультации по законодательству РФ: ГК, ТК, НК, корпоративное право, защита прав',
+    description:
+      'Консультации по законодательству РФ: ГК, ТК, НК, корпоративное право, защита прав',
     homepage: 'https://gptweb.ru',
     identifier: 'webgpt-lawyer',
     knowledgeCount: 0,
@@ -193,7 +197,8 @@ export const WEBGPT_AGENTS: DiscoverAssistantItem[] = [
 - Предлагай альтернативные каналы поиска кандидатов`,
     },
     createdAt: '2026-03-01',
-    description: 'Подбор персонала: вакансии для hh.ru, интервью, оценка кандидатов, онбординг, HR-аналитика',
+    description:
+      'Подбор персонала: вакансии для hh.ru, интервью, оценка кандидатов, онбординг, HR-аналитика',
     homepage: 'https://gptweb.ru',
     identifier: 'webgpt-hr',
     knowledgeCount: 0,
@@ -260,7 +265,8 @@ export const WEBGPT_AGENTS: DiscoverAssistantItem[] = [
 - Общайся на русском, код и комментарии в коде — на английском`,
     },
     createdAt: '2026-03-01',
-    description: 'Python, JavaScript, SQL и другие языки: написание кода, ревью, архитектура, debugging',
+    description:
+      'Python, JavaScript, SQL и другие языки: написание кода, ревью, архитектура, debugging',
     homepage: 'https://gptweb.ru',
     identifier: 'webgpt-developer',
     knowledgeCount: 0,
@@ -337,4 +343,4 @@ export const WEBGPT_AGENTS: DiscoverAssistantItem[] = [
     title: 'Email-маркетолог',
     tokenUsage: 380,
   },
-];
+] as any as DiscoverAssistantItem[];

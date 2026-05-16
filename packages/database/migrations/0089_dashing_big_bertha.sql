@@ -1,1 +1,1 @@
-ALTER TABLE "billing_plans" ADD COLUMN "daily_credit_limit" integer;
+ALTER TABLE "billing_plans" ADD COLUMN IF NOT EXISTS "daily_credit_limit" integer;

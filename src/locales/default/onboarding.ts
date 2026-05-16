@@ -88,6 +88,7 @@ export default {
   'uiMode.light': 'Light',
   'uiMode.pro': 'Pro',
   'uiMode.switchFailed': 'Failed to switch UI mode',
+  'uiMode.modelResetToWebGPT': 'Default model reset to WebGPT.',
   'uiMode.switchedToLight': 'Light mode enabled. Custom providers hidden.',
   'uiMode.switchedToPro': 'Pro mode enabled. All providers and advanced settings unlocked.',
   'welcome.body':

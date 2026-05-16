@@ -132,9 +132,30 @@ describe('POST /api/cron/billing-sanity-checks', () => {
     });
 
     fetchAllRatesMock.mockResolvedValue([
-      { markup: 0.5, modelId: 'cheap-model', provider: 'openai' }, // too low
-      { markup: 50, modelId: 'expensive-model', provider: 'openai' }, // too high
-      { markup: 3, modelId: 'fine-model', provider: 'anthropic' },
+      {
+        inputPer1M: 1,
+        markup: 0.5,
+        modelId: 'cheap-model',
+        outputPer1M: 1,
+        perUnit: null,
+        provider: 'openai',
+      }, // too low
+      {
+        inputPer1M: 1,
+        markup: 50,
+        modelId: 'expensive-model',
+        outputPer1M: 1,
+        perUnit: null,
+        provider: 'openai',
+      }, // too high
+      {
+        inputPer1M: 1,
+        markup: 3,
+        modelId: 'fine-model',
+        outputPer1M: 1,
+        perUnit: null,
+        provider: 'anthropic',
+      },
     ]);
 
     const res = await POST(

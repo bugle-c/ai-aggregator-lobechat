@@ -3,7 +3,8 @@ import { SignJWT } from 'jose';
 import { type NextRequest, NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
-import { account, users } from '@/database/schemas/betterAuth';
+import { account } from '@/database/schemas/betterAuth';
+import { users } from '@/database/schemas/user';
 import { serverDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';

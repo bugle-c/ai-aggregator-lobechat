@@ -34,7 +34,7 @@ const Header = memo(() => {
             <ActionIcon
               aria-label="Назад"
               icon={ArrowLeft}
-              size="normal"
+              size="small"
               onClick={() => navigate('/')}
             />
           )}

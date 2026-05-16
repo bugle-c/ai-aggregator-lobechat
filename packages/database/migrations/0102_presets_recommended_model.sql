@@ -10,4 +10,6 @@
 -- selection action no longer changes the current model.
 
 ALTER TABLE presets RENAME COLUMN model_id TO recommended_model_id;
+--> statement-breakpoint
 ALTER TABLE presets ALTER COLUMN recommended_model_id DROP NOT NULL;
+--> statement-breakpoint

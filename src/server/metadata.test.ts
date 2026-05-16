@@ -1,7 +1,9 @@
 // @vitest-environment node
-import { BRANDING_NAME } from '@lobechat/business-const';
+import { BRANDING_NAME, ORG_NAME } from '@lobechat/business-const';
 import { OG_URL } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
+
+import { isCustomORG } from '@/const/version';
 
 import { Meta } from './metadata';
 
@@ -89,7 +91,7 @@ describe('Metadata', () => {
         title: 'Twitter Title',
         description: 'Twitter description',
         images: ['https://twitter-image.com'],
-        site: '@lobehub',
+        site: isCustomORG ? `@${ORG_NAME}` : '@lobehub',
         url: 'https://example.com/twitter',
       });
     });

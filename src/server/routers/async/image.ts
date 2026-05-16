@@ -245,7 +245,7 @@ export const imageRouter = router({
         try {
           const { inferenceId, pollUrl } = await submitWaveSpeedImage(
             { model, params: params as unknown as RuntimeImageGenParams },
-            { apiKey: wavespeedApiKey },
+            { apiKey: wavespeedApiKey, provider: 'wavespeed' },
           );
           await ctx.asyncTaskModel.update(taskId, {
             inferenceId,

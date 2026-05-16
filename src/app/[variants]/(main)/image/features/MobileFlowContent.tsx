@@ -43,7 +43,7 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const setParamOnInput = useImageStore((s) => s.setParamOnInput);
   const parameters = useImageStore(imageGenerationConfigSelectors.parameters);
   const promptValue = (parameters?.prompt as string | undefined) ?? '';
-  const aspect = (parameters?.aspect_ratio as string | undefined) ?? null;
+  const aspect = (parameters?.aspectRatio as string | undefined) ?? null;
 
   // The selected model may support a single reference image (img2img,
   // FLUX Kontext etc.) and/or multiple reference images. Surface these

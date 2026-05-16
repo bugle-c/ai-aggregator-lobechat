@@ -40,8 +40,8 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const setParamOnInput = useVideoStore((s) => s.setParamOnInput);
   const parameters = useVideoStore(videoGenerationConfigSelectors.parameters);
   const promptValue = (parameters?.prompt as string | undefined) ?? '';
-  const aspect = (parameters?.aspect_ratio as string | undefined) ?? null;
-  const duration = (parameters?.duration_sec as number | undefined) ?? null;
+  const aspect = (parameters?.aspectRatio as string | undefined) ?? null;
+  const duration = (parameters?.duration as number | undefined) ?? null;
 
   // img2vid / frame-conditioned generation — surface uploaders when
   // the model schema supports them. `imageUrl` = start frame,

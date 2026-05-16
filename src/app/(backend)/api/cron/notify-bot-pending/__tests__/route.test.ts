@@ -36,7 +36,7 @@ const mocks = vi.hoisted(() => {
 
   // update chain: db.update(t).set({...}).where(cond)
   const updateWhereMock = vi.fn(async () => undefined);
-  const updateSetMock = vi.fn(() => ({ where: updateWhereMock }));
+  const updateSetMock = vi.fn((_args: any) => ({ where: updateWhereMock }));
   const updateMock = vi.fn(() => ({ set: updateSetMock }));
 
   const fetchPlanByIdMock = vi.fn(async (id: number) => ({
