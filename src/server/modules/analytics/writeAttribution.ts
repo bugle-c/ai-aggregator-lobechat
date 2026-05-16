@@ -18,6 +18,25 @@ export interface ComputeAttributionInput {
   userId: string;
 }
 
+export interface AttributionRow {
+  firstLandingPage: string | null;
+  firstReferrer: string | null;
+  firstSeenAt: Date;
+  firstUtmCampaign: string | null;
+  firstUtmContent: string | null;
+  firstUtmMedium: string | null;
+  firstUtmSource: string | null;
+  lastLandingPage: string | null;
+  lastReferrer: string | null;
+  lastSeenAt: Date;
+  lastUtmCampaign: string | null;
+  lastUtmContent: string | null;
+  lastUtmMedium: string | null;
+  lastUtmSource: string | null;
+  registeredAt: Date;
+  userId: string;
+}
+
 const SEARCH_ENGINES = [
   { match: /(^|\.)yandex\./i, source: 'yandex' },
   { match: /(^|\.)google\./i, source: 'google' },
@@ -75,7 +94,7 @@ function touchToFields(
   } as const;
 }
 
-export function computeAttributionRow(input: ComputeAttributionInput) {
+export function computeAttributionRow(input: ComputeAttributionInput): AttributionRow {
   const first = touchToFields('first', input.firstCookie, input.rawReferrer);
   const last = touchToFields('last', input.lastCookie ?? input.firstCookie, input.rawReferrer);
   return {
@@ -83,7 +102,7 @@ export function computeAttributionRow(input: ComputeAttributionInput) {
     ...first,
     ...last,
     registeredAt: new Date(),
-  };
+  } as AttributionRow;
 }
 
 export async function writeAttribution(

@@ -41,7 +41,7 @@ export function defineConfig() {
     if (refRaw) {
       const REF_CODE_RE = /^[a-z0-9]{8}$/;
       const ref = refRaw.toLowerCase();
-      const cleanUrl = url.clone ? url.clone() : new URL(request.url);
+      const cleanUrl = new URL(url.toString());
       cleanUrl.searchParams.delete('ref');
       const response = NextResponse.redirect(cleanUrl);
       if (REF_CODE_RE.test(ref)) {

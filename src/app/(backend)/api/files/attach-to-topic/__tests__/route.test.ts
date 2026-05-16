@@ -36,7 +36,9 @@ const mocks = vi.hoisted(() => {
   }));
 
   // Notify (global fetch) mock
-  const globalFetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+  const globalFetchMock = vi.fn(
+    async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+  );
 
   return {
     getSessionMock,
@@ -46,6 +48,7 @@ const mocks = vi.hoisted(() => {
     selectMock,
     txInsertValuesMock,
     txInsertMock,
+    txMock,
     transactionMock,
     getServerDBMock,
     uploadBufferMock,
@@ -88,20 +91,33 @@ vi.stubGlobal('fetch', mocks.globalFetchMock);
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeFormData(fields: { topicId?: string; file?: { name: string; type: string; content: string } }) {
+function makeFormData(fields: {
+  topicId?: string;
+  file?: { name: string; type: string; content: string };
+}) {
   const fd = new FormData();
   if (fields.topicId) fd.append('topicId', fields.topicId);
   if (fields.file) {
-    fd.append('file', new File([fields.file.content], fields.file.name, { type: fields.file.type }));
+    fd.append(
+      'file',
+      new File([fields.file.content], fields.file.name, { type: fields.file.type }),
+    );
   }
   return fd;
 }
 
-function makeRequest(opts: {
-  formData?: FormData;
-  cookie?: string;
-} = {}) {
-  const fd = opts.formData ?? makeFormData({ topicId: 'topic-1', file: { name: 'test.pdf', type: 'application/pdf', content: 'hello' } });
+function makeRequest(
+  opts: {
+    formData?: FormData;
+    cookie?: string;
+  } = {},
+) {
+  const fd =
+    opts.formData ??
+    makeFormData({
+      topicId: 'topic-1',
+      file: { name: 'test.pdf', type: 'application/pdf', content: 'hello' },
+    });
   const headers: Record<string, string> = {};
   if (opts.cookie) headers['cookie'] = opts.cookie;
   return new Request('http://localhost/api/files/attach-to-topic', {
@@ -122,7 +138,7 @@ describe('POST /api/files/attach-to-topic', () => {
 
     // Default DB: first select returns topic, second returns billing (with chatId)
     let selectCallCount = 0;
-    mocks.selectMock.mockImplementation(() => {
+    mocks.selectMock.mockImplementation((() => {
       selectCallCount++;
       const callNum = selectCallCount;
       return {
@@ -139,14 +155,21 @@ describe('POST /api/files/attach-to-topic', () => {
           }),
         }),
       };
-    });
+    }) as any);
 
     mocks.getSessionMock.mockResolvedValue(null);
     mocks.uploadBufferMock.mockResolvedValue({ key: 'files/user/ts-test.pdf' });
-    mocks.createFileRecordMock.mockResolvedValue({ fileId: 'file-abc-123', url: 'https://app/f/file-abc-123' });
+    mocks.createFileRecordMock.mockResolvedValue({
+      fileId: 'file-abc-123',
+      url: 'https://app/f/file-abc-123',
+    });
     mocks.txInsertValuesMock.mockResolvedValue(undefined);
-    mocks.transactionMock.mockImplementation(async (fn: any) => fn(mocks.txMock ?? { insert: mocks.txInsertMock }));
-    mocks.globalFetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    mocks.transactionMock.mockImplementation(async (fn: any) =>
+      fn(mocks.txMock ?? { insert: mocks.txInsertMock }),
+    );
+    mocks.globalFetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
   });
 
   afterEach(() => {
@@ -202,10 +225,10 @@ describe('POST /api/files/attach-to-topic', () => {
     mocks.selectMock.mockReturnValue({
       from: () => ({
         where: () => ({
-          limit: async () => [],
+          limit: (async () => []) as any,
         }),
       }),
-    });
+    } as any);
 
     const res = await POST(makeRequest());
     expect(res.status).toBe(403);

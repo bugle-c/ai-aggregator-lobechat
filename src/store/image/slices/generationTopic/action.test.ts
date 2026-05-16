@@ -258,7 +258,7 @@ describe('GenerationTopicAction', () => {
       });
     });
 
-    it('should throw error when topic not found', async () => {
+    it('should skip summary when topic not found', async () => {
       const { result } = renderHook(() => useImageStore());
 
       act(() => {
@@ -268,7 +268,7 @@ describe('GenerationTopicAction', () => {
       await act(async () => {
         await expect(
           result.current.summaryGenerationTopicTitle('gt_non_existent', ['prompt']),
-        ).rejects.toThrow('Topic gt_non_existent not found');
+        ).resolves.toBe('');
       });
     });
 

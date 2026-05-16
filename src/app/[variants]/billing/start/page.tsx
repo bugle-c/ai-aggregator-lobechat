@@ -50,11 +50,12 @@ const BillingStartPage: FC<Props> = async ({ searchParams }) => {
 
     const db = await getServerDB();
     const createCaller = createCallerFactory(lambdaRouter);
-    const caller = createCaller({ userId, serverDB: db });
+    const caller = createCaller({ userId, serverDB: db } as any);
 
     const { paymentUrl } = await caller.subscription.createPayment({ planId });
 
-    redirect(paymentUrl);
+    if (paymentUrl) redirect(paymentUrl);
+    throw new Error('Payment URL missing');
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Неизвестная ошибка';
 

@@ -17,8 +17,12 @@ vi.mock('../model-rates', () => ({
 
 // Mock the BillingService so we can observe increment calls.
 const incrementTokensUsedMock = vi.fn();
+const getOrCreateUserBillingMock = vi.fn();
+const getPlanByIdMock = vi.fn();
 vi.mock('@/server/services/billing', () => ({
   BillingService: vi.fn().mockImplementation(() => ({
+    getOrCreateUserBilling: getOrCreateUserBillingMock,
+    getPlanById: getPlanByIdMock,
     incrementTokensUsed: incrementTokensUsedMock,
   })),
 }));
@@ -38,8 +42,12 @@ function makeFakeDb() {
 }
 
 beforeEach(() => {
+  getOrCreateUserBillingMock.mockReset();
+  getPlanByIdMock.mockReset();
   incrementTokensUsedMock.mockReset();
   (writeUsageLog as any).mockReset();
+  getOrCreateUserBillingMock.mockResolvedValue({ planId: 'pro', tokenBalance: 100 });
+  getPlanByIdMock.mockResolvedValue({ tokenLimit: 1000 });
 });
 
 afterEach(() => {
@@ -59,7 +67,7 @@ describe('recordTokenUsage — strict transaction', () => {
 
     expect(incrementTokensUsedMock).toHaveBeenCalledTimes(1);
     // Called as (credits, tx) — tx is whatever the db.transaction callback receives.
-    expect(incrementTokensUsedMock).toHaveBeenCalledWith(10, expect.anything());
+    expect(incrementTokensUsedMock).toHaveBeenCalledWith(10, expect.anything(), { limit: 1100 });
     expect(writeUsageLog).toHaveBeenCalledTimes(1);
   });
 

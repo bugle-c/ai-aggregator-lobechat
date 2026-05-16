@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { BRANDING_LOGO_URL } from '@lobechat/business-const';
 import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -191,8 +192,8 @@ describe('AgentService', () => {
       const newService = new AgentService(mockDb, mockUserId);
       const result = await newService.getBuiltinAgent('inbox');
 
-      // Avatar should be merged from BUILTIN_AGENTS definition
-      expect((result as any)?.avatar).toBe('/avatars/lobe-ai.png');
+      // Avatar should be merged from BUILTIN_AGENTS definition (respects branding override)
+      expect((result as any)?.avatar).toBe(BRANDING_LOGO_URL || '/avatars/lobe-ai.png');
     });
 
     it('should not include avatar for non-builtin agents', async () => {

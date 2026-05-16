@@ -51,7 +51,7 @@ const FlowMainArea = memo(() => {
         <ActionIcon
           aria-label="Назад"
           icon={ArrowLeft}
-          size="normal"
+          size="small"
           onClick={() => navigate('/')}
         />
         <Segmented

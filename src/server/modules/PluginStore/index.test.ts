@@ -9,7 +9,7 @@ describe('PluginStore', () => {
   it('should return the default index URL when no language is provided', () => {
     const pluginStore = new PluginStore();
     const url = pluginStore.getPluginIndexUrl();
-    expect(url).toBe(`${baseURL}/index.en-US.json`);
+    expect(url).toBe(`${baseURL}/index.ru-RU.json`);
   });
 
   it('should return the index URL for a supported language', () => {

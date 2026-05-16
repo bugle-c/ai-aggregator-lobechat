@@ -69,10 +69,10 @@ describe('computeUsageLogRow', () => {
       kind: 'chat',
     });
 
-    // claude-sonnet-4-6: input 3.0 / output 15.0 per 1M, markup 1.0
-    // costUsd = 1.0 * 3 + 0.1 * 15 = 4.5
-    expect(Number(row.costUsd)).toBeCloseTo(4.5, 6);
-    expect(Number(row.costRub)).toBeCloseTo(4.5 * USD_TO_RUB, 4);
+    // claude-sonnet-4-6: input 3.0 / output 15.0 per 1M, high-tier multiplier 4x
+    // baseCostUsd = 1.0 * 3 + 0.1 * 15 = 4.5; costUsd = 4.5 * 4 = 18
+    expect(Number(row.costUsd)).toBeCloseTo(18, 6);
+    expect(Number(row.costRub)).toBeCloseTo(18 * USD_TO_RUB, 4);
     expect(Number(row.exchangeRate)).toBe(USD_TO_RUB);
     expect(row.userId).toBe('user_abc');
     expect(row.kind).toBe('chat');
@@ -88,8 +88,8 @@ describe('computeUsageLogRow', () => {
       creditsCharged: 1,
       kind: 'chat',
     });
-    // __default__ row: 3 / 15, markup 1.0 → 1M input → $3
-    expect(Number(row.costUsd)).toBeCloseTo(3, 6);
+    // __default__ row: 3 / 15, high-tier multiplier 4x → 1M input → $12
+    expect(Number(row.costUsd)).toBeCloseTo(12, 6);
   });
 
   it('zero tokens produces zero cost', async () => {

@@ -60,11 +60,12 @@ export class UIModeActionImpl {
       try {
         const agentStoreState = useAgentStore.getState();
         const currentProvider = agentSelectors.currentAgentModelProvider(agentStoreState);
-        const activeAgentId = agentSelectors.activeAgentId(agentStoreState);
+        const activeAgentId = agentStoreState.activeAgentId;
 
         if (currentProvider && currentProvider !== 'lobehub' && activeAgentId) {
           await agentStoreState.updateAgentConfigById(activeAgentId, {
-            chatConfig: { model: 'gpt-5-mini', provider: 'lobehub' },
+            model: 'gpt-5-mini',
+            provider: 'lobehub',
           });
           modelWasReset = true;
         }

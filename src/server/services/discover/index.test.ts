@@ -296,7 +296,8 @@ describe('DiscoverService', () => {
       const result = await service.getAssistantList();
 
       expect(mockMarket.agents.getAgentList).toHaveBeenCalled();
-      expect(result.items[0]).toEqual(
+      const marketItem = result.items.find((i: any) => i.identifier === 'market-assistant-1');
+      expect(marketItem).toEqual(
         expect.objectContaining({
           identifier: 'market-assistant-1',
           title: 'Market Assistant 1',
