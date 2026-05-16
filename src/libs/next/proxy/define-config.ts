@@ -195,6 +195,10 @@ export function defineConfig() {
       referrer?: string | null;
       landingPage?: string | null;
       seenAt?: string;
+      ymClientId?: string | null;
+      gaClientId?: string | null;
+      roistatVisit?: string | null;
+      analyticsIds?: Record<string, string>;
     } | null = null;
     const gptwebUtmsRaw = request.cookies.get('_gptweb_utms')?.value;
     if (gptwebUtmsRaw) {
@@ -222,6 +226,10 @@ export function defineConfig() {
         utm_content: url.searchParams.get('utm_content') ?? landingFirstTouch?.utm_content ?? null,
         utm_medium: url.searchParams.get('utm_medium') ?? landingFirstTouch?.utm_medium ?? null,
         utm_source: url.searchParams.get('utm_source') ?? landingFirstTouch?.utm_source ?? null,
+        ym_client_id: landingFirstTouch?.ymClientId ?? null,
+        ga_client_id: landingFirstTouch?.gaClientId ?? null,
+        roistat_visit: landingFirstTouch?.roistatVisit ?? null,
+        analytics_ids: landingFirstTouch?.analyticsIds ?? null,
       };
       const payload = JSON.stringify(payloadObj);
       const cookieOpts = {

@@ -2,13 +2,17 @@ import { userAttribution } from '@/database/schemas/analytics';
 import { type LobeChatDatabase } from '@/database/type';
 
 export interface AttributionCookie {
+  analytics_ids?: Record<string, string> | null;
+  ga_client_id?: string | null;
   landing_page: string | null;
   referrer: string | null;
+  roistat_visit?: string | null;
   seen_at: string; // ISO
   utm_campaign: string | null;
   utm_content: string | null;
   utm_medium: string | null;
   utm_source: string | null;
+  ym_client_id?: string | null;
 }
 
 export interface ComputeAttributionInput {
@@ -19,20 +23,28 @@ export interface ComputeAttributionInput {
 }
 
 export interface AttributionRow {
+  firstAnalyticsIds: Record<string, string> | null;
+  firstGaClientId: string | null;
   firstLandingPage: string | null;
   firstReferrer: string | null;
+  firstRoistatVisit: string | null;
   firstSeenAt: Date;
   firstUtmCampaign: string | null;
   firstUtmContent: string | null;
   firstUtmMedium: string | null;
   firstUtmSource: string | null;
+  firstYmClientId: string | null;
+  lastAnalyticsIds: Record<string, string> | null;
+  lastGaClientId: string | null;
   lastLandingPage: string | null;
   lastReferrer: string | null;
+  lastRoistatVisit: string | null;
   lastSeenAt: Date;
   lastUtmCampaign: string | null;
   lastUtmContent: string | null;
   lastUtmMedium: string | null;
   lastUtmSource: string | null;
+  lastYmClientId: string | null;
   registeredAt: Date;
   userId: string;
 }
@@ -80,6 +92,10 @@ function touchToFields(
       [`${prefix}Referrer`]: cookie.referrer,
       [`${prefix}LandingPage`]: cookie.landing_page,
       [`${prefix}SeenAt`]: new Date(cookie.seen_at),
+      [`${prefix}YmClientId`]: cookie.ym_client_id ?? null,
+      [`${prefix}GaClientId`]: cookie.ga_client_id ?? null,
+      [`${prefix}RoistatVisit`]: cookie.roistat_visit ?? null,
+      [`${prefix}AnalyticsIds`]: cookie.analytics_ids ?? null,
     } as const;
   }
   const inferred = inferSourceFromReferrer(rawReferrer ?? null);
@@ -91,6 +107,10 @@ function touchToFields(
     [`${prefix}Referrer`]: rawReferrer || null,
     [`${prefix}LandingPage`]: null,
     [`${prefix}SeenAt`]: new Date(),
+    [`${prefix}YmClientId`]: null,
+    [`${prefix}GaClientId`]: null,
+    [`${prefix}RoistatVisit`]: null,
+    [`${prefix}AnalyticsIds`]: null,
   } as const;
 }
 
