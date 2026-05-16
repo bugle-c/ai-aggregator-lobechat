@@ -1,4 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
+import type * as AntdModule from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { imageService } from '@/services/image';
@@ -30,6 +31,18 @@ vi.mock('@/services/image', () => ({
     }),
   },
 }));
+
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof AntdModule>();
+
+  return {
+    ...actual,
+    notification: {
+      ...actual.notification,
+      error: vi.fn(),
+    },
+  };
+});
 
 const mockImageService = vi.mocked(imageService);
 
