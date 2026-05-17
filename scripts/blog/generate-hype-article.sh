@@ -62,12 +62,35 @@ if [[ -z "$NEWS_CAT_ID" ]]; then
 fi
 log "Target category: news (${NEWS_CAT_NAME}) id=${NEWS_CAT_ID:0:8}"
 
-# Step 0.5: Idempotence — skip if a hype-source post already exists for today.
-# We mark our posts with source='hype' in the meta_keywords field as a tag,
-# since blog_posts schema may not have a dedicated source column.
-ALREADY=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_posts?select=id&category_id=eq.${NEWS_CAT_ID}&meta_keywords=ilike.*source:hype*&created_at=gte.${TODAY_UTC}T00:00:00Z&limit=1" "${SUPA_HDRS[@]}" 2>/dev/null)
-if [[ -n "$ALREADY" && "$ALREADY" != "[]" ]]; then
-    log "Hype article already published today — nothing to do."
+# Step 0.5: Idempotence — cap at 2 hype-source posts per UTC day, and
+# require ≥6 hours between them so the morning (09:30 МСК) and evening
+# (19:30 МСК) timers don't double-fire after a system delay.
+# We mark our posts with source='hype' in the meta_keywords field as a tag.
+DAILY_HYPE=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_posts?select=created_at&category_id=eq.${NEWS_CAT_ID}&meta_keywords=ilike.*source:hype*&created_at=gte.${TODAY_UTC}T00:00:00Z&order=created_at.desc" "${SUPA_HDRS[@]}" 2>/dev/null)
+DAILY_GATE=$(echo "$DAILY_HYPE" | python3 -c "
+import json, sys
+from datetime import datetime, timezone
+try:
+    rows = json.load(sys.stdin)
+except Exception:
+    print(''); sys.exit(0)
+if not isinstance(rows, list) or not rows:
+    print(''); sys.exit(0)
+if len(rows) >= 2:
+    print('cap-reached'); sys.exit(0)
+last = rows[0].get('created_at','')
+try:
+    last_dt = datetime.fromisoformat(last.replace('Z','+00:00'))
+    delta_h = (datetime.now(timezone.utc) - last_dt).total_seconds() / 3600
+    if delta_h < 6:
+        print(f'too-soon:{delta_h:.1f}h-since-last')
+    else:
+        print('')
+except Exception:
+    print('')
+" 2>/dev/null)
+if [[ -n "$DAILY_GATE" ]]; then
+    log "Idempotent skip — $DAILY_GATE"
     log "=== Hype article generation complete (idempotent skip) ==="
     exit 0
 fi
@@ -78,10 +101,12 @@ fi
 # classify previously-unseen events on demand (LLM call per event).
 fetch_news() {
     local min_score="$1"
+    # limit=15 instead of 5 — gives the freshness picker enough candidates
+    # to pick a genuinely hot+fresh event over a stale-but-high-score one.
     curl -sf --max-time 90 -X POST "${AGENT_NEWS_URL}/api/v1/get-news-for-project" \
         -H "x-api-key: ${AGENT_NEWS_API_KEY}" \
         -H "content-type: application/json" \
-        -d "{\"project_id\":\"gptweb\",\"limit\":5,\"min_score\":${min_score},\"min_hype\":0,\"exclude_delivered\":true}" 2>/dev/null
+        -d "{\"project_id\":\"gptweb\",\"limit\":15,\"min_score\":${min_score},\"min_hype\":0,\"exclude_delivered\":true}" 2>/dev/null
 }
 
 log "Querying agent-news-007 (min_score=70 — strict pass)..."
@@ -113,11 +138,34 @@ NEWS_REL=""
 NEWS_HYPE=""
 
 eval "$(echo "$AN_RESP" | python3 -c "
-import json, sys, shlex
+# Freshness-weighted picker. Combined score = relevance × hype × freshness,
+# where freshness decays exponentially from first_seen_at:
+#   ~1.0 at 0h,  0.85 at 2h,  0.55 at 6h,  0.37 at 12h,  0.14 at 24h.
+# A stale-but-high-score event from yesterday loses to a fresher one
+# even if its raw hype is 2x higher. Half-life ~12 hours.
+import json, sys, shlex, math
+from datetime import datetime, timezone
 try:
     d = json.load(sys.stdin)
     if d.get('status') == 'ok' and d.get('news'):
-        n = d['news'][0]
+        now = datetime.now(timezone.utc)
+        def fresh_factor(iso):
+            if not iso: return 0.5  # unknown — middle weight
+            try:
+                t = datetime.fromisoformat(iso.replace('Z','+00:00'))
+                age_h = (now - t).total_seconds() / 3600
+                return math.exp(-age_h / 12.0)
+            except Exception:
+                return 0.5
+        ranked = []
+        for n in d['news']:
+            rel = n.get('relevance_score', 0) or 0
+            hype = n.get('hype_score', 0) or 0
+            ff = fresh_factor(n.get('first_seen_at') or '')
+            score = (rel / 100.0) * (hype / 100.0) * ff
+            ranked.append((score, ff, n))
+        ranked.sort(key=lambda x: -x[0])
+        score, ff, n = ranked[0]
         sources = n.get('all_sources', []) or []
         sources_str = ' | '.join(f\"{s.get('name','?')}: {s.get('url','')}\" for s in sources[:5])
         print(f'NEWS_EVENT_ID={shlex.quote(n.get(\"event_id\",\"\"))}')
@@ -128,6 +176,8 @@ try:
         print(f'NEWS_SOURCES={shlex.quote(sources_str)}')
         print(f'NEWS_REL={n.get(\"relevance_score\",0)}')
         print(f'NEWS_HYPE={n.get(\"hype_score\",0):.0f}')
+        print(f'NEWS_FRESHNESS={ff:.2f}')
+        print(f'NEWS_COMBINED={score:.3f}')
     elif d.get('status') in ('need_profile','profile_expired'):
         print('# profile-required', file=sys.stderr)
 except Exception as e:
@@ -146,7 +196,7 @@ if [[ -z "$NEWS_EVENT_ID" ]]; then
     exit 0
 fi
 
-log "Selected hype event: '${NEWS_TITLE:0:90}' (event=${NEWS_EVENT_ID:0:8}, rel=${NEWS_REL}, hype=${NEWS_HYPE})"
+log "Selected hype event: '${NEWS_TITLE:0:90}' (event=${NEWS_EVENT_ID:0:8}, rel=${NEWS_REL}, hype=${NEWS_HYPE}, freshness=${NEWS_FRESHNESS:-?}, combined=${NEWS_COMBINED:-?})"
 
 # Step 1.5: Title-overlap dedup against last 30 days of news posts
 EXISTING_TITLES=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_posts?select=title&status=eq.published&category_id=eq.${NEWS_CAT_ID}&created_at=gte.$(date -u -d '30 days ago' +%Y-%m-%d)T00:00:00Z&order=created_at.desc&limit=60" "${SUPA_HDRS[@]}" 2>/dev/null | python3 -c "
