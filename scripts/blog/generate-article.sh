@@ -108,6 +108,26 @@ except Exception:
 " 2>/dev/null)
 [[ -n "$EXISTING_TITLES" ]] && log "Loaded $(echo "$EXISTING_TITLES" | wc -l) existing titles in $TARGET_CAT for dedup context"
 
+# Pre-load ALL category titles published in the last 7 days. Used by the
+# topic-saturation guard below — if a candidate keyword shares its
+# distinctive root with too many recent posts ACROSS categories (e.g.
+# VPN/ВПН, Gemini, Claude), it's a sign the round-robin pipeline got
+# captured by one topic. Cap to 3 posts/7d per root, then skip.
+SATURATION_SINCE=$(date -u -d '7 days ago' +%FT%TZ)
+RECENT_ALL_TITLES=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_posts?select=title&status=eq.published&published_at=gte.${SATURATION_SINCE}&order=published_at.desc&limit=120" "${SUPA_HDRS[@]}" 2>/dev/null | python3 -c "
+import json, sys
+try:
+    rows = json.load(sys.stdin)
+    for r in rows:
+        t = r.get('title', '').strip()
+        if t: print(t)
+except Exception:
+    pass
+" 2>/dev/null)
+[[ -n "$RECENT_ALL_TITLES" ]] && log "Loaded $(echo "$RECENT_ALL_TITLES" | wc -l) cross-category titles (7d) for topic-saturation guard"
+
+SATURATION_THRESHOLD=3
+
 # Mark a keyword as skipped so the queue advances. Surfaces non-2xx HTTP codes
 # in the log so a future schema change (e.g., status enum revision) doesn't go
 # unnoticed and re-trigger the duplicate-keyword loop bug.
@@ -159,6 +179,44 @@ for attempt in $(seq 1 $MAX_KEYWORD_ATTEMPTS); do
         log "ERROR: Failed to obtain keyword on attempt ${attempt}"
         notify_failure "generate-article" "Failed to obtain keyword for category $TARGET_CAT" "$LOG_FILE"
         exit 1
+    fi
+
+    # Cross-category topic-saturation guard. Each candidate keyword has
+    # one or two "topic root" tokens (4+ chars). If any of those roots
+    # appears in 3+ titles published in the last 7 days (across ALL
+    # categories), the topic is saturated — skip this keyword so a
+    # different topic gets a slot.
+    if [[ -n "$RECENT_ALL_TITLES" ]]; then
+        SATURATED=$(echo "$RECENT_ALL_TITLES" | KW="$CANDIDATE_KEYWORD" THR="$SATURATION_THRESHOLD" python3 -c "
+import sys, re, os
+kw = os.environ.get('KW', '').lower()
+thr = int(os.environ.get('THR', '3'))
+# Drop common stopwords; what remains is the topic core.
+STOP = {'для', 'как', 'что', 'это', 'или', 'без', 'свой', 'свои', 'наш', 'наши',
+        'году', 'году:', 'роли', 'ролик', 'роли', 'россии', 'россия', 'россияне',
+        'free', 'best', 'top', 'обзор', 'обзоры', 'кейс', 'кейсы', 'промпты', 'промпт',
+        'гайд', 'гайды', 'инструкция', 'учеба', 'учёбы', 'учёба', 'бизнес', 'бизнеса',
+        'студентов', 'студент', 'студентам', 'новости', 'новость',
+        'скачать', 'установить', 'купить', 'выбрать', 'настроить', 'настройка',
+        'ноутбук', 'ноутбуке', 'компьютер', 'компьютере',
+        'android', 'iphone', 'mac', 'windows', 'linux', 'iphone,'}
+roots = [w for w in re.findall(r\"[а-яёa-z0-9]{4,}\", kw) if w not in STOP]
+if not roots: sys.exit(0)
+counts = {r: 0 for r in roots}
+for line in sys.stdin:
+    t = line.lower()
+    for r in roots:
+        if r in t: counts[r] += 1
+hot = [(r,c) for r,c in counts.items() if c >= thr]
+if hot:
+    hot.sort(key=lambda x:-x[1])
+    print('|'.join(f'{r}={c}' for r,c in hot[:3]))
+" 2>/dev/null)
+        if [[ -n "$SATURATED" ]]; then
+            log "TOPIC-SATURATED: '$CANDIDATE_KEYWORD' shares roots with 7d corpus: $SATURATED"
+            mark_keyword_skipped "$CANDIDATE_ID" "topic-saturated: $SATURATED"
+            continue
+        fi
     fi
 
     # Pre-check: is the candidate an obvious dupe of an existing title in THIS category?
