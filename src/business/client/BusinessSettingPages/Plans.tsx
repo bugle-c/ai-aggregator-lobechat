@@ -15,7 +15,7 @@ import {
   Typography,
 } from 'antd';
 import { Check } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
@@ -67,6 +67,17 @@ const Plans = memo(() => {
   const [removeCardOpen, setRemoveCardOpen] = useState(false);
   const [removingCard, setRemovingCard] = useState(false);
 
+  // Recovery modal — shown once per session if the user has a canceled
+  // or expired checkout in the last 24h. Three exits: retry same plan,
+  // enter promo, or contact support.
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [recoveryDismissed, setRecoveryDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return sessionStorage.getItem('wgpt:recovery-dismissed') === '1';
+  });
+  const [promoInput, setPromoInput] = useState('');
+  const [promoRedeeming, setPromoRedeeming] = useState(false);
+
   // IMPORTANT: keep all hooks above any early-return.
   // useIsMobile() wraps antd-style useResponsive() which calls useRef
   // internally. Calling it after a conditional return causes React #310
@@ -88,6 +99,66 @@ const Plans = memo(() => {
   const { data: packages } = lambdaQuery.topUp.getPackages.useQuery(undefined, {
     enabled: isLogin,
   });
+
+  // Recovery query — only fires for logged-in users with no active
+  // subscription (a paying user doesn't need the «не закончили оплату»
+  // nudge). Auto-opens the modal once on first hit per session.
+  const { data: recoveryAttempt } = lambdaQuery.subscription.getRecentFailedAttempt.useQuery(
+    undefined,
+    { enabled: isLogin },
+  );
+  useEffect(() => {
+    if (recoveryAttempt && !recoveryDismissed && !recoveryOpen) {
+      setRecoveryOpen(true);
+    }
+  }, [recoveryAttempt, recoveryDismissed, recoveryOpen]);
+
+  const closeRecovery = () => {
+    setRecoveryOpen(false);
+    setRecoveryDismissed(true);
+    try {
+      sessionStorage.setItem('wgpt:recovery-dismissed', '1');
+    } catch {
+      /* private mode / quota — fine, in-memory flag holds for this session */
+    }
+  };
+
+  const retryRecoveryPayment = () => {
+    if (!recoveryAttempt?.planId) return;
+    closeRecovery();
+    subscribeMutation.mutate({ planId: recoveryAttempt.planId });
+  };
+
+  const handlePromoRedeem = async () => {
+    const code = promoInput.trim();
+    if (!code) {
+      message.warning('Введите промокод');
+      return;
+    }
+    setPromoRedeeming(true);
+    try {
+      const res = await lambdaClient.promo.redeem.mutate({ code });
+      message.success(res.message || 'Промокод применён');
+      setPromoInput('');
+      closeRecovery();
+      await utils.subscription.getBillingState.invalidate();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Ошибка применения';
+      const label =
+        msg === 'code_not_found'
+          ? 'Промокод не найден'
+          : msg === 'code_expired'
+            ? 'Промокод истёк'
+            : msg === 'code_max_uses_reached'
+              ? 'Промокод исчерпан'
+              : msg === 'code_already_redeemed'
+                ? 'Вы уже использовали этот промокод'
+                : msg;
+      message.error(label);
+    } finally {
+      setPromoRedeeming(false);
+    }
+  };
 
   // Accept reason/text as args so the mobile bottom-sheet flow doesn't
   // race against state-set timing. Earlier the desktop modal used
@@ -325,6 +396,80 @@ const Plans = memo(() => {
           оплаченного периода. Чтобы продолжить пользоваться платным тарифом после этой даты,
           понадобится оплатить заново.
         </Text>
+      </Modal>
+
+      <Modal
+        footer={null}
+        open={recoveryOpen}
+        title="Не закончили оплату?"
+        width={480}
+        onCancel={closeRecovery}
+      >
+        <Flexbox gap={16}>
+          <Text type="secondary">
+            {recoveryAttempt?.planName
+              ? `Прошлая попытка оплатить «${recoveryAttempt.planName}» (${recoveryAttempt.amountRub} ₽) не завершилась. Деньги не списались.`
+              : 'Прошлая попытка оплатить подписку не завершилась. Деньги не списались.'}
+          </Text>
+
+          <Button
+            block
+            loading={subscribeMutation.isPending}
+            size="large"
+            type="primary"
+            onClick={retryRecoveryPayment}
+          >
+            Попробовать оплатить ещё раз
+          </Button>
+
+          <Divider plain style={{ marginBlock: 4 }}>
+            <Text style={{ fontSize: 12 }} type="secondary">
+              или
+            </Text>
+          </Divider>
+
+          <Flexbox gap={8}>
+            <Text strong style={{ fontSize: 13 }}>
+              Есть промокод? Введите его
+            </Text>
+            <Flexbox horizontal gap={8}>
+              <Input
+                placeholder="PROMO-CODE"
+                size="large"
+                value={promoInput}
+                onChange={(e) => setPromoInput(e.target.value)}
+                onPressEnter={handlePromoRedeem}
+              />
+              <Button loading={promoRedeeming} size="large" onClick={handlePromoRedeem}>
+                Применить
+              </Button>
+            </Flexbox>
+            <Text style={{ fontSize: 12 }} type="secondary">
+              Промокод даст вам бонусные кредиты или сразу активирует тариф.
+            </Text>
+          </Flexbox>
+
+          <Divider plain style={{ marginBlock: 4 }} />
+
+          <Flexbox gap={8}>
+            <Text strong style={{ fontSize: 13 }}>
+              Не получается оплатить?
+            </Text>
+            <Text style={{ fontSize: 12 }} type="secondary">
+              Часто карты российских банков не принимают повторные списания — попробуйте другую
+              карту или напишите в поддержку, поможем разобраться.
+            </Text>
+            <Button
+              block
+              href="https://t.me/gptwebrubot"
+              size="large"
+              target="_blank"
+              type="default"
+            >
+              Связаться с поддержкой в Telegram
+            </Button>
+          </Flexbox>
+        </Flexbox>
       </Modal>
 
       <Modal

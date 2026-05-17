@@ -218,4 +218,43 @@ export const subscriptionRouter = router({
 
     return { ok: true };
   }),
+
+  /**
+   * Surfaces the user's most recent abandoned/failed checkout in the
+   * last 24 hours so the client can show a recovery pop-up («Не
+   * закончили оплату?» → продолжить / промокод / поддержка). Excludes
+   * succeeded ones — those don't need recovery.
+   *
+   * Returns null when there is no candidate.
+   */
+  getRecentFailedAttempt: billingProcedure.query(async ({ ctx }) => {
+    const { and, desc, eq, gt, inArray } = await import('drizzle-orm');
+    const { billingPayments, billingPlans } = await import('@/database/schemas');
+
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const rows = await ctx.serverDB
+      .select({
+        amountRub: billingPayments.amountRub,
+        createdAt: billingPayments.createdAt,
+        paymentId: billingPayments.id,
+        planId: billingPayments.planId,
+        planName: billingPlans.name,
+        planSlug: billingPlans.slug,
+        status: billingPayments.status,
+      })
+      .from(billingPayments)
+      .leftJoin(billingPlans, eq(billingPlans.id, billingPayments.planId))
+      .where(
+        and(
+          eq(billingPayments.userId, ctx.userId),
+          eq(billingPayments.type, 'subscription'),
+          inArray(billingPayments.status, ['canceled', 'failed', 'pending']),
+          gt(billingPayments.createdAt, since),
+        ),
+      )
+      .orderBy(desc(billingPayments.createdAt))
+      .limit(1);
+
+    return rows[0] ?? null;
+  }),
 });
