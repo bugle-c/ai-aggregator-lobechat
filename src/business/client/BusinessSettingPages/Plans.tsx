@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
 import MobileCancelFlow from '@/features/Upsell/MobileCancelFlow';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useQueryState } from '@/hooks/useQueryParam';
 import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -100,22 +101,90 @@ const Plans = memo(() => {
     enabled: isLogin,
   });
 
-  // Recovery query — only fires for logged-in users with no active
-  // subscription (a paying user doesn't need the «не закончили оплату»
-  // nudge). Auto-opens the modal once on first hit per session.
-  const { data: recoveryAttempt } = lambdaQuery.subscription.getRecentFailedAttempt.useQuery(
-    undefined,
-    { enabled: isLogin },
+  // Two ways the recovery modal can fire:
+  //   1. URL ?recoveryFor=<payment-id> — set on the YooKassa return_url.
+  //      We poll that payment's status for a few seconds (webhook lag);
+  //      if it lands on succeeded we celebrate, otherwise we open the
+  //      recovery modal AND prefill `recoveryAttempt` with that row.
+  //   2. Fallback: last 24h canceled/failed/pending payment — picked up
+  //      on a fresh /settings/plans visit (user navigated manually,
+  //      not via YK redirect).
+  const [recoveryForId, setRecoveryForId] = useQueryState('recoveryFor');
+  const [recoveryPollEnabled, setRecoveryPollEnabled] = useState(false);
+  const [retryAttempts, setRetryAttempts] = useState(0);
+  const { data: redirectedPayment } = lambdaQuery.subscription.getPaymentStatus.useQuery(
+    { id: recoveryForId || '' },
+    {
+      enabled: isLogin && !!recoveryForId,
+      // Poll a few seconds because YK redirects before our webhook lands
+      refetchInterval: recoveryPollEnabled ? 1500 : false,
+    },
   );
+
+  const { data: fallbackAttempt } = lambdaQuery.subscription.getRecentFailedAttempt.useQuery(
+    undefined,
+    { enabled: isLogin && !recoveryForId },
+  );
+
+  // Drive the URL-based recovery flow.
   useEffect(() => {
-    if (recoveryAttempt && !recoveryDismissed && !recoveryOpen) {
+    if (!recoveryForId) return;
+    // Start polling on first mount with the param.
+    if (!recoveryPollEnabled) {
+      setRecoveryPollEnabled(true);
+      setRetryAttempts(0);
+      return;
+    }
+    if (!redirectedPayment) return;
+
+    if (redirectedPayment.status === 'succeeded') {
+      message.success(`Подписка «${redirectedPayment.planName ?? ''}» активирована. Спасибо!`, 4);
+      setRecoveryPollEnabled(false);
+      setRecoveryForId(null);
+      void utils.subscription.getBillingState.invalidate();
+      return;
+    }
+
+    if (redirectedPayment.status === 'pending') {
+      // Wait up to ~10s for the webhook. After that treat as abandoned
+      // and offer recovery — by then YK has either cancelled or the
+      // user is back on our page anyway.
+      if (retryAttempts >= 7) {
+        setRecoveryPollEnabled(false);
+        setRecoveryOpen(true);
+      } else {
+        setRetryAttempts((n) => n + 1);
+      }
+      return;
+    }
+
+    // canceled / failed → recovery flow.
+    setRecoveryPollEnabled(false);
+    setRecoveryOpen(true);
+  }, [
+    recoveryForId,
+    redirectedPayment,
+    recoveryPollEnabled,
+    retryAttempts,
+    message,
+    setRecoveryForId,
+    utils.subscription.getBillingState,
+  ]);
+
+  // Drive the fallback (visited Plans without YK redirect).
+  useEffect(() => {
+    if (recoveryForId) return; // URL flow takes priority
+    if (fallbackAttempt && !recoveryDismissed && !recoveryOpen) {
       setRecoveryOpen(true);
     }
-  }, [recoveryAttempt, recoveryDismissed, recoveryOpen]);
+  }, [fallbackAttempt, recoveryDismissed, recoveryOpen, recoveryForId]);
+
+  const recoveryAttempt = recoveryForId ? redirectedPayment : fallbackAttempt;
 
   const closeRecovery = () => {
     setRecoveryOpen(false);
     setRecoveryDismissed(true);
+    if (recoveryForId) setRecoveryForId(null);
     try {
       sessionStorage.setItem('wgpt:recovery-dismissed', '1');
     } catch {

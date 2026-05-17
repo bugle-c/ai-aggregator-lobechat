@@ -33,7 +33,12 @@ export const subscriptionRouter = router({
         type: 'subscription',
       });
 
-      const returnUrl = `${process.env.APP_URL || 'https://ask.gptweb.ru'}/settings/billing?payment=success`;
+      // Single return_url for both success and abandon paths — YooKassa
+      // doesn't separate them. We attach the local payment id so the
+      // landing page can look up the true status server-side and either
+      // celebrate (succeeded) or fire the recovery flow (canceled /
+      // expired / still pending). See Plans.tsx → recoveryFor handling.
+      const returnUrl = `${process.env.APP_URL || 'https://ask.gptweb.ru'}/settings/plans?recoveryFor=${payment.id}`;
 
       const user = await UserModel.findById(ctx.serverDB, ctx.userId);
 
@@ -218,6 +223,37 @@ export const subscriptionRouter = router({
 
     return { ok: true };
   }),
+
+  /**
+   * Read the status of a specific billing_payments row. Called from
+   * the post-YooKassa landing on /settings/plans?recoveryFor=<id> to
+   * decide whether to congratulate the user, poll a bit longer (webhook
+   * usually lags ~1-2s), or fire the recovery modal.
+   *
+   * Returns null when the id doesn't belong to the current user — keeps
+   * the endpoint safe against scraping arbitrary payment ids.
+   */
+  getPaymentStatus: billingProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const { and, eq } = await import('drizzle-orm');
+      const { billingPayments, billingPlans } = await import('@/database/schemas');
+      const rows = await ctx.serverDB
+        .select({
+          amountRub: billingPayments.amountRub,
+          createdAt: billingPayments.createdAt,
+          id: billingPayments.id,
+          planId: billingPayments.planId,
+          planName: billingPlans.name,
+          planSlug: billingPlans.slug,
+          status: billingPayments.status,
+        })
+        .from(billingPayments)
+        .leftJoin(billingPlans, eq(billingPlans.id, billingPayments.planId))
+        .where(and(eq(billingPayments.id, input.id), eq(billingPayments.userId, ctx.userId)))
+        .limit(1);
+      return rows[0] ?? null;
+    }),
 
   /**
    * Surfaces the user's most recent abandoned/failed checkout in the
