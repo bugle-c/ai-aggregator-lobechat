@@ -84,9 +84,17 @@ function touchToFields(
   rawReferrer: string | null | undefined,
 ) {
   if (cookie) {
+    // Middleware writes utm_attribution_first on every first visit even when
+    // there are no UTM params (to preserve the first-visit referrer + landing
+    // page). If the cookie has no utm_source, infer from the cookie's own
+    // referrer — that's the FIRST-touch referrer, far more accurate than
+    // rawReferrer (which at signup time is always internal /signin).
+    const inferred = cookie.utm_source
+      ? null
+      : inferSourceFromReferrer(cookie.referrer ?? rawReferrer ?? null);
     return {
-      [`${prefix}UtmSource`]: cookie.utm_source,
-      [`${prefix}UtmMedium`]: cookie.utm_medium,
+      [`${prefix}UtmSource`]: cookie.utm_source ?? inferred?.source ?? null,
+      [`${prefix}UtmMedium`]: cookie.utm_medium ?? inferred?.medium ?? null,
       [`${prefix}UtmCampaign`]: cookie.utm_campaign,
       [`${prefix}UtmContent`]: cookie.utm_content,
       [`${prefix}Referrer`]: cookie.referrer,

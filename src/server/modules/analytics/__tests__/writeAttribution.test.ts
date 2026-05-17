@@ -83,4 +83,49 @@ describe('computeAttributionRow', () => {
     expect(row.firstUtmSource).toBe('direct');
     expect(row.firstUtmMedium).toBe('none');
   });
+
+  it('infers from cookie referrer when cookie has no UTM source', () => {
+    // Middleware writes utm_attribution_first on every first visit, even
+    // for users with no UTM params or referer. The resulting cookie has
+    // all UTM fields null but still preserves the FIRST-visit referrer.
+    // touchToFields must fall through to inferSourceFromReferrer using
+    // the cookie's referrer (NOT the signup-request referrer, which is
+    // always internal ask.gptweb.ru/signin and useless for attribution).
+    const row = computeAttributionRow({
+      userId: 'u4',
+      firstCookie: {
+        utm_source: null,
+        utm_medium: null,
+        utm_campaign: null,
+        utm_content: null,
+        referrer: 'https://yandex.ru/search/?text=webgpt',
+        landing_page: '/',
+        seen_at: '2026-05-17T10:00:00Z',
+      },
+      lastCookie: null,
+      rawReferrer: 'https://ask.gptweb.ru/signin',
+    });
+    expect(row.firstUtmSource).toBe('yandex');
+    expect(row.firstUtmMedium).toBe('organic_search');
+    expect(row.firstReferrer).toBe('https://yandex.ru/search/?text=webgpt');
+    expect(row.firstLandingPage).toBe('/');
+  });
+
+  it('falls back to direct when cookie has no UTM source and no referrer', () => {
+    const row = computeAttributionRow({
+      userId: 'u5',
+      firstCookie: {
+        utm_source: null,
+        utm_medium: null,
+        utm_campaign: null,
+        utm_content: null,
+        referrer: null,
+        landing_page: '/signin',
+        seen_at: '2026-05-17T10:00:00Z',
+      },
+      lastCookie: null,
+    });
+    expect(row.firstUtmSource).toBe('direct');
+    expect(row.firstUtmMedium).toBe('none');
+  });
 });
