@@ -179,6 +179,16 @@ const Plans = memo(() => {
     }
   }, [fallbackAttempt, recoveryDismissed, recoveryOpen, recoveryForId]);
 
+  // Broadcast-campaign deep-link: `/settings/plans?ref=<code>` pre-fills the
+  // promo input so the recipient doesn't have to retype it from the email.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const ref = new URLSearchParams(window.location.search).get('ref');
+    if (ref && !promoInput) setPromoInput(ref.toUpperCase());
+    // run-once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const recoveryAttempt = recoveryForId ? redirectedPayment : fallbackAttempt;
 
   const closeRecovery = () => {
@@ -697,6 +707,33 @@ const Plans = memo(() => {
           </Grid>
         </>
       )}
+
+      {/* Promo redeem — always visible at the bottom of /settings/plans.
+          Broadcast recipients click "Open" in the email and land here with
+          `?ref=<code>`; we pre-fill the field so they don't have to hunt. */}
+      <Card size="small" style={{ marginTop: 24 }}>
+        <Flexbox gap={8}>
+          <Title level={5} style={{ margin: 0 }}>
+            Есть промокод? Введите его
+          </Title>
+          <Flexbox horizontal gap={8}>
+            <Input
+              placeholder="PROMO-CODE"
+              size="large"
+              value={promoInput}
+              onChange={(e) => setPromoInput(e.target.value)}
+              onPressEnter={handlePromoRedeem}
+            />
+            <Button loading={promoRedeeming} size="large" onClick={handlePromoRedeem}>
+              Применить
+            </Button>
+          </Flexbox>
+          <Text style={{ fontSize: 12 }} type="secondary">
+            Бонусные кредиты или активация тарифа. Код из email-рассылки активируется только после
+            оплаты любого тарифа в течение 24 часов.
+          </Text>
+        </Flexbox>
+      </Card>
     </>
   );
 });
