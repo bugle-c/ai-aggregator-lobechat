@@ -300,6 +300,78 @@ const Plans = memo(() => {
   const totalAvailable = creditLimit + creditBalance;
   const usagePercent = totalAvailable > 0 ? Math.round((creditsUsed / totalAvailable) * 100) : 0;
 
+  // Recovery modal lifted out of both render branches so mobile + desktop
+  // share one source of truth and behaviour.
+  const recoveryModal = (
+    <Modal
+      footer={null}
+      open={recoveryOpen}
+      title="Не закончили оплату?"
+      width={480}
+      onCancel={closeRecovery}
+    >
+      <Flexbox gap={16}>
+        <Text type="secondary">
+          {recoveryAttempt?.planName
+            ? `Прошлая попытка оплатить «${recoveryAttempt.planName}» (${recoveryAttempt.amountRub} ₽) не завершилась. Деньги не списались.`
+            : 'Прошлая попытка оплатить подписку не завершилась. Деньги не списались.'}
+        </Text>
+
+        <Button
+          block
+          loading={subscribeMutation.isPending}
+          size="large"
+          type="primary"
+          onClick={retryRecoveryPayment}
+        >
+          Попробовать оплатить ещё раз
+        </Button>
+
+        <Divider plain style={{ marginBlock: 4 }}>
+          <Text style={{ fontSize: 12 }} type="secondary">
+            или
+          </Text>
+        </Divider>
+
+        <Flexbox gap={8}>
+          <Text strong style={{ fontSize: 13 }}>
+            Есть промокод? Введите его
+          </Text>
+          <Flexbox horizontal gap={8}>
+            <Input
+              placeholder="PROMO-CODE"
+              size="large"
+              value={promoInput}
+              onChange={(e) => setPromoInput(e.target.value)}
+              onPressEnter={handlePromoRedeem}
+            />
+            <Button loading={promoRedeeming} size="large" onClick={handlePromoRedeem}>
+              Применить
+            </Button>
+          </Flexbox>
+          <Text style={{ fontSize: 12 }} type="secondary">
+            Промокод даст вам бонусные кредиты или сразу активирует тариф.
+          </Text>
+        </Flexbox>
+
+        <Divider plain style={{ marginBlock: 4 }} />
+
+        <Flexbox gap={8}>
+          <Text strong style={{ fontSize: 13 }}>
+            Не получается оплатить?
+          </Text>
+          <Text style={{ fontSize: 12 }} type="secondary">
+            Часто карты российских банков не принимают повторные списания — попробуйте другую карту
+            или напишите в поддержку, поможем разобраться.
+          </Text>
+          <Button block href="https://t.me/gptwebrubot" size="large" target="_blank" type="default">
+            Связаться с поддержкой в Telegram
+          </Button>
+        </Flexbox>
+      </Flexbox>
+    </Modal>
+  );
+
   if (isMobile && plans && billing) {
     // Mobile: vertical-stack layout + bottom-sheet cancel flow. Active
     // paid users see a "Отменить подписку" button below the plan list.
@@ -363,6 +435,7 @@ const Plans = memo(() => {
             await handleCancelSubmit(reasonCode, reasonText);
           }}
         />
+        {recoveryModal}
       </>
     );
   }
@@ -467,79 +540,7 @@ const Plans = memo(() => {
         </Text>
       </Modal>
 
-      <Modal
-        footer={null}
-        open={recoveryOpen}
-        title="Не закончили оплату?"
-        width={480}
-        onCancel={closeRecovery}
-      >
-        <Flexbox gap={16}>
-          <Text type="secondary">
-            {recoveryAttempt?.planName
-              ? `Прошлая попытка оплатить «${recoveryAttempt.planName}» (${recoveryAttempt.amountRub} ₽) не завершилась. Деньги не списались.`
-              : 'Прошлая попытка оплатить подписку не завершилась. Деньги не списались.'}
-          </Text>
-
-          <Button
-            block
-            loading={subscribeMutation.isPending}
-            size="large"
-            type="primary"
-            onClick={retryRecoveryPayment}
-          >
-            Попробовать оплатить ещё раз
-          </Button>
-
-          <Divider plain style={{ marginBlock: 4 }}>
-            <Text style={{ fontSize: 12 }} type="secondary">
-              или
-            </Text>
-          </Divider>
-
-          <Flexbox gap={8}>
-            <Text strong style={{ fontSize: 13 }}>
-              Есть промокод? Введите его
-            </Text>
-            <Flexbox horizontal gap={8}>
-              <Input
-                placeholder="PROMO-CODE"
-                size="large"
-                value={promoInput}
-                onChange={(e) => setPromoInput(e.target.value)}
-                onPressEnter={handlePromoRedeem}
-              />
-              <Button loading={promoRedeeming} size="large" onClick={handlePromoRedeem}>
-                Применить
-              </Button>
-            </Flexbox>
-            <Text style={{ fontSize: 12 }} type="secondary">
-              Промокод даст вам бонусные кредиты или сразу активирует тариф.
-            </Text>
-          </Flexbox>
-
-          <Divider plain style={{ marginBlock: 4 }} />
-
-          <Flexbox gap={8}>
-            <Text strong style={{ fontSize: 13 }}>
-              Не получается оплатить?
-            </Text>
-            <Text style={{ fontSize: 12 }} type="secondary">
-              Часто карты российских банков не принимают повторные списания — попробуйте другую
-              карту или напишите в поддержку, поможем разобраться.
-            </Text>
-            <Button
-              block
-              href="https://t.me/gptwebrubot"
-              size="large"
-              target="_blank"
-              type="default"
-            >
-              Связаться с поддержкой в Telegram
-            </Button>
-          </Flexbox>
-        </Flexbox>
-      </Modal>
+      {recoveryModal}
 
       <Modal
         cancelText="Передумал"
