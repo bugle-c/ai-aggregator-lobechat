@@ -181,10 +181,20 @@ const Plans = memo(() => {
 
   // Broadcast-campaign deep-link: `/settings/plans?ref=<code>` pre-fills the
   // promo input so the recipient doesn't have to retype it from the email.
+  // Also suppresses the recovery modal — `?ref=` means "user clicked a
+  // marketing link", not "user returned from a failed checkout".
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const ref = new URLSearchParams(window.location.search).get('ref');
-    if (ref && !promoInput) setPromoInput(ref.toUpperCase());
+    if (!ref) return;
+    if (!promoInput) setPromoInput(ref.toUpperCase());
+    setRecoveryDismissed(true);
+    setRecoveryOpen(false);
+    try {
+      sessionStorage.setItem('wgpt:recovery-dismissed', '1');
+    } catch {
+      // sessionStorage may be unavailable in private mode — non-fatal
+    }
     // run-once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
