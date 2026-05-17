@@ -8,6 +8,7 @@ export * from './apiKey';
 export * from './asyncTask';
 export * from './betterAuth';
 export * from './billing';
+export * from './broadcast';
 export * from './chatGroup';
 export * from './credit-holds';
 export * from './file';

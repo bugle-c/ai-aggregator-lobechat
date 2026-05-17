@@ -2,7 +2,16 @@ import { TRPCError } from '@trpc/server';
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { billingPlans, promoCodes, promoRedemptions, userBilling } from '@/database/schemas';
+import {
+  billingPayments,
+  billingPlans,
+  broadcastCampaigns,
+  broadcastEvents,
+  broadcastRecipients,
+  promoCodes,
+  promoRedemptions,
+  userBilling,
+} from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
@@ -110,6 +119,121 @@ export const promoRouter = router({
             message: `Тариф «${plan?.name ?? 'обновлён'}» на ${promo.durationDays} дней`,
             planName: plan?.name ?? null,
             type: 'plan_upgrade' as const,
+          };
+        }
+
+        if (promo.type === 'broadcast_paid_bonus_24h') {
+          if (!promo.tokenAmount)
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'invalid_promo_config' });
+
+          // 1) Eligibility — recent unredeemed recipient with matching campaign promoCode
+          const recipientRows = await tx
+            .select({
+              r: broadcastRecipients,
+              c: broadcastCampaigns,
+            })
+            .from(broadcastRecipients)
+            .innerJoin(
+              broadcastCampaigns,
+              eq(broadcastCampaigns.id, broadcastRecipients.campaignId),
+            )
+            .where(
+              and(
+                eq(broadcastRecipients.userId, ctx.userId),
+                sql`${broadcastRecipients.sentAt} IS NOT NULL`,
+                sql`${broadcastRecipients.promoRedeemedAt} IS NULL`,
+                eq(broadcastCampaigns.promoCode, promo.code),
+                sql`${broadcastRecipients.sentAt} > now() - interval '24 hours'`,
+              ),
+            )
+            .orderBy(sql`${broadcastRecipients.sentAt} DESC`)
+            .limit(1);
+
+          if (!recipientRows[0]) {
+            // Check if already redeemed (better error message)
+            const usedRows = await tx
+              .select({ id: broadcastRecipients.id })
+              .from(broadcastRecipients)
+              .where(
+                and(
+                  eq(broadcastRecipients.userId, ctx.userId),
+                  sql`${broadcastRecipients.promoRedeemedAt} IS NOT NULL`,
+                ),
+              )
+              .limit(1);
+
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: usedRows[0]
+                ? 'Этот код уже активирован.'
+                : 'Код доступен только получателям email-рассылки в течение 24 часов после получения письма.',
+            });
+          }
+
+          const recipient = recipientRows[0].r;
+
+          // 2) Payment check — at least one successful billing_payments in last 24h
+          const paymentRows = await tx
+            .select({
+              id: billingPayments.id,
+              amountRub: billingPayments.amountRub,
+              updatedAt: billingPayments.updatedAt,
+            })
+            .from(billingPayments)
+            .where(
+              and(
+                eq(billingPayments.userId, ctx.userId),
+                eq(billingPayments.status, 'succeeded'),
+                sql`${billingPayments.amountRub} > 0`,
+                sql`${billingPayments.updatedAt} > now() - interval '24 hours'`,
+              ),
+            )
+            .orderBy(sql`${billingPayments.updatedAt} DESC`)
+            .limit(1);
+
+          if (!paymentRows[0]) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                'Сначала оплати любой тариф (Basic / Pro / Pro Max), затем введи код — окно 24 часа.',
+            });
+          }
+
+          const payment = paymentRows[0];
+
+          // 3) Grant credits
+          await tx
+            .update(userBilling)
+            .set({
+              tokenBalance: sql`${userBilling.tokenBalance} + ${promo.tokenAmount}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(userBilling.userId, ctx.userId));
+
+          // 4) Mark recipient redeemed
+          await tx
+            .update(broadcastRecipients)
+            .set({
+              promoRedeemedAt: new Date(),
+              bonusCreditsGranted: promo.tokenAmount,
+              paidAt: payment.updatedAt,
+              paymentId: payment.id,
+              paymentAmountRub: payment.amountRub,
+            })
+            .where(eq(broadcastRecipients.id, recipient.id));
+
+          // 5) Audit event
+          await tx.insert(broadcastEvents).values({
+            campaignId: recipient.campaignId,
+            recipientId: recipient.id,
+            eventType: 'promo_grant',
+            payload: { amount: promo.tokenAmount, payment_id: payment.id },
+          });
+
+          return {
+            message: `+${promo.tokenAmount} кредитов`,
+            tokensAdded: promo.tokenAmount,
+            type: 'token_bonus' as const,
           };
         }
 
