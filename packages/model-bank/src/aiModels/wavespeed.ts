@@ -1,4 +1,26 @@
+import {
+  PRESET_VIDEO_ASPECT_RATIOS,
+  PRESET_VIDEO_RESOLUTIONS,
+  type VideoModelParamsSchema,
+} from '../standard-parameters/video';
 import type { AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
+
+// Kuaishou Kling 2.6/3.0 Pro accept a strict duration enum [5, 10] and the
+// canonical aspect-ratio enum; sending anything else (e.g. duration=8 or
+// aspectRatio="adaptive") makes WaveSpeed 400 the request before it ever
+// reaches Kuaishou. Without an explicit per-model schema the UI falls back
+// to seedance15ProParams (4..12 slider, "adaptive" default) and lets the
+// user pick illegal combos. Both Kling tiers share the same constraints.
+const klingProParams: VideoModelParamsSchema = {
+  aspectRatio: { default: '16:9', enum: PRESET_VIDEO_ASPECT_RATIOS },
+  duration: { default: 5, max: 10, min: 5, step: 5 },
+  endImageUrl: { default: null, maxFileSize: 30 * 1024 * 1024, requiresImageUrl: true },
+  generateAudio: { default: false },
+  imageUrl: { default: null, maxFileSize: 30 * 1024 * 1024 },
+  prompt: { default: '' },
+  resolution: { default: '1080p', enum: PRESET_VIDEO_RESOLUTIONS },
+  seed: { default: null },
+};
 
 // WaveSpeed AI — image/video/audio inference aggregator
 // Pricing in ai_aggregator.model_rates (Supabase) is source of truth for billing;
@@ -371,6 +393,7 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     displayName: 'Kling 2.6 Pro',
     enabled: true,
     id: 'kwaivgi/kling-v2.6-pro/text-to-video',
+    parameters: klingProParams,
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.07, strategy: 'fixed', unit: 'second' }],
     },
@@ -381,6 +404,7 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     displayName: 'Kling 3.0 Pro',
     enabled: true,
     id: 'kwaivgi/kling-v3.0-pro/text-to-video',
+    parameters: { ...klingProParams, generateAudio: { default: true } },
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.2, strategy: 'fixed', unit: 'second' }],
     },

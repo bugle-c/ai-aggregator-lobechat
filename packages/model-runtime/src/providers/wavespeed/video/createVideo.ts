@@ -73,7 +73,7 @@ export async function createWaveSpeedVideo(
  * for Seedance/Kling/Veo/Wan/Hailuo/Sora/Runway/LTX/Luma as of Apr 2026.
  * Per-model overrides can be added here as we discover them.
  */
-function buildBody(params: CreateVideoPayload['params']): Record<string, unknown> {
+export function buildBody(params: CreateVideoPayload['params']): Record<string, unknown> {
   const {
     prompt,
     imageUrl,
@@ -90,7 +90,13 @@ function buildBody(params: CreateVideoPayload['params']): Record<string, unknown
 
   if (imageUrl) body.image = imageUrl;
   if (endImageUrl) body.last_image = endImageUrl;
-  if (aspectRatio !== undefined) body.aspect_ratio = aspectRatio;
+  // `adaptive` is a LobeChat-internal sentinel meaning "let the provider decide
+  // / infer from input image". No upstream WaveSpeed model accepts the literal
+  // string — Kling/Seedance/Veo all enforce a strict enum (16:9, 9:16, ...) and
+  // 400 on anything else. Drop the field instead of forwarding it.
+  if (aspectRatio !== undefined && aspectRatio !== 'adaptive') {
+    body.aspect_ratio = aspectRatio;
+  }
   if (duration !== undefined) body.duration = duration;
   if (generateAudio !== undefined) body.enable_audio = generateAudio;
   if (seed !== undefined && seed !== null) body.seed = seed;

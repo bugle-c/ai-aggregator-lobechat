@@ -17,13 +17,15 @@ const nextConfig = defineConfig({
         ],
       }
     : undefined,
-  // Include ffmpeg binary only for video webhook processing
-  // refs: https://github.com/vercel-labs/ffmpeg-on-vercel
-  outputFileTracingIncludes: isVercel
-    ? {
-        '/api/webhooks/video/*': ['./node_modules/ffmpeg-static/ffmpeg'],
-      }
-    : undefined,
+  // Include ffmpeg binary for video webhook processing on BOTH Vercel and self-host.
+  // Next.js' nft tracer skips binary assets that aren't reachable through static
+  // require analysis, so without this hint the ffmpeg binary never lands in
+  // `.next/standalone/node_modules/ffmpeg-static/`. The webhook then crashes with
+  // `spawn ENOENT` on every successful WaveSpeed video callback, breaking the
+  // entire video pipeline. Refs: https://github.com/vercel-labs/ffmpeg-on-vercel
+  outputFileTracingIncludes: {
+    '/api/webhooks/video/*': ['./node_modules/ffmpeg-static/ffmpeg'],
+  },
   webpack: (webpackConfig, context) => {
     const { dev } = context;
     if (!dev) {
