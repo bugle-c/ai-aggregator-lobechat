@@ -267,6 +267,7 @@ Bot mirror (`gptwebrubot/src/models.ts`) has a `local` category with the same th
 ## Phase 13: Visual generators async + presets + recovery (2026-05-11..17)
 
 ### Async image generation
+
 - WaveSpeed has async API: `POST /api/v3/{model}` → `{ inferenceId, pollUrl }` → poll until status=`completed`.
 - `packages/model-runtime/src/providers/wavespeed/createImage.ts` split into `submitWaveSpeedImage()` + `checkWaveSpeedImage()` (keeps legacy sync `createWaveSpeedImage` for fallback).
 - `src/server/routers/async/image.ts` — if `WAVESPEED_API_KEY` set, **always** submits async (provider check removed — aggregator routes through `lobehub` provider, not `wavespeed`); stores `inferenceId` + `pollUrl` in `async_task.metadata`; returns `{ success: true, asyncPending: true }`. Falls back to sync only on submit error.
@@ -276,39 +277,79 @@ Bot mirror (`gptwebrubot/src/models.ts`) has a `local` category with the same th
 - `cron/reconcile-pending-payments` — every 10min catches `billing_payments` stuck without YK ID after 5min (mark failed) or polls YK for completed/canceled status.
 
 ### AsyncTask gotchas
+
 - `AsyncTaskStatus` is STRING enum (`'pending'|'processing'|'success'|'error'`), NOT numeric. Easy mistake when writing manual SQL.
 - `asyncTaskModel.listActiveByType` extended to return Pending+Processing always + Error rows in the last 7 days (so UI tiles linger after failure, not vanish).
 
 ### S3 presign split
+
 - `src/server/modules/S3/index.ts` has a SECOND client (`presignClient`) bound to `S3_PUBLIC_DOMAIN` (e.g. `https://files.gptweb.ru`). Internal client stays on `localhost:9000`.
 - Reason: SigV4 binds signature to `Host` header — presigned URL generated with internal endpoint returns `localhost:9000` in body and breaks in browser.
 - `FileS3` passes `presignEndpoint` option; if equal/undefined the same client is reused.
 
 ### Caddy CORS dedup
+
 - `files.gptweb.ru` Caddyfile block had `header { Access-Control-Allow-* }` AND RustFS adds its own → browsers rejected with "multiple values" error. Removed the Caddy block; RustFS handles CORS alone.
 
 ### Presets (75 across 11 categories)
+
 - Migrations `0098_presets.sql` … `0103_user_billing_admin_grant_flag.sql` — preset table + seed + `model_id` rename to recommendation (not hard-bound) + `is_admin_granted` boolean on `user_billing`.
 - `params_lock` JSON: `{ aspect_ratio, prompt_prefix, style, ... }` — same `aspect_ratio` field both drives generation params and the masonry card height (`PresetCard.cardAspectRatio()` regex `^(\d+)\s*[:×x/]\s*(\d+)$` → CSS `${m1} / ${m2}`).
-- Thumbnails: WebP, ~10-60KB each, generated via sharp inside `lobehub` container (Brevo-style: external host can't write to RustFS path).
+- Thumbnails: WebP, \~10-60KB each, generated via sharp inside `lobehub` container (Brevo-style: external host can't write to RustFS path).
 - **RustFS gotcha**: never `mkdir -p /data/lobe/presets/` directly on the host filesystem — bare dirs confuse RustFS metadata so subsequent S3 PUTs return AccessDenied. Always go through S3 API.
 - `migrations/__drizzle_migrations` SHA256 must match the file hash. If container crashes re-running an applied migration, manually `INSERT` the row with computed hash + `when=<epoch_ms>`.
 
 ### Preset UI
+
 - `PresetGrid.tsx` uses CSS columns (`columnCount: isMobile?2:4, columnGap: 12`) for true masonry — CSS Grid couldn't avoid gaps with varied aspect ratios.
 - `PresetCard.tsx` is a `<button>` (was `<Block>` — CSS columns broke clicks). Hover overlay has `pointer-events: none`. `CATEGORY_HINTS` map provides per-category usage tips.
 - `ActiveGenerationsStrip.tsx` error tiles have a × close button; dismissed IDs persist to `localStorage['wgpt:dismissed-error-tasks']`. (Earlier auto-disappear-after-2min was rejected by user as not visible enough.)
 - `FlowMainArea.tsx` (image + video) embeds `<ResourceExplorer/>` inside the "Мои генерации" tab and primes the resource store with the right `FilesTabs` — no navigation hop to `/resource`.
 
 ### Payment recovery flow
+
 - `createPayment.returnUrl = /settings/plans?recoveryFor=${payment.id}` (was `/settings/billing?payment=success`).
-- `subscription.getPaymentStatus({ id })` query — polled every 1.5s for ~10s on Plans mount when `recoveryFor` param present.
+- `subscription.getPaymentStatus({ id })` query — polled every 1.5s for \~10s on Plans mount when `recoveryFor` param present.
 - `subscription.getRecentFailedAttempt` — finds last 24h canceled/failed/pending; drives recovery modal with 3 paths: retry same plan, redeem promo (`promo.redeem.mutate`), open `t.me/gptwebrubot`.
 - Recovery modal JSX **lifted outside** the desktop/mobile branch — single `recoveryModal` const used in both renders (was only on desktop, broke on mobile).
 - `subscription.removePaymentMethod` — clears `payment_method_id` + sets `auto_renew=false` for YK card-detach UI.
 
 ### YooKassa recurring
+
 - `YOOKASSA_RECURRING_ENABLED=0` (env flag) — YK occasionally claims "store can't make recurring payments" 403 despite confirmation; flag lets us flip back to single-payment mode quickly.
 
 ### Brevo email gotcha
+
 - Brevo whitelists sending IPs. Sending from outside the `lobe` container box returns 401 "unrecognised IP". Always run from inside the container (or curl from the host's whitelisted IP).
+
+## Phase 14: Promo redeem + broadcast integration (2026-05-17)
+
+### Promo type `broadcast_paid_bonus_24h`
+
+- Расширение `promo.redeem` мутатора (`src/business/server/lambda-routers/promo.ts`).
+- Branch активируется когда `promo.type === 'broadcast_paid_bonus_24h'`. Все проверки в одной транзакции (`ctx.serverDB.transaction`):
+  1. Lookup recipient: JOIN `broadcast_recipients` + `broadcast_campaigns` WHERE `userId = ctx.userId AND sentAt IS NOT NULL AND promoRedeemedAt IS NULL AND campaigns.promoCode = code AND sentAt > now() - interval '24h'`. ORDER BY sentAt DESC LIMIT 1.
+  2. Payment gate (raw SQL via `tx.execute`): `billing_payments WHERE user_id AND status='succeeded' AND amount_rub > 0 AND updated_at > now() - interval '24h'` (нет `succeeded_at` — используем `updated_at`).
+  3. Grant credits: `UPDATE user_billing SET token_balance = token_balance + promo.tokenAmount` (это **credits для UI**, не token_limit).
+  4. Log: INSERT promo_redemptions (promoId, userId — НЕТ `code` или `source` колонок).
+  5. Mark recipient: promo_redeemed_at, bonus_credits_granted, paid_at, payment_id, payment_amount_rub.
+  6. Audit event in broadcast_events.
+  7. UPDATE promo_codes.used_count++.
+
+### Return shape
+
+Существующая `token_bonus` ветвь возвращает `{message, tokensAdded, type: 'token_bonus' as const}` — НЕ `tokenAmount`. Frontend ожидает именно `tokensAdded`. Новая ветвь матчит шейп.
+
+### Drizzle schema файл
+
+`packages/database/src/schemas/broadcast.ts` — три таблицы (`broadcastCampaigns`, `broadcastRecipients`, `broadcastEvents`). НЕТ `users` import чтобы избежать circular deps (FK существует в SQL, в Drizzle опущен).
+
+### Plans.tsx (broadcast UX)
+
+- `useEffect` на mount читает `?ref=` из URL → авто-заполняет `promoInput` upper-cased + ставит `recoveryDismissed=true` + закрывает recovery modal (чтобы при cookie-failed-payment не лезть с retry-модалкой поверх маркетингового deeplink'а).
+- Always-visible `<Card>` "Есть промокод? Введите его" внизу Plans page (раньше промо-input жил ТОЛЬКО внутри recovery modal → 0 redemptions за всю историю).
+
+### Production rollout campaign #2 (2026-05-17)
+
+- 1043 recipients, audience=all, daily_cap=150 → \~7 дней доставки.
+- End-to-end verified: token_balance +500, promo_redemptions row, recipient marked, audit event записан. Fake-payment в тесте — INSERT в `billing_payments` со status='succeeded' (потом DELETE по `yookassa_payment_id LIKE 'TEST-%'`).
