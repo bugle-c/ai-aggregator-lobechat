@@ -218,6 +218,13 @@ const PresetCard = memo<Props>(({ isActive, onClick, preset }) => {
             e.stopPropagation();
             setZoomOpen(true);
           }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              setZoomOpen(true);
+            }
+          }}
         >
           <ZoomIn size={16} />
         </span>
