@@ -30,7 +30,17 @@ const IMAGE_TYPES = new Set([
 ]);
 
 // Video file types
-const VIDEO_TYPES = new Set(['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime']);
+const VIDEO_TYPES = new Set([
+  'video/mp4',
+  'video/webm',
+  'video/ogg',
+  'video/quicktime',
+  'video/mpeg',
+  'video/x-msvideo',
+  'video/x-matroska',
+  'video/x-ms-wmv',
+  'video/x-flv',
+]);
 
 // Markdown file types
 const MARKDOWN_TYPES = new Set(['text/markdown', 'text/x-markdown']);
