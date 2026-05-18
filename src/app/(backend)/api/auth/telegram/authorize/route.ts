@@ -109,9 +109,9 @@ export const GET = async (req: NextRequest) => {
   <div class="container">
     <h2>Вход через Telegram</h2>
     <p class="subtitle">
-      Нажмите кнопку ниже, затем подтвердите вход в Telegram
+      Нажмите кнопку, подтвердите вход в Telegram и вернитесь сюда — мы автоматически вас впустим.
     </p>
-    <a class="tg-btn" href="${deepLink}" target="_blank" id="tgBtn">
+    <a class="tg-btn" href="${deepLink}" id="tgBtn">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.03-1.97 1.25-5.56 3.69-.53.36-1.01.54-1.43.53-.47-.01-1.38-.27-2.05-.49-.83-.27-1.49-.42-1.43-.88.03-.24.37-.49 1.02-.74 3.99-1.73 6.65-2.87 7.97-3.44 3.8-1.58 4.59-1.86 5.1-1.87.11 0 .37.03.54.17.14.12.18.28.2.45-.01.06.01.24 0 .37z"/>
       </svg>
@@ -157,6 +157,21 @@ export const GET = async (req: NextRequest) => {
 
         // Start polling after a short delay
         setTimeout(poll, 1000);
+
+        // Re-trigger an immediate poll whenever the tab regains focus.
+        // Without target="_blank", clicking "Open Telegram" navigates
+        // the same tab away; the user comes back via app handoff or
+        // browser "back". Both restore this page from bfcache with
+        // timers frozen, so the next poll might be ~2s away. Force one
+        // right now to minimize the wait.
+        function pulse() { if (!stopped) poll(); }
+        document.addEventListener('visibilitychange', function() {
+          if (!document.hidden) pulse();
+        });
+        window.addEventListener('pageshow', function(e) {
+          if (e.persisted) pulse();
+        });
+        window.addEventListener('focus', pulse);
       })();
     </script>
   </div>
