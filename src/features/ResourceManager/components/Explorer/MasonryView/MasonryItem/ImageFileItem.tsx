@@ -47,10 +47,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgMask};
 
     transition: opacity ${cssVar.motionDurationMid};
-
-    &:hover {
-      opacity: 1;
-    }
   `,
   imageWrapper: css`
     position: relative;
@@ -191,8 +187,8 @@ const ImageFileItem = memo<ImageFileItemProps>(
               src={url}
               preview={{
                 src: url,
-                visible: previewOpen,
-                onVisibleChange: (v) => setPreviewOpen(v),
+                open: previewOpen,
+                onOpenChange: (v) => setPreviewOpen(v),
               }}
               style={{
                 display: 'block',
