@@ -432,5 +432,18 @@ Authenticated waterfall не измерен в данном проходе (Play
 
 - Image tiles: **inline antd `<Image preview>`** controlled via `useState` в `ImageFileItem.tsx`. Click на плитке выставляет `previewOpen=true`; antd рендерит lightbox с zoom/rotate/flip/wheel-zoom из коробки. Hover overlay получил `pointer-events:none` чтобы не перехватывать click.
 - Video tiles: новый компонент `VideoFileItem.tsx` (mirror of ImageFileItem). `<video preload="metadata" src={url + '#t=0.1'}>` рендерит первый кадр как poster. Maximize-кнопка в углу + центральный Play-индикатор. Клик → локальный antd `<Modal>` с `<video controls autoPlay>`. НЕ идёт через FullscreenModal route.
-- Preset cards: `PresetCard.tsx` оставляет existing "click = apply preset" поведение. Новая ZoomIn-кнопка (\~28×28px) в правом верхнем углу открывает `PresetZoomModal` с full-size MP4/image + "Применить пресет" footer-кнопкой. `e.stopPropagation()` + `e.preventDefault()` на zoom-кнопке чтобы не активировать apply.
+- Preset cards: `PresetCard.tsx` оставляет existing "click = apply preset" поведение. Новая ZoomIn-кнопка (\~28×28px) в правом верхнем углу открывает `PresetZoomModal` с full-size MP4/image + "Применить пресет" footer-кнопкой. `e.stopPropagation()` + `e.preventDefault()` на zoom-кнопке чтобы не активировать apply. `<span role="button">` обёртка вместо `<button>` — нельзя вкладывать кнопку в кнопку. Keyboard: Enter/Space через `onKeyDown`.
 - FullscreenModal route и `FileViewer/Renderer/{Image,Video}` оставлены без изменений — всё ещё используются для PDF/Office/markdown/code файлов через `DefaultFileItem`/`MarkdownFileItem`/`NoteFileItem`.
+
+### Shipped 2026-05-18
+
+- `b760161254` + `2be5327afb` — inline antd `<Image preview open/onOpenChange>` на ImageFileItem (antd 6: deprecated visible/onVisibleChange).
+- `0987dd1357` + `0081548035` — новый VideoFileItem с onError-фолбэком и single openModal handler.
+- `87ddee220d` + `7d7e1f19db` — dispatcher routes 9 video MIME-типов (mp4/webm/ogg/quicktime/mpeg/avi/mkv/wmv/flv) на VideoFileItem.
+- `750a1280a3` + `24b092b0d0` — PresetCard ZoomIn кнопка + PresetZoomModal с keyboard activation.
+
+### Known TODO (follow-up)
+
+- `VIDEO_TYPES` дублируется между `MasonryItem/index.tsx` и `FileViewer/index.tsx` (`VIDEO_MIME_TYPES`). Извлечь в `src/utils/mimeTypes.ts` при следующем касании этой области.
+- `isVideoUrl` в `PresetZoomModal.tsx` и обратная image-whitelist логика в `PresetMP4Player.tsx` — общая утилита `isVideoPreset(preset)` чище. Или ориентироваться на `preset.modality === 'video'`.
+- iOS Safari может не отрендерить `#t=0.1` poster на `<video>` thumbnail в Library; fallback (`onError` → скрыть `<video>`) оставляет Play-индикатор и Maximize-кнопку видимыми. Если жалобы пойдут — server-side thumbnail generation.
