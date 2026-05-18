@@ -16,7 +16,7 @@ export default function AuthGuardWrapper({ children }: { children: ReactNode }) 
     <>
       <div
         style={{
-          filter: isLogin ? undefined : 'blur(8px)',
+          filter: isLogin ? undefined : 'blur(3px)',
           minHeight: '100vh',
           pointerEvents: isLogin ? undefined : 'none',
           transition: 'filter 200ms ease',
