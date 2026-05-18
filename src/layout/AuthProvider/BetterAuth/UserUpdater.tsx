@@ -8,22 +8,46 @@ import { useUserStore } from '@/store/user';
 import { type LobeUser } from '@/types/user';
 
 /**
- * Sync Better-Auth session state to Zustand store
+ * Sync Better-Auth session state to Zustand store.
+ *
+ * IMPORTANT: this component fires on every tab focus / visibilitychange
+ * because Better Auth's useSession re-fetches the session when the page
+ * regains visibility. During that re-fetch `isPending` flips to true and
+ * `data` is briefly undefined.
+ *
+ * If we naively wrote `isSignedIn = !!session?.user` to the store on
+ * every render, the AuthGuardOverlay would FLASH the registration modal
+ * every time the user came back to the tab — even though they're still
+ * logged in. The store would go true → false → true within ~300ms.
+ *
+ * Fix: only commit `isSignedIn` / clear `user` when the session call has
+ * settled (`!isPending`). During pending we keep the previous value.
  */
 const UserUpdater = memo(() => {
   const { data: session, isPending, error } = useSession();
 
-  const isLoaded = !isPending;
   const isSignedIn = !!session?.user && !error;
-
   const betterAuthUser = session?.user;
   const useStoreUpdater = createStoreUpdater(useUserStore);
 
-  useStoreUpdater('isLoaded', isLoaded);
-  useStoreUpdater('isSignedIn', isSignedIn);
+  // isLoaded should reflect "the very first session check has finished"
+  // — once true, never flip back to false on subsequent refetches. The
+  // store updater only writes when the value changes, so calling with
+  // `true` repeatedly is a no-op after the first time.
+  useStoreUpdater('isLoaded', !isPending);
 
-  // Sync user data from Better-Auth session to Zustand store
+  // Only sync isSignedIn after pending settles. Otherwise mid-refetch
+  // we write `false` and the AuthGuardOverlay flashes.
   useEffect(() => {
+    if (isPending) return;
+    useUserStore.setState({ isSignedIn });
+  }, [isPending, isSignedIn]);
+
+  // Sync user data from Better-Auth session to Zustand store. Same
+  // pending guard — don't clear the user during refetch.
+  useEffect(() => {
+    if (isPending) return;
+
     if (betterAuthUser) {
       const userAvatar = useUserStore.getState().user?.avatar;
 
@@ -36,14 +60,14 @@ const UserUpdater = memo(() => {
         username: betterAuthUser.username,
       } as LobeUser;
 
-      // Update user data in store
       useUserStore.setState({ user: lobeUser });
       return;
     }
 
-    // Clear user data when session becomes unavailable
+    // Clear user data only when the session call definitively returned
+    // no user (not while still pending).
     useUserStore.setState({ user: undefined });
-  }, [betterAuthUser]);
+  }, [betterAuthUser, isPending]);
 
   return null;
 });

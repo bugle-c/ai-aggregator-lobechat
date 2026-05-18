@@ -9,6 +9,17 @@ import AuthGuardOverlay from './AuthGuardOverlay';
 
 export default function AuthGuardWrapper({ children }: { children: ReactNode }) {
   const isLogin = useUserStore(authSelectors.isLogin);
+  const isLoaded = useUserStore((s) => s.isLoaded);
+
+  // Only show the registration overlay when we've definitively confirmed
+  // the user is NOT signed in (session check finished, returned no user).
+  // Before isLoaded flips true we have no information, so default to
+  // "trust the user, show the app". Without this guard the modal would
+  // flash on every tab refocus while Better Auth's useSession re-fetches.
+  // Pair with UserUpdater which preserves previous isSignedIn during
+  // re-fetches (those two layers together guarantee no flash).
+  const showOverlay = isLoaded && !isLogin;
+  const blur = showOverlay;
 
   return (
     <>
@@ -21,17 +32,17 @@ export default function AuthGuardWrapper({ children }: { children: ReactNode }) 
       <div
         style={{
           display: 'flex',
-          filter: isLogin ? undefined : 'blur(3px)',
+          filter: blur ? 'blur(3px)' : undefined,
           flexDirection: 'column',
           minHeight: '100vh',
-          pointerEvents: isLogin ? undefined : 'none',
+          pointerEvents: blur ? 'none' : undefined,
           transition: 'filter 200ms ease',
           width: '100%',
         }}
       >
         {children}
       </div>
-      {!isLogin && <AuthGuardOverlay />}
+      {showOverlay && <AuthGuardOverlay />}
     </>
   );
 }
