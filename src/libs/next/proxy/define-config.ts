@@ -307,8 +307,32 @@ export function defineConfig() {
     '/share(.*)',
   ]);
 
+  // Legacy auth URLs — landing CTAs and old email links still point at these.
+  // Forward to root with the right tab open in the new modal UX.
+  const LEGACY_AUTH_ROUTES: Record<string, 'signin' | 'signup'> = {
+    '/signin': 'signin',
+    '/login': 'signin',
+    '/signup': 'signup',
+    '/register': 'signup',
+  };
+
   const betterAuthMiddleware = async (req: NextRequest) => {
     logBetterAuth('BetterAuth middleware processing request: %s %s', req.method, req.url);
+
+    // Redirect legacy auth page URLs to root with ?auth= modal param.
+    // Must run before defaultMiddleware (which does the variant rewrite).
+    const pathname = req.nextUrl.pathname;
+    const legacyTab = LEGACY_AUTH_ROUTES[pathname];
+    if (legacyTab) {
+      const dest = new URL('/', req.url);
+      dest.searchParams.set('auth', legacyTab);
+      // Preserve UTM and other query params from the original URL
+      req.nextUrl.searchParams.forEach((v, k) => {
+        if (k !== 'auth') dest.searchParams.set(k, v);
+      });
+      logBetterAuth('Legacy auth URL redirect: %s → %s', pathname, dest.toString());
+      return NextResponse.redirect(dest, 308);
+    }
 
     const response = defaultMiddleware(req);
 
