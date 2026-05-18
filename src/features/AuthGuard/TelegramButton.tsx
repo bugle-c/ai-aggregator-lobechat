@@ -2,17 +2,16 @@
 
 import { useState } from 'react';
 
-import { oauth2 } from '@/libs/better-auth/auth-client';
-
 interface Props {
   mode: 'signin' | 'signup';
 }
 
 /**
- * Telegram OAuth via Better Auth's genericOAuthClient.
- * Upstream lobechat registers Telegram as a generic OAuth provider whose
- * authorize endpoint is /api/auth/telegram/authorize (custom bot deep-link
- * + Redis poll page). `oauth2.signIn` initiates that flow.
+ * Telegram OAuth via Better Auth genericOAuth plugin.
+ * Server endpoint is /api/auth/sign-in/oauth2 (the client `oauth2.signIn()`
+ * action targets a different path — version mismatch). Direct fetch and
+ * follow the returned URL to /api/auth/telegram/authorize (custom bot
+ * deep-link + Redis poll page).
  */
 export default function TelegramButton({ mode }: Props) {
   const [loading, setLoading] = useState(false);
@@ -20,10 +19,24 @@ export default function TelegramButton({ mode }: Props) {
   async function onClick() {
     setLoading(true);
     try {
-      await oauth2.signIn({
-        providerId: 'telegram',
-        callbackURL: '/',
+      const res = await fetch('/api/auth/sign-in/oauth2', {
+        body: JSON.stringify({ providerId: 'telegram', callbackURL: '/' }),
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
+      if (!res.ok) {
+        console.error('[telegram-signin] HTTP', res.status, await res.text());
+        setLoading(false);
+        return;
+      }
+      const data = (await res.json()) as { url?: string };
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        console.error('[telegram-signin] no redirect url in response', data);
+        setLoading(false);
+      }
     } catch (e) {
       console.error('[telegram-signin]', e);
       setLoading(false);
