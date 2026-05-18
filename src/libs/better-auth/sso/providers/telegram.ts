@@ -41,6 +41,21 @@ import { type GenericProviderDefinition } from '../types';
  */
 
 type TelegramIdTokenClaims = {
+  /**
+   * Real numeric Telegram user ID (7-10 digits, e.g. 987654321).
+   * Telegram exposes this alongside the OIDC-standard opaque `sub`
+   * (which is a 19-digit pairwise-style identifier). The discovery
+   * doc doesn't formally list `id` in claims_supported but the API
+   * does return it — see https://core.telegram.org/bots/telegram-login
+   * "User Data Structure" example. We prefer it as the account key
+   * because:
+   *   1. it matches identifiers stored by the legacy bot-deep-link
+   *      flow (so users login as the same row across the migration);
+   *   2. linkTelegramAccount() needs the real ID to write
+   *      user_billing.tg_bot_chat_id and call the bot's internal
+   *      /link-user endpoint — opaque sub is useless there.
+   */
+  id?: number | string;
   name?: string;
   phone_number?: string;
   picture?: string;
@@ -88,7 +103,10 @@ const provider: GenericProviderDefinition<{
 
         if (!claims?.sub) return null;
 
-        const tgId = String(claims.sub);
+        // Prefer the real Telegram ID over the opaque sub — see
+        // TelegramIdTokenClaims doc above. Falls back to sub only if
+        // Telegram ever stops returning id (defensive).
+        const tgId = claims.id != null ? String(claims.id) : String(claims.sub);
         const name = claims.name || claims.preferred_username || tgId;
 
         return {
