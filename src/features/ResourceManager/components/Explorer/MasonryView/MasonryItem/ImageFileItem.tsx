@@ -1,4 +1,4 @@
-import { Button, Flexbox, stopPropagation,Tooltip } from '@lobehub/ui';
+import { Button, Flexbox, stopPropagation, Tooltip } from '@lobehub/ui';
 import { Image } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { isNull } from 'es-toolkit/compat';
@@ -30,6 +30,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     transition: opacity ${cssVar.motionDurationMid};
   `,
   hoverOverlay: css`
+    pointer-events: none;
+
     position: absolute;
     z-index: 1;
     inset: 0;
@@ -133,6 +135,7 @@ const ImageFileItem = memo<ImageFileItemProps>(
   }) => {
     const { t } = useTranslation('components');
     const [imageLoaded, setImageLoaded] = useState(false);
+    const [previewOpen, setPreviewOpen] = useState(false);
     const [isCreatingFileParseTask, parseFiles] = useFileStore((s) => [
       fileManagerSelectors.isCreatingFileParseTask(id)(s),
       s.parseFilesToChunks,
@@ -142,7 +145,22 @@ const ImageFileItem = memo<ImageFileItemProps>(
 
     return (
       <>
-        <div className={styles.imageWrapper}>
+        <div
+          className={styles.imageWrapper}
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (imageLoaded) setPreviewOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              if (imageLoaded) setPreviewOpen(true);
+            }
+          }}
+        >
           {!imageLoaded && (
             <Flexbox
               align={'center'}
@@ -173,6 +191,8 @@ const ImageFileItem = memo<ImageFileItemProps>(
               src={url}
               preview={{
                 src: url,
+                visible: previewOpen,
+                onVisibleChange: (v) => setPreviewOpen(v),
               }}
               style={{
                 display: 'block',
