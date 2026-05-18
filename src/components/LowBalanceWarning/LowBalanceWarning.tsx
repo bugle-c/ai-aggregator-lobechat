@@ -7,13 +7,17 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { lambdaQuery } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 const LowBalanceWarning = memo(() => {
   const { t } = useTranslation('subscription');
   const navigate = useNavigate();
   const [dismissed, setDismissed] = useState(false);
+  const isLogin = useUserStore(authSelectors.isLogin);
 
   const { data } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
+    enabled: isLogin,
     refetchInterval: 60_000,
   });
 

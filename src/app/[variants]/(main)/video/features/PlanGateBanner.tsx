@@ -7,6 +7,8 @@ import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { lambdaQuery } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 /**
  * Free-plan gate banner for the /video page.
@@ -27,7 +29,9 @@ const PlanGateBanner = memo(() => {
   // SPA navigation — `next/navigation`'s router doesn't drive the
   // react-router subtree under (main).
   const navigate = useNavigate();
+  const isLogin = useUserStore(authSelectors.isLogin);
   const { data } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
+    enabled: isLogin,
     staleTime: 5 * 60 * 1000,
   });
   const planSlug = data?.planSlug;

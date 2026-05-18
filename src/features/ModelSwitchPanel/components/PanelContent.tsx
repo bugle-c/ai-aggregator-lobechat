@@ -4,6 +4,8 @@ import { Rnd } from 'react-rnd';
 
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { lambdaQuery } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import { ENABLE_RESIZING, MAX_WIDTH, MIN_WIDTH } from '../const';
 import { usePanelHandlers } from '../hooks/usePanelHandlers';
@@ -40,10 +42,12 @@ export const PanelContent: FC<PanelContentProps> = ({
     onModelChange: onModelChangeProp,
     onOpenChange,
   });
+  const isLogin = useUserStore(authSelectors.isLogin);
 
   // Plan-aware recommended list. staleTime=5min — plan rarely changes
   // mid-session, and tRPC will dedupe with other consumers (CreditWidget).
   const { data: creditState } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
+    enabled: isLogin,
     staleTime: 5 * 60 * 1000,
   });
   const planSlug = creditState?.planSlug;

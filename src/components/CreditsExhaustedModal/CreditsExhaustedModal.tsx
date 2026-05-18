@@ -7,6 +7,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lambdaQuery } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 const { Text, Title } = Typography;
 
@@ -17,8 +19,11 @@ interface CreditsExhaustedModalProps {
 
 const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(({ open, onClose }) => {
   const { t } = useTranslation('subscription');
+  const isLogin = useUserStore(authSelectors.isLogin);
 
-  const { data } = lambdaQuery.spend.getCreditState.useQuery();
+  const { data } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
+    enabled: isLogin,
+  });
   const { data: plans } = lambdaQuery.subscription.getPlans.useQuery();
   const { data: packages } = lambdaQuery.topUp.getPackages.useQuery();
 

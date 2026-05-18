@@ -14,6 +14,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import OpeningQuestions from './OpeningQuestions';
 import ToolAuthAlert from './ToolAuthAlert';
@@ -21,7 +22,10 @@ import ToolAuthAlert from './ToolAuthAlert';
 const InboxWelcome = memo(() => {
   const { t } = useTranslation(['welcome', 'chat']);
   const mobile = useIsMobile();
-  const { data: creditState } = lambdaQuery.spend.getCreditState.useQuery();
+  const isLogin = useUserStore(authSelectors.isLogin);
+  const { data: creditState } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
+    enabled: isLogin,
+  });
   const navigate = useNavigate();
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const openingQuestions = useAgentStore(agentSelectors.openingQuestions, isEqual);
