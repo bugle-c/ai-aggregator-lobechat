@@ -1,13 +1,11 @@
 'use client';
 
-import dynamic from 'next/dynamic';
 import { type ReactNode } from 'react';
 
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
-// Lazy-load to avoid SSR issues (uses client-only hooks + antd)
-const AuthGuardOverlay = dynamic(() => import('./AuthGuardOverlay'), { ssr: false });
+import AuthGuardOverlay from './AuthGuardOverlay';
 
 export default function AuthGuardWrapper({ children }: { children: ReactNode }) {
   const isLogin = useUserStore(authSelectors.isLogin);

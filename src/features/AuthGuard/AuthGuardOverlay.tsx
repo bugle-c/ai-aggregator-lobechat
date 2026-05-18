@@ -1,6 +1,6 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 
 import AuthModal from './AuthModal';
 
@@ -8,11 +8,20 @@ import AuthModal from './AuthModal';
  * Fixed-position backdrop with blur + AuthModal on top. Mounted from root
  * layout when user is not authenticated. Tab default is signup; ?auth=signin
  * in URL forces signin tab.
+ *
+ * Reads `?auth=` from `window.location.search` once on mount instead of
+ * `useSearchParams()` — the hook requires a Suspense boundary above the
+ * client tree, and our root layout mounts this wrapper outside any Suspense,
+ * which caused the overlay to never hydrate (HTML stuck on BrandTextLoading).
  */
-export default function AuthGuardOverlay() {
-  const searchParams = useSearchParams();
-  const initialTab: 'signin' | 'signup' =
-    searchParams.get('auth') === 'signin' ? 'signin' : 'signup';
+function AuthGuardOverlayInner() {
+  const [initialTab, setInitialTab] = useState<'signin' | 'signup'>('signup');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const value = new URLSearchParams(window.location.search).get('auth');
+    if (value === 'signin') setInitialTab('signin');
+  }, []);
 
   return (
     <div
@@ -32,5 +41,13 @@ export default function AuthGuardOverlay() {
     >
       <AuthModal defaultTab={initialTab} />
     </div>
+  );
+}
+
+export default function AuthGuardOverlay() {
+  return (
+    <Suspense fallback={null}>
+      <AuthGuardOverlayInner />
+    </Suspense>
   );
 }
