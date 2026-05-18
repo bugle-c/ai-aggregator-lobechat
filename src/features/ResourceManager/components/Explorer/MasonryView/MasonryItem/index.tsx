@@ -17,6 +17,7 @@ import DefaultFileItem from './DefaultFileItem';
 import ImageFileItem from './ImageFileItem';
 import MarkdownFileItem from './MarkdownFileItem';
 import NoteFileItem from './NoteFileItem';
+import VideoFileItem from './VideoFileItem';
 
 // Image file types
 const IMAGE_TYPES = new Set([
@@ -27,6 +28,9 @@ const IMAGE_TYPES = new Set([
   'image/webp',
   'image/svg+xml',
 ]);
+
+// Video file types
+const VIDEO_TYPES = new Set(['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime']);
 
 // Markdown file types
 const MARKDOWN_TYPES = new Set(['text/markdown', 'text/x-markdown']);
@@ -215,11 +219,12 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         isImage: fileType && IMAGE_TYPES.has(fileType),
         isMarkdown: isMarkdownFile(name, fileType),
         isPage: isCustomPage(fileType, name),
+        isVideo: fileType && VIDEO_TYPES.has(fileType),
       }),
       [fileType, name],
     );
 
-    const { isImage, isMarkdown, isPage, isFolder } = computedValues;
+    const { isImage, isMarkdown, isPage, isFolder, isVideo } = computedValues;
 
     // Use shared click handler hook
     const handleItemClick = useFileItemClick({
@@ -413,7 +418,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         <div
           className={cx(
             styles.content,
-            !isImage && !isMarkdown && !isPage && styles.contentWithPadding,
+            !isImage && !isVideo && !isMarkdown && !isPage && styles.contentWithPadding,
           )}
           onClick={handleItemClick}
         >
@@ -422,6 +427,24 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
               case isImage && !!url: {
                 return (
                   <ImageFileItem
+                    chunkCount={chunkCount ?? undefined}
+                    chunkingError={chunkingError}
+                    chunkingStatus={chunkingStatus ?? undefined}
+                    embeddingError={embeddingError}
+                    embeddingStatus={embeddingStatus ?? undefined}
+                    fileType={fileType}
+                    finishEmbedding={finishEmbedding}
+                    id={id}
+                    isInView={isInView}
+                    name={name}
+                    size={size}
+                    url={url}
+                  />
+                );
+              }
+              case isVideo && !!url: {
+                return (
+                  <VideoFileItem
                     chunkCount={chunkCount ?? undefined}
                     chunkingError={chunkingError}
                     chunkingStatus={chunkingStatus ?? undefined}
