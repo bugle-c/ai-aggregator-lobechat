@@ -8,14 +8,20 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { lambdaQuery } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 const { Text } = Typography;
 
 const CreditWidget = memo(() => {
   const { t } = useTranslation('subscription');
   const navigate = useNavigate();
+  const isLogin = useUserStore(authSelectors.isLogin);
 
+  // Skip query for unauthenticated users — endpoint returns 401 and spams
+  // console; the widget is hidden anyway when isLogin is false.
   const { data, isLoading } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
+    enabled: isLogin,
     refetchInterval: 60_000,
   });
 
