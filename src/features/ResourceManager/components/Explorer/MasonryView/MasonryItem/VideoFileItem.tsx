@@ -1,5 +1,5 @@
 import { Modal } from 'antd';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Maximize2, Play } from 'lucide-react';
 import { memo, useState } from 'react';
 
@@ -95,10 +95,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const VideoFileItem = memo<VideoFileItemProps>(({ isInView, name, url }) => {
   const [modalOpen, setModalOpen] = useState(false);
+  const [posterErrored, setPosterErrored] = useState(false);
 
-  const open = (e: React.MouseEvent | React.KeyboardEvent) => {
+  const openModal = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.preventDefault();
     e.stopPropagation();
-    if ('preventDefault' in e) e.preventDefault();
     setModalOpen(true);
   };
 
@@ -109,20 +110,28 @@ const VideoFileItem = memo<VideoFileItemProps>(({ isInView, name, url }) => {
         className={styles.videoWrapper}
         role="button"
         tabIndex={0}
-        onClick={open}
+        onClick={openModal}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') open(e);
+          if (e.key === 'Enter' || e.key === ' ') openModal(e);
         }}
       >
-        {isInView && url && <video muted playsInline preload="metadata" src={`${url}#t=0.1`} />}
+        {isInView && url && !posterErrored && (
+          <video
+            muted
+            playsInline
+            preload="metadata"
+            src={`${url}#t=0.1`}
+            onError={() => setPosterErrored(true)}
+          />
+        )}
         <div className={styles.playBadge}>
           <Play fill="#fff" size={24} strokeWidth={0} />
         </div>
         <button
           aria-label="Maximize"
-          className={cx(styles.maximizeBtn)}
+          className={styles.maximizeBtn}
           type="button"
-          onClick={open}
+          onClick={openModal}
         >
           <Maximize2 size={16} />
         </button>
