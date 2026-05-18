@@ -23,6 +23,7 @@ import Microsoft from './providers/microsoft';
 import Okta from './providers/okta';
 import Telegram from './providers/telegram';
 import Wechat from './providers/wechat';
+import Yandex from './providers/yandex';
 import Zitadel from './providers/zitadel';
 
 const providerDefinitions = [
@@ -43,6 +44,7 @@ const providerDefinitions = [
   Zitadel,
   Feishu,
   Wechat,
+  Yandex,
   Telegram,
 ] as const;
 

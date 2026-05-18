@@ -84,6 +84,9 @@ declare global {
       AUTH_WECHAT_ID?: string;
       AUTH_WECHAT_SECRET?: string;
 
+      AUTH_YANDEX_ID?: string;
+      AUTH_YANDEX_SECRET?: string;
+
       AUTH_ZITADEL_ID?: string;
       AUTH_ZITADEL_ISSUER?: string;
       AUTH_ZITADEL_SECRET?: string;
@@ -186,6 +189,9 @@ export const getAuthConfig = () => {
       AUTH_WECHAT_ID: z.string().optional(),
       AUTH_WECHAT_SECRET: z.string().optional(),
 
+      AUTH_YANDEX_ID: z.string().optional(),
+      AUTH_YANDEX_SECRET: z.string().optional(),
+
       AUTH_TELEGRAM_BOT_TOKEN: z.string().optional(),
       AUTH_TELEGRAM_BOT_USERNAME: z.string().optional(),
 
@@ -213,7 +219,9 @@ export const getAuthConfig = () => {
       AUTH_SSO_PROVIDERS: process.env.AUTH_SSO_PROVIDERS,
       AUTH_TRUSTED_ORIGINS: process.env.AUTH_TRUSTED_ORIGINS,
       AUTH_ALLOWED_EMAILS: process.env.AUTH_ALLOWED_EMAILS,
-      AUTH_BLOCK_SUSPICIOUS_SIGNUPS: process.env.AUTH_BLOCK_SUSPICIOUS_SIGNUPS === '1' || process.env.AUTH_BLOCK_SUSPICIOUS_SIGNUPS === 'true',
+      AUTH_BLOCK_SUSPICIOUS_SIGNUPS:
+        process.env.AUTH_BLOCK_SUSPICIOUS_SIGNUPS === '1' ||
+        process.env.AUTH_BLOCK_SUSPICIOUS_SIGNUPS === 'true',
       AUTH_DISABLE_EMAIL_PASSWORD: process.env.AUTH_DISABLE_EMAIL_PASSWORD === '1',
 
       // Cognito provider specific env vars
@@ -282,6 +290,9 @@ export const getAuthConfig = () => {
 
       AUTH_WECHAT_ID: process.env.AUTH_WECHAT_ID,
       AUTH_WECHAT_SECRET: process.env.AUTH_WECHAT_SECRET,
+
+      AUTH_YANDEX_ID: process.env.AUTH_YANDEX_ID,
+      AUTH_YANDEX_SECRET: process.env.AUTH_YANDEX_SECRET,
 
       AUTH_TELEGRAM_BOT_TOKEN: process.env.AUTH_TELEGRAM_BOT_TOKEN,
       AUTH_TELEGRAM_BOT_USERNAME: process.env.AUTH_TELEGRAM_BOT_USERNAME,
