@@ -35,6 +35,10 @@ export const config = {
 
     '/signup(.*)',
     '/signin(.*)',
+    // Legacy auth URLs — middleware redirects /register → /?auth=signup
+    // and /login → /?auth=signin. Must be in matcher or middleware never fires.
+    '/register(.*)',
+    '/login(.*)',
     '/verify-email(.*)',
     '/reset-password(.*)',
     '/auth-error(.*)',
