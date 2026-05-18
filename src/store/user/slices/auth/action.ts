@@ -73,14 +73,21 @@ export class UserAuthActionImpl {
   };
 
   openLogin = async (): Promise<void> => {
-    // Skip if already on a login page (/signin, /signup)
+    // Skip if already on a login page (/signin, /signup) or modal already open.
     const pathname = location.pathname;
     if (pathname.startsWith('/signin') || pathname.startsWith('/signup')) {
       return;
     }
 
-    const currentUrl = location.toString();
-    window.location.href = `/signin?callbackUrl=${encodeURIComponent(currentUrl)}`;
+    // New UX: do NOT redirect to /signin (causes infinite callbackUrl loop with
+    // the legacy /signin → /?auth=signin redirect rule). Instead just open the
+    // AuthGuardOverlay on the current page by setting ?auth=signin in the URL.
+    const url = new URL(location.href);
+    // Strip any existing nested callbackUrl that may have been accumulated.
+    url.searchParams.delete('callbackUrl');
+    if (url.searchParams.get('auth') === 'signin') return; // already triggered, avoid loop
+    url.searchParams.set('auth', 'signin');
+    window.location.href = url.toString();
   };
 
   refreshAuthProviders = async (): Promise<void> => {
