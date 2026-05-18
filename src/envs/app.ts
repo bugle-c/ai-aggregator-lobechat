@@ -83,6 +83,17 @@ export const getAppConfig = () => {
        */
       enableQueueAgentRuntime: z.boolean().optional(),
       TELEMETRY_DISABLED: z.boolean().optional(),
+
+      /**
+       * Internal URL of the gptwebrubot service (default: http://127.0.0.1:8082).
+       * Used by the Telegram auto-link hook to write bot.db tables and send welcome message.
+       */
+      BOT_INTERNAL_URL: z.string().optional(),
+      /**
+       * Shared secret for authenticating internal calls to gptwebrubot.
+       * If unset, the Telegram auto-link hook skips the bot.db sync step.
+       */
+      BOT_INTERNAL_TOKEN: z.string().optional(),
     },
     runtimeEnv: {
       // Sentry
@@ -120,6 +131,9 @@ export const getAppConfig = () => {
 
       enableQueueAgentRuntime: process.env.AGENT_RUNTIME_MODE === 'queue',
       TELEMETRY_DISABLED: process.env.TELEMETRY_DISABLED === '1',
+
+      BOT_INTERNAL_URL: process.env.BOT_INTERNAL_URL,
+      BOT_INTERNAL_TOKEN: process.env.BOT_INTERNAL_TOKEN,
     },
   });
 };

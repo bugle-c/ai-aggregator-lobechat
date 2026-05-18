@@ -26,6 +26,7 @@ import {
   getVerificationOTPEmailTemplate,
   getWelcomeEmailTemplate,
 } from '@/libs/better-auth/email-templates';
+import { linkTelegramAccount } from '@/libs/better-auth/hooks/telegram-link';
 import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
 import { createSecondaryStorage, getTrustedOrigins } from '@/libs/better-auth/utils/config';
@@ -88,7 +89,9 @@ const enabledSSOProviders = parseSSOProviders(authEnv.AUTH_SSO_PROVIDERS);
 const { socialProviders, genericOAuthProviders } = initBetterAuthSSOProviders();
 
 async function customEmailValidator(email: string): Promise<boolean> {
-  const baseValid = ENABLE_BUSINESS_FEATURES ? await businessEmailValidator(email) : validateEmail(email);
+  const baseValid = ENABLE_BUSINESS_FEATURES
+    ? await businessEmailValidator(email)
+    : validateEmail(email);
   if (!baseValid) return false;
 
   const assessment = assessSignupEmail(email);
@@ -206,6 +209,25 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
      * Ref: https://www.better-auth.com/docs/reference/options#databasehooks
      */
     databaseHooks: {
+      account: {
+        create: {
+          after: async (account, ctx) => {
+            if (account.providerId !== 'telegram') return;
+            const tgId = Number(account.accountId);
+            if (!Number.isFinite(tgId)) return;
+            // ctx.context is AuthContext; user name is not directly on it.
+            // We pass undefined for userName — the bot welcome uses first_name
+            // from Telegram's own profile if the bot row already exists.
+            const isNewUser = (ctx as any)?.context?.newSession?.user == null;
+            await linkTelegramAccount({
+              userId: account.userId,
+              telegramId: tgId,
+              userName: (ctx as any)?.context?.user?.name ?? undefined,
+              isNewUser,
+            });
+          },
+        },
+      },
       user: {
         create: {
           after: async (user, ctx) => {
