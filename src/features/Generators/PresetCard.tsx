@@ -1,11 +1,13 @@
 'use client';
 
 import { createStyles } from 'antd-style';
-import { memo } from 'react';
+import { ZoomIn } from 'lucide-react';
+import { memo, useState } from 'react';
 
 import type { Preset, PresetBadge } from '@/types/preset';
 
 import PresetMP4Player from './PresetMP4Player';
+import PresetZoomModal from './PresetZoomModal';
 
 interface Props {
   isActive?: boolean;
@@ -78,6 +80,10 @@ const useStyles = createStyles(({ css, token }) => ({
     &:hover .preset-hover-overlay {
       opacity: 1;
     }
+
+    &:hover .preset-zoom-btn {
+      opacity: 1;
+    }
   `,
   active: css`
     border-color: ${token.colorPrimary};
@@ -139,6 +145,37 @@ const useStyles = createStyles(({ css, token }) => ({
 
     transition: opacity 0.18s ease;
   `,
+  zoomBtn: css`
+    cursor: pointer;
+
+    position: absolute;
+    z-index: 3;
+    inset-block-start: 8px;
+    inset-inline-end: 8px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 6px;
+
+    color: #fff;
+
+    opacity: 0;
+    background: rgb(0 0 0 / 55%);
+    backdrop-filter: blur(4px);
+
+    transition:
+      opacity 0.18s ease,
+      background 0.18s ease;
+
+    &:hover {
+      background: rgb(0 0 0 / 80%);
+    }
+  `,
 }));
 
 /**
@@ -158,54 +195,77 @@ const cardAspectRatio = (preset: Preset): string => {
 const PresetCard = memo<Props>(({ isActive, onClick, preset }) => {
   const { styles, cx } = useStyles();
   const hint = CATEGORY_HINTS[preset.category];
+  const [zoomOpen, setZoomOpen] = useState(false);
 
   return (
-    <button
-      aria-label={preset.title}
-      className={cx(styles.card, isActive && styles.active)}
-      style={{ aspectRatio: cardAspectRatio(preset) }}
-      type="button"
-      onClick={() => onClick(preset)}
-    >
-      <PresetMP4Player ariaHidden fallbackLabel={preset.title} previewUrl={preset.previewUrl} />
+    <>
+      <button
+        aria-label={preset.title}
+        className={cx(styles.card, isActive && styles.active)}
+        style={{ aspectRatio: cardAspectRatio(preset) }}
+        type="button"
+        onClick={() => onClick(preset)}
+      >
+        <PresetMP4Player ariaHidden fallbackLabel={preset.title} previewUrl={preset.previewUrl} />
 
-      {preset.badges.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            gap: 4,
-            insetBlockStart: 8,
-            insetInlineStart: 8,
-            pointerEvents: 'none',
-            position: 'absolute',
+        <span
+          aria-label="Увеличить превью"
+          className={cx(styles.zoomBtn, 'preset-zoom-btn')}
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setZoomOpen(true);
           }}
         >
-          {preset.badges.map((b) => (
-            <span
-              key={b}
-              style={{
-                background: BADGE_COLORS[b],
-                borderRadius: 6,
-                color: b === 'top_choice' ? '#000' : '#fff',
-                fontSize: 11,
-                fontWeight: 600,
-                padding: '2px 6px',
-              }}
-            >
-              {BADGE_LABELS[b]}
-            </span>
-          ))}
+          <ZoomIn size={16} />
+        </span>
+
+        {preset.badges.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              gap: 4,
+              insetBlockStart: 8,
+              insetInlineStart: 8,
+              pointerEvents: 'none',
+              position: 'absolute',
+            }}
+          >
+            {preset.badges.map((b) => (
+              <span
+                key={b}
+                style={{
+                  background: BADGE_COLORS[b],
+                  borderRadius: 6,
+                  color: b === 'top_choice' ? '#000' : '#fff',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: '2px 6px',
+                }}
+              >
+                {BADGE_LABELS[b]}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className={styles.bottomLabel}>{preset.title}</div>
+
+        <div className={cx(styles.hoverOverlay, 'preset-hover-overlay')}>
+          <div className={styles.title}>{preset.title}</div>
+          {preset.description && <div className={styles.description}>{preset.description}</div>}
+          {hint && <div className={styles.hint}>{hint}</div>}
         </div>
-      )}
-
-      <div className={styles.bottomLabel}>{preset.title}</div>
-
-      <div className={cx(styles.hoverOverlay, 'preset-hover-overlay')}>
-        <div className={styles.title}>{preset.title}</div>
-        {preset.description && <div className={styles.description}>{preset.description}</div>}
-        {hint && <div className={styles.hint}>{hint}</div>}
-      </div>
-    </button>
+      </button>
+      <PresetZoomModal
+        open={zoomOpen}
+        preset={preset}
+        onApply={() => onClick(preset)}
+        onClose={() => setZoomOpen(false)}
+      />
+    </>
   );
 });
 
