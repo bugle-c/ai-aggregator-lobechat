@@ -333,9 +333,17 @@ export function defineConfig() {
     });
 
     if (!isLoggedIn && !isDesktop) {
-      // If request a protected route, redirect to sign-in page
-      if (isProtected) {
-        logBetterAuth('Request a protected route, redirecting to sign-in page');
+      // Only redirect to /signin for backend API routes — page routes are
+      // handled client-side by AuthGuardWrapper (blur backdrop + overlay modal).
+      // This prevents the jarring load → flicker → redirect UX on page loads.
+      const isApiRoute =
+        req.nextUrl.pathname.startsWith('/api') ||
+        req.nextUrl.pathname.startsWith('/trpc') ||
+        req.nextUrl.pathname.startsWith('/webapi') ||
+        req.nextUrl.pathname.startsWith('/oidc');
+
+      if (isProtected && isApiRoute) {
+        logBetterAuth('Request a protected API route, redirecting to sign-in page');
         const callbackUrl = `${appEnv.APP_URL}${req.nextUrl.pathname}${req.nextUrl.search}`;
         const signInUrl = new URL('/signin', appEnv.APP_URL);
         signInUrl.searchParams.set('callbackUrl', callbackUrl);
@@ -351,7 +359,12 @@ export function defineConfig() {
         }
         return redirectResponse;
       }
-      logBetterAuth('Request a free route but not login, allow visit without auth header');
+
+      logBetterAuth(
+        isApiRoute
+          ? 'Request a free route but not login, allow visit without auth header'
+          : 'Unauthenticated page route — letting through for client-side AuthGuardOverlay',
+      );
     }
 
     return response;
