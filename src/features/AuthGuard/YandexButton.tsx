@@ -2,16 +2,19 @@
 
 import { useState } from 'react';
 
+import { signIn } from '@/libs/better-auth/auth-client';
+
 interface Props {
   mode: 'signin' | 'signup';
 }
 
 /**
  * Yandex OAuth via Better Auth genericOAuth plugin.
- * The genericOAuthClient's `oauth2.signIn()` action POSTs to
- * /api/auth/oauth2/sign-in (404 — the path the server registered is
- * /api/auth/sign-in/oauth2, version mismatch). Direct fetch to the
- * working endpoint, then follow the redirect URL.
+ * Calls `signIn.oauth2({providerId})` — the documented client API which POSTs
+ * to /api/auth/sign-in/oauth2 (matches the server route the plugin registers).
+ * The earlier `oauth2.signIn(...)` we tried is a different namespace (for
+ * link/callback sub-actions) and 404s on a non-existent path.
+ * Ref: https://better-auth.com/docs/plugins/generic-oauth
  */
 export default function YandexButton({ mode }: Props) {
   const [loading, setLoading] = useState(false);
@@ -19,24 +22,10 @@ export default function YandexButton({ mode }: Props) {
   async function onClick() {
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/sign-in/oauth2', {
-        body: JSON.stringify({ providerId: 'yandex', callbackURL: '/' }),
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
+      await signIn.oauth2({
+        callbackURL: '/',
+        providerId: 'yandex',
       });
-      if (!res.ok) {
-        console.error('[yandex-signin] HTTP', res.status, await res.text());
-        setLoading(false);
-        return;
-      }
-      const data = (await res.json()) as { url?: string };
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        console.error('[yandex-signin] no redirect url in response', data);
-        setLoading(false);
-      }
     } catch (e) {
       console.error('[yandex-signin]', e);
       setLoading(false);
