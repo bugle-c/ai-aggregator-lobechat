@@ -33,7 +33,18 @@ export const GET = async (req: NextRequest) => {
   const safeJson = (v: string) =>
     JSON.stringify(v).replaceAll('</', '<\\/').replaceAll('<!--', '<\\!--');
 
-  const deepLink = `https://t.me/${botUsername}?start=auth_${code}`;
+  // tg:// URL scheme hands off to the Telegram app via the OS without
+  // opening a new browser tab. Mobile browsers (Chrome, Safari, Yandex)
+  // create a new tab for https://t.me/... links even with no target=,
+  // because they treat it as a universal-link / web fallback. Using
+  // tg:// directly means the current tab stays put — when the user
+  // confirms in the app and switches back to the browser, they land
+  // straight on this polling page, which auto-redirects them.
+  //
+  // Fallback https://t.me/... is used (via JS timeout) only if the app
+  // is not installed and tg:// fails silently.
+  const tgScheme = `tg://resolve?domain=${botUsername}&start=auth_${code}`;
+  const tgWeb = `https://t.me/${botUsername}?start=auth_${code}`;
 
   const html = `<!DOCTYPE html>
 <html lang="ru">
@@ -111,7 +122,7 @@ export const GET = async (req: NextRequest) => {
     <p class="subtitle">
       Нажмите кнопку, подтвердите вход в Telegram и вернитесь сюда — мы автоматически вас впустим.
     </p>
-    <a class="tg-btn" href="${deepLink}" id="tgBtn">
+    <a class="tg-btn" href="${tgWeb}" id="tgBtn">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.03-1.97 1.25-5.56 3.69-.53.36-1.01.54-1.43.53-.47-.01-1.38-.27-2.05-.49-.83-.27-1.49-.42-1.43-.88.03-.24.37-.49 1.02-.74 3.99-1.73 6.65-2.87 7.97-3.44 3.8-1.58 4.59-1.86 5.1-1.87.11 0 .37.03.54.17.14.12.18.28.2.45-.01.06.01.24 0 .37z"/>
       </svg>
@@ -125,8 +136,39 @@ export const GET = async (req: NextRequest) => {
         var code = ${safeJson(code)};
         var state = ${safeJson(state)};
         var redirectUri = ${safeJson(redirectUri)};
+        var tgScheme = ${safeJson(tgScheme)};
+        var tgWeb = ${safeJson(tgWeb)};
         var pollUrl = '/api/auth/telegram/poll?code=' + encodeURIComponent(code);
         var stopped = false;
+
+        // Intercept the button click to try tg:// scheme first. If the
+        // Telegram app is installed, the OS hands off and the current
+        // tab stays here polling — when the user comes back, polling
+        // sees confirmed and auto-redirects to /. No extra tab opened.
+        // If after 1.5s we're still here AND tab is visible, the app
+        // is probably not installed — fall back to web (https://t.me/)
+        // which works in any browser.
+        var btn = document.getElementById('tgBtn');
+        if (btn) {
+          btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            var t0 = Date.now();
+            // Use an invisible iframe so a failed tg:// doesn't navigate
+            // the main tab to a "page not found".
+            var ifr = document.createElement('iframe');
+            ifr.style.display = 'none';
+            ifr.src = tgScheme;
+            document.body.appendChild(ifr);
+            setTimeout(function() {
+              try { ifr.remove(); } catch (_) {}
+              // If the tab is still visible after the timeout, the OS
+              // didn't hand off — assume app not installed, open web.
+              if (!document.hidden && Date.now() - t0 < 2500) {
+                window.location.href = tgWeb;
+              }
+            }, 1500);
+          });
+        }
 
         function poll() {
           if (stopped) return;
