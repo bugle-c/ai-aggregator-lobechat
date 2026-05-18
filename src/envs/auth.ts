@@ -79,6 +79,9 @@ declare global {
       AUTH_TELEGRAM_BOT_TOKEN?: string;
 
       AUTH_TELEGRAM_BOT_USERNAME?: string;
+
+      AUTH_TELEGRAM_CLIENT_ID?: string;
+      AUTH_TELEGRAM_CLIENT_SECRET?: string;
       AUTH_TRUSTED_ORIGINS?: string;
 
       AUTH_WECHAT_ID?: string;
@@ -194,6 +197,8 @@ export const getAuthConfig = () => {
 
       AUTH_TELEGRAM_BOT_TOKEN: z.string().optional(),
       AUTH_TELEGRAM_BOT_USERNAME: z.string().optional(),
+      AUTH_TELEGRAM_CLIENT_ID: z.string().optional(),
+      AUTH_TELEGRAM_CLIENT_SECRET: z.string().optional(),
 
       AUTH_ZITADEL_ID: z.string().optional(),
       AUTH_ZITADEL_SECRET: z.string().optional(),
@@ -296,6 +301,8 @@ export const getAuthConfig = () => {
 
       AUTH_TELEGRAM_BOT_TOKEN: process.env.AUTH_TELEGRAM_BOT_TOKEN,
       AUTH_TELEGRAM_BOT_USERNAME: process.env.AUTH_TELEGRAM_BOT_USERNAME,
+      AUTH_TELEGRAM_CLIENT_ID: process.env.AUTH_TELEGRAM_CLIENT_ID,
+      AUTH_TELEGRAM_CLIENT_SECRET: process.env.AUTH_TELEGRAM_CLIENT_SECRET,
 
       AUTH_ZITADEL_ID: process.env.AUTH_ZITADEL_ID,
       AUTH_ZITADEL_SECRET: process.env.AUTH_ZITADEL_SECRET,

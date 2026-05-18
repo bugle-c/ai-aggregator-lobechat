@@ -1,117 +1,125 @@
-import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
-import { getRedisConfig } from '@/envs/redis';
-import { initializeRedis, isRedisEnabled } from '@/libs/redis';
 
 import { type GenericProviderDefinition } from '../types';
 
 /**
- * Telegram bot-based auth flow:
- * 1. Serve a custom authorize page with a deep link to the bot
- * 2. User opens bot, confirms auth → bot calls /api/auth/telegram/confirm
- * 3. Authorize page polls /api/auth/telegram/poll until confirmed
- * 4. Redirect to Better Auth's genericOAuth callback with the code
- * 5. Custom getToken() reads confirmed data from Redis → synthetic token
- * 6. Custom getUserInfo() extracts profile → synthetic email tg_{id}@bot.gptweb.ru
+ * Telegram OIDC (modern flow).
+ *
+ * Standard OAuth 2.0 / OpenID Connect via `oauth.telegram.org` —
+ * configured per bot via @BotFather (Bot Settings → Web Login →
+ * OpenID Connect Login). Replaces the earlier custom bot-deep-link
+ * flow that opened a new browser tab on mobile (Chrome / Yandex /
+ * Safari all force a new tab for https://t.me/... links because they
+ * treat them as universal links).
+ *
+ * The new flow is plain redirect-based OAuth — same tab throughout:
+ *   1. signIn.oauth2({providerId:'telegram'}) → POST /sign-in/oauth2
+ *   2. server returns redirect URL: oauth.telegram.org/auth?...
+ *   3. browser navigates (same tab) to oauth.telegram.org
+ *   4. Telegram authenticates via web or app handoff (their UI)
+ *   5. redirect back to /api/auth/callback/telegram?code=...
+ *   6. Better Auth exchanges code at oauth.telegram.org/token
+ *   7. ID token decoded, getUserInfo synthesizes a stable email
+ *
+ * Telegram OIDC discovery (https://oauth.telegram.org/.well-known/
+ * openid-configuration) advertises scopes openid/profile/phone and
+ * supports PKCE S256. We request openid+profile; phone is optional.
+ *
+ * The id_token's `sub` claim is the user's numeric Telegram ID, which
+ * Better Auth stores as `account.accountId`. The existing
+ * databaseHooks.account.create.after handler reads accountId and
+ * calls linkTelegramAccount — that hook works unchanged.
+ *
+ * Setup in @BotFather (one-time, already done by Pavel):
+ *   - Open BotFather as MINI APP (icon, not chat)
+ *   - Bot Settings → gptwebrubot → Web Login
+ *   - Add the site URL, remove it, reopen — OpenID Connect Login
+ *     option unlocks (permanent, one-way)
+ *   - Allowed URL:  https://ask.gptweb.ru
+ *   - Redirect URL: https://ask.gptweb.ru/api/auth/callback/telegram
+ *   - Copy Client ID + Client Secret (NOT bot token, NOT username)
  */
 
-export const REDIS_KEY_PREFIX = 'tg-auth:';
-export const CODE_TTL_SECONDS = 300; // 5 minutes
-
-type TelegramUserData = {
-  first_name?: string;
-  id: number;
-  last_name?: string;
-  photo_url?: string;
-  status: string;
-  username?: string;
-};
-
-export const getRedis = async () => {
-  const redisConfig = getRedisConfig();
-  if (!isRedisEnabled(redisConfig)) {
-    throw new Error('[Telegram Auth] Redis is required for Telegram OAuth');
-  }
-  const client = await initializeRedis(redisConfig);
-  if (!client) {
-    throw new Error('[Telegram Auth] Failed to initialize Redis');
-  }
-  return client;
+type TelegramIdTokenClaims = {
+  name?: string;
+  phone_number?: string;
+  picture?: string;
+  preferred_username?: string;
+  sub: string;
 };
 
 const provider: GenericProviderDefinition<{
-  AUTH_TELEGRAM_BOT_TOKEN: string;
-  AUTH_TELEGRAM_BOT_USERNAME: string;
+  AUTH_TELEGRAM_CLIENT_ID: string;
+  AUTH_TELEGRAM_CLIENT_SECRET: string;
 }> = {
   build: (env) => {
-    const botToken = env.AUTH_TELEGRAM_BOT_TOKEN;
-
     return {
-      // Our custom authorize page with Telegram bot deep link and polling
-      authorizationUrl: `${appEnv.APP_URL}/api/auth/telegram/authorize`,
+      clientId: env.AUTH_TELEGRAM_CLIENT_ID,
+      clientSecret: env.AUTH_TELEGRAM_CLIENT_SECRET,
 
-      // Not used by our custom flow, but genericOAuth requires these fields
-      clientId: 'telegram',
-      clientSecret: botToken,
+      // OIDC auto-discovery — Better Auth pulls authorization_endpoint,
+      // token_endpoint, jwks_uri from this. Saves us from hardcoding
+      // endpoints that Telegram could change.
+      discoveryUrl: 'https://oauth.telegram.org/.well-known/openid-configuration',
 
-      getToken: async ({ code }) => {
-        const redis = await getRedis();
-        const key = `${REDIS_KEY_PREFIX}${code}`;
-
-        // Atomic get-and-delete to prevent code reuse
-        const raw = (await redis.eval(
-          "local v = redis.call('GET', KEYS[1]); if v then redis.call('DEL', KEYS[1]); end; return v;",
-          1,
-          key,
-        )) as string | null;
-
-        if (!raw) {
-          throw new Error('[Telegram Auth] Invalid or expired auth code');
-        }
-
-        const userData = JSON.parse(raw) as TelegramUserData;
-
-        if (userData.status !== 'confirmed') {
-          throw new Error('[Telegram Auth] Auth code not yet confirmed');
-        }
-
-        return {
-          accessToken: `tg-${userData.id}`,
-          raw: userData,
-          tokenType: 'Bearer',
-        };
-      },
-
+      // Telegram's id_token has user data; no separate /userinfo
+      // endpoint is advertised, so we read claims from the token.
+      // Better Auth passes decoded claims via tokens.raw when available;
+      // we fall back to parsing id_token manually if not.
       getUserInfo: async (tokens) => {
-        const data = (tokens as { raw?: TelegramUserData }).raw;
-        if (!data?.id) return null;
+        const raw = tokens as {
+          idToken?: string;
+          raw?: TelegramIdTokenClaims;
+        };
+        let claims = raw.raw;
 
-        const tgId = String(data.id);
-        const name =
-          [data.first_name, data.last_name].filter(Boolean).join(' ') || data.username || tgId;
+        if (!claims?.sub && raw.idToken) {
+          // Decode JWT payload without verification — Better Auth has
+          // already verified the signature via jwks_uri before passing
+          // tokens to us. We only need the claim values here.
+          try {
+            const payload = raw.idToken.split('.')[1];
+            const decoded = Buffer.from(payload, 'base64url').toString('utf8');
+            claims = JSON.parse(decoded);
+          } catch {
+            // fall through — null below
+          }
+        }
+
+        if (!claims?.sub) return null;
+
+        const tgId = String(claims.sub);
+        const name = claims.name || claims.preferred_username || tgId;
 
         return {
+          // Synthetic email — Telegram OIDC doesn't expose real emails.
+          // Same scheme as the previous bot-deep-link flow so existing
+          // users keep matching by primary key.
           email: `tg_${tgId}@bot.gptweb.ru`,
           emailVerified: false,
           id: tgId,
-          image: data.photo_url,
+          image: claims.picture,
           name,
         };
       },
 
-      pkce: false,
+      // PKCE S256 is supported (and recommended) per discovery.
+      pkce: true,
       providerId: 'telegram',
       responseMode: 'query',
-      scopes: [],
-      tokenUrl: `${appEnv.APP_URL}/api/auth/telegram/authorize`,
+
+      // openid is mandatory; profile gives us name + picture + username.
+      // We omit "phone" — adding it later if/when we want phone capture
+      // will not break existing accounts since the sub remains the same.
+      scopes: ['openid', 'profile'],
     };
   },
 
   checkEnvs: () => {
-    return !!(authEnv.AUTH_TELEGRAM_BOT_TOKEN && authEnv.AUTH_TELEGRAM_BOT_USERNAME)
+    return !!(authEnv.AUTH_TELEGRAM_CLIENT_ID && authEnv.AUTH_TELEGRAM_CLIENT_SECRET)
       ? {
-          AUTH_TELEGRAM_BOT_TOKEN: authEnv.AUTH_TELEGRAM_BOT_TOKEN,
-          AUTH_TELEGRAM_BOT_USERNAME: authEnv.AUTH_TELEGRAM_BOT_USERNAME,
+          AUTH_TELEGRAM_CLIENT_ID: authEnv.AUTH_TELEGRAM_CLIENT_ID,
+          AUTH_TELEGRAM_CLIENT_SECRET: authEnv.AUTH_TELEGRAM_CLIENT_SECRET,
         }
       : false;
   },
