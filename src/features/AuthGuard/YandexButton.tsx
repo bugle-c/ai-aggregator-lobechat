@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { signIn } from '@/libs/better-auth/auth-client';
 
@@ -24,6 +24,17 @@ interface Props {
  */
 export default function YandexButton({ mode }: Props) {
   const [loading, setLoading] = useState(false);
+
+  // Reset loading state when page is restored from bfcache (browser
+  // "back" from oauth.yandex.ru). Without this, the button stays
+  // pointer-events:none / opacity 0.7 — looks frozen, can't re-click.
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setLoading(false);
+    };
+    window.addEventListener('pageshow', onShow);
+    return () => window.removeEventListener('pageshow', onShow);
+  }, []);
 
   const href = '/api/auth/oauth-start?provider=yandex&callbackURL=%2F';
 

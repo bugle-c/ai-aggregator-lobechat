@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { signIn } from '@/libs/better-auth/auth-client';
 
@@ -22,6 +22,16 @@ interface Props {
  */
 export default function TelegramButton({ mode }: Props) {
   const [loading, setLoading] = useState(false);
+
+  // Reset loading state when page is restored from bfcache (browser
+  // "back" from /telegram/authorize). See YandexButton for rationale.
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setLoading(false);
+    };
+    window.addEventListener('pageshow', onShow);
+    return () => window.removeEventListener('pageshow', onShow);
+  }, []);
 
   const href = '/api/auth/oauth-start?provider=telegram&callbackURL=%2F';
 
