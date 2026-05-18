@@ -353,3 +353,60 @@ Bot mirror (`gptwebrubot/src/models.ts`) has a `local` category with the same th
 
 - 1043 recipients, audience=all, daily_cap=150 → \~7 дней доставки.
 - End-to-end verified: token_balance +500, promo_redemptions row, recipient marked, audit event записан. Fake-payment в тесте — INSERT в `billing_payments` со status='succeeded' (потом DELETE по `yookassa_payment_id LIKE 'TEST-%'`).
+
+## Phase 15: Auth Modal + Yandex/Telegram OAuth (2026-05-18)
+
+### UX shift
+
+- Untransited users no longer redirected to `/signin` — root layout wraps `{children}` в `AuthGuardWrapper`, который применяет `filter:blur(8px) + pointer-events:none` к app и рендерит `<AuthGuardOverlay>` (fixed-position modal с tabs Sign Up/Sign In, default = signup).
+- Legacy URLs (`/signin /login /signup /register`) → 308 redirect на `/?auth=signin|signup`, сохраняя UTM. Реализовано в начале `betterAuthMiddleware` ДО variants rewrite.
+- Middleware redirect для `/signin` нейтрализован для page routes; API/trpc/webapi/oidc routes по-прежнему redirect (без UX impact, это back-end).
+
+### SSO providers
+
+- **Yandex** — новый файл `src/libs/better-auth/sso/providers/yandex.ts` (commit 3c59306bb6). Generic OAuth через Better Auth `genericOAuth`. Использует `getUserInfo()` (НЕ `mapProfileToUser` — mirror Wechat). Env: `AUTH_YANDEX_ID`, `AUTH_YANDEX_SECRET`. Redirect URI registered manually в Yandex OAuth console: `https://ask.gptweb.ru/api/auth/oauth/yandex`. НЕ добавлен в `BUILTIN_BETTER_AUTH_PROVIDERS` (тот массив только для `type: 'builtin'`).
+- **Telegram** — уже в upstream (`providers/telegram.ts` — bot deep-link + Redis poll). Env: `AUTH_TELEGRAM_BOT_USERNAME=gptwebrubot` (токен уже был). Bot domain должен быть установлен `@BotFather /setdomain → ask.gptweb.ru`.
+
+### TG auto-link hook (без /settings шага)
+
+- `src/libs/better-auth/hooks/telegram-link.ts` (commit 6e3238a663): `linkTelegramAccount({userId, telegramId, userName, isNewUser})`.
+- Wired in `define-config.ts` `databaseHooks.account.create.after` — fires только при `providerId === 'telegram'`.
+- Двойная запись:
+  1. UPSERT `user_billing.tg_bot_chat_id = <tg_id>` через Drizzle.
+  2. POST `http://127.0.0.1:8082/internal/link-user` с `X-Internal-Token` (BOT_INTERNAL_TOKEN).
+- Обе записи best-effort, не блокируют auth.
+
+### gptwebrubot side (commit 2508d2d)
+
+- Новый `POST /internal/link-user` в `src/server.ts`, защищён `X-Internal-Token`. UPSERT в обе таблицы bot.db: `tg_chat_id` + `telegram_users`. Отправляет welcome ТОЛЬКО при `source='auth_signup'`.
+- Schema gotcha: `tg_chat_id` table использует `updated_at` (epoch ms), НЕ `last_seen_ms`.
+- Новый env: `BOT_INTERNAL_TOKEN` (общий секрет с lobechat).
+
+### Frontend components (commits 767f6096b7 + f70c792fc7)
+
+- `src/features/AuthGuard/` — 8 файлов (`AuthGuardOverlay`, `AuthGuardWrapper`, `AuthModal`, `YandexButton`, `TelegramButton`, `EmailSignIn`, `EmailSignUp`, `index.ts`).
+- `auth-client.ts` экспортирует named `signIn`/`signUp` напрямую (НЕ `authClient` object). Mirror that.
+- `useSearchParams()` из `next/navigation` для tab default — НЕ `useState + useEffect` (правило `@eslint-react/hooks-extra/no-direct-set-state-in-use-effect`).
+- `next/link` `Link` вместо `<a>` для internal hrefs (правило `@next/next/no-html-link-for-pages`).
+- `AuthGuardOverlay` is `dynamic(ssr: false)` — antd components используют refs.
+
+### Env vars (`/opt/lobechat/.env`)
+
+```
+AUTH_YANDEX_ID=<from user>
+AUTH_YANDEX_SECRET=<from user>
+AUTH_TELEGRAM_BOT_TOKEN=<existing — gptwebrubot>
+AUTH_TELEGRAM_BOT_USERNAME=gptwebrubot
+BOT_INTERNAL_TOKEN=<openssl rand -hex 32 — общий с gptwebrubot/.env>
+BOT_INTERNAL_URL=http://127.0.0.1:8082
+```
+
+Все пять также должны быть в `docker-compose.yml` `lobe:` service `environment:`.
+
+### Pitfalls
+
+- Better Auth `databaseHooks.account.create.after` (v1.4.6): `(account, context) => Promise<void>`. `context.context.user.name` НЕ типизировано — cast через `(ctx as any)`.
+- `isNewUser` heuristic via `ctx?.context?.newSession?.user == null` — best-effort, только для welcome message dispatch.
+- Bot слушает на `127.0.0.1:8082` (Bun), НЕ `:3000`. `BOT_INTERNAL_URL=http://127.0.0.1:8082`.
+- Telegram users имеют synthetic email `tg-<id>@telegram.local` — broadcasts to these users undeliverable.
+- Yandex redirect URI в OAuth console MUST be added manually (Claude не может).
