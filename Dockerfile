@@ -122,6 +122,13 @@ COPY --from=base /distroless/ /
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder /app/.next/standalone /app/
+# Next.js standalone output does NOT include /static or /public — they must be
+# copied separately, otherwise every JS/CSS chunk request returns 404 and the
+# entire client app is broken. Caused the 17.05 22:16 → 18.05 outage:
+# `/register` HTML rendered fine, but every `_next/static/*` chunk 404'd,
+# turning every signup landing into a blank page. 0 registrations for 13 hours.
+COPY --from=builder /app/.next/static /app/.next/static
+COPY --from=builder /app/public /app/public
 # Copy Next export output for desktop renderer
 COPY --from=builder /app/apps/desktop/dist/next /app/apps/desktop/dist/next
 
