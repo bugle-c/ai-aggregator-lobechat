@@ -410,3 +410,27 @@ BOT_INTERNAL_URL=http://127.0.0.1:8082
 - Bot слушает на `127.0.0.1:8082` (Bun), НЕ `:3000`. `BOT_INTERNAL_URL=http://127.0.0.1:8082`.
 - Telegram users имеют synthetic email `tg-<id>@telegram.local` — broadcasts to these users undeliverable.
 - Yandex redirect URI в OAuth console MUST be added manually (Claude не может).
+
+## Phase 16: Library lightbox + perf-audit (2026-05-18)
+
+### Perf-audit findings (`/resource`)
+
+Quick TTFB/total measurements via `curl` (anonymous, redirects to login HTML; size 106 KB shell):
+
+- 5 sequential runs: ttfb 234–459 ms, total 408–879 ms. Median \~245/410 ms.
+- One outlier (run 4) at 459/879 ms suggests cold caches or a transient backend pause.
+
+Authenticated waterfall не измерен в данном проходе (Playwright OAuth dance ради 1-2 цифр пропустили). Источник медленного first-paint, скорее всего:
+
+1. `useFetchResources` SWR hook (`src/store/file/slices/resource/hooks.ts`) делает `resourceService.queryResources({limit:50, offset:0})` на mount. С `revalidateOnFocus: true` это бьёт каждый раз когда пользователь возвращается во вкладку — лишний request при cmd+tab.
+2. `dedupingInterval: 2000ms` короче чем средний навигационный hop, так что повторный заход в /resource всегда тригерит fresh fetch вместо stale-while-revalidate.
+3. Lazy-loaded thumbnails (Intersection Observer `rootMargin: 200px`) уже стоят на ImageFileItem и должны помогать на длинных списках.
+
+Если жалобы продолжатся после lightbox-фикса — следующий шаг профилировки: добавить `console.time` на `queryResources` server-side + измерить через `/api/health` ping разницу до и после fetch.
+
+### Lightbox architecture
+
+- Image tiles: **inline antd `<Image preview>`** controlled via `useState` в `ImageFileItem.tsx`. Click на плитке выставляет `previewOpen=true`; antd рендерит lightbox с zoom/rotate/flip/wheel-zoom из коробки. Hover overlay получил `pointer-events:none` чтобы не перехватывать click.
+- Video tiles: новый компонент `VideoFileItem.tsx` (mirror of ImageFileItem). `<video preload="metadata" src={url + '#t=0.1'}>` рендерит первый кадр как poster. Maximize-кнопка в углу + центральный Play-индикатор. Клик → локальный antd `<Modal>` с `<video controls autoPlay>`. НЕ идёт через FullscreenModal route.
+- Preset cards: `PresetCard.tsx` оставляет existing "click = apply preset" поведение. Новая ZoomIn-кнопка (\~28×28px) в правом верхнем углу открывает `PresetZoomModal` с full-size MP4/image + "Применить пресет" footer-кнопкой. `e.stopPropagation()` + `e.preventDefault()` на zoom-кнопке чтобы не активировать apply.
+- FullscreenModal route и `FileViewer/Renderer/{Image,Video}` оставлены без изменений — всё ещё используются для PDF/Office/markdown/code файлов через `DefaultFileItem`/`MarkdownFileItem`/`NoteFileItem`.
