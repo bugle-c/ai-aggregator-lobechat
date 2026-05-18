@@ -103,7 +103,7 @@ jobs:
             docker ps --filter name=lobehub --format "{{.Names}} | {{.Status}}"
           EOF
 
-      - name: Smoke check — root + cron route
+      - name: Smoke check — root + cron route + static assets
         run: |
           # Root is reachable (any 3xx redirect to /signin = healthy)
           status=$(curl -s -o /dev/null -w '%{http_code}' https://ask.gptweb.ru)
@@ -120,3 +120,36 @@ jobs:
           else
             echo "Cron route: HTTP $cron (OK)"
           fi
+
+          # CRITICAL: verify Next.js static chunks are served.
+          # The 17.05 outage happened because Dockerfile didn't COPY .next/static
+          # — HTML rendered fine (200) but every JS/CSS chunk 404'd, breaking the
+          # entire client app. We did not notice for 13 hours because /signin
+          # returns 307 even when the page is unusable. Net result: 0 signups.
+          chunk=$(curl -s https://ask.gptweb.ru/register | grep -oE '_next/static/chunks/[a-zA-Z0-9_-]+\.js' | head -n 1)
+          if [ -z "$chunk" ]; then
+            echo "::error::No static chunk reference found in /register HTML"
+            exit 1
+          fi
+          chunk_status=$(curl -s -o /dev/null -w '%{http_code}' "https://ask.gptweb.ru/$chunk")
+          chunk_type=$(curl -s -o /dev/null -w '%{content_type}' "https://ask.gptweb.ru/$chunk")
+          if [ "$chunk_status" != "200" ]; then
+            echo "::error::Static chunk /$chunk returned HTTP $chunk_status — Dockerfile likely missing COPY .next/static"
+            exit 1
+          fi
+          case "$chunk_type" in
+            *javascript*) ;;
+            *)
+              echo "::error::Static chunk MIME is '$chunk_type', expected JavaScript — Next.js standalone build is broken"
+              exit 1
+              ;;
+          esac
+          echo "Static chunk: HTTP $chunk_status, $chunk_type (OK)"
+
+          # /public assets (logo.png is always present)
+          logo_status=$(curl -s -o /dev/null -w '%{http_code}' https://ask.gptweb.ru/logo.png)
+          if [ "$logo_status" != "200" ]; then
+            echo "::error::/logo.png returned HTTP $logo_status — Dockerfile likely missing COPY public"
+            exit 1
+          fi
+          echo "Public asset: HTTP $logo_status (OK)"
