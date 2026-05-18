@@ -205,6 +205,7 @@ export const telegramAuth = (opts: {
         });
 
         let userId: string;
+        let isNewUser = false;
         if (existing) {
           userId = existing.userId;
         } else {
@@ -223,6 +224,7 @@ export const telegramAuth = (opts: {
             },
           });
           userId = newUser.id;
+          isNewUser = true;
           await ctx.context.adapter.create({
             model: 'account',
             data: {
@@ -231,20 +233,51 @@ export const telegramAuth = (opts: {
               accountId: tgAccountId,
             },
           });
-          // Also persist tg_chat_id ↔ user_id in bot's lookup table (HTTP call to gptwebrubot)
-          // — best effort, async, don't block auth on failure
-          try {
-            await fetch(`http://gptwebrubot:3000/internal/link-user`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Internal-Token': process.env.BOT_INTERNAL_TOKEN!,
-              },
-              body: JSON.stringify({ tg_user_id: data.id, lobechat_user_id: userId }),
-            });
-          } catch (e) {
-            console.error('[telegram-auth] bot link failed', e);
-          }
+        }
+
+        // CRITICAL: дабл-write связи юзер↔bot, чтобы юзеру НЕ нужно было отдельно
+        // привязывать бота в /settings. Для всех TG-login юзеров (новых и
+        // существующих) пишем chat_id в lobechat user_billing И в bot.db.
+        //
+        // 1) lobechat side — user_billing.tg_bot_chat_id (bigint).
+        //    Используется для send-notification cron'ов из admin.
+        try {
+          await ctx.context.db.execute(sql`
+            INSERT INTO user_billing (user_id, tg_bot_chat_id, plan_id)
+            VALUES (${userId}, ${data.id}, 1)
+            ON CONFLICT (user_id) DO UPDATE
+            SET tg_bot_chat_id = EXCLUDED.tg_bot_chat_id
+            WHERE user_billing.tg_bot_chat_id IS DISTINCT FROM EXCLUDED.tg_bot_chat_id
+          `);
+        } catch (e) {
+          console.error('[telegram-auth] failed to set tg_bot_chat_id', e);
+          // Non-fatal: юзер залогинится; админ заметит по metric'у
+          // "users w/o tg_bot_chat_id".
+        }
+
+        // 2) bot.db side — gptwebrubot has its own SQLite (telegram_users +
+        //    tg_chat_id tables). POST /internal/link-user (HTTP, token-guarded).
+        //    Best-effort: not blocking — если bot недоступен, link сделается
+        //    lazy когда юзер впервые напишет боту /start (gptwebrubot handler
+        //    уже умеет это).
+        try {
+          await fetch(`http://gptwebrubot:3000/internal/link-user`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Token': process.env.BOT_INTERNAL_TOKEN!,
+            },
+            body: JSON.stringify({
+              tg_user_id: data.id,
+              tg_chat_id: data.id, // for private chats id===chat_id
+              lobechat_user_id: userId,
+              first_name: data.first_name,
+              username: data.username,
+              source: isNewUser ? 'auth_signup' : 'auth_relink',
+            }),
+          });
+        } catch (e) {
+          console.error('[telegram-auth] bot link failed', e);
         }
 
         // 4) Set session cookie via Better Auth helper
@@ -264,6 +297,73 @@ export const telegramAuth = (opts: {
 ```
 
 Endpoint URL: `POST /api/auth/telegram/verify` (Better Auth префиксит `/api/auth`).
+
+### 4.3 gptwebrubot side: `POST /internal/link-user`
+
+Новый internal endpoint в `gptwebrubot` (`src/server.ts`). Принимает связь от lobechat
+после Telegram-login юзера и пишет её в локальную SQLite-БД `bot.db`.
+
+```ts
+// gptwebrubot/src/server.ts — добавить route handler
+// Guarded by X-Internal-Token (shared secret BOT_INTERNAL_TOKEN, см. §7).
+
+app.post('/internal/link-user', async (ctx) => {
+  if (ctx.req.headers.get('x-internal-token') !== process.env.BOT_INTERNAL_TOKEN) {
+    return ctx.json({ error: 'unauthorized' }, 401);
+  }
+  const { tg_user_id, tg_chat_id, lobechat_user_id, first_name, username, source } =
+    await ctx.req.json();
+
+  if (!tg_user_id || !lobechat_user_id) {
+    return ctx.json({ error: 'tg_user_id and lobechat_user_id required' }, 400);
+  }
+
+  // 1) tg_chat_id table — primary identity store (existing)
+  db.prepare(
+    `INSERT INTO tg_chat_id (tg_user_id, chat_id, last_seen_ms)
+     VALUES (?, ?, ?)
+     ON CONFLICT (tg_user_id) DO UPDATE
+     SET chat_id = excluded.chat_id, last_seen_ms = excluded.last_seen_ms`,
+  ).run(tg_user_id, tg_chat_id ?? tg_user_id, Date.now());
+
+  // 2) telegram_users table — bot's "user profile" cache
+  db.prepare(
+    `INSERT INTO telegram_users (telegram_id, lobechat_user_id, preferred_model, current_topic_id)
+     VALUES (?, ?, ?, NULL)
+     ON CONFLICT (telegram_id) DO UPDATE
+     SET lobechat_user_id = excluded.lobechat_user_id`,
+  ).run(String(tg_user_id), lobechat_user_id, DEFAULT_MODEL);
+
+  // 3) Optional: send welcome message on signup (source='auth_signup')
+  if (source === 'auth_signup' && tg_chat_id) {
+    try {
+      await bot.api.sendMessage(
+        Number(tg_chat_id),
+        `Привет, ${first_name || username || 'друг'}! ` +
+          `Твой WebGPT-аккаунт связан с этим Telegram. ` +
+          `Просто пиши сюда — я отвечу через GPT/Claude/etc. ` +
+          `Кредиты и история шарятся с веб-версией: https://ask.gptweb.ru`,
+      );
+    } catch (e) {
+      // user might have closed chat / blocked bot — non-fatal
+      console.error('[link-user] welcome message failed', e);
+    }
+  }
+
+  return ctx.json({ ok: true });
+});
+```
+
+**Поведение:**
+
+- Endpoint **идемпотентный** — повторный вызов с теми же параметрами обновит `last_seen_ms` и не ломает existing связь.
+- Welcome-сообщение отправляется только для `source='auth_signup'` (новый юзер). Для `auth_relink` (юзер уже был, перезалогинился) — не спамим.
+- Если связь между `tg_user_id` и `lobechat_user_id` была другая (юзер удалил аккаунт и снова логинится) — UPDATE перепишет на новый `lobechat_user_id`.
+
+**Acceptance criteria:** после Telegram-login на ask.gptweb.ru,
+`SELECT tg_bot_chat_id FROM user_billing WHERE user_id=<userId>` возвращает Telegram ID
+И `SELECT lobechat_user_id FROM telegram_users WHERE telegram_id=<id>` (в bot.db) тоже
+возвращает этот `userId`. **Юзеру НЕ нужно ничего делать вручную для привязки.**
 
 ---
 
