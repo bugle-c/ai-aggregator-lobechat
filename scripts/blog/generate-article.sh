@@ -151,6 +151,15 @@ mark_keyword_skipped() {
     rm -f "$body_file"
 }
 
+is_valid_keyword() {
+    local kw="$1"
+    [[ -n "$kw" ]] || return 1
+    [[ ${#kw} -le 160 ]] || return 1
+    [[ ! "$kw" =~ ^[\{\[] ]] || return 1
+    [[ ! "$kw" =~ (превышен[[:space:]]+лимит[[:space:]]+запросов|retryaftersec|windowseconds|error|message) ]] || return 1
+    return 0
+}
+
 for attempt in $(seq 1 $MAX_KEYWORD_ATTEMPTS); do
     CANDIDATE_KEYWORD=""
     CANDIDATE_ID=""
@@ -179,6 +188,12 @@ for attempt in $(seq 1 $MAX_KEYWORD_ATTEMPTS); do
         log "ERROR: Failed to obtain keyword on attempt ${attempt}"
         notify_failure "generate-article" "Failed to obtain keyword for category $TARGET_CAT" "$LOG_FILE"
         exit 1
+    fi
+
+    if ! is_valid_keyword "$CANDIDATE_KEYWORD"; then
+        log "INVALID: keyword payload rejected: '${CANDIDATE_KEYWORD:0:120}' (id=$CANDIDATE_ID)"
+        mark_keyword_skipped "$CANDIDATE_ID" "invalid keyword payload"
+        continue
     fi
 
     # Cross-category topic-saturation guard. Each candidate keyword has
