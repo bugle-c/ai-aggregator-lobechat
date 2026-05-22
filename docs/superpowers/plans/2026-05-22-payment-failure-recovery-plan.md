@@ -1389,7 +1389,7 @@ git commit -m "feat(billing): /api/billing/recovery-retry — HMAC-verified bot 
 
 ## Phase 5 — Bot DM cron
 
-### Task 10: gptwebrubot — `/internal/payment-recovery` endpoint
+### Task 10: gptwebrubot — `/internal/payment-recovery` (sendInvoice primary) + pre_checkout + successful_payment handlers
 
 **Files:**
 
@@ -1397,22 +1397,35 @@ git commit -m "feat(billing): /api/billing/recovery-retry — HMAC-verified bot 
 
 - Modify: `gptwebrubot/src/routes/internal/index.ts` (register route)
 
-- [ ] **Step 1: Inspect existing internal route pattern**
+- Modify: `gptwebrubot/src/bot.ts` (or wherever update handlers live) — add `pre_checkout_query` + `message:successful_payment` handlers
+
+- Env: bot must have `TELEGRAM_PAYMENT_PROVIDER_TOKEN` (already added to `.env`, format `<provider_id>:LIVE:<secret>`)
+
+- [ ] **Step 1: Inspect existing internal route pattern + bot update handlers**
 
 ```bash
 ls /home/deploy/projects/gptwebrubot/src/routes/internal/
 cat /home/deploy/projects/gptwebrubot/src/routes/internal/link-user.ts | head -40
+grep -rn "pre_checkout_query\|successful_payment\|sendInvoice" /home/deploy/projects/gptwebrubot/src | head -5
 ```
 
-Note the auth helper (likely `X-Internal-Token` check via shared middleware) and the Express/Fastify framework in use. We mirror that pattern below — adjust import paths to match.
+Note the framework (Express/Fastify) and the grammY/Telegraf bot library. Adjust imports below to match. Confirm `TELEGRAM_PAYMENT_PROVIDER_TOKEN` is loaded from env.
 
-- [ ] **Step 2: Implement the endpoint**
+- [ ] **Step 2: Implement the endpoint with sendInvoice primary + URL fallback**
 
 ```ts
 // gptwebrubot/src/routes/internal/payment-recovery.ts
 import { Router } from 'express'; // adjust if app uses Fastify/etc.
 import { bot } from '../../bot'; // adjust import to the project's bot instance
 import { requireInternalToken } from '../../middleware/auth';
+
+interface InvoiceData {
+  title: string;
+  description: string;
+  payload: string; // HMAC-signed (paymentId|userId|exp)
+  currency: 'RUB';
+  prices: { label: string; amount: number }[]; // amount in KOPECKS
+}
 
 interface RecoveryRequest {
   tg_chat_id: number;
@@ -1422,8 +1435,9 @@ interface RecoveryRequest {
   tokens_amount: number;
   reason_code: string;
   reason_text: string;
-  retry_url_sbp: string;
-  retry_url_choice: string;
+  invoice?: InvoiceData; // PRIMARY channel
+  retry_url_sbp: string; // FALLBACK
+  retry_url_choice: string; // FALLBACK
 }
 
 const REASON_EMOJI: Record<string, string> = {
@@ -1446,19 +1460,59 @@ paymentRecoveryRouter.post('/payment-recovery', requireInternalToken, async (req
     return res.status(400).json({ sent: false, error: 'bad_request' });
   }
 
+  const providerToken = process.env.TELEGRAM_PAYMENT_PROVIDER_TOKEN;
   const emoji = REASON_EMOJI[body.reason_code] ?? '😕';
-  const text =
+  const introText =
     `😕 *Видим — оплата не прошла*\n\n` +
     `${emoji} ${body.reason_text}\n\n` +
     `Можем попробовать через *СБП* — оплата по QR в банковском приложении, ` +
-    `без 3-D Secure, проходит у 95% карт российских банков.\n\n` +
+    `без 3-D Secure, проходит у 95% карт российских банков.`;
+
+  // PRIMARY: try sendInvoice (native Telegram payment UI, no browser)
+  if (providerToken && body.invoice) {
+    try {
+      // 1) Send the explainer text first so the user understands context.
+      await bot.api.sendMessage(body.tg_chat_id, introText, { parse_mode: 'Markdown' });
+
+      // 2) Send the native invoice card. Telegram renders its own "Pay X ₽" button.
+      const inv = await bot.api.sendInvoice(
+        body.tg_chat_id,
+        body.invoice.title,
+        body.invoice.description,
+        body.invoice.payload,
+        providerToken,
+        body.invoice.currency,
+        body.invoice.prices,
+      );
+      return res.json({
+        sent: true,
+        channel: 'invoice',
+        telegram_message_id: inv.message_id,
+      });
+    } catch (err: any) {
+      const msg = String(err?.message ?? err);
+      if (/blocked|user_is_deactivated|chat_not_found|forbidden/i.test(msg)) {
+        return res.json({ sent: false, error: 'blocked' });
+      }
+      if (/too many requests|429/i.test(msg)) {
+        return res.json({ sent: false, error: 'rate_limited' });
+      }
+      // sendInvoice itself failed (provider token issue, currency disabled, etc.).
+      // Fall through to URL fallback so the user still sees something.
+      console.warn('[payment-recovery] sendInvoice failed, falling back to URL:', msg);
+    }
+  }
+
+  // FALLBACK: URL buttons
+  const fallbackText =
+    `${introText}\n\n` +
     `──────────────────────────────\n` +
     `💎 *${body.plan_name}*   —   *${body.amount_rub} ₽*\n` +
     `${body.tokens_amount} кредитов\n` +
     `──────────────────────────────`;
 
   try {
-    const sent = await bot.api.sendMessage(body.tg_chat_id, text, {
+    const sent = await bot.api.sendMessage(body.tg_chat_id, fallbackText, {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
@@ -1473,7 +1527,11 @@ paymentRecoveryRouter.post('/payment-recovery', requireInternalToken, async (req
         ],
       },
     });
-    return res.json({ sent: true, telegram_message_id: sent.message_id });
+    return res.json({
+      sent: true,
+      channel: 'url_fallback',
+      telegram_message_id: sent.message_id,
+    });
   } catch (err: any) {
     const msg = String(err?.message ?? err);
     if (/blocked|user_is_deactivated|chat_not_found|forbidden/i.test(msg)) {
@@ -1498,9 +1556,78 @@ import { paymentRecoveryRouter } from './payment-recovery';
 app.use('/internal', paymentRecoveryRouter);
 ```
 
-(Adjust to the existing aggregation pattern.)
+- [ ] **Step 4: Add `pre_checkout_query` and `successful_payment` handlers**
 
-- [ ] **Step 4: Type-check + run any bot tests**
+Telegram requires `pre_checkout_query` to be answered within 10 seconds (else payment fails for the user). And `message.successful_payment` is the success event — we must forward it to the aggregator so credits get applied.
+
+In `gptwebrubot/src/bot.ts` (or wherever you wire update handlers — grammY style shown; adjust if Telegraf):
+
+```ts
+// 1) Pre-checkout: always OK as long as payload looks like a recovery invoice.
+//    Telegram will retry our endpoint up to ~10s. Heavy verification (HMAC, DB
+//    lookup) happens AT FULFILL TIME on the aggregator side — we don't want
+//    to slow the pre-checkout response.
+bot.on('pre_checkout_query', async (ctx) => {
+  try {
+    const payload = ctx.preCheckoutQuery.invoice_payload;
+    // Light sanity check — payload should be our two-part base64url.signature shape.
+    // If we ever issue other invoice types, branch here.
+    if (!payload || !payload.includes('.')) {
+      await ctx.answerPreCheckoutQuery(false, 'Неизвестный payload');
+      return;
+    }
+    await ctx.answerPreCheckoutQuery(true);
+  } catch (err) {
+    console.error('[pre_checkout_query] handler error', err);
+    try {
+      await ctx.answerPreCheckoutQuery(false, 'Внутренняя ошибка');
+    } catch (_) {}
+  }
+});
+
+// 2) Successful payment: forward to the aggregator's fulfill endpoint so it
+//    can create a billing_payments row and credit the user.
+bot.on('message:successful_payment', async (ctx) => {
+  const sp = ctx.message.successful_payment;
+  const tgUserId = ctx.from?.id;
+  if (!sp || !tgUserId) return;
+
+  const aggregatorUrl =
+    process.env.AGGREGATOR_INTERNAL_URL ?? process.env.LOBECHAT_URL ?? 'https://ask.gptweb.ru';
+  const token = process.env.BOT_INTERNAL_TOKEN;
+  if (!token) {
+    console.error('[successful_payment] BOT_INTERNAL_TOKEN missing — cannot forward');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${aggregatorUrl}/api/billing/telegram-payment-fulfill`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Internal-Token': token },
+      body: JSON.stringify({
+        invoice_payload: sp.invoice_payload,
+        telegram_payment_charge_id: sp.telegram_payment_charge_id,
+        provider_payment_charge_id: sp.provider_payment_charge_id,
+        total_amount: sp.total_amount,
+        currency: sp.currency,
+        tg_user_id: tgUserId,
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      console.error('[successful_payment] fulfill failed:', res.status, json);
+      // Don't reply to user — the existing per-payment success DM from the
+      // aggregator's normal fulfillPayment path will handle the confirmation
+      // (idempotent). If forwarding failed entirely, support sees it in logs.
+      return;
+    }
+  } catch (err) {
+    console.error('[successful_payment] fetch failed', err);
+  }
+});
+```
+
+- [ ] **Step 5: Type-check + build**
 
 ```bash
 cd /home/deploy/projects/gptwebrubot
@@ -1509,11 +1636,11 @@ npm run build 2>&1 | tail -20
 
 Expected: clean compile.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/routes/internal/payment-recovery.ts src/routes/internal/index.ts
-git commit -m "feat(bot): POST /internal/payment-recovery — DM user with retry links"
+git add src/routes/internal/payment-recovery.ts src/routes/internal/index.ts src/bot.ts
+git commit -m "feat(bot): payment-recovery endpoint (sendInvoice primary + URL fallback) + pre_checkout/successful_payment handlers"
 ```
 
 ---
@@ -1659,6 +1786,16 @@ export async function GET(req: Request) {
     const retryUrlSbp = `${appEnv.APP_URL}/api/billing/recovery-retry?payment=${r.id}&method=sbp&t=${tSbp}`;
     const retryUrlChoice = `${appEnv.APP_URL}/api/billing/recovery-retry?payment=${r.id}&method=any&t=${tAny}`;
 
+    // HMAC-signed invoice payload for Telegram Payments primary channel.
+    // Bot answers pre_checkout_query as soon as Telegram fires it (no DB
+    // lookup on hot path), and on successful_payment forwards this payload
+    // back to our /api/billing/telegram-payment-fulfill endpoint where it's
+    // verified before crediting the user.
+    const tInvoice = signRecoveryToken(
+      { paymentId: r.id, userId: r.user_id, method: 'sbp', exp: expSec },
+      secret,
+    );
+
     const result = await callBot({
       tg_chat_id: Number(r.tg_bot_chat_id),
       payment_id: r.id,
@@ -1667,6 +1804,18 @@ export async function GET(req: Request) {
       tokens_amount: r.tokens_amount ?? 0,
       reason_code: reasonCode,
       reason_text: reasonDesc.text,
+      // Primary channel — bot uses native sendInvoice (no browser).
+      invoice: {
+        title: r.type === 'subscription' ? `Подписка ${planName} (повтор)` : `Пополнение (повтор)`,
+        description:
+          r.type === 'subscription'
+            ? `Возобновление подписки ${planName}. ${r.tokens_amount ?? 0} кредитов.`
+            : `${r.tokens_amount ?? 0} кредитов. Пополнение баланса.`,
+        payload: tInvoice,
+        currency: 'RUB',
+        prices: [{ label: planName, amount: r.amount_rub * 100 }], // KOPECKS
+      },
+      // Fallback channel — bot uses URL inline buttons if sendInvoice fails.
       retry_url_sbp: retryUrlSbp,
       retry_url_choice: retryUrlChoice,
     });
@@ -1727,7 +1876,160 @@ Expected: JSON `{ok:true, eligible:0, sent:0, ...}` on first run before any new 
 
 ```bash
 git add src/app/\(backend\)/api/cron/payment-recovery-notify/route.ts
-git commit -m "feat(billing): 5-min cron sends recovery DM to users with failed payments"
+git commit -m "feat(billing): 5-min cron sends recovery DM (invoice primary, URL fallback)"
+```
+
+---
+
+### Task 11b: `/api/billing/telegram-payment-fulfill` — bot→aggregator bridge
+
+When a user pays a recovery invoice inside Telegram, the bot receives a
+`message.successful_payment` update (handled in Task 10's bot.ts change)
+and forwards it here. We verify the HMAC payload, insert a `succeeded`
+billing_payments row, and call existing `fulfillPayment` to credit the
+user. Idempotent.
+
+**Files:**
+
+- Create: `src/app/(backend)/api/billing/telegram-payment-fulfill/route.ts`
+
+- [ ] **Step 1: Implement the endpoint**
+
+```ts
+// src/app/(backend)/api/billing/telegram-payment-fulfill/route.ts
+import crypto from 'node:crypto';
+
+import { and, eq } from 'drizzle-orm';
+import { NextResponse } from 'next/server';
+
+import { authEnv } from '@/envs/auth';
+import { billingPayments } from '@/database/schemas';
+import { getServerDB } from '@/database/server';
+import { fulfillPayment } from '@/server/modules/billing/fulfill';
+import { verifyRecoveryToken } from '@/server/modules/billing/recovery-token';
+
+export const dynamic = 'force-dynamic';
+
+interface Body {
+  invoice_payload: string;
+  telegram_payment_charge_id: string;
+  provider_payment_charge_id: string;
+  total_amount: number; // KOPECKS
+  currency: string; // 'RUB'
+  tg_user_id: number;
+}
+
+export async function POST(req: Request) {
+  const token = req.headers.get('x-internal-token');
+  if (!process.env.BOT_INTERNAL_TOKEN || token !== process.env.BOT_INTERNAL_TOKEN) {
+    return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
+  }
+
+  let body: Body;
+  try {
+    body = (await req.json()) as Body;
+  } catch {
+    return NextResponse.json({ ok: false, error: 'bad_json' }, { status: 400 });
+  }
+
+  const secret = authEnv.AUTH_SECRET || process.env.AUTH_SECRET;
+  if (!secret) {
+    console.error('[tg-payment-fulfill] AUTH_SECRET missing');
+    return NextResponse.json({ ok: false, error: 'server_misconfigured' }, { status: 500 });
+  }
+
+  const verified = verifyRecoveryToken(body.invoice_payload, secret);
+  if (!verified) {
+    return NextResponse.json({ ok: false, error: 'invalid_payload' }, { status: 400 });
+  }
+
+  const db = await getServerDB();
+  const original = await db
+    .select()
+    .from(billingPayments)
+    .where(eq(billingPayments.id, verified.paymentId))
+    .then((r) => r[0]);
+
+  if (!original) {
+    return NextResponse.json({ ok: false, error: 'original_not_found' }, { status: 404 });
+  }
+  if (original.userId !== verified.userId) {
+    return NextResponse.json({ ok: false, error: 'user_mismatch' }, { status: 400 });
+  }
+
+  // Amount sanity check: Telegram sends kopecks, we store rubles.
+  const expectedKopecks = original.amountRub * 100;
+  if (body.total_amount !== expectedKopecks || body.currency !== 'RUB') {
+    console.error('[tg-payment-fulfill] amount mismatch', {
+      expected: expectedKopecks,
+      actual: body.total_amount,
+    });
+    return NextResponse.json({ ok: false, error: 'amount_mismatch' }, { status: 400 });
+  }
+
+  // Idempotency: if we've already processed this provider_payment_charge_id,
+  // return the existing row instead of creating a duplicate.
+  const existing = await db
+    .select({ id: billingPayments.id })
+    .from(billingPayments)
+    .where(eq(billingPayments.yookassaPaymentId, body.provider_payment_charge_id))
+    .then((r) => r[0]);
+
+  if (existing) {
+    // Already processed — Telegram may re-send successful_payment on retry.
+    return NextResponse.json({ ok: true, new_payment_id: existing.id, idempotent: true });
+  }
+
+  const newRowId = crypto.randomUUID();
+  await db.insert(billingPayments).values({
+    amountRub: original.amountRub,
+    id: newRowId,
+    metadata: {
+      pricing_variant: (original.metadata as any)?.pricing_variant,
+      recovery_from: original.id,
+      recovery_method_used: 'tg_dm_invoice',
+      telegram_payment_charge_id: body.telegram_payment_charge_id,
+      tg_user_id: body.tg_user_id,
+    },
+    planId: original.planId,
+    status: 'succeeded',
+    tokensAmount: original.tokensAmount,
+    type: original.type,
+    userId: original.userId,
+    yookassaPaymentId: body.provider_payment_charge_id,
+  });
+
+  // Credit the user via the existing fulfill path. fulfillPayment is
+  // idempotent — it no-ops if status is already 'succeeded'. We just
+  // inserted with status='succeeded' so the early-return path triggers;
+  // fulfillPayment exists for orchestration symmetry with the webhook path.
+  await fulfillPayment(db, body.provider_payment_charge_id, {});
+
+  return NextResponse.json({ ok: true, new_payment_id: newRowId });
+}
+```
+
+- [ ] **Step 2: Type-check**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: clean.
+
+- [ ] **Step 3: Smoke (manual, post-deploy)**
+
+```bash
+# unauthenticated rejected
+curl -i -X POST https://ask.gptweb.ru/api/billing/telegram-payment-fulfill -d '{}' -H 'Content-Type: application/json'
+# expect 401
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/app/\(backend\)/api/billing/telegram-payment-fulfill/route.ts
+git commit -m "feat(billing): /telegram-payment-fulfill bridge from bot successful_payment to billing_payments"
 ```
 
 ---

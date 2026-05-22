@@ -4,6 +4,8 @@
 **Project:** ask.gptweb.ru (`ai-aggregator-lobechat`)
 **Scope:** Problem C from registration→payment funnel analysis. Telemetry for YooKassa failure reasons + multi-channel recovery to convert failed/canceled attempts.
 
+**Update 2026-05-22 (post-spec):** Pavel linked YooKassa to the Telegram bot via BotFather, giving us a Telegram Payments `provider_token` stored as `TELEGRAM_PAYMENT_PROVIDER_TOKEN` in `/opt/lobechat/.env` and the bot's env. The bot can now request payments natively inside the chat via `bot.api.sendInvoice` — no browser, no new tab, single-tap UX. The recovery DM (Change #4b below) uses **invoice as the primary method**, with URL buttons as fallback. A new endpoint `POST /api/billing/telegram-payment-fulfill` bridges Telegram `successful_payment` events back to our `billing_payments` table.
+
 ---
 
 ## Problem statement
@@ -392,23 +394,57 @@ LIMIT 50;
   tokens_amount: number;
   reason_code: string; // e.g. 'insufficient_funds'
   reason_text: string; // already RU-localized
-  retry_url_sbp: string;
-  retry_url_choice: string;
+  retry_url_sbp: string;     // fallback URL retry
+  retry_url_choice: string;  // fallback URL retry (any method)
+  invoice: {                  // PRIMARY recovery channel — bot sendInvoice
+    title: string;            // "Оплата подписки Pro" / "Пополнение 490₽"
+    description: string;      // short subtitle (under 255 chars)
+    payload: string;          // opaque to Telegram, contains original_payment_id (signed HMAC)
+    currency: 'RUB';
+    prices: [{ label: string; amount: number }];  // amount in KOPECKS (rub * 100)
+  };
 }
 ```
 
-Response: `{sent: true, telegram_message_id: number}` | `{sent: false, error: 'blocked' | 'invalid_chat' | 'rate_limited' | 'unknown'}`.
+Response: `{sent: true, telegram_message_id: number, channel: 'invoice' | 'url_fallback'}` | `{sent: false, error: 'blocked' | 'invalid_chat' | 'rate_limited' | 'unknown'}`.
 
-**DM template**:
+**Two channels, bot picks one**:
+
+1. **Primary: native Telegram invoice via `bot.api.sendInvoice`**. Single tap inside chat opens Telegram's own payment UI (card / SBP form provided by YooKassa via `TELEGRAM_PAYMENT_PROVIDER_TOKEN`). No browser, no tab, no session. Bot handles `pre_checkout_query` (always answer OK if payload signature valid) and `message.successful_payment` (forwards to aggregator's `/api/billing/telegram-payment-fulfill`). Response includes `channel: 'invoice'`.
+2. **Fallback: URL inline buttons** (current spec). If `sendInvoice` fails (provider misconfigured, user blocked invoice scope, etc.) the bot drops back to the URL-button DM. Response includes `channel: 'url_fallback'`.
+
+The aggregator's cron always sends both an `invoice` payload AND the URL fallback fields — bot decides which to use.
+
+**DM template (invoice path)**:
+
+User sees a Telegram-native message card:
 
 ```
 😕  Видим — оплата не прошла
 
 {emoji} {reason_text}
 
-Можем попробовать через СБП — оплата по QR из
-банковского приложения, без 3-D Secure, проходит
+Можем попробовать через СБП — оплата по QR в
+банковском приложении, без 3-D Secure, проходит
 у 95% карт российских банков.
+
+[ ⬇  Native Telegram invoice card ⬇ ]
+┌──────────────────────────────────┐
+│  💎  {plan_name}                  │
+│  {tokens_amount} кредитов         │
+│  ──────────────────────────────  │
+│  ИТОГО:                {price} ₽  │
+│                                   │
+│        [ ОПЛАТИТЬ {price} ₽ ]    │
+└──────────────────────────────────┘
+```
+
+**DM template (URL fallback path)** — unchanged from original spec:
+
+```
+😕  Видим — оплата не прошла
+
+{emoji} {reason_text}
 
 ──────────────────────────────────
 💎 {plan_name}                  {amount_rub} ₽
@@ -417,7 +453,7 @@ Response: `{sent: true, telegram_message_id: number}` | `{sent: false, error: 'b
 
 [ 🟢  Оплатить через СБП ]    ← inline URL button
 [ 💳  Другой способ ]         ← inline URL button
-[ ✉️  Помоги вручную ]         ← inline URL button to t.me/gptwebrubot?start=help_payment_<id>
+[ ✉️  Помоги вручную ]         ← inline URL button
 ```
 
 **Recovery-retry endpoint** (`GET /api/billing/recovery-retry`):
@@ -445,7 +481,65 @@ Behavior:
 
 The site modal does **not** use this endpoint — it has a session already and
 calls the normal tRPC mutations with `metadata.recovery_method_used: 'site_modal'`.
-This endpoint exists specifically for the bot-DM flow where session may be absent.
+This endpoint exists specifically for the bot-DM URL-fallback flow where
+session may be absent.
+
+---
+
+## Change #4c — Telegram-payment fulfill bridge
+
+When the user pays via the native Telegram invoice (the primary recovery
+channel from Change #4b), the bot receives a `message.successful_payment`
+update from Telegram. The bot calls our aggregator:
+
+`POST /api/billing/telegram-payment-fulfill` with `X-Internal-Token`.
+
+Request body:
+
+```ts
+{
+  invoice_payload: string; // the HMAC-signed payload we created in cron
+  telegram_payment_charge_id: string; // Telegram's payment id
+  provider_payment_charge_id: string; // YooKassa's payment id
+  total_amount: number; // KOPECKS (rub * 100)
+  currency: 'RUB';
+  tg_user_id: number; // Telegram user numeric id
+}
+```
+
+Behavior:
+
+1. Verify `X-Internal-Token` matches `BOT_INTERNAL_TOKEN`. Reject 401.
+2. Parse + verify HMAC on `invoice_payload`. Extract `paymentId` (original
+   failed `billing_payments` row), `userId`, and `expiresAt`. Reject 400 if
+   signature invalid or expired.
+3. Load original `billing_payments` row by paymentId. Reject 404 if missing
+   or if it doesn't belong to the user from the payload.
+4. Insert NEW `billing_payments` row with:
+   - `status: 'succeeded'` (paid via Telegram, never goes through pending)
+   - `type` = original.type
+   - `amountRub` = original.amountRub (verify `total_amount / 100 === amountRub`, reject 400 on mismatch)
+   - `tokensAmount`, `planId` = original
+   - `yookassaPaymentId` = `provider_payment_charge_id` (the YK side)
+   - `metadata`:
+     ```json
+     {
+       "pricing_variant": "<copied>",
+       "recovery_from": "<originalId>",
+       "recovery_method_used": "tg_dm_invoice",
+       "telegram_payment_charge_id": "<value>",
+       "tg_user_id": <number>
+     }
+     ```
+5. Call `fulfillPayment(db, providerPaymentId)` (existing function) to credit
+   the user. This handles the user_billing balance update, sends a
+   confirmation DM via the bot's normal post-payment flow, and is idempotent.
+6. Return `200 {ok: true, new_payment_id: <uuid>}`.
+
+The bot is responsible for the `pre_checkout_query` answer (must respond
+within 10s). Bot answers OK as long as the invoice_payload signature is
+valid (no DB lookup needed at pre-check time — verification happens at
+fulfill time).
 
 ---
 
