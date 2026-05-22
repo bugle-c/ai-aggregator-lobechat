@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 
 import { billingEnv } from '@/envs/billing';
 
+import { extractMetadataPatch, type YookassaPaymentObject } from './parse-yk-payload';
+
 interface CreatePaymentParams {
   amountRub: number;
   customerEmail?: string;
@@ -125,6 +127,7 @@ export async function createYookassaPayment(
  * row that was created locally but the YK request failed mid-flight).
  */
 export async function fetchYookassaPaymentStatus(yookassaPaymentId: string): Promise<{
+  object: YookassaPaymentObject;
   paymentMethodId?: string;
   status: string;
 } | null> {
@@ -143,9 +146,14 @@ export async function fetchYookassaPaymentStatus(yookassaPaymentId: string): Pro
     throw new Error(`YooKassa GET error ${res.status}: ${err}`);
   }
 
-  const data: YookassaPaymentResponse = await res.json();
+  const data = (await res.json()) as YookassaPaymentObject;
   return {
-    paymentMethodId: data.payment_method?.id,
+    object: data,
+    paymentMethodId:
+      data.payment_method?.saved && data.payment_method.id ? data.payment_method.id : undefined,
     status: data.status,
   };
 }
+
+// Re-export so callers can use extractMetadataPatch from this module if needed.
+export { extractMetadataPatch };

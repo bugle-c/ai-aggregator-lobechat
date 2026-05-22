@@ -29,11 +29,12 @@
  *
  * Triggered by host cron every 10 min with Bearer CRON_SECRET.
  */
-import { and, eq, isNull, lt } from 'drizzle-orm';
+import { and, eq, isNull, lt, sql } from 'drizzle-orm';
 
 import { billingPayments } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { fulfillPayment } from '@/server/modules/billing/fulfill';
+import { extractMetadataPatch } from '@/server/modules/billing/parse-yk-payload';
 import { fetchYookassaPaymentStatus } from '@/server/modules/billing/yookassa';
 
 const UNSENT_THRESHOLD_MS = 5 * 60 * 1000; // 5 min — never reached YK
@@ -108,6 +109,18 @@ export async function GET(req: Request) {
           .where(eq(billingPayments.id, row.id));
         summary.localFailed++;
         continue;
+      }
+
+      // Merge whatever telemetry YK now has on this payment into our metadata.
+      const patch = extractMetadataPatch(yk.object);
+      if (Object.keys(patch).length > 0) {
+        await db
+          .update(billingPayments)
+          .set({
+            metadata: sql`COALESCE(${billingPayments.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+            updatedAt: new Date(),
+          })
+          .where(eq(billingPayments.id, row.id));
       }
 
       if (yk.status === 'succeeded') {
