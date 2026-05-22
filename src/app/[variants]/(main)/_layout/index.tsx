@@ -20,6 +20,7 @@ import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import MobileTabBar from '@/features/MobileTabBar';
 import NavPanel from '@/features/NavPanel';
+import { RetryModal } from '@/features/PaymentRetry';
 import { useFeedbackModal } from '@/hooks/useFeedbackModal';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePlatform } from '@/hooks/usePlatform';
@@ -115,6 +116,7 @@ const Layout: FC = () => {
         <HotkeyHelperPanel />
         <RegisterHotkeys />
         <CmdkLazy />
+        <RetryModal />
         {isFeedbackModalOpen && (
           <Suspense fallback={null}>
             <FeedbackModal
