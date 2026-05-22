@@ -167,11 +167,14 @@ export async function GET(req: Request) {
     const retryUrlSbp = `${appEnv.APP_URL}/api/billing/recovery-retry?payment=${r.id}&method=sbp&t=${tSbp}`;
     const retryUrlChoice = `${appEnv.APP_URL}/api/billing/recovery-retry?payment=${r.id}&method=any&t=${tAny}`;
 
-    // HMAC-signed payload for Telegram Payments invoice (T10 primary channel).
-    const tInvoice = signRecoveryToken(
-      { paymentId: r.id, userId: r.user_id, method: 'sbp', exp: expSec },
-      secret,
-    );
+    // Telegram invoice_payload has a 128-byte hard limit. An HMAC token
+    // (base64url payload + signature) blows past it once paymentId and
+    // userId are both UUIDs (~177 chars). Pass the bare paymentId (36
+    // chars) instead — the bot→aggregator hop is already authenticated
+    // by X-Internal-Token in /telegram-payment-fulfill, so the HMAC is
+    // redundant here. The aggregator verifies ownership by joining
+    // billing_payments.id → user_billing.tg_bot_chat_id == tg_user_id.
+    const tInvoice = r.id;
 
     const result = await callBot({
       tg_chat_id: Number(r.tg_bot_chat_id),
