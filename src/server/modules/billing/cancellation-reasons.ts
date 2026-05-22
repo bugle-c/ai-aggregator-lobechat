@@ -16,8 +16,8 @@
 export type Suggest = 'sbp' | 'retry_same' | 'retry' | 'support';
 
 export interface ReasonDescription {
-  suggest: Suggest;
-  text: string;
+  readonly suggest: Suggest;
+  readonly text: string;
 }
 
 export const REASON_MAP: Record<string, ReasonDescription> = {
