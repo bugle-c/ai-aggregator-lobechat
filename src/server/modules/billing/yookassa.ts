@@ -16,6 +16,14 @@ interface CreatePaymentParams {
    * renew-due-subscriptions cron.
    */
   paymentMethodId?: string;
+  /**
+   * Pre-select payment method on the YooKassa hosted form. Other methods
+   * remain accessible via "Выбрать другой способ оплаты". We default to
+   * 'sbp' for new top-ups based on RU 2026 conversion data — bank cards
+   * are 2-3× more likely to be rejected (TINKOFF / other RU banks block
+   * 3DS on online merchants, foreign-issued cards fail country checks).
+   */
+  paymentMethodType?: 'sbp' | 'bank_card' | 'yoo_money' | 'sber_b2b' | 'tinkoff_bank';
   returnUrl: string;
   /**
    * Subscription-type initial payment: ask YooKassa to save the payment
@@ -44,71 +52,91 @@ export async function createYookassaPayment(
   const secretKey = billingEnv.YOOKASSA_SECRET_KEY;
   if (!shopId || !secretKey) throw new Error('YooKassa credentials not configured');
 
-  const idempotenceKey = crypto.randomUUID();
   const auth = Buffer.from(`${shopId}:${secretKey}`).toString('base64');
-
   const isRecurring = !!params.paymentMethodId;
 
-  const body: Record<string, unknown> = {
-    amount: {
-      currency: 'RUB',
-      value: params.amountRub.toFixed(2),
-    },
-    capture: true,
-    description: params.description,
-    metadata: params.metadata || {},
-    receipt: {
-      customer: {
-        email: params.customerEmail || 'noreply@gptweb.ru',
-      },
-      items: [
-        {
-          amount: {
-            currency: 'RUB',
-            value: params.amountRub.toFixed(2),
+  const buildBody = (withMethod: boolean): Record<string, unknown> => {
+    const body: Record<string, unknown> = {
+      amount: { currency: 'RUB', value: params.amountRub.toFixed(2) },
+      capture: true,
+      description: params.description,
+      metadata: params.metadata || {},
+      receipt: {
+        customer: { email: params.customerEmail || 'noreply@gptweb.ru' },
+        items: [
+          {
+            amount: { currency: 'RUB', value: params.amountRub.toFixed(2) },
+            description: params.description.slice(0, 128),
+            payment_mode: 'full_payment',
+            payment_subject: 'service',
+            quantity: '1.00',
+            vat_code: 1,
           },
-          description: params.description.slice(0, 128),
-          payment_mode: 'full_payment',
-          payment_subject: 'service',
-          quantity: '1.00',
-          vat_code: 1,
-        },
-      ],
-    },
+        ],
+      },
+    };
+    if (isRecurring) {
+      // Server-initiated charge against an already-saved card. No redirect:
+      // YooKassa moves the funds straight away; webhook fires with
+      // payment.succeeded on success.
+      body.payment_method_id = params.paymentMethodId;
+    } else {
+      body.confirmation = { return_url: params.returnUrl, type: 'redirect' };
+      if (params.savePaymentMethod) {
+        // Tells YooKassa to remember the card token so future recurring
+        // charges can run without redirecting the user. The webhook on the
+        // initial succeeded payment carries `payment_method.id`, which we
+        // persist on user_billing.
+        body.save_payment_method = true;
+      }
+      if (withMethod && params.paymentMethodType) {
+        body.payment_method_data = { type: params.paymentMethodType };
+      }
+    }
+    return body;
   };
 
-  if (isRecurring) {
-    // Server-initiated charge against an already-saved card. No redirect:
-    // YooKassa moves the funds straight away; webhook fires with
-    // payment.succeeded on success.
-    body.payment_method_id = params.paymentMethodId;
-  } else {
-    body.confirmation = { return_url: params.returnUrl, type: 'redirect' };
-    if (params.savePaymentMethod) {
-      // Tells YooKassa to remember the card token so future recurring
-      // charges can run without redirecting the user. The webhook on the
-      // initial succeeded payment carries `payment_method.id`, which we
-      // persist on user_billing.
-      body.save_payment_method = true;
-    }
+  const callYK = async (
+    body: Record<string, unknown>,
+  ): Promise<{ ok: boolean; status: number; json: any }> => {
+    const res = await fetch('https://api.yookassa.ru/v3/payments', {
+      body: JSON.stringify(body),
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json',
+        'Idempotence-Key': crypto.randomUUID(),
+      },
+      method: 'POST',
+    });
+    const json = await res.json();
+    return { ok: res.ok, status: res.status, json };
+  };
+
+  let attempt = await callYK(buildBody(true));
+
+  // Fallback: YK rejected our preselected method (not enabled in this
+  // shop, or unknown). Retry without payment_method_data. Logged so we
+  // notice if SBP needs to be enabled in the Kabinet.
+  const unsupportedMethod =
+    !attempt.ok &&
+    attempt.status === 400 &&
+    typeof attempt.json?.description === 'string' &&
+    /payment_method_data/i.test(attempt.json.description);
+
+  if (unsupportedMethod && params.paymentMethodType) {
+    console.warn(
+      `[billing] YK rejected payment_method_data.type=${params.paymentMethodType} — falling back to default. Configure this method in the YK Kabinet.`,
+    );
+    attempt = await callYK(buildBody(false));
   }
 
-  const res = await fetch('https://api.yookassa.ru/v3/payments', {
-    body: JSON.stringify(body),
-    headers: {
-      'Authorization': `Basic ${auth}`,
-      'Content-Type': 'application/json',
-      'Idempotence-Key': idempotenceKey,
-    },
-    method: 'POST',
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`YooKassa error ${res.status}: ${err}`);
+  if (!attempt.ok) {
+    throw new Error(
+      `YooKassa createPayment failed: ${attempt.status} ${JSON.stringify(attempt.json)}`,
+    );
   }
 
-  const data: YookassaPaymentResponse = await res.json();
+  const data = attempt.json as YookassaPaymentResponse;
   return {
     paymentId: data.id,
     paymentUrl: data.confirmation?.confirmation_url ?? null,
