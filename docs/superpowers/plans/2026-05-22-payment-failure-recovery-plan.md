@@ -2933,7 +2933,7 @@ grep payment-recovery /etc/cron.d/*
 
 - [ ] **Step 2: Confirm SBP is enabled in YooKassa Kabinet** _(Pavel's action)_
 
-1. Login at `kassa.yandex.ru`
+1. Login at `yookassa.ru` (the old `kassa.yandex.ru` domain has been dead for years)
 2. Settings → Магазин → "Способы оплаты"
 3. Verify **СБП** is ON. If not, enable it (separate contract clause may be required — call YK manager).
 4. In "Расположение способов оплаты", drag СБП to first position. Save.
