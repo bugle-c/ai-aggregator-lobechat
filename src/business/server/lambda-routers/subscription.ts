@@ -65,7 +65,20 @@ export const subscriptionRouter = router({
           type: 'subscription',
           ...(ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : {}),
         },
-        paymentMethodType: 'sbp',
+        // NB: NO paymentMethodType for subscriptions.
+        //
+        // SBP is logically incompatible with `save_payment_method: true` —
+        // SBP is a one-shot QR scan, there's no card token to save for
+        // recurring charges. YooKassa rejects the combination with 403
+        // "This store can't make recurring payments" (misleading message —
+        // the real reason is the SBP/save-method conflict, not shop config).
+        //
+        // Top-ups (one-shot) DO get SBP preselect — see topUp.ts. They
+        // don't pass savePaymentMethod, so the conflict doesn't arise.
+        //
+        // Subscriptions need a saveable method = bank card. YK's hosted
+        // form still shows SBP as an option, but bank_card is the default
+        // because we don't preselect anything here.
         returnUrl,
         // Saves the card token on first payment so the
         // renew-due-subscriptions cron can charge the user each cycle
