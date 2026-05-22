@@ -163,15 +163,24 @@ const Plans = memo(() => {
       if (retryAttempts >= 7) {
         setRecoveryPollEnabled(false);
         setRecoveryOpen(true);
+        // CRITICAL: also drop the URL param. Without this, the next
+        // effect-fire sees `recoveryForId` still set + `!recoveryPollEnabled`
+        // and hits the "Start polling on first mount" branch above, which
+        // re-enables polling and resets retryAttempts to 0 — creating an
+        // infinite oscillation (7-increment cycle restarts forever) →
+        // React error #185. Clearing the URL param trips the first guard
+        // (`if (!recoveryForId) return`) so the effect exits cleanly.
+        setRecoveryForId(null);
       } else {
         setRetryAttempts((n) => n + 1);
       }
       return;
     }
 
-    // canceled / failed → recovery flow.
+    // canceled / failed → recovery flow. Same oscillation guard as above.
     setRecoveryPollEnabled(false);
     setRecoveryOpen(true);
+    setRecoveryForId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     recoveryForId,
