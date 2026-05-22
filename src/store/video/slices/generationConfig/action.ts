@@ -102,7 +102,7 @@ export const createGenerationConfigSlice: StateCreator<
       defaultValues = resolved.defaultValues;
       parametersSchema = resolved.parametersSchema;
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.warn(
         '[setModelAndProviderOnSelect] schema resolve failed for',
         `${provider}/${model}`,

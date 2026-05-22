@@ -86,12 +86,12 @@ const Layout: FC = () => {
           {isMobile && (
             <Drawer
               destroyOnHidden={false}
-              onClose={() => toggleLeftPanel(false)}
               open={showLeftPanel}
               placement="left"
               styles={{ body: { padding: 0 } }}
               title={null}
               width={300}
+              onClose={() => toggleLeftPanel(false)}
             >
               <NavPanel />
             </Drawer>

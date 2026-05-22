@@ -268,7 +268,7 @@ export class GenerationConfigActionImpl {
     try {
       resolved = prepareModelConfigState(model, provider);
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.warn(
         '[setModelAndProviderOnSelect] schema resolve failed for',
         `${provider}/${model}`,

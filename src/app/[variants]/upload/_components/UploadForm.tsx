@@ -89,25 +89,25 @@ const UploadForm: FC<UploadFormProps> = ({ topicId }) => {
 
       {/* Drag-and-drop zone */}
       <div
+        role="button"
+        tabIndex={0}
         style={{
           ...styles.dropZone,
           ...(dragging ? styles.dropZoneActive : {}),
           ...(isUploading ? styles.dropZoneDisabled : {}),
         }}
         onClick={() => !isUploading && inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); if (!isUploading) setDragging(true); }}
         onDragLeave={() => setDragging(false)}
+        onDragOver={(e) => { e.preventDefault(); if (!isUploading) setDragging(true); }}
         onDrop={isUploading ? undefined : handleDrop}
-        role="button"
-        tabIndex={0}
         onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
       >
         <input
-          ref={inputRef}
-          type="file"
-          style={{ display: 'none' }}
-          onChange={handleChange}
           disabled={isUploading}
+          ref={inputRef}
+          style={{ display: 'none' }}
+          type="file"
+          onChange={handleChange}
         />
         {isUploading ? (
           <span>Загружается...</span>

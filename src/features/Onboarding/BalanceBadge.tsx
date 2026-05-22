@@ -85,9 +85,9 @@ const BalanceBadge = memo(() => {
       {isMobile && (
         <BalanceExplainSheet
           monthlyResetDate={null}
-          onClose={() => setSheetOpen(false)}
           open={sheetOpen}
           remainingCredits={remaining}
+          onClose={() => setSheetOpen(false)}
         />
       )}
     </>

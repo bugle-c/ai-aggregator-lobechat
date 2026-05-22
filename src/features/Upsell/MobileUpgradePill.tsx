@@ -60,11 +60,7 @@ const MobileUpgradePill = memo<Props>(({ shouldRender }) => {
 
   return (
     <Link
-      onClick={() => {
-        click('home_pill');
-        dismissNow();
-        setDismissed(true);
-      }}
+      to="/settings/plans?utm_source=home_pill"
       style={{
         alignItems: 'center',
         background: 'linear-gradient(90deg, #6d28d9 0%, #2563eb 100%)',
@@ -78,7 +74,11 @@ const MobileUpgradePill = memo<Props>(({ shouldRender }) => {
         padding: '10px 14px',
         textDecoration: 'none',
       }}
-      to="/settings/plans?utm_source=home_pill"
+      onClick={() => {
+        click('home_pill');
+        dismissNow();
+        setDismissed(true);
+      }}
     >
       <Zap size={16} />
       <span style={{ flex: 1 }}>Перейди на Pro — больше моделей, без лимитов</span>

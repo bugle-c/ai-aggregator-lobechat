@@ -11,13 +11,13 @@
  */
 
 import { and, eq } from 'drizzle-orm';
-import { type NextRequest, NextResponse } from 'next/server';
 import { sha256 } from 'js-sha256';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
-import { topics, messages, messagesFiles, userBilling } from '@/database/schemas';
-import { idGenerator } from '@/database/utils/idGenerator';
 import { getServerDB } from '@/database/core/db-adaptor';
+import { messages, messagesFiles, topics, userBilling } from '@/database/schemas';
+import { idGenerator } from '@/database/utils/idGenerator';
 import { FileService } from '@/server/services/file';
 
 export const runtime = 'nodejs';

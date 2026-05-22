@@ -37,10 +37,10 @@ const MobileCancelFlow = memo<Props>(({ loading, onClose, onConfirm, open }) => 
   return (
     <Drawer
       height="auto"
-      onClose={onClose}
       open={open}
       placement="bottom"
       styles={{ body: { padding: 0 }, header: { display: 'none' } }}
+      onClose={onClose}
     >
       <Flexbox gap={12} paddingBlock={20} paddingInline={20}>
         <Title level={5} style={{ margin: 0 }}>
@@ -51,8 +51,8 @@ const MobileCancelFlow = memo<Props>(({ loading, onClose, onConfirm, open }) => 
             <Button
               block
               key={r.code}
-              onClick={() => setReason(r.code)}
               type={reason === r.code ? 'primary' : 'default'}
+              onClick={() => setReason(r.code)}
             >
               {r.label}
             </Button>
@@ -60,24 +60,24 @@ const MobileCancelFlow = memo<Props>(({ loading, onClose, onConfirm, open }) => 
         </Flexbox>
         <Input.TextArea
           maxLength={500}
-          onChange={(e) => setText(e.target.value)}
           placeholder="Расскажи подробнее (опционально)"
           rows={3}
           value={text}
+          onChange={(e) => setText(e.target.value)}
         />
         <Button
           block
           danger
           disabled={!reason || loading}
           loading={loading}
+          size="large"
           onClick={async () => {
             await onConfirm(reason, text);
           }}
-          size="large"
         >
           Подтвердить отмену
         </Button>
-        <Button block onClick={onClose} type="text">
+        <Button block type="text" onClick={onClose}>
           Передумал
         </Button>
       </Flexbox>

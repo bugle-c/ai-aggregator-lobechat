@@ -38,10 +38,10 @@ import { fetchPlanById } from '@/server/services/billing/plans-source';
 const RENEW_WINDOW_DAYS = 1; // charge ~24h before expiry
 
 interface RenewResult {
-  userId: string;
-  planId: number;
-  outcome: 'charged' | 'skipped' | 'failed';
   error?: string;
+  outcome: 'charged' | 'skipped' | 'failed';
+  planId: number;
+  userId: string;
   yookassaStatus?: string;
 }
 

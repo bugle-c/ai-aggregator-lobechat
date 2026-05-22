@@ -47,10 +47,10 @@ const LockedModelUpsellSheet = memo<Props>(
     return (
       <Drawer
         height="auto"
-        onClose={onClose}
         open={open}
         placement="bottom"
         styles={{ body: { padding: 0 }, header: { display: 'none' } }}
+        onClose={onClose}
       >
         <Flexbox gap={12} paddingBlock={24} paddingInline={20}>
           <Title level={4} style={{ margin: 0 }}>
@@ -66,10 +66,10 @@ const LockedModelUpsellSheet = memo<Props>(
               /мес
             </Text>
           </Title>
-          <Button block onClick={goToPlans} size="large" type="primary">
+          <Button block size="large" type="primary" onClick={goToPlans}>
             Перейти на {requiredPlanName}
           </Button>
-          <Button block onClick={goToPlans} type="default">
+          <Button block type="default" onClick={goToPlans}>
             Сравнить тарифы
           </Button>
         </Flexbox>

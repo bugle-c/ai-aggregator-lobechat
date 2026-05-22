@@ -88,10 +88,7 @@ const MobileVpnPromo = memo(() => {
       </a>
       <button
         aria-label="Закрыть"
-        onClick={() => {
-          setDismissed();
-          setDismissedState(true);
-        }}
+        type="button"
         style={{
           background: 'transparent',
           border: 0,
@@ -99,7 +96,10 @@ const MobileVpnPromo = memo(() => {
           cursor: 'pointer',
           padding: 4,
         }}
-        type="button"
+        onClick={() => {
+          setDismissed();
+          setDismissedState(true);
+        }}
       >
         <X size={14} />
       </button>

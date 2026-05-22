@@ -64,7 +64,7 @@ const MobileHome = memo<Props>(({ onSelectPrompt }) => {
 
       <Divider style={{ margin: 0 }}>Попробуй</Divider>
       <Flexbox paddingInline={16}>
-        <SuggestedPrompts onSelect={onSelectPrompt} showHint={false} />
+        <SuggestedPrompts showHint={false} onSelect={onSelectPrompt} />
       </Flexbox>
     </Flexbox>
   );

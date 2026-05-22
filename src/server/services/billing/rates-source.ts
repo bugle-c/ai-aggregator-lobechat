@@ -158,7 +158,7 @@ export async function fetchRate(modelId: string): Promise<RateView | undefined> 
 
   // dash/dot normalisation — strip trailing date and rewrite version dashes
   const stripDateSuffix = modelId.replace(/-\d{8}$/, '');
-  const dotted = stripDateSuffix.replace(/-(\d+)-(\d+)(?=$|-)/g, '-$1.$2');
+  const dotted = stripDateSuffix.replaceAll(/-(\d+)-(\d+)(?=$|-)/g, '-$1.$2');
   if (dotted !== modelId) {
     const dot = byId.get(dotted);
     if (dot) return dot;
