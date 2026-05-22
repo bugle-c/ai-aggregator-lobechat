@@ -141,9 +141,18 @@ const Plans = memo(() => {
   useEffect(() => {
     if (!recoveryForId) return;
     // Start polling on first mount with the param.
-    if (!recoveryPollEnabled) {
+    //
+    // CRITICAL: guard the reset path with `retryAttempts === 0`. Without
+    // it, after a terminal branch sets `recoveryPollEnabled=false` +
+    // `setRecoveryForId(null)`, nuqs queues the URL update asynchronously
+    // — for several React render cycles, `recoveryForId` is still the old
+    // value while `recoveryPollEnabled` is already false. The effect then
+    // re-enters THIS branch, re-enables polling, resets retryAttempts to
+    // 0 → oscillation → React #185. The `retryAttempts === 0` guard makes
+    // this branch fire ONLY on true initial mount (state never gets back
+    // to 0 + recoveryPollEnabled=false combination after the first run).
+    if (!recoveryPollEnabled && retryAttempts === 0) {
       setRecoveryPollEnabled(true);
-      setRetryAttempts(0);
       return;
     }
     if (!redirectedPayment) return;
