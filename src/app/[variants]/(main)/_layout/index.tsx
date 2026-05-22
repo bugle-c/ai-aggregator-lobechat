@@ -20,6 +20,7 @@ import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import MobileTabBar from '@/features/MobileTabBar';
 import NavPanel from '@/features/NavPanel';
+import { RetryModal } from '@/features/PaymentRetry';
 import { useFeedbackModal } from '@/hooks/useFeedbackModal';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePlatform } from '@/hooks/usePlatform';
@@ -115,11 +116,7 @@ const Layout: FC = () => {
         <HotkeyHelperPanel />
         <RegisterHotkeys />
         <CmdkLazy />
-        {/* TEMP unmounted 2026-05-22 — investigating React #185 infinite render loop
-            on /?payment=success return-url from YK. The site retry modal is off
-            until root-cause is found; bot DM recovery still ships (cron is fine,
-            no React involvement). See: src/features/PaymentRetry/RetryModal.tsx */}
-        {/* <RetryModal /> */}
+        <RetryModal />
         {isFeedbackModalOpen && (
           <Suspense fallback={null}>
             <FeedbackModal

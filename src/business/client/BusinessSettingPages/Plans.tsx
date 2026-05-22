@@ -127,6 +127,17 @@ const Plans = memo(() => {
   );
 
   // Drive the URL-based recovery flow.
+  //
+  // IMPORTANT: do NOT put `utils.subscription.getBillingState` in the deps
+  // array. tRPC's `useUtils()` returns a stable outer `utils` object, but
+  // each `utils.foo.bar` access goes through a Proxy that creates a NEW
+  // descendant proxy reference on every render. Putting that in deps
+  // makes the effect think its deps changed every render, fires the
+  // effect every render, calls setState (e.g. `setRetryAttempts(n+1)`),
+  // re-renders, etc. → React error #185 "Maximum update depth exceeded".
+  //
+  // Call the invalidate via the captured-but-not-deps `utils` ref. This
+  // is the standard tRPC pattern (see https://trpc.io/docs/client/react/useUtils).
   useEffect(() => {
     if (!recoveryForId) return;
     // Start polling on first mount with the param.
@@ -161,6 +172,7 @@ const Plans = memo(() => {
     // canceled / failed → recovery flow.
     setRecoveryPollEnabled(false);
     setRecoveryOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     recoveryForId,
     redirectedPayment,
@@ -168,7 +180,7 @@ const Plans = memo(() => {
     retryAttempts,
     message,
     setRecoveryForId,
-    utils.subscription.getBillingState,
+    // utils intentionally omitted — see comment above.
   ]);
 
   // Drive the fallback (visited Plans without YK redirect).
