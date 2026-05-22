@@ -68,6 +68,69 @@ export const topUpRouter = router({
     return [...TOPUP_PACKAGES];
   }),
 
+  recoverFromFailure: billingProcedure
+    .input(
+      z.object({
+        originalPaymentId: z.string().uuid(),
+        method: z.enum(['sbp', 'any']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { and, eq } = await import('drizzle-orm');
+      const { billingPayments, userBilling } = await import('@/database/schemas');
+      const { appEnv } = await import('@/envs/app');
+      const { createYookassaPayment } = await import('@/server/modules/billing/yookassa');
+
+      const original = await ctx.serverDB
+        .select()
+        .from(billingPayments)
+        .where(
+          and(
+            eq(billingPayments.id, input.originalPaymentId),
+            eq(billingPayments.userId, ctx.userId),
+          ),
+        )
+        .then((r) => r[0]);
+      if (!original) throw new Error('Payment not found');
+
+      const ub = await ctx.serverDB
+        .select({ tgBotChatId: userBilling.tgBotChatId })
+        .from(userBilling)
+        .where(eq(userBilling.userId, ctx.userId))
+        .then((r) => r[0]);
+
+      const { UserModel } = await import('@/database/models/user');
+      const user = await UserModel.findById(ctx.serverDB, ctx.userId);
+
+      const yk = await createYookassaPayment({
+        amountRub: original.amountRub,
+        customerEmail: user?.email || undefined,
+        description: original.type === 'subscription' ? 'Подписка (повтор)' : 'Пополнение (повтор)',
+        paymentMethodType: input.method === 'sbp' ? 'sbp' : undefined,
+        returnUrl: `${appEnv.APP_URL}/?payment=success`,
+        savePaymentMethod: original.type === 'subscription',
+      });
+
+      await ctx.serverDB.insert(billingPayments).values({
+        amountRub: original.amountRub,
+        metadata: {
+          pricing_variant: (original.metadata as any)?.pricing_variant,
+          recovery_from: original.id,
+          recovery_method_used: 'site_modal',
+          sbp_preselected: input.method === 'sbp',
+          tg_user_id: ub?.tgBotChatId ?? null,
+        },
+        planId: original.planId,
+        status: 'pending',
+        tokensAmount: original.tokensAmount,
+        type: original.type,
+        userId: ctx.userId,
+        yookassaPaymentId: yk.paymentId,
+      });
+
+      return { paymentUrl: yk.paymentUrl };
+    }),
+
   getRecentFailure: billingProcedure.query(async ({ ctx }) => {
     const { and, desc, eq, gt, inArray } = await import('drizzle-orm');
     const { billingPayments } = await import('@/database/schemas');
