@@ -1,6 +1,8 @@
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { UserModel } from '@/database/models/user';
+import { userBilling } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getTopupPackage, TOPUP_PACKAGES } from '@/server/modules/billing/constants';
@@ -21,9 +23,21 @@ export const topUpRouter = router({
       const pkg = getTopupPackage(input.amountRub);
       if (!pkg) throw new Error('Invalid topup amount');
 
+      const ubRow = await ctx.serverDB
+        .select({ tgBotChatId: userBilling.tgBotChatId })
+        .from(userBilling)
+        .where(eq(userBilling.userId, ctx.userId))
+        .then((r) => r[0]);
+
+      const tgChatId = ubRow?.tgBotChatId ?? null;
+
       const payment = await ctx.billingService.createPayment({
         amountRub: pkg.amountRub,
-        metadata: ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : null,
+        metadata: {
+          ...(ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : {}),
+          sbp_preselected: true,
+          tg_user_id: tgChatId,
+        },
         tokensAmount: pkg.credits,
         type: 'topup',
       });
@@ -41,6 +55,7 @@ export const topUpRouter = router({
           type: 'topup',
           ...(ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : {}),
         },
+        paymentMethodType: 'sbp',
         returnUrl,
       });
 
