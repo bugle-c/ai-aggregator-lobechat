@@ -55,7 +55,10 @@ export async function createYookassaPayment(
   const auth = Buffer.from(`${shopId}:${secretKey}`).toString('base64');
   const isRecurring = !!params.paymentMethodId;
 
-  const buildBody = (withMethod: boolean): Record<string, unknown> => {
+  const buildBody = (
+    withMethod: boolean,
+    withSaveMethod: boolean = true,
+  ): Record<string, unknown> => {
     const body: Record<string, unknown> = {
       amount: { currency: 'RUB', value: params.amountRub.toFixed(2) },
       capture: true,
@@ -82,11 +85,16 @@ export async function createYookassaPayment(
       body.payment_method_id = params.paymentMethodId;
     } else {
       body.confirmation = { return_url: params.returnUrl, type: 'redirect' };
-      if (params.savePaymentMethod) {
+      if (withSaveMethod && params.savePaymentMethod) {
         // Tells YooKassa to remember the card token so future recurring
         // charges can run without redirecting the user. The webhook on the
         // initial succeeded payment carries `payment_method.id`, which we
         // persist on user_billing.
+        //
+        // Some YooKassa shops don't have "recurring payments" enabled at
+        // the contract level — YK returns 403 forbidden. We retry once
+        // with `withSaveMethod=false` so the purchase still completes as
+        // a one-shot. See the fallback below.
         body.save_payment_method = true;
       }
       if (withMethod && params.paymentMethodType) {
@@ -112,9 +120,11 @@ export async function createYookassaPayment(
     return { ok: res.ok, status: res.status, json };
   };
 
-  let attempt = await callYK(buildBody(true));
+  let withMethod = true;
+  let withSaveMethod = true;
+  let attempt = await callYK(buildBody(withMethod, withSaveMethod));
 
-  // Fallback: YK rejected our preselected method (not enabled in this
+  // Fallback 1: YK rejected our preselected method (not enabled in this
   // shop, or unknown). Retry without payment_method_data. Logged so we
   // notice if SBP needs to be enabled in the Kabinet.
   const unsupportedMethod =
@@ -127,7 +137,27 @@ export async function createYookassaPayment(
     console.warn(
       `[billing] YK rejected payment_method_data.type=${params.paymentMethodType} — falling back to default. Configure this method in the YK Kabinet.`,
     );
-    attempt = await callYK(buildBody(false));
+    withMethod = false;
+    attempt = await callYK(buildBody(withMethod, withSaveMethod));
+  }
+
+  // Fallback 2: YK shop doesn't have recurring/auto-payments enabled at
+  // the contract level. The 403 description reads "This store can't make
+  // recurring payments. Contact the YooMoney manager…". Retry once
+  // without save_payment_method — the purchase completes as a one-shot,
+  // user just won't get auto-renew until the shop's contract enables it.
+  const recurringForbidden =
+    !attempt.ok &&
+    attempt.status === 403 &&
+    typeof attempt.json?.description === 'string' &&
+    /recurring/i.test(attempt.json.description);
+
+  if (recurringForbidden && params.savePaymentMethod) {
+    console.warn(
+      '[billing] YK rejected save_payment_method (shop lacks recurring permission) — falling back to one-shot. Contact YK manager to enable recurring on the shop contract.',
+    );
+    withSaveMethod = false;
+    attempt = await callYK(buildBody(withMethod, withSaveMethod));
   }
 
   if (!attempt.ok) {

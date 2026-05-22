@@ -95,4 +95,62 @@ describe('createYookassaPayment paymentMethodType', () => {
     const secondBody = JSON.parse((fetchMock.mock.calls[1][1] as any).body);
     expect(secondBody.payment_method_data).toBeUndefined();
   });
+
+  it('falls back without save_payment_method when YK returns 403 recurring forbidden', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            type: 'error',
+            code: 'forbidden',
+            description: "This store can't make recurring payments. Contact the YooMoney manager",
+          }),
+          { status: 403 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'pay-recur-fallback',
+            status: 'pending',
+            confirmation: { confirmation_url: 'https://yk/no-save' },
+          }),
+          { status: 200 },
+        ),
+      );
+    const result = await createYookassaPayment({
+      amountRub: 490,
+      description: 'Subscription',
+      returnUrl: 'https://ask.gptweb.ru/',
+      savePaymentMethod: true,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.paymentId).toBe('pay-recur-fallback');
+
+    const firstBody = JSON.parse((fetchMock.mock.calls[0][1] as any).body);
+    expect(firstBody.save_payment_method).toBe(true);
+    const secondBody = JSON.parse((fetchMock.mock.calls[1][1] as any).body);
+    expect(secondBody.save_payment_method).toBeUndefined();
+  });
+
+  it('does not retry on 403 if no save_payment_method was requested', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          type: 'error',
+          code: 'forbidden',
+          description: "This store can't make recurring payments",
+        }),
+        { status: 403 },
+      ),
+    );
+    await expect(
+      createYookassaPayment({
+        amountRub: 490,
+        description: 'Top-up',
+        returnUrl: 'https://ask.gptweb.ru/',
+      }),
+    ).rejects.toThrow(/YooKassa createPayment failed: 403/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });
