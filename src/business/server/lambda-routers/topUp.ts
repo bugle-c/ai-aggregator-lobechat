@@ -67,4 +67,66 @@ export const topUpRouter = router({
   getPackages: billingProcedure.query(() => {
     return [...TOPUP_PACKAGES];
   }),
+
+  getRecentFailure: billingProcedure.query(async ({ ctx }) => {
+    const { and, desc, eq, gt, inArray } = await import('drizzle-orm');
+    const { billingPayments } = await import('@/database/schemas');
+
+    const row = await ctx.serverDB
+      .select({
+        id: billingPayments.id,
+        amountRub: billingPayments.amountRub,
+        status: billingPayments.status,
+        planId: billingPayments.planId,
+        tokensAmount: billingPayments.tokensAmount,
+        type: billingPayments.type,
+        metadata: billingPayments.metadata,
+        createdAt: billingPayments.createdAt,
+      })
+      .from(billingPayments)
+      .where(
+        and(
+          eq(billingPayments.userId, ctx.userId),
+          inArray(billingPayments.status, ['failed', 'canceled']),
+          gt(billingPayments.createdAt, new Date(Date.now() - 30 * 60 * 1000)),
+        ),
+      )
+      .orderBy(desc(billingPayments.createdAt))
+      .limit(1)
+      .then((r) => r[0]);
+
+    if (!row) return null;
+
+    // Suppress: a later succeeded payment exists.
+    const laterSuccess = await ctx.serverDB
+      .select({ id: billingPayments.id })
+      .from(billingPayments)
+      .where(
+        and(
+          eq(billingPayments.userId, ctx.userId),
+          eq(billingPayments.status, 'succeeded'),
+          gt(billingPayments.createdAt, row.createdAt),
+        ),
+      )
+      .limit(1)
+      .then((r) => r[0]);
+
+    if (laterSuccess) return null;
+
+    // Suppress: bot DM already sent (avoid double-prompt).
+    const meta = (row.metadata as Record<string, unknown>) ?? {};
+    if (typeof meta.tg_recovery_sent === 'string') return null;
+
+    return {
+      paymentId: row.id,
+      amountRub: row.amountRub,
+      planId: row.planId,
+      tokensAmount: row.tokensAmount,
+      type: row.type,
+      reasonCode: (meta.cancellation as any)?.reason ?? null,
+      paymentMethodType: (meta.payment_method as any)?.type ?? null,
+      cardLast4: (meta.payment_method as any)?.card_last4 ?? null,
+      cardIssuerName: (meta.payment_method as any)?.card_issuer_name ?? null,
+    };
+  }),
 });
