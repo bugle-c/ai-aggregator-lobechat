@@ -1,6 +1,8 @@
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { UserModel } from '@/database/models/user';
+import { userBilling } from '@/database/schemas';
 import { CANCELLATION_REASON_CODES, cancellationSurveys } from '@/database/schemas/lifecycle';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -26,9 +28,21 @@ export const subscriptionRouter = router({
       if (!plan) throw new Error('Plan not found');
       if (plan.priceRub === 0) throw new Error('Cannot purchase free plan');
 
+      const ubRow = await ctx.serverDB
+        .select({ tgBotChatId: userBilling.tgBotChatId })
+        .from(userBilling)
+        .where(eq(userBilling.userId, ctx.userId))
+        .then((r) => r[0]);
+
+      const tgChatId = ubRow?.tgBotChatId ?? null;
+
       const payment = await ctx.billingService.createPayment({
         amountRub: plan.priceRub,
-        metadata: ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : null,
+        metadata: {
+          ...(ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : {}),
+          sbp_preselected: true,
+          tg_user_id: tgChatId,
+        },
         planId: plan.id,
         type: 'subscription',
       });
@@ -51,6 +65,7 @@ export const subscriptionRouter = router({
           type: 'subscription',
           ...(ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : {}),
         },
+        paymentMethodType: 'sbp',
         returnUrl,
         // Saves the card token on first payment so the
         // renew-due-subscriptions cron can charge the user each cycle
