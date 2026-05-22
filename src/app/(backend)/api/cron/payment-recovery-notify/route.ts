@@ -107,12 +107,22 @@ export async function GET(req: Request) {
   const userIds = candidateRows.map((r) => r.user_id);
 
   // Anti-spam caps: per user, max 1 sent in last 24h and max 3 in last 7d.
+  //
+  // NB: passing a JS array via Drizzle's sql template would serialize it
+  // as a record (parens-quoted), which Postgres can't cast to text[] —
+  // hence the "cannot cast type record to text[]" error. Wrap each id in
+  // `sql` and join with comma so Drizzle produces a proper IN-list, then
+  // use IN instead of ANY(...).
+  const userIdList = sql.join(
+    userIds.map((id) => sql`${id}`),
+    sql`, `,
+  );
   const capRows = await db.execute(sql`
     SELECT user_id,
            COUNT(*) FILTER (WHERE (metadata->>'tg_recovery_sent') > to_char(NOW() - INTERVAL '24 hours','YYYY-MM-DD"T"HH24:MI:SS')) AS day_count,
            COUNT(*) FILTER (WHERE (metadata->>'tg_recovery_sent') > to_char(NOW() - INTERVAL '7 days','YYYY-MM-DD"T"HH24:MI:SS')) AS week_count
     FROM billing_payments
-    WHERE user_id = ANY(${userIds}::text[])
+    WHERE user_id IN (${userIdList})
       AND (metadata->>'tg_recovery_sent') IS NOT NULL
       AND (metadata->>'tg_recovery_sent') <> 'blocked'
     GROUP BY user_id
