@@ -24,6 +24,12 @@ describe('recovery-token', () => {
     expect(verifyRecoveryToken(t, SECRET)).toBeNull();
   });
 
+  it('verify rejects token whose exp equals current second (boundary)', () => {
+    const exp = Math.floor(Date.now() / 1000); // exactly now
+    const t = signRecoveryToken({ paymentId: 'p1', userId: 'u1', method: 'sbp', exp }, SECRET);
+    expect(verifyRecoveryToken(t, SECRET)).toBeNull();
+  });
+
   it('verify rejects malformed token', () => {
     expect(verifyRecoveryToken('not-a-token', SECRET)).toBeNull();
     expect(verifyRecoveryToken('a.b', SECRET)).toBeNull();

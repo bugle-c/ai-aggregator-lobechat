@@ -55,7 +55,7 @@ export function verifyRecoveryToken(token: string, secret: string): RecoveryPayl
     return null;
   }
 
-  if (typeof payload.exp !== 'number' || payload.exp < Math.floor(Date.now() / 1000)) {
+  if (typeof payload.exp !== 'number' || payload.exp <= Math.floor(Date.now() / 1000)) {
     return null;
   }
   return payload;
