@@ -84,6 +84,7 @@ src/server/routers/mobile/                          — entire subtree
 **Goal of task:** Mobile users hitting `?mobile_redesign=1` (or with `NEXT_PUBLIC_MOBILE_REDESIGN=1` env) land on a new responsive home with input, chips, and suggestions instead of the empty agents list.
 
 **Files:**
+
 - Create: `src/features/MobileHome/index.tsx`
 - Create: `src/features/MobileHome/Greeting.tsx`
 - Create: `src/features/MobileHome/FeatureChipsRow.tsx`
@@ -323,17 +324,17 @@ const MobileGlobalHeader = memo(() => {
       }}
     >
       <Link href="/" style={{ alignItems: 'center', display: 'flex', gap: 6 }}>
-        <span aria-hidden style={{ fontSize: 20 }}>🤯</span>
-        <Text strong style={{ fontSize: 16 }}>WebGPT</Text>
+        <span aria-hidden style={{ fontSize: 20 }}>
+          🤯
+        </span>
+        <Text strong style={{ fontSize: 16 }}>
+          WebGPT
+        </Text>
       </Link>
 
       <BalanceBadge />
 
-      <Avatar
-        src={avatar ?? undefined}
-        size={32}
-        title={name}
-      />
+      <Avatar src={avatar ?? undefined} size={32} title={name} />
     </Flexbox>
   );
 });
@@ -720,7 +721,7 @@ const MobileVpnPromo = memo(() => {
       }}
     >
       <a
-        href="https://t.me/freeip_pashavinbot"
+        href="https://t.me/freeipru_bot"
         rel="noopener noreferrer"
         style={{ color: 'inherit', textDecoration: 'none' }}
         target="_blank"
@@ -797,6 +798,7 @@ git commit -m "feat(mobile): hide tab bar on chat thread pages"
 **Goal of task:** `/image` and `/video` render a mobile-friendly stacked layout with sticky generation panel; existing desktop split-pane stays intact.
 
 **Files:**
+
 - Create: `src/app/[variants]/(main)/image/ImageWorkspaceMobile.tsx`
 - Create: `src/app/[variants]/(main)/video/VideoWorkspaceMobile.tsx`
 - Modify: `src/app/[variants]/(main)/image/index.tsx`
@@ -918,6 +920,7 @@ git commit -m "feat(mobile): stacked video workspace with sticky prompt panel"
 **Goal of task:** `/settings/subscription/plans` plan cards stack vertically on mobile; `/settings` becomes a list-of-links.
 
 **Files:**
+
 - Create: `src/business/client/BusinessSettingPages/PlansMobileLayout.tsx`
 - Create: `src/app/[variants]/(main)/settings/MobileSettingsList.tsx`
 - Modify: `src/business/client/BusinessSettingPages/Plans.tsx`
@@ -954,49 +957,70 @@ interface Props {
   onSelect: (planId: number) => void;
 }
 
-const PlansMobileLayout = memo<Props>(({ currentPlanSlug, plans, tokensUsed, tokensTotal, onSelect }) => {
-  const usedPct = tokensTotal > 0 ? Math.min(100, Math.round((tokensUsed / tokensTotal) * 100)) : 0;
+const PlansMobileLayout = memo<Props>(
+  ({ currentPlanSlug, plans, tokensUsed, tokensTotal, onSelect }) => {
+    const usedPct =
+      tokensTotal > 0 ? Math.min(100, Math.round((tokensUsed / tokensTotal) * 100)) : 0;
 
-  return (
-    <Flexbox gap={16} paddingBlock={16} paddingInline={16}>
-      <Block padding={16} variant="filled">
-        <Text>Текущий: {currentPlanSlug ?? 'Старт (бесплатно)'}</Text>
-        <Text type="secondary">Использовано: {tokensUsed} / {tokensTotal} кредитов</Text>
-        <div style={{ background: 'var(--ant-color-fill)', borderRadius: 4, height: 8, marginBlockStart: 8, overflow: 'hidden' }}>
-          <div style={{ background: 'var(--ant-color-primary)', height: '100%', width: `${usedPct}%` }} />
-        </div>
-      </Block>
-
-      {plans.map((plan) => (
-        <Block
-          key={plan.id}
-          padding={16}
-          style={{ borderColor: plan.highlighted ? 'var(--ant-color-primary)' : undefined }}
-          variant="outlined"
-        >
-          <Flexbox align="center" horizontal justify="space-between">
-            <Text style={{ fontSize: 18, fontWeight: 600 }}>{plan.name}</Text>
-            {plan.highlighted && <Tag color="blue">🔥 Рекомендуем</Tag>}
-          </Flexbox>
-          <Text style={{ fontSize: 24, fontWeight: 700 }}>{plan.priceRub} ₽/мес</Text>
-          <Flexbox gap={4} paddingBlock={8}>
-            {plan.features.map((f) => (
-              <Text key={f} type="secondary">• {f}</Text>
-            ))}
-          </Flexbox>
-          <Button
-            block
-            disabled={plan.slug === currentPlanSlug}
-            onClick={() => onSelect(plan.id)}
-            type={plan.highlighted ? 'primary' : 'default'}
+    return (
+      <Flexbox gap={16} paddingBlock={16} paddingInline={16}>
+        <Block padding={16} variant="filled">
+          <Text>Текущий: {currentPlanSlug ?? 'Старт (бесплатно)'}</Text>
+          <Text type="secondary">
+            Использовано: {tokensUsed} / {tokensTotal} кредитов
+          </Text>
+          <div
+            style={{
+              background: 'var(--ant-color-fill)',
+              borderRadius: 4,
+              height: 8,
+              marginBlockStart: 8,
+              overflow: 'hidden',
+            }}
           >
-            {plan.slug === currentPlanSlug ? 'Текущий тариф' : 'Выбрать'}
-          </Button>
+            <div
+              style={{
+                background: 'var(--ant-color-primary)',
+                height: '100%',
+                width: `${usedPct}%`,
+              }}
+            />
+          </div>
         </Block>
-      ))}
-    </Flexbox>
-  );
-});
+
+        {plans.map((plan) => (
+          <Block
+            key={plan.id}
+            padding={16}
+            style={{ borderColor: plan.highlighted ? 'var(--ant-color-primary)' : undefined }}
+            variant="outlined"
+          >
+            <Flexbox align="center" horizontal justify="space-between">
+              <Text style={{ fontSize: 18, fontWeight: 600 }}>{plan.name}</Text>
+              {plan.highlighted && <Tag color="blue">🔥 Рекомендуем</Tag>}
+            </Flexbox>
+            <Text style={{ fontSize: 24, fontWeight: 700 }}>{plan.priceRub} ₽/мес</Text>
+            <Flexbox gap={4} paddingBlock={8}>
+              {plan.features.map((f) => (
+                <Text key={f} type="secondary">
+                  • {f}
+                </Text>
+              ))}
+            </Flexbox>
+            <Button
+              block
+              disabled={plan.slug === currentPlanSlug}
+              onClick={() => onSelect(plan.id)}
+              type={plan.highlighted ? 'primary' : 'default'}
+            >
+              {plan.slug === currentPlanSlug ? 'Текущий тариф' : 'Выбрать'}
+            </Button>
+          </Block>
+        ))}
+      </Flexbox>
+    );
+  },
+);
 
 PlansMobileLayout.displayName = 'PlansMobileLayout';
 
@@ -1089,7 +1113,13 @@ const MobileSettingsList = memo(() => {
       <Block padding={16} variant="filled">
         <a
           href="?mobile_redesign=0"
-          style={{ alignItems: 'center', color: 'var(--ant-color-link)', display: 'flex', gap: 8, textDecoration: 'none' }}
+          style={{
+            alignItems: 'center',
+            color: 'var(--ant-color-link)',
+            display: 'flex',
+            gap: 8,
+            textDecoration: 'none',
+          }}
         >
           <ExternalLink size={16} /> Открыть полную версию на компьютере
         </a>
@@ -1097,8 +1127,18 @@ const MobileSettingsList = memo(() => {
 
       <Block padding={16} variant="filled">
         <button
-          onClick={() => { window.location.href = '/api/auth/sign-out'; }}
-          style={{ alignItems: 'center', background: 'transparent', border: 0, color: 'var(--ant-color-error)', cursor: 'pointer', display: 'flex', gap: 8 }}
+          onClick={() => {
+            window.location.href = '/api/auth/sign-out';
+          }}
+          style={{
+            alignItems: 'center',
+            background: 'transparent',
+            border: 0,
+            color: 'var(--ant-color-error)',
+            cursor: 'pointer',
+            display: 'flex',
+            gap: 8,
+          }}
           type="button"
         >
           <LogOut size={16} /> Выйти
@@ -1140,6 +1180,7 @@ git commit -m "feat(mobile): list-of-links settings root"
 **Goal of task:** Free→paid conversion goes from 0% to >5% via 5 explicit touchpoints + bottom-sheet upgrade UX.
 
 **Files:**
+
 - Create: `src/features/Upsell/LockedModelUpsellSheet.tsx`
 - Create: `src/features/Upsell/MobileUpgradePill.tsx`
 - Create: `src/features/Upsell/MobileCancelFlow.tsx`
@@ -1189,8 +1230,12 @@ const LockedModelUpsellSheet = memo<Props>(
         styles={{ body: { padding: 0 } }}
       >
         <Flexbox gap={12} paddingBlock={24} paddingInline={20}>
-          <Text style={{ fontSize: 20, fontWeight: 700 }}>Доступно на тарифе {requiredPlanName}</Text>
-          <Text type="secondary">{modelDescription ?? `Модель «${modelId}» недоступна на текущем тарифе.`}</Text>
+          <Text style={{ fontSize: 20, fontWeight: 700 }}>
+            Доступно на тарифе {requiredPlanName}
+          </Text>
+          <Text type="secondary">
+            {modelDescription ?? `Модель «${modelId}» недоступна на текущем тарифе.`}
+          </Text>
           <Text style={{ fontSize: 28, fontWeight: 700 }}>{requiredPlanPriceRub} ₽/мес</Text>
           <Button
             block
@@ -1203,7 +1248,14 @@ const LockedModelUpsellSheet = memo<Props>(
           >
             Перейти на {requiredPlanName}
           </Button>
-          <Button block onClick={() => { onClose(); router.push('/settings/subscription/plans'); }} type="default">
+          <Button
+            block
+            onClick={() => {
+              onClose();
+              router.push('/settings/subscription/plans');
+            }}
+            type="default"
+          >
             Сравнить тарифы
           </Button>
         </Flexbox>
@@ -1268,7 +1320,13 @@ const BalanceExplainSheet = memo<Props>(({ monthlyResetDate, onClose, open, rema
   const router = useRouter();
 
   return (
-    <Drawer height="auto" onClose={onClose} open={open} placement="bottom" styles={{ body: { padding: 0 } }}>
+    <Drawer
+      height="auto"
+      onClose={onClose}
+      open={open}
+      placement="bottom"
+      styles={{ body: { padding: 0 } }}
+    >
       <Flexbox gap={10} paddingBlock={24} paddingInline={20}>
         <Text style={{ fontSize: 18, fontWeight: 600 }}>Что такое кредит?</Text>
         <Text type="secondary">1 кредит ≈ 1 короткое сообщение GPT-5-mini</Text>
@@ -1276,11 +1334,28 @@ const BalanceExplainSheet = memo<Props>(({ monthlyResetDate, onClose, open, rema
         <Text type="secondary">50 кредитов = 1 картинка Nano Banana Pro</Text>
         <Text type="secondary">200 кредитов = 1 минута видео Seedance</Text>
         <Text style={{ marginBlockStart: 12 }}>У вас {remainingCredits} кредитов.</Text>
-        {monthlyResetDate && <Text type="secondary">Бесплатные кредиты обновятся {monthlyResetDate}.</Text>}
-        <Button block onClick={() => { onClose(); router.push('/settings/billing'); }} type="default">
+        {monthlyResetDate && (
+          <Text type="secondary">Бесплатные кредиты обновятся {monthlyResetDate}.</Text>
+        )}
+        <Button
+          block
+          onClick={() => {
+            onClose();
+            router.push('/settings/billing');
+          }}
+          type="default"
+        >
           Купить ещё
         </Button>
-        <Button block onClick={() => { onClose(); router.push('/settings/subscription/plans'); }} size="large" type="primary">
+        <Button
+          block
+          onClick={() => {
+            onClose();
+            router.push('/settings/subscription/plans');
+          }}
+          size="large"
+          type="primary"
+        >
           Перейти на Pro
         </Button>
       </Flexbox>
@@ -1307,14 +1382,16 @@ const [sheetOpen, setSheetOpen] = useState(false);
 
 // wrap the existing badge content with onClick={() => isMobile && setSheetOpen(true)}
 // after the badge:
-{isMobile && (
-  <BalanceExplainSheet
-    monthlyResetDate={resetDate}
-    onClose={() => setSheetOpen(false)}
-    open={sheetOpen}
-    remainingCredits={remaining}
-  />
-)}
+{
+  isMobile && (
+    <BalanceExplainSheet
+      monthlyResetDate={resetDate}
+      onClose={() => setSheetOpen(false)}
+      open={sheetOpen}
+      remainingCredits={remaining}
+    />
+  );
+}
 ```
 
 - [ ] **Step 4.2.3: Commit**
@@ -1468,7 +1545,13 @@ const MobileCancelFlow = memo<Props>(({ loading, onClose, onConfirm, open }) => 
   const [text, setText] = useState('');
 
   return (
-    <Drawer height="auto" onClose={onClose} open={open} placement="bottom" styles={{ body: { padding: 0 } }}>
+    <Drawer
+      height="auto"
+      onClose={onClose}
+      open={open}
+      placement="bottom"
+      styles={{ body: { padding: 0 } }}
+    >
       <Flexbox gap={12} paddingBlock={20} paddingInline={20}>
         <Text style={{ fontSize: 18, fontWeight: 600 }}>Жаль, что уходишь. Почему?</Text>
         <Flexbox gap={8}>
@@ -1487,7 +1570,13 @@ const MobileCancelFlow = memo<Props>(({ loading, onClose, onConfirm, open }) => 
           onChange={(e) => setText(e.target.value)}
           placeholder="Расскажи подробнее (опционально)"
           rows={3}
-          style={{ borderColor: 'var(--ant-color-border)', borderRadius: 8, borderStyle: 'solid', borderWidth: 1, padding: 8 }}
+          style={{
+            borderColor: 'var(--ant-color-border)',
+            borderRadius: 8,
+            borderStyle: 'solid',
+            borderWidth: 1,
+            padding: 8,
+          }}
           value={text}
         />
         <Button
@@ -1559,6 +1648,7 @@ git commit -m "feat(mobile): cancel flow as bottom-sheet survey"
 **Goal of task:** Every upsell impression and click is recorded in two new tables, exposed via tRPC, surfaced in admin `/finance/pricing-experiments`.
 
 **Files:**
+
 - Create: `packages/database/migrations/0XXX_upsell_tracking.sql`
 - Create: `packages/database/src/schemas/upsell.ts`
 - Modify: `packages/database/src/schemas/index.ts`
@@ -1883,7 +1973,16 @@ Render a small table beneath the existing experiments table:
 
 ```tsx
 <Table>
-  <thead><tr><th>Источник</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>Paid</th><th>CR</th></tr></thead>
+  <thead>
+    <tr>
+      <th>Источник</th>
+      <th>Impressions</th>
+      <th>Clicks</th>
+      <th>CTR</th>
+      <th>Paid</th>
+      <th>CR</th>
+    </tr>
+  </thead>
   <tbody>
     {funnel.map((r) => (
       <tr key={r.source}>
@@ -1959,7 +2058,7 @@ GROUP BY day
 ORDER BY day DESC;
 ```
 
-Expected after 1 week: activation_pct >70% on mobile users (vs ~48% baseline).
+Expected after 1 week: activation_pct >70% on mobile users (vs \~48% baseline).
 
 ---
 
@@ -2025,6 +2124,7 @@ ssh root@135.181.115.234 "cd /opt/lobechat && docker compose up -d --force-recre
 ## Self-review
 
 **Spec coverage:**
+
 - Architecture (Section 1) → Tasks 1.1, 1.2, 6, 7. ✅
 - Home screen + Onboarding (Section 2) → Tasks 1.4–1.7. ✅
 - Image / Video / Plans / Settings (Section 3) → Tasks 2, 3. ✅
@@ -2034,6 +2134,7 @@ ssh root@135.181.115.234 "cd /opt/lobechat && docker compose up -d --force-recre
 - Migration phases 2 + 3 → Tasks 6, 7. ✅
 
 **Gaps acknowledged but not implemented in this plan:**
+
 - "Inline mode" for image/video chips (Section 3 spec). Marked as future enhancement; chips currently navigate to feature pages. This keeps Task 1.5 simple; inline mode requires deeper chat-input + payload changes (separate plan when ready).
 - Per-message debit indicator under each assistant reply ("−3 кредита"). Marked optional in spec; deferred.
 - Welcome-email upsell tracking (#5 in spec) — relies on email-link UTM landing on `/settings/subscription/plans?utm_source=brevo&utm_campaign=welcome_signup`. UTM cookie capture already exists; no new UI/logic needed beyond what's in Task 5.5 (admin chart sees the source).
@@ -2041,6 +2142,7 @@ ssh root@135.181.115.234 "cd /opt/lobechat && docker compose up -d --force-recre
 **Placeholder scan:** No "TBD" / "TODO" left. A few tasks say "engineer adapts to existing API" where the existing component's exported props aren't fully visible from the spec — this is honest scaffolding, not a placeholder, since the engineer has the file open and can see the actual signatures.
 
 **Type consistency:**
+
 - `useTrackUpsell()` returns `{ click, impression }` and the `UpsellSource` enum matches between hook (`Task 5.3`) and tRPC router (`Task 5.2`). ✅
 - `MobileUpgradePill` prop `shouldRender` is computed in MobileHome from `billing` shape — matches `useUserStore` selectors used elsewhere in the project. ✅
 - `LockedModelUpsellSheet` props match what `useTrackUpsell.impression('locked_model', {...})` expects. ✅

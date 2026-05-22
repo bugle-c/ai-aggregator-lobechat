@@ -76,7 +76,7 @@ const MobileVpnPromo = memo(() => {
       }}
     >
       <a
-        href="https://t.me/freeip_pashavinbot"
+        href="https://t.me/freeipru_bot"
         rel="noopener noreferrer"
         style={{ color: 'inherit', flex: 1, textDecoration: 'none' }}
         target="_blank"
