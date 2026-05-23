@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -15,6 +15,18 @@ import MobileSettingsList from './MobileSettingsList';
 const Layout = memo<LayoutProps>(() => {
   const params = useParams<{ tab?: string }>();
   const isMobile = useIsMobile();
+
+  // antd-style's useResponsive returns `mobile=false` during SSR / first
+  // client paint before window.matchMedia resolves. That triggered the
+  // <Navigate to="/settings/profile"> branch BEFORE the client even got
+  // a chance to detect mobile — and once redirected, params.tab='profile'
+  // routes to the desktop SettingsContent which has no Выйти button.
+  // Gate routing on a mounted flag so we wait one tick for the
+  // responsive query to settle.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted) return null;
 
   // On mobile, the bare `/settings` route shows a list-of-links instead
   // of the desktop sidebar + content split. When a specific sub-route is
