@@ -43,13 +43,20 @@ async function ensureUser(userId: string) {
   });
 }
 
-describe('grantTgLinkBonus (real DB)', () => {
-  beforeAll(async () => {
-    const connectionString =
-      process.env.DATABASE_TEST_URL ||
-      `postgresql://postgres:${process.env.POSTGRES_PASSWORD || '0ae6c58c62f6347f2120e958941ef922'}@127.0.0.1:5433/lobechat`;
+// Test requires DATABASE_TEST_URL or POSTGRES_PASSWORD to connect to
+// the local lobe-postgres. When neither is set we skip — the contract
+// is also covered by the production smoke in T12.
+const TEST_DB_URL =
+  process.env.DATABASE_TEST_URL ||
+  (process.env.POSTGRES_PASSWORD
+    ? `postgresql://postgres:${process.env.POSTGRES_PASSWORD}@127.0.0.1:5433/lobechat`
+    : undefined);
 
-    pool = new Pool({ connectionString });
+const describeIfDb = TEST_DB_URL ? describe : describe.skip;
+
+describeIfDb('grantTgLinkBonus (real DB)', () => {
+  beforeAll(async () => {
+    pool = new Pool({ connectionString: TEST_DB_URL! });
     // Cast: node-postgres drizzle instance satisfies LobeChatDatabase for our usage
     db = drizzle(pool, { schema }) as unknown as LobeChatDatabase;
 
