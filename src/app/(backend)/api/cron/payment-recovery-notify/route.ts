@@ -1,15 +1,18 @@
 /**
  * GET /api/cron/payment-recovery-notify
  *
- * Runs every 5 minutes. For each failed/canceled billing_payments row from the
- * last 24 h (older than 5 min grace period), where the user has a
- * tg_bot_chat_id and no tg_recovery_sent mark yet, and no later succeeded
- * payment exists — sends a Telegram recovery DM via the bot.
+ * Runs every 5 minutes. Two parallel recovery channels:
  *
- * Primary channel: Telegram Invoice (sendInvoice) via bot T10 endpoint.
- * Fallback: signed URL buttons (SBP + any method).
+ *   1. Telegram DM (existing) — sends sendInvoice to users who have
+ *      a tg_bot_chat_id and no tg_recovery_sent mark. Falls back to
+ *      URL buttons inside the bot if sendInvoice fails.
  *
- * Anti-spam: max 1 DM per user per 24 h, max 3 per 7 days.
+ *   2. Email Stage 1 (this commit) — sends a recovery email to ALL
+ *      users with a valid email and no email_recovery_sent mark. Runs
+ *      independently of the TG channel.
+ *
+ * Anti-spam: TG caps 1/24h + 3/7d per user; email cap 2/7d per user
+ * (counting both stages).
  */
 import { eq, sql } from 'drizzle-orm';
 
@@ -18,6 +21,7 @@ import { getServerDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { describeReason } from '@/server/modules/billing/cancellation-reasons';
 import { signRecoveryToken } from '@/server/modules/billing/recovery-token';
+import { sendRecoveryEmail } from '@/server/modules/billing/send-recovery-email';
 import { fetchPlanById } from '@/server/services/billing/plans-source';
 
 export const dynamic = 'force-dynamic';
@@ -100,10 +104,8 @@ export async function GET(req: Request) {
     tg_bot_chat_id: string;
   }>;
 
-  if (candidateRows.length === 0) {
-    return Response.json({ ok: true, ...summary });
-  }
-
+  // The existing TG-DM path runs even if no candidates — we just skip the
+  // cap query when the list is empty (Postgres rejects empty IN-lists).
   const userIds = candidateRows.map((r) => r.user_id);
 
   // Anti-spam caps: per user, max 1 sent in last 24h and max 3 in last 7d.
@@ -113,28 +115,29 @@ export async function GET(req: Request) {
   // hence the "cannot cast type record to text[]" error. Wrap each id in
   // `sql` and join with comma so Drizzle produces a proper IN-list, then
   // use IN instead of ANY(...).
-  const userIdList = sql.join(
-    userIds.map((id) => sql`${id}`),
-    sql`, `,
-  );
-  const capRows = await db.execute(sql`
-    SELECT user_id,
-           COUNT(*) FILTER (WHERE (metadata->>'tg_recovery_sent') > to_char(NOW() - INTERVAL '24 hours','YYYY-MM-DD"T"HH24:MI:SS')) AS day_count,
-           COUNT(*) FILTER (WHERE (metadata->>'tg_recovery_sent') > to_char(NOW() - INTERVAL '7 days','YYYY-MM-DD"T"HH24:MI:SS')) AS week_count
-    FROM billing_payments
-    WHERE user_id IN (${userIdList})
-      AND (metadata->>'tg_recovery_sent') IS NOT NULL
-      AND (metadata->>'tg_recovery_sent') <> 'blocked'
-    GROUP BY user_id
-  `);
-
   const caps = new Map<string, { day: number; week: number }>();
-  for (const r of capRows.rows as Array<{
-    user_id: string;
-    day_count: string;
-    week_count: string;
-  }>) {
-    caps.set(r.user_id, { day: Number(r.day_count), week: Number(r.week_count) });
+  if (userIds.length > 0) {
+    const userIdList = sql.join(
+      userIds.map((id) => sql`${id}`),
+      sql`, `,
+    );
+    const capRows = await db.execute(sql`
+      SELECT user_id,
+             COUNT(*) FILTER (WHERE (metadata->>'tg_recovery_sent') > to_char(NOW() - INTERVAL '24 hours','YYYY-MM-DD"T"HH24:MI:SS')) AS day_count,
+             COUNT(*) FILTER (WHERE (metadata->>'tg_recovery_sent') > to_char(NOW() - INTERVAL '7 days','YYYY-MM-DD"T"HH24:MI:SS')) AS week_count
+      FROM billing_payments
+      WHERE user_id IN (${userIdList})
+        AND (metadata->>'tg_recovery_sent') IS NOT NULL
+        AND (metadata->>'tg_recovery_sent') <> 'blocked'
+      GROUP BY user_id
+    `);
+    for (const r of capRows.rows as Array<{
+      user_id: string;
+      day_count: string;
+      week_count: string;
+    }>) {
+      caps.set(r.user_id, { day: Number(r.day_count), week: Number(r.week_count) });
+    }
   }
 
   for (const r of candidateRows) {
@@ -224,6 +227,133 @@ export async function GET(req: Request) {
       summary.rateLimited++;
     } else {
       summary.errors++;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Stage 1 email leg — runs INDEPENDENTLY of the TG leg, covering 100%
+  // of users (including those without a tg_bot_chat_id). Same window as
+  // TG (5min grace, 24h horizon), but driven by email_recovery_sent
+  // instead of tg_recovery_sent.
+  // ─────────────────────────────────────────────────────────────────────
+  const emailRows = await db.execute(sql`
+    SELECT bp.id::text AS id,
+           bp.user_id,
+           bp.amount_rub,
+           bp.plan_id,
+           bp.tokens_amount,
+           bp.type,
+           bp.metadata,
+           u.email
+    FROM billing_payments bp
+    JOIN users u ON u.id = bp.user_id
+    WHERE bp.status IN ('failed','canceled')
+      AND bp.created_at > NOW() - INTERVAL '24 hours'
+      AND bp.created_at < NOW() - INTERVAL '5 minutes'
+      AND (bp.metadata->>'email_recovery_sent') IS NULL
+      AND u.email IS NOT NULL
+      AND u.email <> ''
+      AND NOT EXISTS (
+        SELECT 1 FROM billing_payments bp2
+        WHERE bp2.user_id = bp.user_id
+          AND bp2.status = 'succeeded'
+          AND bp2.created_at > bp.created_at
+      )
+    LIMIT 50
+  `);
+
+  const emailCandidateRows = emailRows.rows as Array<{
+    id: string;
+    user_id: string;
+    amount_rub: number;
+    plan_id: number | null;
+    tokens_amount: number | null;
+    type: string;
+    metadata: Record<string, unknown> | null;
+    email: string;
+  }>;
+
+  // Email cap: max 2 (Stage 1 + Stage 2) per user per rolling 7d.
+  const emailUserIds = [...new Set(emailCandidateRows.map((r) => r.user_id))];
+  const emailCaps = new Map<string, number>();
+  if (emailUserIds.length > 0) {
+    const emailUserIdList = sql.join(
+      emailUserIds.map((id) => sql`${id}`),
+      sql`, `,
+    );
+    const emailCapRows = await db.execute(sql`
+      SELECT user_id,
+             COUNT(*) FILTER (
+               WHERE (metadata->>'email_recovery_sent') IS NOT NULL
+                 AND (metadata->>'email_recovery_sent')::timestamptz > NOW() - INTERVAL '7 days'
+             )
+             + COUNT(*) FILTER (
+               WHERE (metadata->>'email_recovery_followup_sent') IS NOT NULL
+                 AND (metadata->>'email_recovery_followup_sent')::timestamptz > NOW() - INTERVAL '7 days'
+             ) AS email_count_7d
+      FROM billing_payments
+      WHERE user_id IN (${emailUserIdList})
+      GROUP BY user_id
+    `);
+    for (const r of emailCapRows.rows as Array<{ user_id: string; email_count_7d: string }>) {
+      emailCaps.set(r.user_id, Number(r.email_count_7d));
+    }
+  }
+
+  for (const r of emailCandidateRows) {
+    summary.eligible++;
+    const used = emailCaps.get(r.user_id) ?? 0;
+    if (used >= 2) {
+      summary.rateLimited++;
+      continue;
+    }
+
+    const cancellation = (r.metadata?.cancellation ?? {}) as Record<string, unknown>;
+    const reasonCode = (cancellation.reason as string | undefined) ?? null;
+    const plan = r.plan_id ? await fetchPlanById(r.plan_id) : undefined;
+    const planName = plan?.name;
+
+    const expSec = Math.floor(Date.now() / 1000) + 7 * 24 * 3600;
+    const t = signRecoveryToken(
+      {
+        paymentId: r.id,
+        userId: r.user_id,
+        method: 'any',
+        exp: expSec,
+        source: 'email_stage1',
+      },
+      secret,
+    );
+    const recoveryUrl = `${appEnv.APP_URL}/api/billing/recovery-retry?payment=${r.id}&method=any&t=${t}`;
+
+    const sent = await sendRecoveryEmail({
+      to: r.email,
+      payment: {
+        amountRub: r.amount_rub,
+        planName,
+        type: r.type === 'subscription' ? 'subscription' : 'topup',
+      },
+      reasonCode,
+      recoveryUrl,
+      stage: 'stage1',
+    });
+
+    if (sent.ok) {
+      summary.sent++;
+      emailCaps.set(r.user_id, used + 1);
+      await db
+        .update(billingPayments)
+        .set({
+          metadata: sql`COALESCE(${billingPayments.metadata}, '{}'::jsonb) || ${JSON.stringify({
+            email_recovery_sent: new Date().toISOString(),
+            email_recovery_sent_messageid: sent.messageId ?? null,
+          })}::jsonb`,
+          updatedAt: new Date(),
+        })
+        .where(eq(billingPayments.id, r.id));
+    } else {
+      summary.errors++;
+      console.error('[payment-recovery-notify] email Stage 1 failed for', r.id, sent.error);
     }
   }
 
