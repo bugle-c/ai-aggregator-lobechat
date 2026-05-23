@@ -7,9 +7,13 @@
  *      a tg_bot_chat_id and no tg_recovery_sent mark. Falls back to
  *      URL buttons inside the bot if sendInvoice fails.
  *
- *   2. Email Stage 1 (this commit) — sends a recovery email to ALL
- *      users with a valid email and no email_recovery_sent mark. Runs
- *      independently of the TG channel.
+ *   2. Email Stage 1 — sends a recovery email to ALL users with a
+ *      valid email and no email_recovery_sent mark. Runs in parallel
+ *      to the TG channel.
+ *
+ *   3. Email Stage 2 — 24h follow-up email for rows whose Stage 1 went
+ *      out ≥24h ago and status is still not succeeded. Outer bound:
+ *      created_at within 7 days.
  *
  * Anti-spam: TG caps 1/24h + 3/7d per user; email cap 2/7d per user
  * (counting both stages).
@@ -354,6 +358,106 @@ export async function GET(req: Request) {
     } else {
       summary.errors++;
       console.error('[payment-recovery-notify] email Stage 1 failed for', r.id, sent.error);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Stage 2 follow-up: rows whose Stage 1 went out ≥24h ago, status
+  // still not succeeded, no Stage 2 sent yet. Outer bound: created_at
+  // within 7d to avoid resurrecting truly old failures.
+  // ─────────────────────────────────────────────────────────────────────
+  const stage2Rows = await db.execute(sql`
+    SELECT bp.id::text AS id,
+           bp.user_id,
+           bp.amount_rub,
+           bp.plan_id,
+           bp.tokens_amount,
+           bp.type,
+           bp.metadata,
+           u.email
+    FROM billing_payments bp
+    JOIN users u ON u.id = bp.user_id
+    WHERE bp.status IN ('failed','canceled')
+      AND bp.created_at > NOW() - INTERVAL '7 days'
+      AND (bp.metadata->>'email_recovery_sent') IS NOT NULL
+      AND (bp.metadata->>'email_recovery_sent')::timestamptz < NOW() - INTERVAL '24 hours'
+      AND (bp.metadata->>'email_recovery_followup_sent') IS NULL
+      AND u.email IS NOT NULL
+      AND u.email <> ''
+      AND NOT EXISTS (
+        SELECT 1 FROM billing_payments bp2
+        WHERE bp2.user_id = bp.user_id
+          AND bp2.status = 'succeeded'
+          AND bp2.created_at > bp.created_at
+      )
+    LIMIT 50
+  `);
+
+  const stage2CandidateRows = stage2Rows.rows as Array<{
+    id: string;
+    user_id: string;
+    amount_rub: number;
+    plan_id: number | null;
+    tokens_amount: number | null;
+    type: string;
+    metadata: Record<string, unknown> | null;
+    email: string;
+  }>;
+
+  for (const r of stage2CandidateRows) {
+    summary.eligible++;
+    const used = emailCaps.get(r.user_id) ?? 0;
+    if (used >= 2) {
+      summary.rateLimited++;
+      continue;
+    }
+
+    const cancellation = (r.metadata?.cancellation ?? {}) as Record<string, unknown>;
+    const reasonCode = (cancellation.reason as string | undefined) ?? null;
+    const plan = r.plan_id ? await fetchPlanById(r.plan_id) : undefined;
+    const planName = plan?.name;
+
+    const expSec = Math.floor(Date.now() / 1000) + 7 * 24 * 3600;
+    const t = signRecoveryToken(
+      {
+        paymentId: r.id,
+        userId: r.user_id,
+        method: 'any',
+        exp: expSec,
+        source: 'email_stage2',
+      },
+      secret,
+    );
+    const recoveryUrl = `${appEnv.APP_URL}/api/billing/recovery-retry?payment=${r.id}&method=any&t=${t}`;
+
+    const sent = await sendRecoveryEmail({
+      to: r.email,
+      payment: {
+        amountRub: r.amount_rub,
+        planName,
+        type: r.type === 'subscription' ? 'subscription' : 'topup',
+      },
+      reasonCode,
+      recoveryUrl,
+      stage: 'stage2',
+    });
+
+    if (sent.ok) {
+      summary.sent++;
+      emailCaps.set(r.user_id, used + 1);
+      await db
+        .update(billingPayments)
+        .set({
+          metadata: sql`COALESCE(${billingPayments.metadata}, '{}'::jsonb) || ${JSON.stringify({
+            email_recovery_followup_sent: new Date().toISOString(),
+            email_recovery_followup_sent_messageid: sent.messageId ?? null,
+          })}::jsonb`,
+          updatedAt: new Date(),
+        })
+        .where(eq(billingPayments.id, r.id));
+    } else {
+      summary.errors++;
+      console.error('[payment-recovery-notify] email Stage 2 failed for', r.id, sent.error);
     }
   }
 
