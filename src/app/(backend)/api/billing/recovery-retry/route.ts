@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
       metadata: {
         pricing_variant: (original.metadata as any)?.pricing_variant,
         recovery_from: original.id,
-        recovery_method_used: 'tg_dm',
+        recovery_method_used: verified.source ?? 'tg_dm', // fallback for legacy tokens
         sbp_preselected: method === 'sbp',
         tg_user_id: ub?.tgBotChatId ?? null,
       },
