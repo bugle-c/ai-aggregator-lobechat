@@ -2,6 +2,7 @@ import { serverDB } from '@lobechat/database';
 import { eq } from 'drizzle-orm';
 
 import { userBilling } from '@/database/schemas';
+import { grantTgLinkBonus } from '@/server/modules/billing/grant-tg-link-bonus';
 
 const BOT_URL = process.env.BOT_INTERNAL_URL || 'http://127.0.0.1:8082';
 
@@ -32,6 +33,22 @@ export async function linkTelegramAccount(input: TelegramLinkInput): Promise<voi
       });
   } catch (e) {
     console.error('[tg-link] failed to set tg_bot_chat_id', e);
+  }
+
+  // 1.5) Bonus grant — fires only on first-ever TG link per user.
+  //      Best-effort. Idempotent: subsequent re-links are no-ops.
+  try {
+    const result = await grantTgLinkBonus(serverDB, input.userId);
+    if (result.granted > 0) {
+      console.info(
+        '[tg-link] +' + result.granted + ' bonus credits granted to',
+        input.userId,
+        'expires',
+        result.expiresAt,
+      );
+    }
+  } catch (e) {
+    console.error('[tg-link] grantTgLinkBonus failed', e);
   }
 
   // 2) gptwebrubot side — bot.db sqlite via internal HTTP route.
