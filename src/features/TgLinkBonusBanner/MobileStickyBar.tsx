@@ -21,11 +21,11 @@ const useStyles = createStyles(({ css }) => ({
     align-items: center;
     justify-content: space-between;
 
-    height: 56px;
+    height: 40px;
     padding-block: 0;
-    padding-inline: 12px;
+    padding-inline: 10px;
 
-    font-size: 14px;
+    font-size: 13px;
     color: #fff;
 
     background: linear-gradient(135deg, #229ed9 0%, #1d8ec5 100%);
@@ -47,11 +47,12 @@ const useStyles = createStyles(({ css }) => ({
 
     flex: 0 0 auto;
 
-    padding-block: 6px;
-    padding-inline: 14px;
+    padding-block: 4px;
+    padding-inline: 12px;
     border: none;
-    border-radius: 6px;
+    border-radius: 5px;
 
+    font-size: 13px;
     font-weight: 600;
     color: #fff;
 
@@ -62,8 +63,8 @@ const useStyles = createStyles(({ css }) => ({
 
     flex: 0 0 auto;
 
-    margin-inline-start: 6px;
-    padding: 6px;
+    margin-inline-start: 4px;
+    padding: 4px;
     border: none;
 
     color: rgb(255 255 255 / 70%);
