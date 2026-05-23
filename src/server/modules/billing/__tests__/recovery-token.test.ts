@@ -45,3 +45,28 @@ describe('recovery-token', () => {
     expect(verifyRecoveryToken(tampered, SECRET)).toBeNull();
   });
 });
+
+describe('RecoveryPayload.source (backward-compat)', () => {
+  const futureExp = Math.floor(Date.now() / 1000) + 3600;
+
+  it('signs and verifies a token carrying source=email_stage1', () => {
+    const token = signRecoveryToken(
+      { paymentId: 'p1', userId: 'u1', method: 'any', exp: futureExp, source: 'email_stage1' },
+      SECRET,
+    );
+    const verified = verifyRecoveryToken(token, SECRET);
+    expect(verified).not.toBeNull();
+    expect(verified!.source).toBe('email_stage1');
+  });
+
+  it('verifies legacy tokens without source (returns undefined source)', () => {
+    const legacyToken = signRecoveryToken(
+      { paymentId: 'p2', userId: 'u2', method: 'sbp', exp: futureExp },
+      SECRET,
+    );
+    const verified = verifyRecoveryToken(legacyToken, SECRET);
+    expect(verified).not.toBeNull();
+    expect(verified!.source).toBeUndefined();
+    expect(verified!.paymentId).toBe('p2');
+  });
+});

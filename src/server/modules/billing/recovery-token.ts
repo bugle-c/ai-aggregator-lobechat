@@ -14,6 +14,12 @@ export interface RecoveryPayload {
   exp: number; // unix seconds
   method: 'sbp' | 'any';
   paymentId: string;
+  /**
+   * Optional — identifies which channel issued the token, used to
+   * stamp `metadata.recovery_method_used` on the new payment.
+   * Undefined for legacy (pre-2026-05-23) tokens.
+   */
+  source?: 'tg_dm' | 'email_stage1' | 'email_stage2';
   userId: string;
 }
 
