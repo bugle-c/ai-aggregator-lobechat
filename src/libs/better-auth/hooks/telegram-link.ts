@@ -1,5 +1,4 @@
 import { serverDB } from '@lobechat/database';
-import { eq } from 'drizzle-orm';
 
 import { userBilling } from '@/database/schemas';
 import { grantTgLinkBonus } from '@/server/modules/billing/grant-tg-link-bonus';
@@ -29,7 +28,12 @@ export async function linkTelegramAccount(input: TelegramLinkInput): Promise<voi
       .onConflictDoUpdate({
         target: userBilling.userId,
         set: { tgBotChatId: input.telegramId },
-        setWhere: eq(userBilling.tgBotChatId, input.telegramId), // only update if changed
+        // No setWhere — we always want to overwrite. The previous
+        // `eq(userBilling.tgBotChatId, input.telegramId)` was inverted
+        // logic: it only updated when the row's tg_bot_chat_id was
+        // ALREADY equal to the new value, so pre-existing rows with
+        // NULL never got the link stamp. Pre-existing user_billing
+        // rows can exist for email-signup users who only later link TG.
       });
   } catch (e) {
     console.error('[tg-link] failed to set tg_bot_chat_id', e);
