@@ -97,6 +97,19 @@ export const userBilling = pgTable(
     paymentMethodId: text('payment_method_id'),
     cancelledAt: timestamptz('cancelled_at'),
     cancelReasonCode: text('cancel_reason_code'),
+    /** Separate balance for non-renewable bonus credits. Adds to
+     *  totalAvailable while bonusBalanceExpiresAt > NOW(). Zeroed by
+     *  the daily expire-bonus-balance cron once past expiry. */
+    bonusBalance: integer('bonus_balance').notNull().default(0),
+
+    /** When the current bonusBalance becomes worthless. NULL means no
+     *  active bonus. Set by grant code; read by checkUsageLimit and the
+     *  daily expiry cron. */
+    bonusBalanceExpiresAt: timestamptz('bonus_balance_expires_at'),
+
+    /** Permanent anti-fraud stamp. Set on first TG-link bonus grant;
+     *  never cleared. Re-link attempts read this and skip the grant. */
+    tgBonusClaimedAt: timestamptz('tg_bonus_claimed_at'),
     ...timestamps,
   },
   (table) => [index('user_billing_user_id_idx').on(table.userId)],

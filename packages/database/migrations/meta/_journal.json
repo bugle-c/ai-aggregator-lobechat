@@ -735,6 +735,13 @@
       "when": 1779500000000,
       "tag": "0104_attribution_analytics_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1779553912713,
+      "tag": "0105_tg_link_bonus",
+      "breakpoints": true
     }
   ],
   "version": "6"
