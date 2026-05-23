@@ -94,6 +94,9 @@ export default {
   'welcome.body':
     'You have 20 free credits — enough for ~40 simple ChatGPT-style questions.\n\nYou are in <1>Light mode</1> — the simplest interface. Want to add your own API keys or unlock advanced settings? Switch to <1>Pro</1> in the top-right corner.',
   'welcome.cta': 'Get started',
+  'welcome.tgLinkBonusBody': 'Привяжи Telegram и получи 100 кредитов на 30 дней',
+  'welcome.tgLinkBonusCta': 'Привязать Telegram',
+  'welcome.tgLinkBonusTitle': '🎁 +100 кредитов за Telegram',
   'welcome.title': 'Welcome to WebGPT!',
 
   // ============ Locked-model UX (LockedModelTooltip + UpsellModal) ============

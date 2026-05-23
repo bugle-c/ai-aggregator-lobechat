@@ -6,6 +6,8 @@ import { Sparkles } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
+import { startTgLink } from '@/features/TgLinkBonusBanner/startTgLink';
+import { useShouldShow } from '@/features/TgLinkBonusBanner/useShouldShow';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -47,6 +49,8 @@ const WelcomeModal = memo(() => {
     if (!markSeen.isPending) markSeen.mutate();
   }, [markSeen]);
 
+  const showTgBonus = useShouldShow();
+
   if (!isLogin || isLoading || !data) return null;
   if (data.firstLoginSeen || localDismissed) return null;
 
@@ -80,6 +84,49 @@ const WelcomeModal = memo(() => {
         <Button block size="large" type="primary" onClick={handleClose}>
           {t('welcome.cta')}
         </Button>
+
+        {showTgBonus && (
+          <Flexbox
+            align="center"
+            gap={8}
+            paddingBlock={12}
+            paddingInline={16}
+            style={{
+              background: 'linear-gradient(135deg, #229ed9 0%, #1d8ec5 100%)',
+              borderRadius: 12,
+              color: '#fff',
+              marginBlockStart: 4,
+              width: '100%',
+            }}
+          >
+            <Title level={5} style={{ color: '#fff', marginBlock: 0 }}>
+              {t('welcome.tgLinkBonusTitle')}
+            </Title>
+            <Paragraph
+              style={{
+                color: 'rgba(255,255,255,0.92)',
+                fontSize: 13,
+                marginBlock: 0,
+                textAlign: 'center',
+              }}
+            >
+              {t('welcome.tgLinkBonusBody')}
+            </Paragraph>
+            <Button
+              block
+              ghost
+              size="middle"
+              style={{ background: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.4)' }}
+              onClick={() => {
+                // Close the welcome modal AND start the TG link flow.
+                handleClose();
+                void startTgLink();
+              }}
+            >
+              {t('welcome.tgLinkBonusCta')}
+            </Button>
+          </Flexbox>
+        )}
       </Flexbox>
     </Modal>
   );
