@@ -3,15 +3,26 @@
 import { useEffect, useState } from 'react';
 
 import { lambdaQuery } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 const DISMISS_KEY = 'tg_link_banner_dismissed_until';
 
 /**
  * Returns true iff the user has no TG link AND no claim stamp AND
  * hasn't dismissed within the last 7 days.
+ *
+ * Gated on `isLogin` — without this gate the tRPC query 401-loops for
+ * anonymous visitors landing from the marketing site, causing a
+ * sidebar-flicker / "register first" toast cascade. See:
+ * https://ask.gptweb.ru/trpc/lambda/subscription.getBillingState ... 401
  */
 export function useShouldShow(): boolean {
+  const isLogin = useUserStore(authSelectors.isLogin);
+
   const { data } = lambdaQuery.subscription.getBillingState.useQuery(undefined, {
+    enabled: isLogin,
+    retry: false,
     staleTime: 60_000,
   });
 
@@ -24,6 +35,7 @@ export function useShouldShow(): boolean {
     if (Number.isFinite(until) && until > Date.now()) setDismissed(true);
   }, []);
 
+  if (!isLogin) return false;
   if (dismissed) return false;
   if (!data) return false;
   if (data.tgBotChatId) return false;
