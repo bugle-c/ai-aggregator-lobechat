@@ -1,34 +1,34 @@
 'use client';
 
-import { oauth2 } from '@/libs/better-auth/auth-client';
-
 /**
- * The server-side OAuth-start endpoint. For a logged-in user better-
- * auth will LINK the new Telegram account to the current session
- * (creating an `accounts` row that fires our linkTelegramAccount hook
- * — see src/libs/better-auth/hooks/telegram-link.ts). For an anon user
- * it signs-in/signs-up. Either way the callback returns to callbackURL.
+ * Banner CTA destination. Server endpoint mints an HMAC token bound
+ * to the current session's user_id, then 302's the browser to the
+ * bot's deep-link: `https://t.me/gptwebrubot?start=link_<token>`.
+ *
+ * The bot handles the actual linkage (its /start handler decodes the
+ * token, shows an inline "Подтвердить привязку" button, on confirm
+ * POSTs to /api/billing/tg-link-confirm which stamps the link + grants
+ * the +100 bonus). Bot replies with a URL button back to the site;
+ * useClaimOnReturn handles the `?tg_linked=1` arrival.
+ *
+ * Why bot-mediated instead of OAuth via oauth.telegram.org:
+ *   1. OAuth path never opens the bot chat, so bot.sendMessage() 403's
+ *      until the user manually /start's it later. This way they're
+ *      already in the chat by step 1.
+ *   2. Safari user-gesture chain: a direct `<a href>` to our server
+ *      endpoint is sync user-gesture nav; the prior `oauth2.link()`
+ *      async fetch broke Safari's popup-block heuristic.
+ *
+ * Returned URL also receives `return` so the bot can include the right
+ * site URL in its "Open WebGPT" follow-up button.
  */
 export function tgLinkHref(): string {
-  const callbackPath =
-    (typeof window !== 'undefined' ? window.location.pathname : '/') + '?tg_linked=1';
-  return '/api/auth/oauth-start?provider=telegram&callbackURL=' + encodeURIComponent(callbackPath);
+  return '/api/billing/tg-link-start';
 }
 
-/**
- * Progressive-enhancement onClick. Render the CTA as `<a href={tgLinkHref()}>`
- * so Safari can do a synchronous user-gesture-driven navigation (Safari's
- * popup blocker breaks the chain on async oauth2.link()). When JS is
- * hydrated this handler hijacks the click and uses the in-browser flow.
- */
-export function onTgLinkClick(e: React.MouseEvent<HTMLAnchorElement>) {
-  e.preventDefault();
-  const callbackURL =
-    (typeof window !== 'undefined' ? window.location.pathname : '/') + '?tg_linked=1';
-  oauth2.link({ providerId: 'telegram', callbackURL }).catch((err) => {
-    console.error('[tg-link-bonus] oauth2.link failed, falling back to href nav', err);
-    if (typeof window !== 'undefined') {
-      window.location.href = tgLinkHref();
-    }
-  });
+/** Plain `<a href={tgLinkHref()}>` is sufficient — no JS hijack. */
+export function onTgLinkClick() {
+  // Intentionally empty: the anchor's native navigation does the work.
+  // Kept as an export so consumer JSX doesn't break if it was passing
+  // a handler previously.
 }
