@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { activeBonusFor } from '@/server/modules/billing/active-bonus';
 import {
   getRequiredPlanForModelAsync,
   isModelAllowedForPlanAsync,
@@ -21,7 +22,7 @@ export const spendRouter = router({
     const billing = await ctx.billingService.getOrResetUserBilling();
     const plan = await ctx.billingService.getPlanById(billing.planId);
     const creditLimit = plan?.tokenLimit || 50;
-    const totalAvailable = creditLimit + billing.tokenBalance;
+    const totalAvailable = creditLimit + billing.tokenBalance + activeBonusFor(billing);
     const usagePercent =
       totalAvailable > 0 ? Math.round((billing.tokensUsedMonth / totalAvailable) * 100) : 0;
 
@@ -40,7 +41,7 @@ export const spendRouter = router({
     const plan = await ctx.billingService.getPlanById(billing.planId);
     const plans = await ctx.billingService.getActivePlans();
     const creditLimit = plan?.tokenLimit || 50;
-    const totalAvailable = creditLimit + billing.tokenBalance;
+    const totalAvailable = creditLimit + billing.tokenBalance + activeBonusFor(billing);
     const usagePercent =
       totalAvailable > 0 ? Math.round((billing.tokensUsedMonth / totalAvailable) * 100) : 0;
 

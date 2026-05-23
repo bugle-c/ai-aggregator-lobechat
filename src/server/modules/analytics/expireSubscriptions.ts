@@ -3,6 +3,7 @@ import { and, eq, gte, isNotNull, isNull, lt, lte, not, or, sql } from 'drizzle-
 import { billingSubscriptionEvents } from '@/database/schemas/analytics';
 import { userBilling } from '@/database/schemas/billing';
 import { type LobeChatDatabase } from '@/database/type';
+import { activeBonusFor } from '@/server/modules/billing/active-bonus';
 import { fetchPlanById } from '@/server/services/billing/plans-source';
 
 import { writeSubscriptionEvent } from './writeSubscriptionEvent';
@@ -38,6 +39,8 @@ async function flagUsageWarnings(db: LobeChatDatabase): Promise<void> {
   // Fetch candidates: paid plan, expiring within 3 days, has bot, not throttled
   const candidates = await db
     .select({
+      bonusBalance: userBilling.bonusBalance,
+      bonusBalanceExpiresAt: userBilling.bonusBalanceExpiresAt,
       userId: userBilling.userId,
       tokensUsedMonth: userBilling.tokensUsedMonth,
       tokenBalance: userBilling.tokenBalance,
@@ -62,7 +65,7 @@ async function flagUsageWarnings(db: LobeChatDatabase): Promise<void> {
   for (const row of candidates) {
     const plan = await fetchPlanById(row.planId);
     if (!plan) continue;
-    const totalAvailable = plan.tokenLimit + row.tokenBalance;
+    const totalAvailable = plan.tokenLimit + row.tokenBalance + activeBonusFor(row);
     if (row.tokensUsedMonth < totalAvailable * 0.8) continue; // under 80%
 
     await db

@@ -4,6 +4,7 @@ import { userBilling } from '@/database/schemas/billing';
 import { type LobeChatDatabase } from '@/database/type';
 import { BillingService } from '@/server/services/billing';
 
+import { activeBonusFor } from './active-bonus';
 import { type ModelTier, type Usage } from './compute-cost';
 import { calculateCreditsAsync } from './model-rates';
 import { type PlanSlug } from './model-tiers';
@@ -38,7 +39,7 @@ export async function checkUsageLimit(
     const billing = await billingService.getOrResetUserBilling();
     const plan = await billingService.getPlanById(billing.planId);
     const creditLimit = plan?.tokenLimit || 50;
-    const totalAvailable = creditLimit + billing.tokenBalance;
+    const totalAvailable = creditLimit + billing.tokenBalance + activeBonusFor(billing);
 
     // No daily caps: monthly credits + top-ups are the only spend limiter.
 
@@ -76,6 +77,8 @@ async function maybeFlagZeroCredits(db: LobeChatDatabase, userId: string): Promi
   try {
     const rows = await db
       .select({
+        bonusBalance: userBilling.bonusBalance,
+        bonusBalanceExpiresAt: userBilling.bonusBalanceExpiresAt,
         planId: userBilling.planId,
         tokenBalance: userBilling.tokenBalance,
         tokensUsedMonth: userBilling.tokensUsedMonth,
@@ -91,7 +94,7 @@ async function maybeFlagZeroCredits(db: LobeChatDatabase, userId: string): Promi
 
     const billingService = new BillingService(db, userId);
     const plan = await billingService.getPlanById(row.planId);
-    const totalAvailable = (plan?.tokenLimit ?? 0) + row.tokenBalance;
+    const totalAvailable = (plan?.tokenLimit ?? 0) + row.tokenBalance + activeBonusFor(row);
 
     if (row.tokensUsedMonth < totalAvailable) return; // still has credits
 
@@ -164,7 +167,7 @@ export async function recordTokenUsage(
     // already passes limit; chat-charge previously did not.
     const billing = await billingService.getOrCreateUserBilling();
     const plan = await billingService.getPlanById(billing.planId);
-    const limit = (plan?.tokenLimit ?? 0) + (billing.tokenBalance ?? 0);
+    const limit = (plan?.tokenLimit ?? 0) + (billing.tokenBalance ?? 0) + activeBonusFor(billing);
 
     // Atomic: increment monthly counter + insert usage_logs row. If either
     // fails, rollback — otherwise we end up with phantom credits (the counter

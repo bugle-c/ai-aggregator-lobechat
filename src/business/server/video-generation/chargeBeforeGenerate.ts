@@ -1,5 +1,6 @@
 import { getServerDB } from '@/database/core/db-adaptor';
 import { creditHolds, type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
+import { activeBonusFor } from '@/server/modules/billing/active-bonus';
 import { checkUsageLimit } from '@/server/modules/billing/checkUsageLimit';
 import { calculateCreditsAsync } from '@/server/modules/billing/model-rates';
 import { isModelAllowedForPlanAsync } from '@/server/modules/billing/model-tiers';
@@ -83,7 +84,8 @@ export async function chargeBeforeGenerate(params: ChargeParams): Promise<Charge
   // Atomic precharge: hold + conditional increment with monthly cap guard (C1).
   const billing = await billingService.getOrResetUserBilling();
   const plan = await billingService.getPlanById(billing.planId);
-  const monthlyCap = (plan?.tokenLimit ?? 0) + (billing.tokenBalance ?? 0);
+  const monthlyCap =
+    (plan?.tokenLimit ?? 0) + (billing.tokenBalance ?? 0) + activeBonusFor(billing);
 
   let holdId: string;
   try {
