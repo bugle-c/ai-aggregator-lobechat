@@ -6,6 +6,7 @@ import { userBilling } from '@/database/schemas';
 import { CANCELLATION_REASON_CODES, cancellationSurveys } from '@/database/schemas/lifecycle';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { grantTgLinkBonus } from '@/server/modules/billing/grant-tg-link-bonus';
 import { createYookassaPayment } from '@/server/modules/billing/yookassa';
 import { BillingService } from '@/server/services/billing';
 
@@ -111,7 +112,34 @@ export const subscriptionRouter = router({
       autoRenew: billing.autoRenew,
       cancelledAt: billing.cancelledAt,
       hasSavedPaymentMethod: !!billing.paymentMethodId,
+      tgBotChatId: billing.tgBotChatId,
+      tgBonusClaimedAt: billing.tgBonusClaimedAt,
     };
+  }),
+
+  /**
+   * One-shot Telegram link bonus claim. Guards against double-grants with
+   * row-level locking inside grantTgLinkBonus. Returns early if TG is not
+   * yet linked or if the bonus was already claimed.
+   */
+  claimTgLinkBonus: billingProcedure.mutation(async ({ ctx }) => {
+    const [row] = await ctx.serverDB
+      .select({
+        tgBotChatId: userBilling.tgBotChatId,
+        tgBonusClaimedAt: userBilling.tgBonusClaimedAt,
+      })
+      .from(userBilling)
+      .where(eq(userBilling.userId, ctx.userId))
+      .limit(1);
+
+    if (!row?.tgBotChatId) {
+      return { granted: 0, alreadyClaimed: false, error: 'tg_not_linked' as const };
+    }
+    if (row.tgBonusClaimedAt) {
+      return { granted: 0, alreadyClaimed: true };
+    }
+
+    return grantTgLinkBonus(ctx.serverDB, ctx.userId);
   }),
 
   getPlans: billingProcedure.query(async ({ ctx }) => {
