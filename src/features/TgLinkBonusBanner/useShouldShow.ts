@@ -17,11 +17,17 @@ const DISMISS_KEY = 'tg_link_banner_dismissed_until';
  * sidebar-flicker / "register first" toast cascade. See:
  * https://ask.gptweb.ru/trpc/lambda/subscription.getBillingState ... 401
  */
+// TEMPORARY DISABLE: the bot-mediated linking flow has UX issues that
+// need follow-up. Hide the banner globally to stop confusing users
+// until the flow is solid. Re-enable by removing this early-return
+// (see commit history for the original logic).
+const BANNER_TEMPORARILY_DISABLED = true;
+
 export function useShouldShow(): boolean {
   const isLogin = useUserStore(authSelectors.isLogin);
 
   const { data } = lambdaQuery.subscription.getBillingState.useQuery(undefined, {
-    enabled: isLogin,
+    enabled: !BANNER_TEMPORARILY_DISABLED && isLogin,
     retry: false,
     staleTime: 60_000,
   });
@@ -35,6 +41,7 @@ export function useShouldShow(): boolean {
     if (Number.isFinite(until) && until > Date.now()) setDismissed(true);
   }, []);
 
+  if (BANNER_TEMPORARILY_DISABLED) return false;
   if (!isLogin) return false;
   if (dismissed) return false;
   if (!data) return false;
