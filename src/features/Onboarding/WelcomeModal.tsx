@@ -6,7 +6,7 @@ import { Sparkles } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
-import { startTgLink } from '@/features/TgLinkBonusBanner/startTgLink';
+import { tgLinkHref } from '@/features/TgLinkBonusBanner/startTgLink';
 import { useShouldShow } from '@/features/TgLinkBonusBanner/useShouldShow';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
@@ -118,9 +118,13 @@ const WelcomeModal = memo(() => {
               size="middle"
               style={{ background: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.4)' }}
               onClick={() => {
-                // Close the welcome modal AND start the TG link flow.
+                // Close the welcome modal AND start the TG link flow
+                // via a synchronous navigation — async oauth2.link()
+                // breaks the user-gesture chain in Safari and gets
+                // blocked. The server-side oauth-start route handles
+                // both signin and link for already-logged-in users.
                 handleClose();
-                void startTgLink();
+                window.location.href = tgLinkHref();
               }}
             >
               {t('welcome.tgLinkBonusCta')}

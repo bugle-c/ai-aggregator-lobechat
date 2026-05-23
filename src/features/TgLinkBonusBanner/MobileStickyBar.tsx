@@ -4,7 +4,7 @@ import { createStyles } from 'antd-style';
 import { X } from 'lucide-react';
 import { memo } from 'react';
 
-import { startTgLink } from './startTgLink';
+import { onTgLinkClick, tgLinkHref } from './startTgLink';
 import { dismissBanner, useShouldShow } from './useShouldShow';
 
 // Keep in sync with src/features/MobileTabBar height.
@@ -55,6 +55,7 @@ const useStyles = createStyles(({ css }) => ({
     font-size: 13px;
     font-weight: 600;
     color: #fff;
+    text-decoration: none;
 
     background: rgb(255 255 255 / 22%);
   `,
@@ -81,9 +82,9 @@ const MobileStickyBar = memo(() => {
   return (
     <div className={styles.bar}>
       <div className={styles.text}>🎁 Привяжи Telegram и получи 100 кредитов</div>
-      <button className={styles.cta} type="button" onClick={startTgLink}>
+      <a className={styles.cta} href={tgLinkHref()} onClick={onTgLinkClick}>
         Привязать
-      </button>
+      </a>
       <button aria-label="Скрыть" className={styles.dismiss} type="button" onClick={dismissBanner}>
         <X size={16} />
       </button>

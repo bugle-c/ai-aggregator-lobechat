@@ -3,24 +3,32 @@
 import { oauth2 } from '@/libs/better-auth/auth-client';
 
 /**
- * Start the TG OIDC link flow for an already-logged-in user. Telegram
- * is a generic-OAuth (non-builtin) provider, so the correct API is
- * `oauth2.link()` — `signIn.oauth2()` does sign-in not linking and
- * silently no-ops when a session already exists.
- *
- * On success Better Auth redirects to the callbackURL. We append
- * `?tg_linked=1` so `useClaimOnReturn` picks it up and toasts.
+ * The server-side OAuth-start endpoint. For a logged-in user better-
+ * auth will LINK the new Telegram account to the current session
+ * (creating an `accounts` row that fires our linkTelegramAccount hook
+ * — see src/libs/better-auth/hooks/telegram-link.ts). For an anon user
+ * it signs-in/signs-up. Either way the callback returns to callbackURL.
  */
-export async function startTgLink() {
+export function tgLinkHref(): string {
+  const callbackPath =
+    (typeof window !== 'undefined' ? window.location.pathname : '/') + '?tg_linked=1';
+  return '/api/auth/oauth-start?provider=telegram&callbackURL=' + encodeURIComponent(callbackPath);
+}
+
+/**
+ * Progressive-enhancement onClick. Render the CTA as `<a href={tgLinkHref()}>`
+ * so Safari can do a synchronous user-gesture-driven navigation (Safari's
+ * popup blocker breaks the chain on async oauth2.link()). When JS is
+ * hydrated this handler hijacks the click and uses the in-browser flow.
+ */
+export function onTgLinkClick(e: React.MouseEvent<HTMLAnchorElement>) {
+  e.preventDefault();
   const callbackURL =
     (typeof window !== 'undefined' ? window.location.pathname : '/') + '?tg_linked=1';
-  try {
-    await oauth2.link({ providerId: 'telegram', callbackURL });
-  } catch (err) {
-    console.error('[tg-link-bonus] oauth2.link failed', err);
+  oauth2.link({ providerId: 'telegram', callbackURL }).catch((err) => {
+    console.error('[tg-link-bonus] oauth2.link failed, falling back to href nav', err);
     if (typeof window !== 'undefined') {
-      window.location.href =
-        '/api/auth/oauth-start?provider=telegram&callbackURL=' + encodeURIComponent(callbackURL);
+      window.location.href = tgLinkHref();
     }
-  }
+  });
 }

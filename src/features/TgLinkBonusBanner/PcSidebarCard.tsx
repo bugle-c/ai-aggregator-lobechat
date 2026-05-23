@@ -4,7 +4,7 @@ import { createStyles } from 'antd-style';
 import { X } from 'lucide-react';
 import { memo } from 'react';
 
-import { startTgLink } from './startTgLink';
+import { onTgLinkClick, tgLinkHref } from './startTgLink';
 import { dismissBanner, useShouldShow } from './useShouldShow';
 
 const useStyles = createStyles(({ css }) => ({
@@ -82,9 +82,9 @@ const PcSidebarCard = memo(() => {
       </button>
       <div className={styles.title}>🎁 +100 кредитов</div>
       <div>Привяжи Telegram и получи 100 кредитов на 30 дней.</div>
-      <button className={styles.cta} type="button" onClick={startTgLink}>
+      <a className={styles.cta} href={tgLinkHref()} onClick={onTgLinkClick}>
         Привязать
-      </button>
+      </a>
     </div>
   );
 });
