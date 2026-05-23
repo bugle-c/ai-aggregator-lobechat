@@ -1,7 +1,7 @@
 'use client';
 
-import { message, Modal } from 'antd';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { message } from 'antd';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 
 import { lambdaQuery } from '@/libs/trpc/client';
@@ -11,40 +11,27 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 const BOT_USERNAME = 'gptwebrubot';
 const BOT_DEEPLINK = `https://t.me/${BOT_USERNAME}?start=welcome`;
 
-function showBotOpenModal(grantedAmount: number) {
-  Modal.success({
-    title: grantedAmount > 0 ? `🎁 +${grantedAmount} кредитов на 30 дней!` : 'Telegram привязан',
-    content:
-      'Чтобы бот мог отправлять уведомления о платежах, новых функциях и расходе кредитов — открой чат и нажми «Старт».',
-    cancelText: 'Позже',
-    closable: true,
-    okText: 'Открыть бота в Telegram',
-    onOk: () => {
-      if (typeof window !== 'undefined') {
-        window.open(BOT_DEEPLINK, '_blank', 'noopener,noreferrer');
-      }
-    },
-    okCancel: true,
-    width: 480,
-  });
-}
-
 /**
- * If the user lands on the app with ?tg_linked=1 in the URL, call the
- * idempotent claim mutation, show a modal with a deep-link to open the
- * bot (Telegram OIDC doesn't go through the bot chat, so the user must
- * /start the bot manually before we can DM them), then scrub the param.
+ * Post-OAuth handler for `?tg_linked=1`.
  *
- * Idempotent on the server side — the mutation no-ops if already
- * claimed. We additionally use a ref to ensure the effect runs at
- * most once per mount (React strict-mode double-invoke safety).
+ * Flow:
+ *   1. claim the bonus server-side (idempotent)
+ *   2. show a brief toast on the source page
+ *   3. redirect the user to the bot's /start welcome deep-link
  *
- * Gated on `isLogin` so we never fire the mutation for anonymous
- * visitors (would 401-loop). Effectively no-op until the auth state
- * resolves to logged-in.
+ * Why redirect to the bot instead of staying on the site:
+ * Telegram OIDC authenticates via oauth.telegram.org — the user never
+ * touches our bot during OAuth. So bot.sendMessage(chat_id) returns
+ * 403 until the user manually opens the bot chat and presses Start.
+ * Auto-redirecting closes that loop: the user lands in the bot, sees
+ * @gptwebrubot in their chat list, and from then on all DMs work
+ * (recovery emails, balance warnings, file_attached notices, etc.).
+ *
+ * Gated on `isLogin` so the mutation never fires for anonymous
+ * visitors (would 401-loop). The `ran` ref guards against double-fire
+ * under React strict mode.
  */
 export function useClaimOnReturn() {
-  const router = useRouter();
   const params = useSearchParams();
   const isLogin = useUserStore(authSelectors.isLogin);
   const ran = useRef(false);
@@ -58,26 +45,21 @@ export function useClaimOnReturn() {
     ran.current = true;
 
     claim.mutate(undefined, {
-      onError: () => {
-        // Quiet failure on the bonus side — but still show the bot-open
-        // modal so the user knows to /start the bot. Otherwise the link
-        // is useless (no DMs possible without prior bot interaction).
-        showBotOpenModal(0);
-        console.warn('[tg-link-bonus] claim mutation failed');
+      onError: (err) => {
+        console.warn('[tg-link-bonus] claim mutation failed', err);
+        // Even on failure, redirect — the OAuth itself may have succeeded.
+        if (typeof window !== 'undefined') window.location.href = BOT_DEEPLINK;
       },
       onSuccess: async (data) => {
         if (data.granted > 0) {
-          message.success(`🎁 +${data.granted} кредитов на 30 дней!`, 3);
+          message.success(`🎁 +${data.granted} кредитов на 30 дней!`, 2);
           await utils.subscription.getBillingState.invalidate();
         }
-        // Always show the modal — even if bonus was already claimed, the
-        // user just went through OAuth and bot.sendMessage() will 403
-        // until they /start the bot.
-        showBotOpenModal(data.granted);
-
-        const url = new URL(window.location.href);
-        url.searchParams.delete('tg_linked');
-        router.replace(url.pathname + url.search);
+        // Small delay so the toast becomes visible before navigation kicks
+        // in (mobile Safari shows the new page near-instant after redirect).
+        setTimeout(() => {
+          if (typeof window !== 'undefined') window.location.href = BOT_DEEPLINK;
+        }, 700);
       },
     });
   }, [isLogin]); // re-evaluate when auth state resolves; ref still guards single-fire
