@@ -6,6 +6,8 @@ import { ChevronRight, LogOut } from 'lucide-react';
 import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { useUserStore } from '@/store/user';
+
 const { Text } = Typography;
 
 interface SettingsItem {
@@ -42,6 +44,10 @@ const ITEMS: SettingsItem[] = [
  */
 const MobileSettingsList = memo(() => {
   const navigate = useNavigate();
+  // Same logout path as desktop UserPanel — store action wraps the
+  // better-auth signOut() POST call. Going directly to
+  // `/api/auth/sign-out` via GET returns 404 (the endpoint is POST-only).
+  const logout = useUserStore((s) => s.logout);
 
   return (
     <Flexbox gap={6} paddingBlock={12} paddingInline={12}>
@@ -77,7 +83,7 @@ const MobileSettingsList = memo(() => {
             padding: 0,
           }}
           onClick={() => {
-            window.location.href = '/api/auth/sign-out';
+            void logout();
           }}
         >
           <LogOut size={16} />
