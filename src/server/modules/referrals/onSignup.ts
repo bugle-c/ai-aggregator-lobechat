@@ -8,16 +8,17 @@
  *
  *   - sets `users.referred_by_l1` and `users.referred_by_l2` on the new user
  *   - creates `referrals` rows (L1 always, L2 if grand-parent exists)
- *   - awards +20 welcome credits to the new user's `user_billing.token_balance`
+ *
+ * No credit bonus is granted here. The +100 referee bonus fires later when
+ * the new user links their Telegram account, via processReferralRewards().
  *
  * Always also generates a fresh `referral_code` for the new user so they can
  * invite others immediately.
  *
  * Failure-tolerant: any error inside this function is caught and logged. We
- * MUST NOT block signup on a referral-side issue — the welcome bonus is a
- * nice-to-have, not a critical path.
+ * MUST NOT block signup on a referral-side issue.
  */
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { referrals, users } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
@@ -28,9 +29,6 @@ import {
   isDisposableEmail,
   selfReferCheck,
 } from './antiAbuse';
-
-/** Welcome credits awarded to a referred user on successful signup. */
-export const REFERRAL_WELCOME_CREDITS = 20;
 
 /**
  * Read the `_ref` cookie value from a Cookie header string. Returns null if
@@ -185,21 +183,12 @@ export async function processReferralSignup(
           .onConflictDoNothing();
       }
 
-      // Welcome bonus: +20 credits to the new user. We use raw SQL here
-      // so it survives the user_billing row not yet existing (initNewUserForBusiness
-      // also runs inside the same hook). To be safe, ensure-row-then-add via
-      // INSERT ... ON CONFLICT.
-      await tx.execute(sql`
-        INSERT INTO user_billing (user_id, token_balance)
-        VALUES (${args.newUserId}, ${REFERRAL_WELCOME_CREDITS})
-        ON CONFLICT (user_id) DO UPDATE
-        SET token_balance = user_billing.token_balance + ${REFERRAL_WELCOME_CREDITS},
-            updated_at = now()
-      `);
+      // (No referee welcome bonus on signup — the +100 bonus is granted
+      //  later when they link Telegram, via processReferralRewards.)
     });
 
     console.info(
-      `[referrals] signup processed: new_user=${args.newUserId} referrer=${referrer.id} l2=${referrer.referredByL1 ?? 'none'} welcome=${REFERRAL_WELCOME_CREDITS}cr`,
+      `[referrals] signup processed: new_user=${args.newUserId} referrer=${referrer.id} l2=${referrer.referredByL1 ?? 'none'}`,
     );
   } catch (error) {
     // Never let referral logic break signup. Log + swallow.
