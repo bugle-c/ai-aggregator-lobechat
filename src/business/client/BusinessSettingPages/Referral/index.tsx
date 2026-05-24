@@ -3,40 +3,39 @@
 import { Flexbox } from '@lobehub/ui';
 import { App, Button, Card, Spin, Statistic, Table, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
-import { Copy, Gift, Send } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { Copy, Gift } from 'lucide-react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
 import { lambdaQuery } from '@/libs/trpc/client';
 
-import CashoutModal from './CashoutModal';
+// CashoutModal is intentionally NOT imported — cashout is dormant per Non-Goals.
+// The modal file is kept in the codebase for future activation.
 
 const { Title, Text, Paragraph } = Typography;
 
 /**
- * User-facing referral & cashout page (Phase 2.1, T2).
+ * User-facing referral page (Phase 2.1, T7).
  *
  * Reads state from the `referral.*` lambda router and renders:
  *   - share block (copy / Telegram / WhatsApp / X)
- *   - bonus structure
+ *   - bonus structure (100/100/30 credits, triggered by TG-link, 30-day expiry)
  *   - aggregate stats + referrals table
- *   - cashout request CTA + history
+ *
+ * Cashout CTA and cashout history are hidden (dormant per Non-Goals).
  *
  * Backend procedures used:
  *   - referral.getMyState        — code, totals, balance, rate/min
  *   - referral.getMyList         — paginated referrals (masked emails)
- *   - referral.requestCashout    — invoked from CashoutModal
- *   - referral.listMyCashouts    — last N cashout requests
  */
 const Referral = memo(() => {
   const { t } = useTranslation('subscription');
   const { message } = App.useApp();
-  const [cashoutOpen, setCashoutOpen] = useState(false);
 
   const stateQuery = lambdaQuery.referral.getMyState.useQuery();
   const listQuery = lambdaQuery.referral.getMyList.useQuery({ limit: 50, offset: 0 });
-  const cashoutsQuery = lambdaQuery.referral.listMyCashouts.useQuery({ limit: 10 });
+  // referral.listMyCashouts is dormant — cashout UI is hidden.
 
   // Build the share link from the running origin so it works in dev, preview,
   // and prod without hard-coding the canonical domain.
@@ -101,14 +100,8 @@ const Referral = memo(() => {
   }
 
   const state = stateQuery.data;
-  const balance = state?.currentBalance ?? 0;
-  const minCredits = state?.cashout.minCredits ?? 5000;
-  const ratePerCredit = state?.cashout.ratePerCredit ?? 0.05;
-  const minRub = Math.round(minCredits * ratePerCredit);
-  const canCashout = balance >= minCredits;
 
   const items = listQuery.data || [];
-  const cashouts = cashoutsQuery.data || [];
 
   return (
     <>
@@ -167,6 +160,9 @@ const Referral = memo(() => {
         <Title level={5} style={{ marginBottom: 12, marginTop: 0 }}>
           {t('referrals.bonusListTitle')}
         </Title>
+        <Paragraph style={{ fontSize: 13, marginBottom: 12 }} type="secondary">
+          {t('referrals.bonusHowItWorks')}
+        </Paragraph>
         <ul style={{ marginBottom: 0, paddingLeft: 24 }}>
           <li>
             <Text>{t('referrals.bonusReferred')}</Text>
@@ -195,7 +191,7 @@ const Referral = memo(() => {
           />
           <Statistic
             suffix={t('referrals.peopleUnit')}
-            title={t('referrals.pendingPayments')}
+            title={t('referrals.pendingTg')}
             value={Math.max((state?.totalReferred ?? 0) - (state?.totalRewarded ?? 0), 0)}
           />
         </Flexbox>
@@ -232,7 +228,7 @@ const Referral = memo(() => {
                 const colorMap: Record<string, string> = {
                   pending: 'gold',
                   rejected_abuse: 'red',
-                  rejected_no_payment: 'default',
+                  rejected_no_tg: 'default',
                   rewarded: 'green',
                 };
                 const labelKey = `referrals.status.${v}` as const;
@@ -261,104 +257,8 @@ const Referral = memo(() => {
         />
       </Card>
 
-      {/* Cashout CTA */}
-      <Card style={{ marginTop: 16 }}>
-        <Flexbox gap={12}>
-          <Flexbox horizontal align="center" gap={6}>
-            <Send size={18} />
-            <Title level={5} style={{ margin: 0 }}>
-              {t('referrals.cashout.title')}
-            </Title>
-          </Flexbox>
-          <Paragraph style={{ marginBottom: 0 }} type="secondary">
-            {t('referrals.cashout.description')}
-          </Paragraph>
-          <Text type="secondary">
-            {t('referrals.cashout.rate', { rate: ratePerCredit })} ·{' '}
-            {t('referrals.cashout.minimum', { min: minCredits, minRub })}
-          </Text>
-          <Text>{t('referrals.cashout.balance', { balance })}</Text>
-          <Flexbox horizontal>
-            <Button disabled={!canCashout} type="primary" onClick={() => setCashoutOpen(true)}>
-              {t('referrals.cashout.request')}
-            </Button>
-          </Flexbox>
-        </Flexbox>
-      </Card>
-
-      {/* Cashout history */}
-      <Card style={{ marginTop: 16 }}>
-        <Title level={5} style={{ marginBottom: 8, marginTop: 0 }}>
-          {t('referrals.cashout.history')}
-        </Title>
-        <Table
-          dataSource={cashouts.map((c) => ({ ...c, key: c.id }))}
-          loading={cashoutsQuery.isLoading}
-          locale={{ emptyText: t('referrals.cashout.historyEmpty') }}
-          pagination={false}
-          size="small"
-          columns={[
-            {
-              dataIndex: 'createdAt',
-              key: 'date',
-              render: (v: string | Date | null) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '—'),
-              title: t('referrals.table.date'),
-              width: 160,
-            },
-            {
-              key: 'amount',
-              render: (_: unknown, row: { creditsRequested: number; amountRub: number }) =>
-                t('referrals.cashout.historyAmount', {
-                  credits: row.creditsRequested.toLocaleString('ru-RU'),
-                  rub: row.amountRub.toLocaleString('ru-RU'),
-                }),
-              title: t('referrals.cashout.amount'),
-            },
-            {
-              dataIndex: 'paymentMethod',
-              key: 'method',
-              render: (v: string) => {
-                if (v === 'sbp') return t('referrals.cashout.methodSbp');
-                if (v === 'sber') return t('referrals.cashout.methodSber');
-                if (v === 'card') return t('referrals.cashout.methodCard');
-                return v;
-              },
-              title: t('referrals.cashout.method'),
-            },
-            {
-              dataIndex: 'status',
-              key: 'status',
-              render: (v: string) => {
-                const colorMap: Record<string, string> = {
-                  approved: 'blue',
-                  paid: 'green',
-                  pending: 'gold',
-                  rejected: 'red',
-                };
-                const labelKey = `referrals.cashout.historyStatus.${v}` as const;
-                return (
-                  <Tag color={colorMap[v] || 'default'}>{t(labelKey, { defaultValue: v })}</Tag>
-                );
-              },
-              title: t('referrals.table.status'),
-            },
-          ]}
-        />
-      </Card>
-
-      <CashoutModal
-        balance={balance}
-        minCredits={minCredits}
-        open={cashoutOpen}
-        ratePerCredit={ratePerCredit}
-        onClose={() => setCashoutOpen(false)}
-        onSuccess={() => {
-          // Refresh state + cashout history so the balance and history table
-          // reflect the new pending request immediately.
-          stateQuery.refetch();
-          cashoutsQuery.refetch();
-        }}
-      />
+      {/* Cashout CTA and cashout history are hidden — dormant per Non-Goals.
+          Re-enable by restoring the two Card blocks and importing CashoutModal. */}
     </>
   );
 });
