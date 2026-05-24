@@ -3,6 +3,7 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Button, Card, Modal, Tag, Typography } from 'antd';
 import { Zap } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,6 +21,7 @@ interface CreditsExhaustedModalProps {
 const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(({ open, onClose }) => {
   const { t } = useTranslation('subscription');
   const isLogin = useUserStore(authSelectors.isLogin);
+  const router = useRouter();
 
   const { data } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
     enabled: isLogin,
@@ -145,6 +147,17 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(({ open, onClose 
             Или разово докупить за {cheapestTopup.amountRub} ₽
           </Button>
         )}
+
+        <Button
+          block
+          type="default"
+          onClick={() => {
+            router.push('/settings/referral');
+            onClose();
+          }}
+        >
+          🎁 Пригласить друга — +100 кр
+        </Button>
       </Flexbox>
     </Modal>
   );
