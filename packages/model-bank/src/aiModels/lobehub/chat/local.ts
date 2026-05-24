@@ -12,12 +12,15 @@ import { type AIChatModelCard } from '../../../types/aiModel';
 // OpenRouter.
 //
 // Pricing here (zero rates) is for UI display only — actual billing reads
-// from Supabase `ai_aggregator.model_rates` rows, which are also zero with
-// tier_override gating the heavyweight pair to basic+ plans.
+// from Supabase `ai_aggregator.model_rates` rows. As of 2026-05-24,
+// Gemma 4 E4B has a non-zero per-token rate (~2-3x cheaper than
+// gpt-5-nano, the cheapest cloud option) so usage is rate-limited via
+// the credit system. tier_override='cheap' keeps it available to free
+// users; the heavyweight 26B still needs basic+ plans.
 //
-// `· local` suffix in displayName is the UI hint that this runs on our own
-// CPU and has no per-token cost. Until we add a proper tag pill this is the
-// cheapest place to surface the fact.
+// `· local` suffix in displayName is the UI hint that this runs on our
+// own CPU. Until we add a proper tag pill this is the cheapest place to
+// surface the fact.
 export const localChatModels: AIChatModelCard[] = [
   {
     abilities: {
@@ -26,15 +29,17 @@ export const localChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Gemma 4 E4B на нашем сервере. Бесплатна для всех тарифов. Подходит для коротких ответов и простых задач.',
-    displayName: 'Gemma 4 E4B · local · бесплатно',
+      'Gemma 4 E4B на нашем сервере. Самая дешёвая модель — ~2-3x дешевле gpt-5-nano. Подходит для коротких ответов и простых задач. Дефолт для всех тарифов.',
+    displayName: 'Gemma 4 E4B · local',
     enabled: true,
     id: 'gemma4:e4b',
     maxOutput: 8192,
     pricing: {
+      // UI-display rates — actual billing uses Supabase model_rates.
+      // Keep in sync with the Supabase row (gemma4:e4b, ollama).
       units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.04, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-05-11',

@@ -5,27 +5,30 @@ export interface RecommendedModel {
   order: number;
 }
 
-// Plan-tiered recommended lists. Free users see only models they can actually
-// use (cheap, no premium-locked Sonnet/Opus). Paid tiers progressively unlock
-// stronger flagships as primaries.
+// Plan-tiered recommended lists. Gemma 4 E4B (our local Hetzner-hosted
+// model) is now the #1 default for every tier — it's ~2-3x cheaper per
+// token than gpt-5-nano (the cheapest cloud option) and matches
+// DEFAULT_MODEL in @lobechat/const/settings/llm.ts. Paid tiers get
+// premium cloud models below it for users who explicitly want bigger
+// brains.
 const RECOMMENDED_BY_PLAN: Record<string, RecommendedModel[]> = {
   free: [
     {
-      creditCost: 1,
-      description: 'Самый быстрый — простые вопросы',
-      modelId: 'gpt-5-mini',
+      creditCost: 0,
+      description: 'Локальная — самая дешёвая. Подходит для большинства задач.',
+      modelId: 'gemma4:e4b',
       order: 1,
+    },
+    {
+      creditCost: 1,
+      description: 'Самый быстрый из cloud — простые вопросы',
+      modelId: 'gpt-5-mini',
+      order: 2,
     },
     {
       creditCost: 1,
       description: 'Умный и дешёвый',
       modelId: 'deepseek-chat',
-      order: 2,
-    },
-    {
-      creditCost: 1,
-      description: 'Минимум кредитов',
-      modelId: 'gpt-5-nano',
       order: 3,
     },
     {
@@ -37,47 +40,47 @@ const RECOMMENDED_BY_PLAN: Record<string, RecommendedModel[]> = {
   ],
   basic: [
     {
-      creditCost: 1,
-      description: 'Самый быстрый',
-      modelId: 'gpt-5-mini',
+      creditCost: 0,
+      description: 'Локальная — самая дешёвая',
+      modelId: 'gemma4:e4b',
       order: 1,
+    },
+    {
+      creditCost: 1,
+      description: 'Самый быстрый cloud',
+      modelId: 'gpt-5-mini',
+      order: 2,
     },
     {
       creditCost: 3,
       description: 'Универсал',
       modelId: 'gpt-4.1-mini',
-      order: 2,
+      order: 3,
     },
     {
       creditCost: 5,
       description: 'Смышлёный, быстрый',
       modelId: 'claude-haiku-4-5-20251001',
-      order: 3,
-    },
-    {
-      creditCost: 1,
-      description: 'Длинные тексты',
-      modelId: 'gemini-2.5-flash',
       order: 4,
     },
   ],
   pro: [
     {
+      creditCost: 0,
+      description: 'Локальная — самая дешёвая',
+      modelId: 'gemma4:e4b',
+      order: 1,
+    },
+    {
       creditCost: 13,
       description: 'Умный и быстрый — для большинства задач',
       modelId: 'claude-sonnet-4-6',
-      order: 1,
+      order: 2,
     },
     {
       creditCost: 8,
       description: 'Универсал GPT-5',
       modelId: 'gpt-5.1',
-      order: 2,
-    },
-    {
-      creditCost: 8,
-      description: 'Хорош для анализа',
-      modelId: 'gemini-2.5-pro',
       order: 3,
     },
     {
@@ -89,27 +92,27 @@ const RECOMMENDED_BY_PLAN: Record<string, RecommendedModel[]> = {
   ],
   pro_max: [
     {
+      creditCost: 0,
+      description: 'Локальная — самая дешёвая',
+      modelId: 'gemma4:e4b',
+      order: 1,
+    },
+    {
       creditCost: 25,
       description: 'Премиум — самые сложные задачи',
       modelId: 'claude-opus-4-6',
-      order: 1,
+      order: 2,
     },
     {
       creditCost: 14,
       description: 'Флагман для сложных задач',
       modelId: 'gpt-5.2',
-      order: 2,
+      order: 3,
     },
     {
       creditCost: 13,
       description: 'Универсал',
       modelId: 'claude-sonnet-4-6',
-      order: 3,
-    },
-    {
-      creditCost: 8,
-      description: 'Глубокий анализ',
-      modelId: 'deepseek-reasoner',
       order: 4,
     },
   ],
