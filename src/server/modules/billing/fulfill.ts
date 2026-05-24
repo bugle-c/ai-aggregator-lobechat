@@ -4,7 +4,6 @@ import { billingPayments, userBilling } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
 import { writeSubscriptionEvent } from '@/server/modules/analytics/writeSubscriptionEvent';
 import { sendSubscriptionConfirmation } from '@/server/modules/lifecycle/sendConfirmation';
-import { rewardReferralsOnFirstPayment } from '@/server/modules/referrals/rewardOnFirstPayment';
 import { BillingService } from '@/server/services/billing';
 
 export interface FulfillOptions {
@@ -109,15 +108,9 @@ export async function fulfillPayment(
     );
   }
 
-  // Referral rewards: triggered ONLY on the user's first successful payment.
-  // The check (count succeeded == 1) lives inside rewardReferralsOnFirstPayment
-  // so subsequent payments are no-ops. Wrapped in try/catch — referral rewards
-  // are nice-to-have, must not break payment fulfillment if they fail.
-  try {
-    await rewardReferralsOnFirstPayment(db, payment.userId);
-  } catch (error) {
-    console.error('[billing] referral reward hook error:', error);
-  }
+  // (Referral rewards now trigger from the linkTelegramAccount hook;
+  //  see src/libs/better-auth/hooks/telegram-link.ts +
+  //  src/server/modules/referrals/processReferralRewards.ts.)
 }
 
 export async function cancelPayment(

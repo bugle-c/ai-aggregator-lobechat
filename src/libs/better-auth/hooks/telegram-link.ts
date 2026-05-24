@@ -55,6 +55,22 @@ export async function linkTelegramAccount(input: TelegramLinkInput): Promise<voi
     console.error('[tg-link] grantTgLinkBonus failed', e);
   }
 
+  // 1.6) Referral payouts — referee just linked TG, our anti-fraud gate.
+  //      Flip any pending `referrals` rows to 'rewarded' and credit
+  //      both L1/L2 referrers + the referee themselves.
+  try {
+    const { processReferralRewards } =
+      await import('@/server/modules/referrals/processReferralRewards');
+    const result = await processReferralRewards(serverDB, input.userId);
+    if (result.awardedCount > 0) {
+      console.info(
+        `[tg-link] referral rewards: awarded=${result.awardedCount} total=${result.totalCredits}cr referee=${input.userId}`,
+      );
+    }
+  } catch (e) {
+    console.error('[tg-link] processReferralRewards failed', e);
+  }
+
   // 2) gptwebrubot side — bot.db sqlite via internal HTTP route.
   //    Defined in Task 5; safe to call even if endpoint doesn't exist yet
   //    (catch handles connection errors / 404).
