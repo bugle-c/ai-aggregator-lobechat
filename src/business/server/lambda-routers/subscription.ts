@@ -41,7 +41,9 @@ export const subscriptionRouter = router({
         amountRub: plan.priceRub,
         metadata: {
           ...(ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : {}),
-          sbp_preselected: true,
+          // Subscriptions force bank_card on the YooKassa form (not SBP) —
+          // SBP can't save a token for recurring renewals.
+          card_preselected: true,
           tg_user_id: tgChatId,
         },
         planId: plan.id,
@@ -66,20 +68,22 @@ export const subscriptionRouter = router({
           type: 'subscription',
           ...(ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : {}),
         },
-        // NB: NO paymentMethodType for subscriptions.
+        // Force bank_card on the YK hosted form. Subscriptions need a
+        // saveable payment method for renewal cron — SBP is one-shot QR
+        // and can't be saved. Without this preselect, YK shows SBP +
+        // YooMoney + card as equal options; users tap SBP, then YK
+        // either errors or silently delivers a form they don't complete
+        // (see expired_on_confirmation cancellations). Locking to
+        // bank_card avoids the dead-end choice.
         //
-        // SBP is logically incompatible with `save_payment_method: true` —
-        // SBP is a one-shot QR scan, there's no card token to save for
-        // recurring charges. YooKassa rejects the combination with 403
-        // "This store can't make recurring payments" (misleading message —
-        // the real reason is the SBP/save-method conflict, not shop config).
+        // Top-ups (one-shot) use SBP preselect instead — see topUp.ts.
+        // They don't pass savePaymentMethod, so the SBP/save conflict
+        // doesn't arise there.
         //
-        // Top-ups (one-shot) DO get SBP preselect — see topUp.ts. They
-        // don't pass savePaymentMethod, so the conflict doesn't arise.
-        //
-        // Subscriptions need a saveable method = bank card. YK's hosted
-        // form still shows SBP as an option, but bank_card is the default
-        // because we don't preselect anything here.
+        // yookassa.ts has a fallback: if YK rejects the type for any
+        // reason (400 / unknown-method), the helper retries without
+        // payment_method_data so the user still gets a usable form.
+        paymentMethodType: 'bank_card',
         returnUrl,
         // Saves the card token on first payment so the
         // renew-due-subscriptions cron can charge the user each cycle
