@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
+import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
 import { useGeminiChineseWarning } from '@/hooks/useGeminiChineseWarning';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
@@ -52,8 +53,13 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isCreating = useImageStore(createImageSelectors.isCreating);
   const createImage = useImageStore((s) => s.createImage);
   const currentModel = useImageStore(imageGenerationConfigSelectors.model);
+  const imageNum = useImageStore(imageGenerationConfigSelectors.imageNum);
   const isLogin = useUserStore(authSelectors.isLogin);
   const checkGeminiChineseWarning = useGeminiChineseWarning();
+  // Live cost preview: shows the credit count inside the Sparkles button so
+  // the user knows what they're about to spend before pressing it. Server
+  // re-uses calculateCreditsAsync so this can never disagree with the bill.
+  const cost = useGenerationCostPreview({ images: imageNum, kind: 'image', model: currentModel });
 
   // Read prompt from query parameter
   const [promptParam, setPromptParam] = useQueryState('prompt');
@@ -150,6 +156,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             onKeyDown={handleKeyDown}
           />
           <Button
+            danger={cost.credits != null && !cost.sufficient}
             disabled={!value}
             icon={Sparkles}
             loading={isCreating}
@@ -159,13 +166,29 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
               fontWeight: 500,
               height: 64,
               minWidth: 64,
-              width: 64,
+              // When we have a cost number, widen the button so the icon
+              // + number fit on one row without crowding. Idle keeps the
+              // original 64×64 square so layout doesn't jump on load.
+              width: cost.credits != null ? 'auto' : 64,
+              paddingInline: cost.credits != null ? 14 : undefined,
             }}
             title={
-              isCreating ? t('generation.status.generating') : t('generation.actions.generate')
+              isCreating
+                ? t('generation.status.generating')
+                : cost.credits != null
+                  ? `${t('generation.actions.generate')} · ~${cost.credits} кр${
+                      cost.sufficient ? '' : ' (не хватает баланса)'
+                    }`
+                  : t('generation.actions.generate')
             }
             onClick={handleGenerate}
-          />
+          >
+            {/* Render the number alongside the icon. The Sparkles icon stays
+                visible via the `icon` prop above; this is just the suffix. */}
+            {cost.credits != null ? (
+              <span style={{ fontWeight: 600, marginInlineStart: 4 }}>~{cost.credits}</span>
+            ) : null}
+          </Button>
         </Flexbox>
       </ChatInput>
     </Flexbox>

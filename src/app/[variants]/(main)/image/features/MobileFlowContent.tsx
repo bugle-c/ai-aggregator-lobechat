@@ -10,6 +10,7 @@ import ImageUrlsUpload from '@/app/[variants]/(main)/image/_layout/ConfigPanel/c
 import ModelSelect from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ModelSelect';
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
+import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
 import { presetSelectors } from '@/store/image/slices/preset/selectors';
@@ -44,6 +45,9 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const parameters = useImageStore(imageGenerationConfigSelectors.parameters);
   const promptValue = (parameters?.prompt as string | undefined) ?? '';
   const aspect = (parameters?.aspectRatio as string | undefined) ?? null;
+  const currentModel = useImageStore(imageGenerationConfigSelectors.model);
+  const imageNum = useImageStore(imageGenerationConfigSelectors.imageNum);
+  const cost = useGenerationCostPreview({ images: imageNum, kind: 'image', model: currentModel });
 
   // The selected model may support a single reference image (img2img,
   // FLUX Kontext etc.) and/or multiple reference images. Surface these
@@ -148,7 +152,14 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
         type="button"
         style={{
           alignItems: 'center',
-          background: canGenerate ? '#c4ff4d' : 'var(--ant-color-bg-text-hover)',
+          // Highlight insufficient balance with a red CTA — clicking still
+          // works (server will return the canonical error), this is just a
+          // hint so the user can top up before submitting.
+          background: !canGenerate
+            ? 'var(--ant-color-bg-text-hover)'
+            : cost.credits != null && !cost.sufficient
+              ? '#ff7875'
+              : '#c4ff4d',
           border: 0,
           borderRadius: 12,
           color: canGenerate ? '#0a0a0a' : 'var(--ant-color-text-tertiary)',
@@ -164,6 +175,11 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
       >
         <Sparkles size={18} />
         {isGenerating ? 'Создаём…' : 'Создать'}
+        {cost.credits != null && !isGenerating ? (
+          <span style={{ fontWeight: 700, marginInlineStart: 2, opacity: 0.85 }}>
+            · ~{cost.credits} кр
+          </span>
+        ) : null}
       </button>
     </Flexbox>
   );

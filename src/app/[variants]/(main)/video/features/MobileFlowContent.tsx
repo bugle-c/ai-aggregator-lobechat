@@ -9,6 +9,7 @@ import FrameUpload from '@/app/[variants]/(main)/video/_layout/ConfigPanel/compo
 import ModelSelect from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/ModelSelect';
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
+import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
 import { useVideoStore } from '@/store/video';
 import { videoGenerationConfigSelectors } from '@/store/video/selectors';
 import { presetSelectors } from '@/store/video/slices/preset/selectors';
@@ -42,6 +43,14 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const promptValue = (parameters?.prompt as string | undefined) ?? '';
   const aspect = (parameters?.aspectRatio as string | undefined) ?? null;
   const duration = (parameters?.duration as number | undefined) ?? null;
+  const currentModel = useVideoStore(videoGenerationConfigSelectors.model);
+  // Default to 5s when the slider hasn't been touched yet — matches the
+  // common Wavespeed model default. Keeps the preview from flashing 0.
+  const cost = useGenerationCostPreview({
+    durationSeconds: duration ?? 5,
+    kind: 'video',
+    model: currentModel,
+  });
 
   // img2vid / frame-conditioned generation — surface uploaders when
   // the model schema supports them. `imageUrl` = start frame,
@@ -156,7 +165,11 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
         type="button"
         style={{
           alignItems: 'center',
-          background: canGenerate ? '#c4ff4d' : 'var(--ant-color-bg-text-hover)',
+          background: !canGenerate
+            ? 'var(--ant-color-bg-text-hover)'
+            : cost.credits != null && !cost.sufficient
+              ? '#ff7875'
+              : '#c4ff4d',
           border: 0,
           borderRadius: 12,
           color: canGenerate ? '#0a0a0a' : 'var(--ant-color-text-tertiary)',
@@ -172,6 +185,11 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
       >
         <Sparkles size={18} />
         {isGenerating ? 'Создаём…' : 'Создать'}
+        {cost.credits != null && !isGenerating ? (
+          <span style={{ fontWeight: 700, marginInlineStart: 2, opacity: 0.85 }}>
+            · ~{cost.credits} кр
+          </span>
+        ) : null}
       </button>
     </Flexbox>
   );

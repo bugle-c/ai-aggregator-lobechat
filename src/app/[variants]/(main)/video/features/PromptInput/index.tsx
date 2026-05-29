@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import VideoFreeQuotaInfo from '@/business/client/features/VideoFreeQuotaInfo';
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
+import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useUserStore } from '@/store/user';
@@ -19,6 +20,7 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 import { useVideoStore } from '@/store/video';
 import { createVideoSelectors } from '@/store/video/selectors';
 import { useVideoGenerationConfigParam } from '@/store/video/slices/generationConfig/hooks';
+import { videoGenerationConfigSelectors } from '@/store/video/slices/generationConfig/selectors';
 
 import PromptTitle from './Title';
 
@@ -51,6 +53,18 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isCreating = useVideoStore(createVideoSelectors.isCreating);
   const createVideo = useVideoStore((s) => s.createVideo);
   const isLogin = useUserStore(authSelectors.isLogin);
+  const currentModel = useVideoStore(videoGenerationConfigSelectors.model);
+  const videoParameters = useVideoStore(videoGenerationConfigSelectors.parameters);
+  // Wavespeed bills per second; pull duration straight from the param store.
+  // Fallback to 5 — the most common default across kling/seedance/veo/wan —
+  // so the preview shows a reasonable estimate even before the user touches
+  // the slider.
+  const durationSeconds = Number(videoParameters?.duration ?? 5) || 5;
+  const cost = useGenerationCostPreview({
+    durationSeconds,
+    kind: 'video',
+    model: currentModel,
+  });
 
   // Read prompt from query parameter
   const [promptParam, setPromptParam] = useQueryState('prompt');
@@ -118,6 +132,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
               onKeyDown={handleKeyDown}
             />
             <Button
+              danger={cost.credits != null && !cost.sufficient}
               disabled={!value}
               icon={Sparkles}
               loading={isCreating}
@@ -127,13 +142,24 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                 fontWeight: 500,
                 height: 64,
                 minWidth: 64,
-                width: 64,
+                width: cost.credits != null ? 'auto' : 64,
+                paddingInline: cost.credits != null ? 14 : undefined,
               }}
               title={
-                isCreating ? t('generation.status.generating') : t('generation.actions.generate')
+                isCreating
+                  ? t('generation.status.generating')
+                  : cost.credits != null
+                    ? `${t('generation.actions.generate')} · ~${cost.credits} кр${
+                        cost.sufficient ? '' : ' (не хватает баланса)'
+                      }`
+                    : t('generation.actions.generate')
               }
               onClick={handleGenerate}
-            />
+            >
+              {cost.credits != null ? (
+                <span style={{ fontWeight: 600, marginInlineStart: 4 }}>~{cost.credits}</span>
+              ) : null}
+            </Button>
           </Flexbox>
         </ChatInput>
         <VideoFreeQuotaInfo />
