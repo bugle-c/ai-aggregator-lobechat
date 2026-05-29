@@ -1,24 +1,82 @@
-import {
-  PRESET_VIDEO_ASPECT_RATIOS,
-  PRESET_VIDEO_RESOLUTIONS,
-  type VideoModelParamsSchema,
-} from '../standard-parameters/video';
+import { type VideoModelParamsSchema } from '../standard-parameters/video';
 import type { AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
 
-// Kuaishou Kling 2.6/3.0 Pro accept a strict duration enum [5, 10] and the
-// canonical aspect-ratio enum; sending anything else (e.g. duration=8 or
-// aspectRatio="adaptive") makes WaveSpeed 400 the request before it ever
-// reaches Kuaishou. Without an explicit per-model schema the UI falls back
-// to seedance15ProParams (4..12 slider, "adaptive" default) and lets the
-// user pick illegal combos. Both Kling tiers share the same constraints.
+// Per-model parameter schemas for WaveSpeed-routed video models.
+//
+// Why we override: without per-model `parameters`, the picker UI inherits
+// `seedance15ProParams` (4..12 duration slider, "adaptive" aspect ratio).
+// Most of these models 400 on values the slider exposes, e.g. Kling rejects
+// duration=8 (accepts only [5, 10]), Seedance API rejects aspect_ratio
+// outside {16:9, 9:16} despite its docs advertising six, Veo accepts only
+// {4, 6, 8}. Trusting the observed 400s over docs.
+//
+// Param-meta zod schema (standard-parameters/video.ts) expresses enums for
+// aspectRatio/resolution but only {min, max, step} for duration — we emulate
+// enums there via stride: e.g. {min:5, max:10, step:5} ≡ enum [5, 10].
+//
+// References: real 400s captured 2026-05-17 + Wavespeed docs research
+// (wavespeed.ai/models/<id>) 2026-05-29.
+
+// Kling 2.6/3.0 Pro — duration enum [5,10], 1080p-native, audio optional.
 const klingProParams: VideoModelParamsSchema = {
-  aspectRatio: { default: '16:9', enum: PRESET_VIDEO_ASPECT_RATIOS },
+  aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1'] },
   duration: { default: 5, max: 10, min: 5, step: 5 },
   endImageUrl: { default: null, maxFileSize: 30 * 1024 * 1024, requiresImageUrl: true },
   generateAudio: { default: false },
   imageUrl: { default: null, maxFileSize: 30 * 1024 * 1024 },
   prompt: { default: '' },
-  resolution: { default: '1080p', enum: PRESET_VIDEO_RESOLUTIONS },
+  resolution: { default: '1080p', enum: ['1080p'] },
+  seed: { default: null },
+};
+
+// Seedance 2.0 / 2.0 Fast — API ENFORCES aspect_ratio ∈ {16:9, 9:16} even
+// though docs list six. Real 400 captured 2026-05-17. Duration is a free
+// 4..15 slider; resolution selectable.
+const seedance20Params: VideoModelParamsSchema = {
+  aspectRatio: { default: '16:9', enum: ['16:9', '9:16'] },
+  duration: { default: 5, max: 15, min: 4, step: 1 },
+  endImageUrl: { default: null, maxFileSize: 30 * 1024 * 1024, requiresImageUrl: true },
+  generateAudio: { default: true },
+  imageUrl: { default: null, maxFileSize: 30 * 1024 * 1024 },
+  prompt: { default: '' },
+  resolution: { default: '720p', enum: ['480p', '720p', '1080p'] },
+  seed: { default: null },
+};
+
+// Google Veo 3.1 / Veo 3.1 Fast — duration enum [4,6,8], fixed 24 FPS,
+// 1080p tier supported. Native audio.
+const veo31Params: VideoModelParamsSchema = {
+  aspectRatio: { default: '16:9', enum: ['16:9', '9:16'] },
+  duration: { default: 8, max: 8, min: 4, step: 2 },
+  endImageUrl: { default: null, maxFileSize: 30 * 1024 * 1024, requiresImageUrl: true },
+  generateAudio: { default: true },
+  imageUrl: { default: null, maxFileSize: 30 * 1024 * 1024 },
+  prompt: { default: '' },
+  resolution: { default: '1080p', enum: ['720p', '1080p'] },
+  seed: { default: null },
+};
+
+// MiniMax Hailuo 02 Pro — 1080p-native, 6s fixed length (only Standard
+// tier offers 10s, this is Pro). Docs page partially unreachable, schema
+// inferred conservatively. Picker shows the duration field as locked.
+const hailuo02ProParams: VideoModelParamsSchema = {
+  aspectRatio: { default: '16:9', enum: ['16:9', '9:16'] },
+  duration: { default: 6, max: 6, min: 6, step: 1 },
+  generateAudio: { default: false },
+  imageUrl: { default: null, maxFileSize: 30 * 1024 * 1024 },
+  prompt: { default: '' },
+  resolution: { default: '1080p', enum: ['1080p'] },
+  seed: { default: null },
+};
+
+// Alibaba Wan 2.7 — duration enum [5,10,15], no audio generation (its
+// audio_url is an input guide, not output).
+const wan27Params: VideoModelParamsSchema = {
+  aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1'] },
+  duration: { default: 5, max: 15, min: 5, step: 5 },
+  imageUrl: { default: null, maxFileSize: 30 * 1024 * 1024 },
+  prompt: { default: '' },
+  resolution: { default: '720p', enum: ['720p', '1080p'] },
   seed: { default: null },
 };
 
@@ -373,6 +431,7 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     displayName: 'Veo 3.1 Fast',
     enabled: true,
     id: 'google/veo3.1-fast/text-to-video',
+    parameters: veo31Params,
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.12, strategy: 'fixed', unit: 'second' }],
     },
@@ -383,6 +442,7 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     displayName: 'Veo 3.1',
     enabled: true,
     id: 'google/veo3.1/text-to-video',
+    parameters: veo31Params,
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.4, strategy: 'fixed', unit: 'second' }],
     },
@@ -415,6 +475,7 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     displayName: 'Seedance 2.0 Fast',
     enabled: true,
     id: 'bytedance/seedance-2.0-fast/text-to-video',
+    parameters: seedance20Params,
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.033, strategy: 'fixed', unit: 'second' }],
     },
@@ -425,6 +486,7 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     displayName: 'Hailuo 02 Pro',
     enabled: true,
     id: 'minimax/minimax-hailuo-02-pro',
+    parameters: hailuo02ProParams,
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.08, strategy: 'fixed', unit: 'second' }],
     },
@@ -435,15 +497,20 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     displayName: 'Wan 2.7',
     enabled: true,
     id: 'alibaba/wan-2.7/text-to-video',
+    parameters: wan27Params,
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
     },
     type: 'video',
   },
   {
-    description: 'Runway Gen-4 Turbo — cost-effective 720p generation.',
+    description: 'Runway Gen-4 Turbo — image-to-video only (requires input image).',
     displayName: 'Runway Gen-4 Turbo',
-    enabled: true,
+    // Disabled in the T2V picker as of 2026-05-29: Wavespeed's gen-4-turbo
+    // endpoint is image-to-video only and 400s on any text-only call. Will be
+    // re-enabled once we wire it through the I2V auto-route path used by
+    // Seedance/Kling paired-endpoint logic.
+    enabled: false,
     id: 'runwayml/gen-4-turbo',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
@@ -451,9 +518,12 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     type: 'video',
   },
   {
-    description: 'Runway Aleph — SOTA video-to-video editing (relight, restyle, inpaint).',
+    description: 'Runway Aleph — video-to-video editing (requires input video).',
     displayName: 'Runway Aleph',
-    enabled: true,
+    // Disabled in the T2V picker as of 2026-05-29: Aleph is V2V — requires a
+    // source video URL/upload, which our chat-input flow can't supply. Belongs
+    // in a dedicated video-edit surface, not the text-to-video gallery.
+    enabled: false,
     id: 'runwayml/aleph',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.18, strategy: 'fixed', unit: 'second' }],
@@ -465,6 +535,7 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     displayName: 'Seedance 2.0',
     enabled: true,
     id: 'bytedance/seedance-2.0/text-to-video',
+    parameters: seedance20Params,
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.08, strategy: 'fixed', unit: 'second' }],
     },

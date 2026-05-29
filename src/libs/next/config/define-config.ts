@@ -350,10 +350,18 @@ export function defineConfig(config: CustomNextConfig) {
     // when external packages in dev mode with turbopack, this config will lead to bundle error
     // @napi-rs/canvas is a native module that can't be bundled by Turbopack
     // pdfjs-dist uses @napi-rs/canvas for DOMMatrix polyfill in Node.js environment
+    // ffmpeg-static MUST be external — its `index.js` returns a __dirname-relative
+    // path to the binary. When Next.js bundles the require, __dirname becomes the
+    // bundle location (e.g. `.next/server/app/(backend)/api/webhooks/video/[provider]/`)
+    // and `spawn ENOENT` kills every successful WaveSpeed video webhook. The
+    // outputFileTracingIncludes hint in next.config.ts already ships the binary to
+    // `standalone/node_modules/ffmpeg-static/`, but only an external require resolves
+    // there at runtime.
     serverExternalPackages: config.serverExternalPackages ?? [
       'pdfkit',
       '@napi-rs/canvas',
       'pdfjs-dist',
+      'ffmpeg-static',
     ],
 
     transpilePackages: ['mermaid', 'better-auth-harmony'],
