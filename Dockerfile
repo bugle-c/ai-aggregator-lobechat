@@ -141,6 +141,13 @@ COPY --from=builder /app/scripts/migrateServerDB/errorHint.js /app/errorHint.js
 COPY --from=builder /deps/node_modules/.pnpm /app/node_modules/.pnpm
 COPY --from=builder /deps/node_modules/pg /app/node_modules/pg
 COPY --from=builder /deps/node_modules/drizzle-orm /app/node_modules/drizzle-orm
+# ffmpeg-static is required by the video webhook to extract dimensions/thumbnail.
+# Next.js' outputFileTracingIncludes only ships the ~76MB binary itself, not
+# the package's index.js/package.json, so `require('ffmpeg-static')` resolves
+# to "Cannot find module" at runtime when the package is marked
+# serverExternalPackages. Copy the whole package directory explicitly so the
+# require returns the path to the binary that's already there.
+COPY --from=builder /app/node_modules/ffmpeg-static /app/node_modules/ffmpeg-static
 
 # Copy server launcher and shared scripts
 COPY --from=builder /app/scripts/serverLauncher/startServer.js /app/startServer.js
