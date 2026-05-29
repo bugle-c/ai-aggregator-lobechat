@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { App, Segmented } from 'antd';
+import { Segmented } from 'antd';
 import { Settings, Sparkles } from 'lucide-react';
 import { memo } from 'react';
 
@@ -11,6 +11,7 @@ import ModelSelect from '@/app/[variants]/(main)/image/_layout/ConfigPanel/compo
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
+import { useImageGenerate } from '@/features/Generators/useImageGenerate';
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
 import { presetSelectors } from '@/store/image/slices/preset/selectors';
@@ -34,13 +35,11 @@ interface Props {
  *   5. Big yellow Generate button (disabled when prompt empty)
  */
 const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
-  const { message } = App.useApp();
   const url = useFlowUrlState('presets');
 
   const preset = useImageStore(presetSelectors.currentPreset);
   const clearPreset = useImageStore((s) => s.clearPreset);
   const isGenerating = useImageStore((s) => s.isCreating);
-  const createImage = useImageStore((s) => s.createImage);
   const setParamOnInput = useImageStore((s) => s.setParamOnInput);
   const parameters = useImageStore(imageGenerationConfigSelectors.parameters);
   const promptValue = (parameters?.prompt as string | undefined) ?? '';
@@ -48,6 +47,7 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   const currentModel = useImageStore(imageGenerationConfigSelectors.model);
   const imageNum = useImageStore(imageGenerationConfigSelectors.imageNum);
   const cost = useGenerationCostPreview({ images: imageNum, kind: 'image', model: currentModel });
+  const generate = useImageGenerate();
 
   // The selected model may support a single reference image (img2img,
   // FLUX Kontext etc.) and/or multiple reference images. Surface these
@@ -63,18 +63,12 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
 
   const handleGenerate = async () => {
     if (!canGenerate) return;
-    try {
-      // Switch to feed + close the create sheet so the user sees the
-      // embedded ResourceExplorer with their previous gens and the
-      // skeleton tile for the in-flight one.
-      url.setTab('feed');
-      url.setView(undefined);
-      message.success({ content: 'Генерация запущена', duration: 1.5 });
-      void createImage();
-      onAfterGenerate();
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : 'Не удалось создать изображение');
-    }
+    // The hook handles tab switch + toast + Chinese warning + createImage.
+    // Mobile-only extras: close the create sheet so the user lands on the
+    // gallery with the in-flight skeleton tile.
+    url.setView(undefined);
+    await generate(promptValue);
+    onAfterGenerate();
   };
 
   return (

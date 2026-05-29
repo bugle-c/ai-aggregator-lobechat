@@ -5,6 +5,7 @@ import { memo } from 'react';
 
 import FlowSidebar from '@/features/Generators/FlowSidebar';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
+import { useVideoGenerate } from '@/features/Generators/useVideoGenerate';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useVideoStore } from '@/store/video';
 import { videoGenerationConfigSelectors } from '@/store/video/slices/generationConfig/selectors';
@@ -22,9 +23,10 @@ const VideoPage = memo(() => {
   const preset = useVideoStore(presetSelectors.currentPreset);
   const clearPreset = useVideoStore((s) => s.clearPreset);
   const isGenerating = useVideoStore((s) => s.isCreating);
-  const createVideo = useVideoStore((s) => s.createVideo);
   const currentModel = useVideoStore(videoGenerationConfigSelectors.model);
   const videoParameters = useVideoStore(videoGenerationConfigSelectors.parameters);
+  const promptValue = (videoParameters?.prompt as string | undefined) ?? '';
+  const generate = useVideoGenerate();
   // Pull current duration out of the param store. 5s is the most common
   // default across kling/seedance/veo/wan so we land on a sensible
   // estimate before the slider is touched.
@@ -48,7 +50,7 @@ const VideoPage = memo(() => {
         preset={preset}
         promptInput={<PromptInput />}
         onClearPreset={clearPreset}
-        onGenerate={() => createVideo()}
+        onGenerate={() => generate(promptValue)}
       />
       <Flexbox flex={1} height={'100%'}>
         <PlanGateBanner />

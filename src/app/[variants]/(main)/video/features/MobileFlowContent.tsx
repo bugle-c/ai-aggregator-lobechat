@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { App, Segmented } from 'antd';
+import { Segmented } from 'antd';
 import { Settings, Sparkles } from 'lucide-react';
 import { memo } from 'react';
 
@@ -10,6 +10,7 @@ import ModelSelect from '@/app/[variants]/(main)/video/_layout/ConfigPanel/compo
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
+import { useVideoGenerate } from '@/features/Generators/useVideoGenerate';
 import { useVideoStore } from '@/store/video';
 import { videoGenerationConfigSelectors } from '@/store/video/selectors';
 import { presetSelectors } from '@/store/video/slices/preset/selectors';
@@ -31,15 +32,14 @@ interface Props {
  * Mirror of image/MobileFlowContent + duration_sec selector.
  */
 const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
-  const { message } = App.useApp();
   const url = useFlowUrlState('presets');
 
   const preset = useVideoStore(presetSelectors.currentPreset);
   const clearPreset = useVideoStore((s) => s.clearPreset);
   const isGenerating = useVideoStore((s) => s.isCreating);
-  const createVideo = useVideoStore((s) => s.createVideo);
   const setParamOnInput = useVideoStore((s) => s.setParamOnInput);
   const parameters = useVideoStore(videoGenerationConfigSelectors.parameters);
+  const generate = useVideoGenerate();
   const promptValue = (parameters?.prompt as string | undefined) ?? '';
   const aspect = (parameters?.aspectRatio as string | undefined) ?? null;
   const duration = (parameters?.duration as number | undefined) ?? null;
@@ -66,18 +66,12 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
 
   const handleGenerate = async () => {
     if (!canGenerate) return;
-    try {
-      // Switch to feed + close the create sheet so the user lands
-      // on the embedded gallery with their previous videos + skeleton
-      // tile for the in-flight one.
-      url.setTab('feed');
-      url.setView(undefined);
-      message.success({ content: 'Генерация запущена', duration: 1.5 });
-      void createVideo();
-      onAfterGenerate();
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : 'Не удалось создать видео');
-    }
+    // Mobile-only extra: close the create sheet so the user lands on
+    // the gallery with the in-flight skeleton tile. The shared hook
+    // handles tab switch + toast + createVideo.
+    url.setView(undefined);
+    await generate(promptValue);
+    onAfterGenerate();
   };
 
   return (

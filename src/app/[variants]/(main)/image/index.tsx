@@ -5,6 +5,7 @@ import { memo } from 'react';
 
 import FlowSidebar from '@/features/Generators/FlowSidebar';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
+import { useImageGenerate } from '@/features/Generators/useImageGenerate';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/slices/generationConfig/selectors';
@@ -21,13 +22,18 @@ const ImagePage = memo(() => {
   const preset = useImageStore(presetSelectors.currentPreset);
   const clearPreset = useImageStore((s) => s.clearPreset);
   const isGenerating = useImageStore((s) => s.isCreating);
-  const createImage = useImageStore((s) => s.createImage);
   const currentModel = useImageStore(imageGenerationConfigSelectors.model);
   const imageNum = useImageStore(imageGenerationConfigSelectors.imageNum);
+  // Read the live prompt for the generate hook — it does the Chinese-input
+  // warning per current model + prompt content. Falls back to '' when the
+  // textarea is empty (the hook's login check still runs).
+  const parameters = useImageStore(imageGenerationConfigSelectors.parameters);
+  const promptValue = (parameters?.prompt as string | undefined) ?? '';
+  const generate = useImageGenerate();
   // Live cost preview drives the sidebar CTA label "Создать · ~128 кр" and
   // colours it red when the user can't afford the current params. Single
   // source of truth for the desktop button — PromptInput's Sparkles button
-  // stays plain so there's only one place showing the price.
+  // is gone, leaving only this CTA.
   const cost = useGenerationCostPreview({ images: imageNum, kind: 'image', model: currentModel });
 
   if (isMobile) return <ImageWorkspaceMobile />;
@@ -43,7 +49,7 @@ const ImagePage = memo(() => {
         preset={preset}
         promptInput={<PromptInput />}
         onClearPreset={clearPreset}
-        onGenerate={() => createImage()}
+        onGenerate={() => generate(promptValue)}
       />
       <Flexbox flex={1} height={'100%'}>
         <FlowMainArea />
