@@ -11,7 +11,15 @@ import PresetThumbCard from './PresetThumbCard';
 interface Props {
   /** Whatever extra widgets the modality wants — image-upload, settings ⚙, model selector. */
   controls: ReactNode;
+  /**
+   * Live credit-cost estimate from useGenerationCostPreview. When provided,
+   * the CTA label becomes "Создать · ~N кр" and the button turns red if
+   * balance is insufficient. Undefined → label stays plain "Создать"
+   * (e.g. on first paint before the quote query resolves).
+   */
   creditCost?: number;
+  /** Set to false to hint the user lacks balance — recolours the CTA red. */
+  creditSufficient?: boolean;
   generateLabel?: string;
   isGenerating: boolean;
   modality: PresetModality;
@@ -34,6 +42,7 @@ const FlowSidebar = memo<Props>(
   ({
     controls,
     creditCost,
+    creditSufficient = true,
     generateLabel,
     isGenerating,
     modality,
@@ -43,6 +52,7 @@ const FlowSidebar = memo<Props>(
     promptInput,
   }) => {
     const label = generateLabel ?? (modality === 'video' ? 'Создать видео' : 'Создать');
+    const insufficient = creditCost !== undefined && !creditSufficient;
 
     return (
       <Flexbox
@@ -61,13 +71,16 @@ const FlowSidebar = memo<Props>(
         {promptInput}
         <Button
           block
+          danger={insufficient}
           loading={isGenerating}
           size="large"
           style={{ marginBlockStart: 'auto' }}
           type="primary"
           onClick={onGenerate}
         >
-          {creditCost !== undefined ? `${label}: ${creditCost} кредитов` : label}
+          {creditCost !== undefined
+            ? `${label} · ~${creditCost} кр${insufficient ? ' (не хватает)' : ''}`
+            : label}
         </Button>
       </Flexbox>
     );
