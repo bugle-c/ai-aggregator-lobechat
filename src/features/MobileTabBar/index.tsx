@@ -1,10 +1,9 @@
 import { Icon } from '@lobehub/ui';
 import { type TabBarProps } from '@lobehub/ui/mobile';
 import { TabBar } from '@lobehub/ui/mobile';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import { Gem, ImageIcon, MessageSquare, User, Video } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useShowTabBar } from '@/features/MobileGlobalHeader/useShowTabBar';
@@ -114,61 +113,46 @@ export default memo<Props>(({ className, tabBarKey }) => {
     [t, tSub, router],
   );
 
-  // SSR-safe portal target. We MUST render the tab bar OUTSIDE the
-  // antd Drawer's blur wrapper because Drawer applies `filter: blur(3px)`
-  // to the background container when open. CSS spec: `filter` (and
-  // `transform`, `will-change: transform`, `perspective`, `contain:
-  // paint/strict/layout`) creates a NEW containing block for
-  // `position: fixed` descendants — so a tab bar nested inside the
-  // blurred subtree gets anchored to that blurred wrapper instead of
-  // the viewport. With CloudBanner on top (41px high), the tab bar
-  // ends up 41px below the viewport edge, invisible. When the Drawer
-  // opens/closes, the blur transitions in 0.2s and the tab bar visibly
-  // jumps. We target `.ant-app` (NOT document.body) because:
-  //   1. `.ant-app` is the parent of the blur subtree — portaling here
-  //      makes us a sibling of the blur wrapper, escaping its
-  //      containing block.
-  //   2. `.ant-app` is the antd CSS-in-JS theme scope. CSS vars like
-  //      `--ant-color-bg-container` are declared inside it, so portaling
-  //      to body would resolve those vars to `transparent` and the bar
-  //      would visually melt into the page.
-  // Fallback to body if .ant-app isn't mounted yet (very early render);
-  // background colors are hard-coded so this fallback still looks right.
-  // See https://drafts.csswg.org/css-transforms-1/#containing-block-fixpos
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    setPortalTarget(document.querySelector('.ant-app') ?? document.body);
-  }, []);
+  // The bar is now a regular flex child of MobileShell — no portal,
+  // no `position: fixed`, no `transform`/`will-change`/`contain`
+  // tricks. CSS variables resolve normally because we live inside
+  // .ant-app, and the visual style uses antd-style's useTheme() so
+  // colors are real hex strings (no var() resolution race
+  // conditions).
+  const theme = useTheme();
 
-  // Hide on chat threads (`/chat/[topicId]`) so messages have full
-  // vertical space. Visible everywhere else, including settings sub-pages.
-  if (!visible || !portalTarget) return null;
+  // Hide on chat threads (/agent/<id>, /group/<id>, /chat/<id>)
+  // so messages get full vertical space; visible everywhere else.
+  if (!visible) return null;
 
-  // Pin to viewport bottom as an overlay so it doesn't shrink the
-  // content area. Pages that need to avoid hiding the last bit of
-  // content under the bar should add `paddingBlockEnd` accordingly
-  // (~72px = 56px bar + 16px safe gap).
-  return createPortal(
+  return (
     <div
+      data-testid="mobile-tabbar"
       style={{
-        // Use the antd CSS var with a hard-coded fallback so the bar
-        // never melts into the page even if the var fails to resolve
-        // (e.g., portaled outside theme scope during a partial mount).
-        backgroundColor: 'var(--ant-color-bg-container, #fff)',
-        borderBlockStart: '1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.06))',
-        bottom: 0,
-        // Promote to its own compositing layer — paint stays stable
-        // during background reflow (URL bar show/hide on iOS Safari).
-        contain: 'layout style paint',
-        insetInline: 0,
-        position: 'fixed',
-        transform: 'translateZ(0)',
-        willChange: 'transform',
-        zIndex: 50,
+        backgroundColor: theme.colorBgContainer,
+        borderBlockStart: `1px solid ${theme.colorBorderSecondary}`,
+        // Elevation that adapts to theme. In light mode the spec's
+        // 0 -2px 12px rgba(0,0,0,0.08) lifts the bar; in dark mode
+        // the same RGBA shadow is invisible (black-on-near-black),
+        // so we use the antd token `boxShadowSecondary` which is
+        // pre-tuned per theme. Falls back to a hardcoded value only
+        // if the token is missing (very old antd, shouldn't happen).
+        boxShadow: theme.boxShadowSecondary || '0 -2px 12px rgba(0, 0, 0, 0.08)',
+        // iOS notch / home-indicator safe area. Padding is on the
+        // wrapper (not the inner <TabBar>) so the background color
+        // extends all the way to the bottom edge of the screen.
+        paddingBlockEnd: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
-      <TabBar safeArea activeKey={activeKey} className={className} items={items} />
-    </div>,
-    portalTarget,
+      <TabBar
+        activeKey={activeKey}
+        className={className}
+        items={items}
+        // Wrapper provides the safe-area inset; lobehub's safeArea
+        // mode would put a transparent strip inside <TabBar>, which
+        // would show whatever's behind it if we ever had a Drawer
+        // sliding under the bar.
+      />
+    </div>
   );
 });
