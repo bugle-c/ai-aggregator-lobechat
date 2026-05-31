@@ -31,6 +31,7 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'claude-sonnet-4-5-20250929': 'anthropic/claude-sonnet-4.5',
   'claude-sonnet-4-20250514': 'anthropic/claude-sonnet-4',
   'claude-3-7-sonnet-20250219': 'anthropic/claude-3.7-sonnet',
+  'claude-opus-4-8': 'anthropic/claude-opus-4.8',
   'claude-opus-4-6': 'anthropic/claude-opus-4.6',
   'claude-opus-4-5-20251101': 'anthropic/claude-opus-4.5',
   'claude-opus-4-1-20250805': 'anthropic/claude-opus-4.1',
@@ -38,6 +39,9 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'claude-haiku-4-5-20251001': 'anthropic/claude-haiku-4.5',
   'claude-3-5-haiku-20241022': 'anthropic/claude-3.5-haiku',
   // OpenAI — already correct
+  'gpt-5.5': 'openai/gpt-5.5',
+  'gpt-5.4': 'openai/gpt-5.4',
+  'gpt-5.4-mini': 'openai/gpt-5.4-mini',
   'gpt-5.2': 'openai/gpt-5.2',
   'gpt-5.1': 'openai/gpt-5.1',
   'gpt-5': 'openai/gpt-5',
@@ -54,6 +58,7 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'o3': 'openai/o3',
   'o4-mini': 'openai/o4-mini',
   // Google
+  'gemini-3.5-flash': 'google/gemini-3.5-flash',
   'gemini-3.1-pro-preview': 'google/gemini-3.1-pro-preview',
   // OpenRouter only ships `gemini-3.1-pro-preview` — alias the older catalog
   // id to it so existing chats don't 400 on selector change.
@@ -67,7 +72,10 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   // DeepSeek — `deepseek-chat`/`deepseek-reasoner` are retired on OpenRouter.
   'deepseek-chat': 'deepseek/deepseek-v3.2',
   'deepseek-reasoner': 'deepseek/deepseek-v3.2-speciale',
+  'deepseek-v4-pro': 'deepseek/deepseek-v4-pro',
+  'deepseek-v4-flash': 'deepseek/deepseek-v4-flash',
   // xAI
+  'grok-4-20': 'x-ai/grok-4.20',
   'grok-4': 'x-ai/grok-4',
   // Moonshot
   'kimi-k2.5': 'moonshotai/kimi-k2.5',

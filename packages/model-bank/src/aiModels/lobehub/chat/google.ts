@@ -67,6 +67,33 @@ export const googleChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'Gemini 3.5 Flash — fast and affordable Gemini for everyday chat and agent tasks. 1M-token context, multimodal input.',
+    displayName: 'Gemini 3.5 Flash',
+    enabled: true,
+    id: 'gemini-3.5-flash',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-05-10',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
       video: true,
       vision: true,
     },

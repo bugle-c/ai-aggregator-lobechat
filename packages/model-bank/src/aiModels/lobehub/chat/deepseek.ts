@@ -4,6 +4,45 @@ export const deepseekChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'DeepSeek V4 Pro — flagship reasoning model with a 1M-token context. Strong on coding, math and agent tasks at a fraction of the cost of frontier closed models.',
+    displayName: 'DeepSeek V4 Pro',
+    enabled: true,
+    id: 'deepseek-v4-pro',
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.43, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.87, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-20',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'DeepSeek V4 Flash — the cheapest member of the V4 family, optimised for fast everyday chat. 1M-token context.',
+    displayName: 'DeepSeek V4 Flash',
+    enabled: true,
+    id: 'deepseek-v4-flash',
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-20',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
     },
     contextWindowTokens: 65_536,
     description:
