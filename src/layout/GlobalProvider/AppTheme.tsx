@@ -42,6 +42,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     @media (device-width >= 576px) {
       overflow: hidden;
     }
+
+    /* MobileShell takes 100dvh itself on small viewports; releasing
+       .app from its 100dvh lock prevents a nested-100dvh fight where
+       the shell can't shrink to leave room for the tab bar. Desktop
+       unchanged (the @media (device-width >= 576px) block above still
+       applies). */
+    @media (width <= 575px) {
+      overflow: visible;
+      min-height: 0;
+      max-height: none;
+    }
   `,
   // scrollbar-width and scrollbar-color are supported from Chrome 121
   // https://developer.mozilla.org/en-US/docs/Web/CSS/scrollbar-color

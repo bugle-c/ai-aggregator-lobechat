@@ -4,6 +4,14 @@ import { createStyles } from 'antd-style';
 import { type FC, type PropsWithChildren } from 'react';
 
 /**
+ * Name of the CSS custom property the layout sets on `.ant-app`
+ * when CloudBanner is visible, so the shell can `calc(100dvh - var(...))`.
+ * Exported so the producer (_layout/index.tsx) and consumer (this
+ * file's stylesheet) reference the same string.
+ */
+export const MOBILE_SHELL_BANNER_OFFSET_VAR = '--mobile-shell-banner-offset';
+
+/**
  * Mobile app shell — replaces the position-fixed overlay TabBar
  * pattern with a proper flex column. See
  * docs/superpowers/specs/2026-06-01-mobile-shell-design.md.
@@ -35,7 +43,8 @@ const useStyles = createStyles(({ css }) => ({
        today, 41px) from the shell so the bar lands ON the viewport
        bottom, not 41px below it. The caller sets
        --mobile-shell-banner-offset on .ant-app whenever such chrome
-       is rendered above us; fallback 0px when nothing is. */
+       is rendered above us; fallback 0px when nothing is.
+       See MOBILE_SHELL_BANNER_OFFSET_VAR. */
     height: calc(100dvh - var(--mobile-shell-banner-offset, 0px));
   `,
   scrollArea: css`
@@ -53,7 +62,6 @@ const useStyles = createStyles(({ css }) => ({
        - overflow-y: auto — own its scrollbar
     */
     flex: 1;
-
     min-height: 0;
   `,
 }));

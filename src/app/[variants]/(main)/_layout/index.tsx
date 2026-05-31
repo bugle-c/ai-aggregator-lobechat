@@ -38,7 +38,7 @@ import DesktopHome from '../home';
 import DesktopHomeLayout from '../home/_layout';
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
 import DesktopLayoutContainer from './DesktopLayoutContainer';
-import { MobileShell } from './MobileShell';
+import { MOBILE_SHELL_BANNER_OFFSET_VAR, MobileShell } from './MobileShell';
 import RegisterHotkeys from './RegisterHotkeys';
 import { styles } from './style';
 
@@ -69,9 +69,9 @@ const Layout: FC = () => {
     const antApp = document.querySelector<HTMLElement>('.ant-app');
     if (!antApp) return;
     const offset = showCloudPromotion ? `${BANNER_HEIGHT}px` : '0px';
-    antApp.style.setProperty('--mobile-shell-banner-offset', offset);
+    antApp.style.setProperty(MOBILE_SHELL_BANNER_OFFSET_VAR, offset);
     return () => {
-      antApp.style.removeProperty('--mobile-shell-banner-offset');
+      antApp.style.removeProperty(MOBILE_SHELL_BANNER_OFFSET_VAR);
     };
   }, [isMobile, showCloudPromotion]);
 
