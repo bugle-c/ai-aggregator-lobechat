@@ -26,19 +26,6 @@ import { sendAlert } from '@/server/services/alerts';
 
 const WAVESPEED_API_KEY = process.env.WAVESPEED_API_KEY;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const USD_TO_RUB = Number.parseFloat(process.env.USD_TO_RUB ?? '90');
-
-interface WaveSpeedUsageResp {
-  data?: {
-    daily_usage?: Array<{ amount: number; count: number; date: string }>;
-    per_model_usage?: Array<{
-      model_uuid: string;
-      total_cost: number;
-      total_count: number;
-    }>;
-    summary?: { total_cost: number; total_requests: number };
-  };
-}
 
 interface OpenRouterCreditsResp {
   data?: { total_credits?: number; total_usage?: number };
@@ -162,7 +149,7 @@ export async function POST(req: Request) {
   const revPM = Number(revPrevMtd[0]?.rub ?? 0);
   const momRatio = revPM > 0 ? revM / revPM : null;
 
-  // ===== 2. API costs — OpenRouter (sum usage_logs.cost_usd) =====
+  // ===== 2. API real cost — sum usage_logs.provider_cost_rub by bucket =====
   // Bucketing mirrors sync-invoices: exclude WaveSpeed + local + HF.
   const isWavespeedSql = drizzleSql`(
        ${usageLogs.model} LIKE 'wavespeed-ai/%'
@@ -182,67 +169,69 @@ export async function POST(req: Request) {
   const isHfSql = drizzleSql`(${usageLogs.model} LIKE 'hf.co/%' AND NOT ${isLocalSql})`;
   const isOpenRouterSql = drizzleSql`(NOT ${isWavespeedSql} AND NOT ${isHfSql} AND NOT ${isLocalSql})`;
 
-  const [orYesterday, orMtd, topModelsY] = await Promise.all([
-    db
-      .select({ sum: drizzleSql<number>`COALESCE(SUM(${usageLogs.costUsd}::numeric),0)::float8` })
-      .from(usageLogs)
-      .where(and(gte(usageLogs.createdAt, yStart), lt(usageLogs.createdAt, yEnd), isOpenRouterSql)),
-    db
-      .select({ sum: drizzleSql<number>`COALESCE(SUM(${usageLogs.costUsd}::numeric),0)::float8` })
-      .from(usageLogs)
-      .where(
-        and(gte(usageLogs.createdAt, monthStart), lt(usageLogs.createdAt, yEnd), isOpenRouterSql),
-      ),
-    db
-      .select({
-        model: usageLogs.model,
-        cost: drizzleSql<number>`COALESCE(SUM(${usageLogs.costUsd}::numeric),0)::float8`,
-        cnt: drizzleSql<number>`COUNT(*)::int`,
-      })
-      .from(usageLogs)
-      .where(and(gte(usageLogs.createdAt, yStart), lt(usageLogs.createdAt, yEnd)))
-      .groupBy(usageLogs.model)
-      .orderBy(desc(drizzleSql`SUM(${usageLogs.costUsd}::numeric)`))
-      .limit(3),
-  ]);
+  // Two parallel sums per period: `provider_cost_rub` (real cost we paid
+  // upstream) and `cost_rub` (credits we charged the user — already includes
+  // the tier multiplier). Earlier iterations used cost_usd which is the same
+  // post-markup value in USD; it inflated "API spend" by 4-5× and hid the
+  // real margin. See docs/plans/2026-06-01-daily-report-real-cost-design.md.
+  const [realCostYesterday, realCostMtd, creditsMtd, creditsYesterday, topModelsY] =
+    await Promise.all([
+      db
+        .select({
+          wsRub: drizzleSql<number>`COALESCE(SUM(CASE WHEN ${isWavespeedSql} THEN ${usageLogs.providerCostRub}::numeric ELSE 0 END),0)::int`,
+          orRub: drizzleSql<number>`COALESCE(SUM(CASE WHEN ${isOpenRouterSql} THEN ${usageLogs.providerCostRub}::numeric ELSE 0 END),0)::int`,
+        })
+        .from(usageLogs)
+        .where(and(gte(usageLogs.createdAt, yStart), lt(usageLogs.createdAt, yEnd))),
+      db
+        .select({
+          wsRub: drizzleSql<number>`COALESCE(SUM(CASE WHEN ${isWavespeedSql} THEN ${usageLogs.providerCostRub}::numeric ELSE 0 END),0)::int`,
+          orRub: drizzleSql<number>`COALESCE(SUM(CASE WHEN ${isOpenRouterSql} THEN ${usageLogs.providerCostRub}::numeric ELSE 0 END),0)::int`,
+        })
+        .from(usageLogs)
+        .where(and(gte(usageLogs.createdAt, monthStart), lt(usageLogs.createdAt, yEnd))),
+      db
+        .select({
+          credits: drizzleSql<number>`COALESCE(SUM(${usageLogs.costRub}::numeric),0)::int`,
+          provider: drizzleSql<number>`COALESCE(SUM(${usageLogs.providerCostRub}::numeric),0)::int`,
+        })
+        .from(usageLogs)
+        .where(and(gte(usageLogs.createdAt, monthStart), lt(usageLogs.createdAt, yEnd))),
+      db
+        .select({
+          credits: drizzleSql<number>`COALESCE(SUM(${usageLogs.costRub}::numeric),0)::int`,
+        })
+        .from(usageLogs)
+        .where(and(gte(usageLogs.createdAt, yStart), lt(usageLogs.createdAt, yEnd))),
+      db
+        .select({
+          model: usageLogs.model,
+          realRub: drizzleSql<number>`COALESCE(SUM(${usageLogs.providerCostRub}::numeric),0)::int`,
+          creditsRub: drizzleSql<number>`COALESCE(SUM(${usageLogs.costRub}::numeric),0)::int`,
+          cnt: drizzleSql<number>`COUNT(*)::int`,
+        })
+        .from(usageLogs)
+        .where(and(gte(usageLogs.createdAt, yStart), lt(usageLogs.createdAt, yEnd)))
+        .groupBy(usageLogs.model)
+        .orderBy(desc(drizzleSql`SUM(${usageLogs.providerCostRub}::numeric)`))
+        .limit(3),
+    ]);
 
-  const orY = Number(orYesterday[0]?.sum ?? 0);
-  const orM = Number(orMtd[0]?.sum ?? 0);
+  const wsY = Number(realCostYesterday[0]?.wsRub ?? 0);
+  const orY = Number(realCostYesterday[0]?.orRub ?? 0);
+  const wsM = Number(realCostMtd[0]?.wsRub ?? 0);
+  const orM = Number(realCostMtd[0]?.orRub ?? 0);
+  const creditsM = Number(creditsMtd[0]?.credits ?? 0);
+  const providerM = Number(creditsMtd[0]?.provider ?? 0);
+  const creditsY = Number(creditsYesterday[0]?.credits ?? 0);
+  const markupRatio = providerM > 0 ? creditsM / providerM : null;
 
-  // ===== 2b. WaveSpeed — live API for balance + retention tripwire =====
-  //
-  // For the per-day amounts we trust our archived `manual_expenses` rows
-  // (populated by sync-invoices, which snapshots WS daily_usage[] before it
-  // ages out of WS). We still hit /usage_stats here so we can show the
-  // oldest day WS still has, as an early-warning when their retention shrinks.
-  let wsY = 0;
-  let wsM = 0;
+  // ===== 2b. WaveSpeed live balance (low-fuel alert) =====
+  // We no longer hit /usage_stats — per-key history is unreliable across
+  // rotations. usage_logs.provider_cost_rub above is our source of truth.
   let wsBal: number | null = null;
-  let wsOldestVisible: string | null = null;
   if (WAVESPEED_API_KEY) {
     try {
-      const r = await fetch('https://api.wavespeed.ai/api/v3/user/usage_stats', {
-        body: JSON.stringify({
-          end_date: yDate,
-          per_model_usage: false,
-          start_date: '2024-01-01',
-        }),
-        headers: {
-          'Authorization': `Bearer ${WAVESPEED_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        method: 'POST',
-      });
-      if (r.ok) {
-        const j = (await r.json()) as WaveSpeedUsageResp;
-        const buckets = j.data?.daily_usage ?? [];
-        const monthPrefix = yDate.slice(0, 7); // YYYY-MM
-        for (const b of buckets) {
-          if (b.date === yDate) wsY = b.amount;
-          if (b.date.startsWith(monthPrefix)) wsM += b.amount;
-        }
-        wsOldestVisible = buckets.map((b) => b.date).sort()[0] ?? null;
-      }
       const bal = await fetch('https://api.wavespeed.ai/api/v3/balance', {
         headers: { Authorization: `Bearer ${WAVESPEED_API_KEY}` },
       });
@@ -251,36 +240,8 @@ export async function POST(req: Request) {
         wsBal = j.data?.balance ?? null;
       }
     } catch {
-      // Swallow — Telegram alert still goes out, just without WS data.
+      // ignore
     }
-  }
-
-  // Fallback for MTD when live API has aged out earlier days: pull from our
-  // archived `manual_expenses` (auto rows) and use the larger of the two.
-  try {
-    const monthStartIso = yDate.slice(0, 7) + '-01';
-    const archive = await fetch(
-      `${process.env.SUPABASE_URL}/rest/v1/manual_expenses?provider=eq.wavespeed&source=eq.auto&date=gte.${monthStartIso}&date=lte.${yDate}&select=date,amount_original`,
-      {
-        headers: {
-          'Accept-Profile': 'ai_aggregator',
-          'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
-          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''}`,
-        },
-      },
-    );
-    if (archive.ok) {
-      const rows = (await archive.json()) as Array<{
-        amount_original: number | null;
-        date: string;
-      }>;
-      const archiveMtd = rows.reduce((acc, r) => acc + Number(r.amount_original ?? 0), 0);
-      const archiveY = Number(rows.find((r) => r.date === yDate)?.amount_original ?? 0);
-      if (archiveMtd > wsM) wsM = archiveMtd;
-      if (archiveY > wsY) wsY = archiveY;
-    }
-  } catch {
-    // ignore — wsY/wsM stay as-is from live API
   }
 
   // ===== 2c. OpenRouter credits balance =====
@@ -431,12 +392,12 @@ export async function POST(req: Request) {
     db
       .select({
         user: usageLogs.userId,
-        cost: drizzleSql<number>`COALESCE(SUM(${usageLogs.costUsd}::numeric),0)::float8`,
+        cost: drizzleSql<number>`COALESCE(SUM(${usageLogs.providerCostRub}::numeric),0)::int`,
       })
       .from(usageLogs)
       .where(and(gte(usageLogs.createdAt, yStart), lt(usageLogs.createdAt, yEnd)))
       .groupBy(usageLogs.userId)
-      .orderBy(desc(drizzleSql`SUM(${usageLogs.costUsd}::numeric)`))
+      .orderBy(desc(drizzleSql`SUM(${usageLogs.providerCostRub}::numeric)`))
       .limit(1),
   ]);
 
@@ -446,35 +407,25 @@ export async function POST(req: Request) {
   );
   const topUserCost = Number(topUser[0]?.cost ?? 0);
   const topUserId = topUser[0]?.user ?? null;
-  const totalApiY = orY + wsY;
+  const totalApiY = orY + wsY; // already in rubles
+  const totalApiM = orM + wsM;
 
   if (failedCnt > 0) alerts.push(`⚠️ Failed payments: ${failedCnt}`);
   if (stuckCnt > 0) alerts.push(`⚠️ Stuck async tasks (>30 min): ${stuckCnt}`);
   if (wsBal !== null && wsBal < 5) alerts.push(`⚠️ WaveSpeed balance low: ${fmtUsd(wsBal)}`);
-  if (wsOldestVisible) {
-    const daysVisible = Math.floor(
-      (yEnd.getTime() - new Date(wsOldestVisible).getTime()) / 86_400_000,
-    );
-    if (daysVisible < 14) {
-      alerts.push(
-        `⚠️ WS retention shrunk: only ${daysVisible} days visible (from ${wsOldestVisible}). Archive in manual_expenses is our source of truth.`,
-      );
-    }
-  }
   if (orCredits !== null && orCredits < 10)
     alerts.push(`⚠️ OpenRouter credits low: ${fmtUsd(orCredits)}`);
   if (totalApiY > 0 && topUserCost / totalApiY > 0.5 && topUserId) {
     alerts.push(
-      `⚠️ One user ate >50% of API: \`${escapeMd(topUserId.slice(0, 16))}…\` ${fmtUsd(topUserCost)}`,
+      `⚠️ One user ate >50% of API: \`${escapeMd(topUserId.slice(0, 16))}…\` ${fmtRub(topUserCost)}`,
     );
   }
 
   // ===== 5. Compose message =====
-  const marginY = revY > 0 ? ((revY - totalApiY * USD_TO_RUB) / revY) * 100 : 0;
-  const totalApiM = orM + wsM;
-  const marginM = revM > 0 ? ((revM - totalApiM * USD_TO_RUB) / revM) * 100 : 0;
-
-  const apiYRub = totalApiY * USD_TO_RUB;
+  // All API spend numbers are now real provider cost (provider_cost_rub),
+  // already in rubles. No more cost_usd × FX dance.
+  const marginY = revY > 0 ? ((revY - totalApiY) / revY) * 100 : 0;
+  const marginM = revM > 0 ? ((revM - totalApiM) / revM) * 100 : 0;
   const momLine =
     momRatio === null
       ? null
@@ -482,10 +433,10 @@ export async function POST(req: Request) {
   const topLines =
     topModelsY.length > 0
       ? [
-          `🤖 *Топ-3 моделей вчера:*`,
+          `🤖 *Топ-3 моделей вчера (real / credits / calls):*`,
           ...topModelsY.map(
             (m, i) =>
-              `${i + 1}. \`${escapeMd((m.model ?? '?').slice(0, 40))}\` — ${fmtUsd(Number(m.cost))} (${m.cnt})`,
+              `${i + 1}. \`${escapeMd((m.model ?? '?').slice(0, 40))}\` — ${fmtRub(Number(m.realRub))} / ${fmtRub(Number(m.creditsRub))} / ${m.cnt}`,
           ),
           '',
         ]
@@ -495,14 +446,14 @@ export async function POST(req: Request) {
   const lines: string[] = [
     `📊 *Отчёт за ${yDate}*`,
     '',
-    `💰 *Деньги:*`,
-    `• Выручка вчера: *${fmtRub(revY)}* (${revYCount} pmt)`,
-    `• API вчера: ${fmtRub(apiYRub)} (OR ${fmtUsd(orY)} + WS ${fmtUsd(wsY)})`,
-    `• Маржа вчера: *${fmtPct(marginY)}*`,
+    `💰 *Деньги вчера:*`,
+    `• Выручка: *${fmtRub(revY)}* (${revYCount} pmt)`,
+    `• API real cost: ${fmtRub(totalApiY)} (WS ${fmtRub(wsY)} + OR ${fmtRub(orY)})`,
+    `• Маржа: *${fmtPct(marginY)}*`,
     '',
     `📅 *MTD ${yDate.slice(0, 7)}:*`,
     `• Выручка: *${fmtRub(revM)}* (${revMCount} pmt)`,
-    `• API: ${fmtRub(totalApiM * USD_TO_RUB)} (OR ${fmtUsd(orM)} + WS ${fmtUsd(wsM)})`,
+    `• API real cost: ${fmtRub(totalApiM)} (WS ${fmtRub(wsM)} + OR ${fmtRub(orM)})`,
     `• Маржа: *${fmtPct(marginM)}*`,
     ...(momLine ? [momLine] : []),
     '',
@@ -517,6 +468,11 @@ export async function POST(req: Request) {
     `• Active: *${activeCount}* | MRR: ${fmtRub(mrr)} | ARPU: ${fmtRub(arpu)}`,
     '',
     ...topLines,
+    `📊 *Credits эконометрика (MTD):*`,
+    `• Списано credits: ${fmtRub(creditsM)}`,
+    `• Реальный cost: ${fmtRub(providerM)}`,
+    ...(markupRatio !== null && providerM > 0 ? [`• Tier markup: ×${markupRatio.toFixed(2)}`] : []),
+    '',
     `💳 *Балансы:*`,
     `• WaveSpeed: ${wsBal !== null ? fmtUsd(wsBal) : 'n/a'}`,
     `• OpenRouter: ${orCredits !== null ? fmtUsd(orCredits) : 'n/a'}`,
@@ -535,13 +491,18 @@ export async function POST(req: Request) {
     sent: true,
     summary: {
       activeSubs: activeCount,
-      apiYRub,
+      apiYRub: totalApiY,
       cancellations: cancellationsCount,
+      creditsM,
+      marginM,
       marginY,
+      markupRatio,
       mrr,
       newSubs: newSubsTotal,
       newSubsRub,
+      orM,
       orY,
+      providerM,
       regsM: regsMCount,
       regsY: regsYCount,
       renewals: renewalsCount,
@@ -551,6 +512,7 @@ export async function POST(req: Request) {
       topupsCount,
       topupsRub,
       wsBal,
+      wsM,
       wsY,
     },
     yDate,
