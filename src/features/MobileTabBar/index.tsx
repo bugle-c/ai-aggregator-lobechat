@@ -11,6 +11,11 @@ import { useShowTabBar } from '@/features/MobileGlobalHeader/useShowTabBar';
 import { usePathname, useRouter } from '@/libs/router/navigation';
 import { SidebarTabKey } from '@/store/global/initialState';
 
+// Height of the icon row inside the bar (does NOT include safe-area
+// inset padding that the wrapper adds separately). Exported so other
+// surfaces can position themselves above the bar without hardcoding 56.
+export const MOBILE_TAB_BAR_HEIGHT = 56;
+
 const styles = createStaticStyles(({ css }) => ({
   active: css`
     svg {

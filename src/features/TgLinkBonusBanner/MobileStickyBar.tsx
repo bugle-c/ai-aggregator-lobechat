@@ -4,11 +4,10 @@ import { createStyles } from 'antd-style';
 import { X } from 'lucide-react';
 import { memo } from 'react';
 
+import { MOBILE_TAB_BAR_HEIGHT } from '@/features/MobileTabBar';
+
 import { onTgLinkClick, tgLinkHref } from './startTgLink';
 import { dismissBanner, useShouldShow } from './useShouldShow';
-
-// Keep in sync with src/features/MobileTabBar height.
-const MOBILE_TAB_BAR_HEIGHT = 56;
 
 const useStyles = createStyles(({ css }) => ({
   bar: css`
