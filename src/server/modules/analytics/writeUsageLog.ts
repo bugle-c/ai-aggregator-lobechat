@@ -1,6 +1,10 @@
 import { usageLogs } from '@/database/schemas/analytics';
 import { type LobeChatDatabase, type Transaction } from '@/database/type';
-import { computeCostUsdFromRate, type Usage } from '@/server/modules/billing/compute-cost';
+import {
+  computeBaseCostUsdFromRate,
+  computeCostUsdFromRate,
+  type Usage,
+} from '@/server/modules/billing/compute-cost';
 import { USD_TO_RUB } from '@/server/modules/billing/model-rates';
 import { fetchRate } from '@/server/services/billing/rates-source';
 
@@ -53,6 +57,13 @@ export async function computeUsageLogRow(input: WriteUsageLogInput) {
   }
   const costUsd = rate ? computeCostUsdFromRate(rate, usage) : 0;
   const costRub = costUsd * USD_TO_RUB;
+  // provider_cost_rub stores what we actually pay the upstream API,
+  // BEFORE the tier markup we apply on top to compute credits. The
+  // Economics page reads this for true gross-margin math; cost_rub
+  // stays the "charged value" reported to the user. Local Ollama
+  // models (rate present but per_unit=0) naturally land at 0.
+  const providerCostUsd = rate ? computeBaseCostUsdFromRate(rate, usage) : 0;
+  const providerCostRub = providerCostUsd * USD_TO_RUB;
 
   return {
     userId: input.userId,
@@ -66,6 +77,7 @@ export async function computeUsageLogRow(input: WriteUsageLogInput) {
     creditsCharged: input.creditsCharged,
     costUsd: costUsd.toFixed(6),
     costRub: costRub.toFixed(4),
+    providerCostRub: providerCostRub.toFixed(4),
     exchangeRate: USD_TO_RUB.toFixed(4),
     kind: input.kind,
   };

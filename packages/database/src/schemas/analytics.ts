@@ -37,6 +37,13 @@ export const usageLogs = pgTable(
     creditsCharged: integer('credits_charged').notNull(),
     costUsd: numeric('cost_usd', { precision: 10, scale: 6 }).notNull(),
     costRub: numeric('cost_rub', { precision: 10, scale: 4 }).notNull(),
+    // What we actually pay the upstream API (per_unit × usage), before
+    // the tier markup that becomes cost_rub. Lets the Economics page
+    // compute real gross margin without re-deriving from rate tables
+    // at query time. Added 2026-05-31; backfilled via SQL.
+    providerCostRub: numeric('provider_cost_rub', { precision: 10, scale: 4 })
+      .notNull()
+      .default('0'),
     exchangeRate: numeric('exchange_rate', { precision: 8, scale: 4 }).notNull(),
     kind: varchar('kind', { length: 16 }).notNull(),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
