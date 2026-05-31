@@ -63,8 +63,13 @@ export class UIModeActionImpl {
         const activeAgentId = agentStoreState.activeAgentId;
 
         if (currentProvider && currentProvider !== 'lobehub' && activeAgentId) {
+          // Reset to our local Gemma (branded as "WebGPT Mini" in the UI) on
+          // Light switch. Earlier this was 'gpt-5-mini', which silently
+          // burned OpenAI spend on the 87% of users who sit in Light —
+          // gemma4:e4b runs on our Ollama box (zero provider cost) and is
+          // already the global DEFAULT_MODEL in @lobechat/const/settings/llm.
           await agentStoreState.updateAgentConfigById(activeAgentId, {
-            model: 'gpt-5-mini',
+            model: 'gemma4:e4b',
             provider: 'lobehub',
           });
           modelWasReset = true;

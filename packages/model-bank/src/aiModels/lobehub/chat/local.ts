@@ -29,8 +29,8 @@ export const localChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Gemma 4 E4B на нашем сервере. Самая дешёвая модель — ~2-3x дешевле gpt-5-nano. Подходит для коротких ответов и простых задач. Дефолт для всех тарифов.',
-    displayName: 'Gemma 4 E4B · local',
+      'Наша базовая модель на собственном сервере. Самая дешёвая в каталоге — в 2-3 раза дешевле gpt-5-nano. Подходит для коротких ответов и простых задач. Дефолт для всех тарифов.',
+    displayName: 'WebGPT Mini',
     enabled: true,
     id: 'gemma4:e4b',
     maxOutput: 8192,

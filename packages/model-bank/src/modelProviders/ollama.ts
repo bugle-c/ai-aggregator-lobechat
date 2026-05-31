@@ -8,7 +8,7 @@ const Ollama: ModelProviderCard = {
   checkModel: 'gemma4:e4b',
   defaultShowBrowserRequest: false,
   description:
-    'Локальные модели WebGPT на нашем сервере. Без задержек cloud-провайдеров, без лимитов сторонних API. Gemma 4 E4B бесплатна для всех тарифов.',
+    'Локальные модели WebGPT на нашем сервере. Без задержек cloud-провайдеров и без зависимости от сторонних API. WebGPT Mini — самая дешёвая модель в каталоге.',
   id: 'ollama',
   modelList: { showModelFetcher: false },
   modelsUrl: 'https://gptweb.ru',
