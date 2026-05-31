@@ -1,0 +1,18 @@
+# Daily admin Telegram digest.
+#
+# Sends a Markdown summary to TELEGRAM_ALERT_CHAT_ID at 09:00 MSK (06:00 UTC).
+# Includes: yesterday revenue + MTD, API costs (OpenRouter + WaveSpeed), margin,
+# new/renewals/cancellations, top-3 models by spend, provider balances, alerts.
+#
+# Install on Hetzner host (135.181.115.234):
+#   sudo cp tasks/cron/daily-admin-report-host.cron /etc/cron.d/daily-admin-report
+#   # replace YOUR_CRON_SECRET with the value from /opt/lobechat/.env
+#   sudo chmod 0644 /etc/cron.d/daily-admin-report
+#   sudo systemctl reload cron
+#
+# Logs to /var/log/daily-admin-report.log.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+0 6 * * * root curl -fsS -X POST -m 60 -H 'Authorization: Bearer YOUR_CRON_SECRET' https://ask.gptweb.ru/api/cron/daily-admin-report >> /var/log/daily-admin-report.log 2>&1

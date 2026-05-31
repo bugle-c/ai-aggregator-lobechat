@@ -24,7 +24,7 @@
  *
  * Triggered from host cron — see tasks/cron/sync-invoices-host.cron.
  */
-import { and, eq, gte, lt, sql as drizzleSql } from 'drizzle-orm';
+import { and, gte, lt, sql as drizzleSql } from 'drizzle-orm';
 
 import { usageLogs } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
@@ -47,9 +47,24 @@ function isoDate(daysAgo: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+interface WaveSpeedDailyUsage {
+  amount: number;
+  count: number;
+  date: string;
+  models?: Array<{ amount: number; count: number; model_uuid: string }>;
+}
+
 interface WaveSpeedResp {
   code: number;
   data?: {
+    daily_usage?: WaveSpeedDailyUsage[];
+    per_model_usage?: Array<{
+      last_used_date: string;
+      model_uuid: string;
+      total_cost: number;
+      total_count: number;
+      unit_price: number;
+    }>;
     summary?: { success_requests: number; total_cost: number; total_requests: number };
   };
   message: string;
@@ -80,13 +95,24 @@ export async function POST(req: Request) {
   const results: ProviderResult[] = [];
 
   // ---- A) WaveSpeed ----
+  //
+  // WaveSpeed's /usage_stats endpoint IGNORES start_date/end_date in the
+  // request body and always returns the full history for the API key, with
+  // `summary.total_cost` = lifetime spend. The per-date breakdown is inside
+  // `data.daily_usage[].date+amount` — that's the only way to get yesterday's
+  // real number. So we send one request and look up our `targetDate` in the
+  // array (defaulting to $0 if the date isn't present — no activity that day).
+  //
+  // Also note: `summary.total_cost` covers ONLY this API key. The WaveSpeed
+  // dashboard shows the whole account (all keys + UI-initiated test calls),
+  // so don't be surprised if those numbers diverge.
   if (WAVESPEED_API_KEY) {
     try {
       const r = await fetch(WAVESPEED_API_URL, {
         body: JSON.stringify({
           end_date: targetDate,
-          per_model_usage: false,
-          start_date: targetDate,
+          per_model_usage: true,
+          start_date: '2024-01-01',
         }),
         headers: {
           'Authorization': `Bearer ${WAVESPEED_API_KEY}`,
@@ -105,18 +131,19 @@ export async function POST(req: Request) {
         });
       } else {
         const j = (await r.json()) as WaveSpeedResp;
-        const totalCost = j.data?.summary?.total_cost ?? 0;
-        const totalRequests = j.data?.summary?.total_requests ?? 0;
+        const dayBucket = j.data?.daily_usage?.find((b) => b.date === targetDate);
+        const dayCost = dayBucket?.amount ?? 0;
+        const dayCount = dayBucket?.count ?? 0;
         const upsert = await upsertExpense({
-          amountUsd: totalCost,
+          amountUsd: dayCost,
           date: targetDate,
-          description: `WaveSpeed daily (auto): ${totalRequests} requests, $${totalCost.toFixed(4)}`,
+          description: `WaveSpeed daily (auto): ${dayCount} requests, $${dayCost.toFixed(4)}`,
           provider: 'wavespeed',
         });
         results.push({
-          amountUsd: totalCost,
+          amountUsd: dayCost,
           date: targetDate,
-          details: `requests=${totalRequests}`,
+          details: `requests=${dayCount}`,
           ok: upsert.ok,
           provider: 'wavespeed',
           reason: upsert.reason,
@@ -220,9 +247,7 @@ export async function POST(req: Request) {
 
   if (failed.length > 0) {
     await sendAlert({
-      body: failed
-        .map((r) => `  ${r.provider}: ${r.reason}`)
-        .join('\n'),
+      body: failed.map((r) => `  ${r.provider}: ${r.reason}`).join('\n'),
       severity: 'warning',
       title: `Invoice sync: ${failed.length}/${results.length} providers failed for ${targetDate}`,
     });
@@ -230,9 +255,14 @@ export async function POST(req: Request) {
     // Informational alert with the day's spend — helps operator notice
     // unexpected drift without having to open the admin every morning.
     await sendAlert({
-      body: succeeded
-        .map((r) => `  ${r.provider}: $${r.amountUsd.toFixed(2)}${r.details ? ` (${r.details})` : ''}`)
-        .join('\n') + `\n\nTotal: $${totalUsd.toFixed(2)} ≈ ${Math.round(totalUsd * USD_TO_RUB)} ₽`,
+      body:
+        succeeded
+          .map(
+            (r) =>
+              `  ${r.provider}: $${r.amountUsd.toFixed(2)}${r.details ? ` (${r.details})` : ''}`,
+          )
+          .join('\n') +
+        `\n\nTotal: $${totalUsd.toFixed(2)} ≈ ${Math.round(totalUsd * USD_TO_RUB)} ₽`,
       severity: 'info',
       title: `Invoice sync: $${totalUsd.toFixed(2)} on ${targetDate}`,
     });
