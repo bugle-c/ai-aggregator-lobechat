@@ -1,0 +1,29 @@
+# Sync model_rates.per_unit with WaveSpeed actual invoice prices every hour
+# at :13 (offset to avoid collision with billing-sanity at :07 and
+# poll-active-image-jobs at :00/20/40).
+#
+# Install on the Hetzner host (135.181.115.234):
+#   sudo cp tasks/cron/sync-wavespeed-rates-host.cron /etc/cron.d/sync-wavespeed-rates
+#   # replace YOUR_CRON_SECRET with the value from /opt/lobechat/.env
+#   sudo chmod 0644 /etc/cron.d/sync-wavespeed-rates
+#   sudo systemctl reload cron
+#
+# Endpoint:  POST /api/cron/sync-wavespeed-rates
+# Behaviour:
+#   1) Pulls last 30 days of usage from WaveSpeed's
+#      POST /api/v3/user/usage_stats?per_model_usage=true
+#   2) For each model_uuid with a model_rates row, diffs per_unit;
+#      if >10% drift, PATCHes the row + invalidates the in-memory rate cache.
+#   3) Reports a Telegram summary if anything changed, was missing, or errored.
+#
+# Models with formula-based pricing (Veo, Kling with duration/resolution
+# multipliers) return the period-weighted MEAN unit_price. Good enough for
+# margin reporting; per-request precision would require evaluating WaveSpeed's
+# JSONata formula client-side (P1, not done).
+#
+# Logs to /var/log/sync-wavespeed-rates.log.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+13 * * * * root curl -fsS -X POST -m 30 -H 'Authorization: Bearer YOUR_CRON_SECRET' https://ask.gptweb.ru/api/cron/sync-wavespeed-rates >> /var/log/sync-wavespeed-rates.log 2>&1
