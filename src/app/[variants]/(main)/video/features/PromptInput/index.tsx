@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import VideoFreeQuotaInfo from '@/business/client/features/VideoFreeQuotaInfo';
 import { useVideoGenerate } from '@/features/Generators/useVideoGenerate';
+import { detectVideoPromptHints } from '@/features/Generators/videoPromptHints';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useUserStore } from '@/store/user';
@@ -101,6 +102,31 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             onKeyDown={handleKeyDown}
           />
         </ChatInput>
+        {/*
+         * Pre-flight prompt hints — warn the user about cases Veo can't do
+         * well (brand logos without input image, on-screen Cyrillic, long
+         * narratives, walls of text). Doesn't block submit, just nudges.
+         * Born from the safa cancellation 2026-05-30: he burned 4608 cr
+         * (~690 RUB) on two prompts both asking for "Rex Express" logo +
+         * Cyrillic final-frame text, then quit. We can't always show him
+         * what won't work in advance, but we can stop the next safa.
+         */}
+        {detectVideoPromptHints(value).map((h) => (
+          <div
+            key={h.title}
+            style={{
+              background: 'var(--ant-color-warning-bg, #fffbe6)',
+              border: '1px solid var(--ant-color-warning-border, #ffe58f)',
+              borderRadius: 8,
+              fontSize: 12,
+              lineHeight: 1.35,
+              padding: '8px 10px',
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>{h.title}</div>
+            <div style={{ color: 'var(--ant-color-text-secondary)' }}>{h.body}</div>
+          </div>
+        ))}
         <VideoFreeQuotaInfo />
       </Flexbox>
     </Flexbox>
