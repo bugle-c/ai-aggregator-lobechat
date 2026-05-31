@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { renderHook } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useMobileShellFlag } from './useMobileShellFlag';
 
@@ -53,5 +53,29 @@ describe('useMobileShellFlag', () => {
     const { result } = renderHook(() => useMobileShellFlag());
     // Falls through to localStorage, which says off.
     expect(result.current).toBe(false);
+  });
+
+  it('falls back to default when localStorage throws', () => {
+    // Simulate Safari private mode / storage quota exceeded.
+    const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError: localStorage unavailable');
+    });
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('SecurityError: localStorage unavailable');
+    });
+
+    try {
+      // No URL param, throwing localStorage — should land on the default-on.
+      const { result } = renderHook(() => useMobileShellFlag());
+      expect(result.current).toBe(true);
+
+      // With URL=off, throwing storage — still honours URL, ignores throw.
+      setUrl('?mobile-shell=off');
+      const second = renderHook(() => useMobileShellFlag());
+      expect(second.result.current).toBe(false);
+    } finally {
+      getItemSpy.mockRestore();
+      setItemSpy.mockRestore();
+    }
   });
 });

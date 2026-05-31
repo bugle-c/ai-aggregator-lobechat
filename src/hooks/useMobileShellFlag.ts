@@ -29,12 +29,26 @@ export const useMobileShellFlag = (): boolean => {
     const params = new URLSearchParams(window.location.search);
     const q = params.get('mobile-shell');
     if (q === 'on' || q === 'off') {
-      window.localStorage.setItem(STORAGE_KEY, q);
+      // Best-effort persist — Safari private mode / quota exceeded throw.
+      // The user gets their URL-requested value either way; we only lose
+      // the cross-session memory.
+      try {
+        window.localStorage.setItem(STORAGE_KEY, q);
+      } catch {
+        // ignore — non-fatal, kill-switch still works for this session
+      }
       setEnabled(q === 'on');
       return;
     }
 
-    const stored = window.localStorage.getItem(STORAGE_KEY);
+    // Same try-guard for getItem. If storage is hard-blocked, we fall
+    // back to the default (`true`) without flipping state.
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(STORAGE_KEY);
+    } catch {
+      // ignore — keep default
+    }
     // Only the literal 'off' disables; anything else (including null
     // and garbage) keeps the default-on.
     setEnabled(stored !== 'off');
