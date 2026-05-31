@@ -1,0 +1,31 @@
+# Auto-pull provider invoices into ai_aggregator.manual_expenses once a day.
+#
+# Runs at 03:30 MSK (00:30 UTC) — enough buffer past midnight that WaveSpeed
+# has settled yesterday's billing entries on their side. Default lookback
+# is "yesterday" in UTC; pass ?date=YYYY-MM-DD via query string when calling
+# manually for a backfill.
+#
+# Install on the Hetzner host (135.181.115.234):
+#   sudo cp tasks/cron/sync-invoices-host.cron /etc/cron.d/sync-invoices
+#   # replace YOUR_CRON_SECRET with the value from /opt/lobechat/.env
+#   sudo chmod 0644 /etc/cron.d/sync-invoices
+#   sudo systemctl reload cron
+#
+# Behaviour per provider:
+#   - WaveSpeed: POST /api/v3/user/usage_stats for yesterday → take
+#     summary.total_cost → UPSERT manual_expenses row with source='auto'.
+#   - OpenRouter: SELECT SUM(usage_logs.cost_usd) for yesterday for non-WS /
+#     non-HF / non-local models → UPSERT same way. We don't call OpenRouter's
+#     API because every response already gave us usage.cost which we persist
+#     as cost_usd; summing it IS the invoice.
+#
+# Idempotency: partial unique index on (date, provider) WHERE source='auto'
+# means re-running the cron rewrites yesterday's auto-row without creating
+# duplicates. Operator's manual entries (source='manual') are untouched.
+#
+# Logs to /var/log/sync-invoices.log.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+30 0 * * * root curl -fsS -X POST -m 60 -H 'Authorization: Bearer YOUR_CRON_SECRET' https://ask.gptweb.ru/api/cron/sync-invoices >> /var/log/sync-invoices.log 2>&1
