@@ -20,6 +20,10 @@ const BADGE_LABELS: Record<PresetBadge, string> = {
   new: 'New',
   top_choice: 'Top',
   trending: '🔥',
+  // Higher-tier "пиар-волна" badge — text pill, reserved for the one
+  // preset ops is actively featuring this month. The emoji prefix makes
+  // it visually pop next to the muted Mixed/Top chips.
+  trend_of_month: '🔥 Тренд месяца',
 };
 
 const BADGE_COLORS: Record<PresetBadge, string> = {
@@ -27,6 +31,10 @@ const BADGE_COLORS: Record<PresetBadge, string> = {
   new: '#dc2626',
   top_choice: '#facc15',
   trending: 'transparent',
+  // Magenta — distinct from the yellow `top_choice` and the red `new`,
+  // matches the editorial pink palette of the Riviera preset this badge
+  // was built for.
+  trend_of_month: '#e11d74',
 };
 
 /**

@@ -1,6 +1,10 @@
 export type PresetModality = 'image' | 'video';
 
-export type PresetBadge = 'top_choice' | 'mixed' | 'new' | 'trending';
+// `trend_of_month` is a more prominent variant of `trending` — the badge
+// renders as a text pill "Тренд месяца" instead of the small 🔥 emoji,
+// reserved for the one-or-two presets ops actively wants to push that
+// month. Keeping `trending` around for the regular hot-list use.
+export type PresetBadge = 'top_choice' | 'mixed' | 'new' | 'trending' | 'trend_of_month';
 
 export interface PresetParamsLock {
   // intentionally permissive — model-specific params live here as raw JSON
