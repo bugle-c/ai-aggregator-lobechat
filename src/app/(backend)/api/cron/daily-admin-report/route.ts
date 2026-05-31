@@ -384,14 +384,14 @@ export async function POST(req: Request) {
       ),
     ]);
 
+  // db.execute() in drizzle/node-postgres returns `{ rows: T[] }`, NOT a bare
+  // array. The first pass forgot `.rows` and every raw-SQL counter silently
+  // came back as 0. Keep that in mind for any future db.execute() calls here.
   const subsRow = (
-    subsBreakdownY as unknown as Array<{
-      new_cnt: number;
-      new_rub: number;
-      renew_cnt: number;
-      renew_rub: number;
-    }>
-  )[0] ?? { new_cnt: 0, new_rub: 0, renew_cnt: 0, renew_rub: 0 };
+    subsBreakdownY as unknown as {
+      rows: Array<{ new_cnt: number; new_rub: number; renew_cnt: number; renew_rub: number }>;
+    }
+  ).rows[0] ?? { new_cnt: 0, new_rub: 0, renew_cnt: 0, renew_rub: 0 };
   const newSubsTotal = Number(subsRow.new_cnt);
   const newSubsRub = Number(subsRow.new_rub);
   const renewalsCount = Number(subsRow.renew_cnt);
@@ -402,8 +402,12 @@ export async function POST(req: Request) {
   const activeCount = Number(activeSubs[0]?.cnt ?? 0);
   const mrr = Number(mrrRow[0]?.mrr ?? 0);
   const arpu = activeCount > 0 ? mrr / activeCount : 0;
-  const regsYCount = Number((regsY as unknown as Array<{ cnt: number }>)[0]?.cnt ?? 0);
-  const regsMCount = Number((regsM as unknown as Array<{ cnt: number }>)[0]?.cnt ?? 0);
+  const regsYCount = Number(
+    (regsY as unknown as { rows: Array<{ cnt: number }> }).rows[0]?.cnt ?? 0,
+  );
+  const regsMCount = Number(
+    (regsM as unknown as { rows: Array<{ cnt: number }> }).rows[0]?.cnt ?? 0,
+  );
 
   // ===== 4. Alerts =====
   const alerts: string[] = [];
@@ -437,7 +441,9 @@ export async function POST(req: Request) {
   ]);
 
   const failedCnt = Number(failedPayments[0]?.cnt ?? 0);
-  const stuckCnt = Number((stuckAsync as unknown as Array<{ cnt: number }>)[0]?.cnt ?? 0);
+  const stuckCnt = Number(
+    (stuckAsync as unknown as { rows: Array<{ cnt: number }> }).rows[0]?.cnt ?? 0,
+  );
   const topUserCost = Number(topUser[0]?.cost ?? 0);
   const topUserId = topUser[0]?.user ?? null;
   const totalApiY = orY + wsY;
