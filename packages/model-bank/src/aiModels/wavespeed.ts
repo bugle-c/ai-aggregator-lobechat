@@ -393,6 +393,94 @@ export const wavespeedImageModels: AIImageModelCard[] = [
     },
     type: 'image',
   },
+  {
+    description:
+      'FLUX 2 Dev — Black Forest Labs latest open-weights model. Sharper text, better hands, higher fidelity than FLUX 1.',
+    displayName: 'FLUX 2 Dev',
+    enabled: true,
+    id: 'wavespeed-ai/flux-2-dev/text-to-image',
+    parameters: {
+      prompt: { default: '' },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.012, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description: 'FLUX 2 Dev Edit — image-to-image variant of FLUX 2 Dev for in-context editing.',
+    displayName: 'FLUX 2 Dev Edit',
+    enabled: true,
+    id: 'wavespeed-ai/flux-2-dev/edit',
+    parameters: {
+      imageUrls: { default: [], maxCount: 4 },
+      prompt: { default: '' },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.024, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description:
+      'ByteDance Seedream 5.0 Lite — newest light Seedream tier for fast, low-cost generations.',
+    displayName: 'Seedream 5.0 Lite',
+    enabled: true,
+    id: 'bytedance/seedream-v5.0-lite/text-to-image',
+    parameters: {
+      prompt: { default: '' },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.035, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description:
+      'Nano Banana Pro Ultra — premium tier of Gemini 3 Pro Image, sharper detail and 4K-class quality.',
+    displayName: 'Nano Banana Pro Ultra',
+    enabled: true,
+    id: 'google/nano-banana-pro/text-to-image-ultra',
+    parameters: {
+      imageUrls: { default: [], maxCount: 10 },
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.15, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description:
+      'Nano Banana Pro Ultra (Edit) — premium edit/inpaint variant of Gemini 3 Pro Image.',
+    displayName: 'Nano Banana Pro Ultra Edit',
+    enabled: true,
+    id: 'google/nano-banana-pro/edit-ultra',
+    parameters: {
+      imageUrls: { default: [], maxCount: 10 },
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.15, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description: 'Midjourney — iconic stylised text-to-image, now served through WaveSpeed.',
+    displayName: 'Midjourney',
+    enabled: true,
+    id: 'midjourney/text-to-image',
+    parameters: {
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.1, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
 ];
 
 export const wavespeedVideoModels: AIVideoModelCard[] = [
@@ -700,6 +788,56 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     id: 'minimax/minimax-hailuo-02-standard',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.03, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description: 'Google Veo 3.1 Lite — cheapest Veo tier, 4x cheaper than veo3.1-fast.',
+    displayName: 'Veo 3.1 Lite',
+    enabled: true,
+    id: 'google/veo3.1-lite/text-to-video',
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.0375, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description: 'Google Veo 3.1 Lite — image-to-video variant of the cheapest Veo tier.',
+    displayName: 'Veo 3.1 Lite (I2V)',
+    enabled: true,
+    id: 'google/veo3.1-lite/image-to-video',
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.0375, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description: 'ByteDance Seedance 1.5 Pro Fast — affordable Seedance for daily generations.',
+    displayName: 'Seedance 1.5 Pro Fast',
+    enabled: true,
+    id: 'bytedance/seedance-v1.5-pro-fast/text-to-video',
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.025, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description: 'ByteDance Seedance 1.5 Pro Fast — image-to-video variant.',
+    displayName: 'Seedance 1.5 Pro Fast (I2V)',
+    enabled: true,
+    id: 'bytedance/seedance-v1.5-pro-fast/image-to-video',
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.025, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description: 'OpenAI Sora 2 Pro — image-to-video variant of the premium Sora tier.',
+    displayName: 'Sora 2 Pro (I2V)',
+    enabled: true,
+    id: 'openai/sora-2-pro/image-to-video',
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.12, strategy: 'fixed', unit: 'second' }],
     },
     type: 'video',
   },
