@@ -108,7 +108,10 @@ export async function POST(req: Request) {
     d.setUTCDate(dayOfMonth);
     return d;
   })();
-  const yDate = yStart.toISOString().slice(0, 10);
+  // yDate must be the *MSK calendar day* (00:00–24:00 MSK), not the UTC start
+  // (which would be `2026-05-30` for what is really "May 31 MSK"). Add the 3-h
+  // MSK offset and slice.
+  const yDate = new Date(yStart.getTime() + 3 * 3_600_000).toISOString().slice(0, 10);
 
   const db = await getServerDB();
 
@@ -298,65 +301,109 @@ export async function POST(req: Request) {
     }
   }
 
-  // ===== 3. Subscriptions =====
-  const [newSubsY, renewalsY, cancellationsY, activeSubs, mrrRow] = await Promise.all([
-    db
-      .select({ cnt: drizzleSql<number>`COUNT(*)::int`, planId: billingPayments.planId })
-      .from(billingPayments)
-      .where(
-        and(
-          eq(billingPayments.status, 'succeeded'),
-          gte(billingPayments.createdAt, yStart),
-          lt(billingPayments.createdAt, yEnd),
-          drizzleSql`${billingPayments.type} = 'subscription'`,
-        ),
-      )
-      .groupBy(billingPayments.planId),
-    db
-      .select({ cnt: drizzleSql<number>`COUNT(*)::int` })
-      .from(billingPayments)
-      .where(
-        and(
-          eq(billingPayments.status, 'succeeded'),
-          gte(billingPayments.createdAt, yStart),
-          lt(billingPayments.createdAt, yEnd),
-          drizzleSql`${billingPayments.type} = 'auto_renewal'`,
-        ),
+  // ===== 3. Subscriptions / topups / registrations =====
+  //
+  // Schema notes (we hit these wrong in the first iteration):
+  //   - billing_payments.type ∈ {'subscription','topup'} only — there's no
+  //     'auto_renewal' value, so the previous renewals filter always returned 0.
+  //   - "New sub" = user's FIRST-EVER succeeded subscription payment, anywhere
+  //     in history. "Renewal" = any subsequent succeeded subscription payment.
+  //     We compute that with a window-style EXISTS check against earlier rows.
+  const [subsBreakdownY, topupsY, cancellationsY, activeSubs, mrrRow, regsY, regsM] =
+    await Promise.all([
+      db.execute<{ new_cnt: number; new_rub: number; renew_cnt: number; renew_rub: number }>(
+        drizzleSql`
+        SELECT
+          COUNT(*) FILTER (WHERE NOT was_paid_before)::int AS new_cnt,
+          COALESCE(SUM(amount_rub) FILTER (WHERE NOT was_paid_before),0)::int AS new_rub,
+          COUNT(*) FILTER (WHERE was_paid_before)::int AS renew_cnt,
+          COALESCE(SUM(amount_rub) FILTER (WHERE was_paid_before),0)::int AS renew_rub
+        FROM (
+          SELECT
+            bp.amount_rub,
+            EXISTS (
+              SELECT 1 FROM billing_payments p2
+              WHERE p2.user_id = bp.user_id
+                AND p2.status = 'succeeded'
+                AND p2.type = 'subscription'
+                AND p2.created_at < bp.created_at
+            ) AS was_paid_before
+          FROM billing_payments bp
+          WHERE bp.status = 'succeeded'
+            AND bp.type = 'subscription'
+            AND bp.created_at >= ${yStart}
+            AND bp.created_at < ${yEnd}
+        ) x
+      `,
       ),
-    db
-      .select({ cnt: drizzleSql<number>`COUNT(*)::int` })
-      .from(userBilling)
-      .where(and(gte(userBilling.cancelledAt, yStart), lt(userBilling.cancelledAt, yEnd))),
-    db
-      .select({ cnt: drizzleSql<number>`COUNT(*)::int` })
-      .from(userBilling)
-      .where(
-        and(
-          drizzleSql`${userBilling.subscriptionExpiresAt} > now()`,
-          drizzleSql`${userBilling.planId} != 1`,
+      db
+        .select({
+          cnt: drizzleSql<number>`COUNT(*)::int`,
+          rub: drizzleSql<number>`COALESCE(SUM(${billingPayments.amountRub}),0)::int`,
+        })
+        .from(billingPayments)
+        .where(
+          and(
+            eq(billingPayments.status, 'succeeded'),
+            gte(billingPayments.createdAt, yStart),
+            lt(billingPayments.createdAt, yEnd),
+            drizzleSql`${billingPayments.type} = 'topup'`,
+          ),
         ),
-      ),
-    db
-      .select({ mrr: drizzleSql<number>`COALESCE(SUM(${billingPlans.priceRub}),0)::int` })
-      .from(userBilling)
-      .innerJoin(billingPlans, eq(billingPlans.id, userBilling.planId))
-      .where(
-        and(
-          drizzleSql`${userBilling.subscriptionExpiresAt} > now()`,
-          drizzleSql`${userBilling.planId} != 1`,
-          drizzleSql`${userBilling.paymentMethodId} IS NOT NULL`,
-          eq(userBilling.autoRenew, true),
-          drizzleSql`${userBilling.cancelledAt} IS NULL`,
+      db
+        .select({ cnt: drizzleSql<number>`COUNT(*)::int` })
+        .from(userBilling)
+        .where(and(gte(userBilling.cancelledAt, yStart), lt(userBilling.cancelledAt, yEnd))),
+      db
+        .select({ cnt: drizzleSql<number>`COUNT(*)::int` })
+        .from(userBilling)
+        .where(
+          and(
+            drizzleSql`${userBilling.subscriptionExpiresAt} > now()`,
+            drizzleSql`${userBilling.planId} != 1`,
+          ),
         ),
+      db
+        .select({ mrr: drizzleSql<number>`COALESCE(SUM(${billingPlans.priceRub}),0)::int` })
+        .from(userBilling)
+        .innerJoin(billingPlans, eq(billingPlans.id, userBilling.planId))
+        .where(
+          and(
+            drizzleSql`${userBilling.subscriptionExpiresAt} > now()`,
+            drizzleSql`${userBilling.planId} != 1`,
+            drizzleSql`${userBilling.paymentMethodId} IS NOT NULL`,
+            eq(userBilling.autoRenew, true),
+            drizzleSql`${userBilling.cancelledAt} IS NULL`,
+          ),
+        ),
+      db.execute<{ cnt: number }>(
+        drizzleSql`SELECT COUNT(*)::int AS cnt FROM users WHERE created_at >= ${yStart} AND created_at < ${yEnd}`,
       ),
-  ]);
+      db.execute<{ cnt: number }>(
+        drizzleSql`SELECT COUNT(*)::int AS cnt FROM users WHERE created_at >= ${monthStart} AND created_at < ${yEnd}`,
+      ),
+    ]);
 
-  const newSubsTotal = newSubsY.reduce((a, r) => a + Number(r.cnt), 0);
-  const renewalsCount = Number(renewalsY[0]?.cnt ?? 0);
+  const subsRow = (
+    subsBreakdownY as unknown as Array<{
+      new_cnt: number;
+      new_rub: number;
+      renew_cnt: number;
+      renew_rub: number;
+    }>
+  )[0] ?? { new_cnt: 0, new_rub: 0, renew_cnt: 0, renew_rub: 0 };
+  const newSubsTotal = Number(subsRow.new_cnt);
+  const newSubsRub = Number(subsRow.new_rub);
+  const renewalsCount = Number(subsRow.renew_cnt);
+  const renewalsRub = Number(subsRow.renew_rub);
+  const topupsCount = Number(topupsY[0]?.cnt ?? 0);
+  const topupsRub = Number(topupsY[0]?.rub ?? 0);
   const cancellationsCount = Number(cancellationsY[0]?.cnt ?? 0);
   const activeCount = Number(activeSubs[0]?.cnt ?? 0);
   const mrr = Number(mrrRow[0]?.mrr ?? 0);
   const arpu = activeCount > 0 ? mrr / activeCount : 0;
+  const regsYCount = Number((regsY as unknown as Array<{ cnt: number }>)[0]?.cnt ?? 0);
+  const regsMCount = Number((regsM as unknown as Array<{ cnt: number }>)[0]?.cnt ?? 0);
 
   // ===== 4. Alerts =====
   const alerts: string[] = [];
@@ -453,8 +500,14 @@ export async function POST(req: Request) {
     `• Маржа: *${fmtPct(marginM)}*`,
     ...(momLine ? [momLine] : []),
     '',
+    `🆕 *Регистрации:*`,
+    `• Вчера: *${regsYCount.toLocaleString('ru-RU')}* | MTD: ${regsMCount.toLocaleString('ru-RU')}`,
+    '',
     `👥 *Подписки:*`,
-    `• Новые: ${newSubsTotal} | Продления: ${renewalsCount} | Отмены: ${cancellationsCount}`,
+    `• Новые: *${newSubsTotal}* (${fmtRub(newSubsRub)})`,
+    `• Продления: ${renewalsCount} (${fmtRub(renewalsRub)})`,
+    `• Топапы: ${topupsCount} (${fmtRub(topupsRub)})`,
+    `• Отмены: ${cancellationsCount}`,
     `• Active: *${activeCount}* | MRR: ${fmtRub(mrr)} | ARPU: ${fmtRub(arpu)}`,
     '',
     ...topLines,
@@ -481,10 +534,16 @@ export async function POST(req: Request) {
       marginY,
       mrr,
       newSubs: newSubsTotal,
+      newSubsRub,
       orY,
+      regsM: regsMCount,
+      regsY: regsYCount,
       renewals: renewalsCount,
+      renewalsRub,
       revM,
       revY,
+      topupsCount,
+      topupsRub,
       wsBal,
       wsY,
     },
