@@ -61,19 +61,36 @@ const Layout: FC = () => {
   const isMobileShellEnabled = useMobileShellFlag();
 
   // MobileShell uses height: calc(100dvh - var(--mobile-shell-banner-offset)).
-  // Set the CSS variable on .ant-app when CloudBanner is visible so the
-  // shell shrinks accordingly; reset when the banner hides. Skipped on
-  // desktop because the shell isn't mounted there.
+  // We measure the actual position of .ant-app relative to body top so the
+  // offset reflects whatever chrome (CloudBanner, future top bars) is
+  // currently above it — not just what showCloudPromotion predicts. The
+  // feature flag and the rendered DOM can disagree (banner can be shown
+  // by upstream logic without the flag), so measuring reality is the
+  // robust choice. ResizeObserver re-measures when anything above us
+  // resizes (banner mounts, banner dismisses, font reflow, etc.).
   useEffect(() => {
     if (!isMobile) return;
     const antApp = document.querySelector<HTMLElement>('.ant-app');
     if (!antApp) return;
-    const offset = showCloudPromotion ? `${BANNER_HEIGHT}px` : '0px';
-    antApp.style.setProperty(MOBILE_SHELL_BANNER_OFFSET_VAR, offset);
+
+    const update = () => {
+      // .ant-app's offsetTop is the gap between body's top edge and the
+      // shell wrapper — exactly what we need to subtract from 100dvh.
+      const offset = antApp.getBoundingClientRect().top;
+      antApp.style.setProperty(MOBILE_SHELL_BANNER_OFFSET_VAR, `${Math.max(0, offset)}px`);
+    };
+
+    update();
+    // Watch body so we catch banner mount/dismount, top-bar appearance,
+    // font reflow, viewport changes, etc.
+    const ro = new ResizeObserver(update);
+    ro.observe(document.body);
+
     return () => {
+      ro.disconnect();
       antApp.style.removeProperty(MOBILE_SHELL_BANNER_OFFSET_VAR);
     };
-  }, [isMobile, showCloudPromotion]);
+  }, [isMobile]);
 
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
