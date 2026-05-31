@@ -206,10 +206,16 @@ export async function POST(req: Request) {
   const orY = Number(orYesterday[0]?.sum ?? 0);
   const orM = Number(orMtd[0]?.sum ?? 0);
 
-  // ===== 2b. WaveSpeed — single API call, look up yesterday + MTD =====
+  // ===== 2b. WaveSpeed — live API for balance + retention tripwire =====
+  //
+  // For the per-day amounts we trust our archived `manual_expenses` rows
+  // (populated by sync-invoices, which snapshots WS daily_usage[] before it
+  // ages out of WS). We still hit /usage_stats here so we can show the
+  // oldest day WS still has, as an early-warning when their retention shrinks.
   let wsY = 0;
   let wsM = 0;
   let wsBal: number | null = null;
+  let wsOldestVisible: string | null = null;
   if (WAVESPEED_API_KEY) {
     try {
       const r = await fetch('https://api.wavespeed.ai/api/v3/user/usage_stats', {
@@ -232,6 +238,7 @@ export async function POST(req: Request) {
           if (b.date === yDate) wsY = b.amount;
           if (b.date.startsWith(monthPrefix)) wsM += b.amount;
         }
+        wsOldestVisible = buckets.map((b) => b.date).sort()[0] ?? null;
       }
       const bal = await fetch('https://api.wavespeed.ai/api/v3/balance', {
         headers: { Authorization: `Bearer ${WAVESPEED_API_KEY}` },
@@ -243,6 +250,34 @@ export async function POST(req: Request) {
     } catch {
       // Swallow — Telegram alert still goes out, just without WS data.
     }
+  }
+
+  // Fallback for MTD when live API has aged out earlier days: pull from our
+  // archived `manual_expenses` (auto rows) and use the larger of the two.
+  try {
+    const monthStartIso = yDate.slice(0, 7) + '-01';
+    const archive = await fetch(
+      `${process.env.SUPABASE_URL}/rest/v1/manual_expenses?provider=eq.wavespeed&source=eq.auto&date=gte.${monthStartIso}&date=lte.${yDate}&select=date,amount_original`,
+      {
+        headers: {
+          'Accept-Profile': 'ai_aggregator',
+          'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''}`,
+        },
+      },
+    );
+    if (archive.ok) {
+      const rows = (await archive.json()) as Array<{
+        amount_original: number | null;
+        date: string;
+      }>;
+      const archiveMtd = rows.reduce((acc, r) => acc + Number(r.amount_original ?? 0), 0);
+      const archiveY = Number(rows.find((r) => r.date === yDate)?.amount_original ?? 0);
+      if (archiveMtd > wsM) wsM = archiveMtd;
+      if (archiveY > wsY) wsY = archiveY;
+    }
+  } catch {
+    // ignore — wsY/wsM stay as-is from live API
   }
 
   // ===== 2c. OpenRouter credits balance =====
@@ -363,6 +398,16 @@ export async function POST(req: Request) {
   if (failedCnt > 0) alerts.push(`⚠️ Failed payments: ${failedCnt}`);
   if (stuckCnt > 0) alerts.push(`⚠️ Stuck async tasks (>30 min): ${stuckCnt}`);
   if (wsBal !== null && wsBal < 5) alerts.push(`⚠️ WaveSpeed balance low: ${fmtUsd(wsBal)}`);
+  if (wsOldestVisible) {
+    const daysVisible = Math.floor(
+      (yEnd.getTime() - new Date(wsOldestVisible).getTime()) / 86_400_000,
+    );
+    if (daysVisible < 14) {
+      alerts.push(
+        `⚠️ WS retention shrunk: only ${daysVisible} days visible (from ${wsOldestVisible}). Archive in manual_expenses is our source of truth.`,
+      );
+    }
+  }
   if (orCredits !== null && orCredits < 10)
     alerts.push(`⚠️ OpenRouter credits low: ${fmtUsd(orCredits)}`);
   if (totalApiY > 0 && topUserCost / totalApiY > 0.5 && topUserId) {

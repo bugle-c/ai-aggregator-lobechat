@@ -88,8 +88,12 @@ export async function POST(req: Request) {
   }
 
   const url = new URL(req.url);
-  // ?date=2026-05-30 → backfill a specific day. Default: yesterday.
+  // ?date=2026-05-30 → write only that one day. Default: yesterday for the
+  // OpenRouter sum. For WaveSpeed we ALWAYS snapshot every day available in
+  // `daily_usage[]` regardless of ?date= because the provider window is
+  // short-lived (see WS block comment).
   const targetDate = url.searchParams.get('date') ?? isoDate(1);
+  const wsBackfillAll = url.searchParams.get('date') === null;
 
   const startedAt = Date.now();
   const results: ProviderResult[] = [];
@@ -97,11 +101,16 @@ export async function POST(req: Request) {
   // ---- A) WaveSpeed ----
   //
   // WaveSpeed's /usage_stats endpoint IGNORES start_date/end_date in the
-  // request body and always returns the full history for the API key, with
-  // `summary.total_cost` = lifetime spend. The per-date breakdown is inside
-  // `data.daily_usage[].date+amount` — that's the only way to get yesterday's
-  // real number. So we send one request and look up our `targetDate` in the
-  // array (defaulting to $0 if the date isn't present — no activity that day).
+  // request body and returns whatever it still has on file for this API key:
+  // - `summary.total_cost` = lifetime spend currently visible
+  // - `data.daily_usage[].date+amount` = per-day breakdown for visible days
+  //
+  // We've observed the window is short: by the time the daily cron runs the
+  // next day, older days have already started disappearing from the array
+  // (looks like a rolling ~7–30-day retention on their side). So when called
+  // without ?date= we UPSERT EVERY day still visible — that's our durable
+  // archive in `manual_expenses`. Re-running the cron is idempotent thanks to
+  // the partial unique index on (date, provider) WHERE source='auto'.
   //
   // Also note: `summary.total_cost` covers ONLY this API key. The WaveSpeed
   // dashboard shows the whole account (all keys + UI-initiated test calls),
@@ -131,24 +140,48 @@ export async function POST(req: Request) {
         });
       } else {
         const j = (await r.json()) as WaveSpeedResp;
-        const dayBucket = j.data?.daily_usage?.find((b) => b.date === targetDate);
-        const dayCost = dayBucket?.amount ?? 0;
-        const dayCount = dayBucket?.count ?? 0;
-        const upsert = await upsertExpense({
-          amountUsd: dayCost,
-          date: targetDate,
-          description: `WaveSpeed daily (auto): ${dayCount} requests, $${dayCost.toFixed(4)}`,
-          provider: 'wavespeed',
-        });
-        results.push({
-          amountUsd: dayCost,
-          date: targetDate,
-          details: `requests=${dayCount}`,
-          ok: upsert.ok,
-          provider: 'wavespeed',
-          reason: upsert.reason,
-          rowId: upsert.rowId,
-        });
+        const allBuckets = j.data?.daily_usage ?? [];
+        const datesToWrite = wsBackfillAll ? allBuckets.map((b) => b.date) : [targetDate];
+
+        // Track the oldest day still returned by WS — useful as a tripwire
+        // for when their retention shrinks further.
+        const oldestVisible = allBuckets.map((b) => b.date).sort()[0];
+
+        for (const date of datesToWrite) {
+          const bucket = allBuckets.find((b) => b.date === date);
+          const dayCost = bucket?.amount ?? 0;
+          const dayCount = bucket?.count ?? 0;
+          // Skip empty days when we already have a row (don't overwrite an
+          // archived nonzero value with zero just because WS forgot it).
+          if (!bucket && wsBackfillAll) continue;
+          const upsert = await upsertExpense({
+            amountUsd: dayCost,
+            date,
+            description: `WaveSpeed daily (auto): ${dayCount} requests, $${dayCost.toFixed(4)}${
+              wsBackfillAll && oldestVisible ? ` [WS-oldest-visible=${oldestVisible}]` : ''
+            }`,
+            provider: 'wavespeed',
+          });
+          results.push({
+            amountUsd: dayCost,
+            date,
+            details: `requests=${dayCount}`,
+            ok: upsert.ok,
+            provider: 'wavespeed',
+            reason: upsert.reason,
+            rowId: upsert.rowId,
+          });
+        }
+
+        if (datesToWrite.length === 0) {
+          results.push({
+            amountUsd: 0,
+            date: targetDate,
+            ok: true,
+            provider: 'wavespeed',
+            reason: 'no days visible in daily_usage',
+          });
+        }
       }
     } catch (err) {
       results.push({
