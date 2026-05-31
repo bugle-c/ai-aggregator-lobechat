@@ -640,50 +640,55 @@ Run: `ssh deploy@135.181.115.234 "docker image inspect lobechat-custom:latest --
 
 If image is newer than container, run: `ssh deploy@135.181.115.234 "cd /opt/lobechat && docker compose up -d --force-recreate lobe"`.
 
-**Step 2: T1 — position correct**
+All Playwright selectors use the `data-testid` attributes set in Tasks 3 + 4: `[data-testid="mobile-shell"]`, `[data-testid="mobile-shell-scroll-area"]`, `[data-testid="mobile-tabbar"]`. Do not fall back to structural traversal (`lastElementChild`, child-index, etc.) — those silently break when any flex child gets added.
 
-Open `https://ask.gptweb.ru/settings/plans` in the browser tool at viewport 390×844. Evaluate:
+**Step 2: T1 — position correct on `/settings/plans`**
+
+Open `https://ask.gptweb.ru/settings/plans` at viewport 390×844. Evaluate:
 
 ```js
 () => {
-  const wrapper = Array.from(document.querySelectorAll('div, footer')).find((el) => {
-    const fs = el.tagName === 'FOOTER' ? el : el.querySelector('footer');
-    return fs && getComputedStyle(el.parentElement || el).display === 'flex';
-  });
-  // Locate the bar wrapper (parent of the inner <footer>) by finding
-  // the flex column shell and taking its last child.
-  const shell = document.querySelector('main')?.parentElement;
-  const tabbar = shell?.lastElementChild;
-  const rect = tabbar?.getBoundingClientRect();
+  const tabbar = document.querySelector('[data-testid="mobile-tabbar"]');
+  if (!tabbar) return { error: 'tabbar not found — flag off or shell not mounted' };
+  const rect = tabbar.getBoundingClientRect();
+  const cs = getComputedStyle(tabbar);
+  const parentCS = tabbar.parentElement ? getComputedStyle(tabbar.parentElement) : null;
   return {
     viewport: window.innerHeight,
-    tabbarTop: rect?.top,
-    tabbarBottom: rect?.bottom,
-    tabbarHeight: rect?.height,
-    bg: tabbar ? getComputedStyle(tabbar).backgroundColor : null,
-    shadow: tabbar ? getComputedStyle(tabbar).boxShadow : null,
-    parentTag: tabbar?.parentElement?.tagName,
-    parentStyle: tabbar?.parentElement ? getComputedStyle(tabbar.parentElement).display : null,
+    tabbarTop: rect.top,
+    tabbarBottom: rect.bottom,
+    tabbarHeight: rect.height,
+    bg: cs.backgroundColor,
+    shadow: cs.boxShadow,
+    parentTestId: tabbar.parentElement?.getAttribute('data-testid'),
+    parentDisplay: parentCS?.display,
   };
 };
 ```
 
-Expected: `tabbarBottom === viewport (844)`, `tabbarHeight >= 56` (icon row + safe-area; could be \~56 on a viewport without notch), `bg !== 'rgba(0, 0, 0, 0)'`, `shadow` starts with `rgba` and contains `-2px`, `parentStyle === 'flex'`.
+Expected:
+
+- `tabbarBottom === viewport (844)` (±1px)
+- `tabbarHeight >= 56` (icon row + safe-area; \~56 on viewports without notch)
+- `bg !== 'rgba(0, 0, 0, 0)'` (real background resolved from `theme.colorBgContainer`)
+- `shadow !== 'none'` — any non-none string. Exact value depends on `theme.boxShadowSecondary` (light vs dark theme)
+- `parentTestId === 'mobile-shell'`
+- `parentDisplay === 'flex'`
 
 **Step 3: T2 — content does not slide under tab bar**
 
-On the same page, evaluate:
+Same page (`/settings/plans`):
 
 ```js
 async () => {
-  const scrollArea = document.querySelector('main');
-  if (!scrollArea) return { error: 'no main' };
-  scrollArea.scrollTo({ top: scrollArea.scrollHeight, behavior: 'instant' });
+  const scrollArea = document.querySelector('[data-testid="mobile-shell-scroll-area"]');
+  const tabbar = document.querySelector('[data-testid="mobile-tabbar"]');
+  if (!scrollArea || !tabbar) return { error: 'shell not mounted' };
+  scrollArea.scrollTop = scrollArea.scrollHeight;
   await new Promise((r) => setTimeout(r, 300));
-  const lastCard = scrollArea.querySelectorAll('.ant-card');
-  const last = lastCard[lastCard.length - 1];
+  const cards = scrollArea.querySelectorAll('.ant-card');
+  const last = cards[cards.length - 1];
   const lastRect = last?.getBoundingClientRect();
-  const tabbar = scrollArea.parentElement.lastElementChild;
   const tabbarRect = tabbar.getBoundingClientRect();
   return {
     lastCardBottom: lastRect?.bottom,
@@ -693,43 +698,118 @@ async () => {
 };
 ```
 
-Expected: `overlap === false` (the last card sits above the tab bar).
+Expected: `overlap === false` (the last card sits above the tab bar). `scrollTop = scrollHeight` is used instead of `scrollTo({ behavior: 'instant' })` because `instant` is not universally supported.
 
-**Step 4: T3 — Drawer interaction**
+**Step 4: T3 — Drawer-open does NOT shift the tab bar (THE headline test)**
 
-Programmatically open Drawer (or open via burger if you can find the trigger). Re-measure tabbarTop; should be unchanged.
+This is the entire reason for the refactor. Automate it — do **not** punt to "verify visually".
 
 ```js
-() => {
-  // Toggle the global drawer via the store; quickest path is to
-  // simulate the burger click if there is one. If you can't find
-  // it from the snapshot, skip and verify visually after Step 5.
-  return { note: 'verify visually that drawer open/close does not move tabbar' };
+async () => {
+  const tabbar = document.querySelector('[data-testid="mobile-tabbar"]');
+  if (!tabbar) return { error: 'tabbar not found' };
+  const beforeTop = tabbar.getBoundingClientRect().top;
+
+  // Open the Drawer via the global Zustand store. The store may be
+  // exposed on window via zustand devtools (`__lobeStore__`) or as
+  // `useGlobalStore` directly. Fall back to clicking the burger button
+  // (any element with `aria-label` containing "menu" or testid hint).
+  const store = window.__lobeStore__?.global || window.useGlobalStore?.getState?.();
+  if (store?.toggleLeftPanel) {
+    store.toggleLeftPanel(true);
+  } else {
+    const burger = document.querySelector('[aria-label*="menu" i], [data-testid*="burger"]');
+    burger?.click();
+  }
+  // Wait for the 200ms antd Drawer + filter transition to fully settle.
+  await new Promise((r) => setTimeout(r, 400));
+  const duringTop = tabbar.getBoundingClientRect().top;
+
+  // Close and re-measure.
+  if (store?.toggleLeftPanel) {
+    store.toggleLeftPanel(false);
+  } else {
+    document.querySelector('.ant-drawer-mask')?.click();
+  }
+  await new Promise((r) => setTimeout(r, 400));
+  const afterTop = tabbar.getBoundingClientRect().top;
+
+  return {
+    beforeTop,
+    duringTop,
+    afterTop,
+    shiftDuring: Math.abs(duringTop - beforeTop),
+    shiftAfter: Math.abs(afterTop - beforeTop),
+  };
 };
 ```
 
-**Step 5: T4 — kill-switch works**
+Expected: `shiftDuring < 2` AND `shiftAfter < 2`. Before the refactor `shiftDuring` was 41px (CloudBanner height) due to the Drawer-blur containing-block trap. Non-zero shift here means the refactor failed its primary goal — escalate, do not declare success.
 
-Navigate to `https://ask.gptweb.ru/settings/plans?mobile-shell=off`. Wait \~1s for the `useEffect` to write localStorage and re-render. Re-run Step 2's evaluation.
+If both store and burger lookups fail (e.g. production build hides the store), report it and continue. Don't silently skip this test.
 
-Expected: now `parentStyle !== 'flex'` (the bar is back in overlay/fixed mode), `localStorage.getItem('mobile-shell-v2') === 'off'`.
+**Step 5: T4 — Chat thread hides tab bar and ScrollArea takes full height**
 
-Then navigate to `?mobile-shell=on` — bar should be flex-mode again, localStorage flips to `'on'`.
+Navigate to any chat-thread route (e.g. `/agent/<some-id>` — pick one from the home list). Evaluate:
 
-**Step 6: T5 — desktop intact**
+```js
+() => {
+  const tabbar = document.querySelector('[data-testid="mobile-tabbar"]');
+  const scrollArea = document.querySelector('[data-testid="mobile-shell-scroll-area"]');
+  const shell = document.querySelector('[data-testid="mobile-shell"]');
+  return {
+    tabbarRendered: !!tabbar,
+    shellRendered: !!shell,
+    scrollAreaHeight: scrollArea?.getBoundingClientRect().height,
+    shellHeight: shell?.getBoundingClientRect().height,
+  };
+};
+```
 
-Resize viewport to `1280×800`, navigate to `/settings/plans`. Confirm: `NavPanel` rendered on the left, no `<main>` from MobileShell, layout looks like current desktop.
+Expected: `tabbarRendered === false` (useShowTabBar returns null on chat threads), `shellRendered === true` (shell still mounts), `scrollAreaHeight === shellHeight` (ScrollArea expands to fill since the tab bar is gone).
 
-**Step 7: Report findings**
+**Step 6: T5 — kill-switch works**
 
-Write a short summary to the user with:
+Navigate to `https://ask.gptweb.ru/settings/plans?mobile-shell=off`. Wait \~1s for the `useEffect` to write localStorage and re-render.
 
-- ✅/❌ for each of T1–T5
-- Any unexpected console errors
-- Screenshot of mobile view at 390×844 (use `browser_take_screenshot`)
-- Whether kill-switch works
+```js
+() => ({
+  tabbarFound: !!document.querySelector('[data-testid="mobile-tabbar"]'),
+  shellFound: !!document.querySelector('[data-testid="mobile-shell"]'),
+  legacyFooter: !!document.querySelector('footer'),
+  storedFlag: localStorage.getItem('mobile-shell-v2'),
+});
+```
 
-If everything passes, ask user to test on real phone (manual checks U7, X2, X5, X6, X9 from the spec's risk register).
+Expected: `shellFound === false`, `tabbarFound === false` (the new bar isn't there — it's the **legacy** bar now, which doesn't have the testid), `legacyFooter === true` (lobehub's inner `<footer>` is present at the bottom in legacy mode), `storedFlag === 'off'`.
+
+Then navigate to `?mobile-shell=on` and verify the flip: `shellFound === true`, `tabbarFound === true`, `storedFlag === 'on'`.
+
+**Step 7: T6 — desktop intact**
+
+Resize viewport to `1280×800`, navigate to `/settings/plans`:
+
+```js
+() => ({
+  mobileShellFound: !!document.querySelector('[data-testid="mobile-shell"]'),
+  navPanelFound: !!document.querySelector('nav, [class*="NavPanel"]'),
+});
+```
+
+Expected: `mobileShellFound === false`, `navPanelFound === true`. Layout matches today's desktop.
+
+**Step 8: Report findings**
+
+Summary to the user:
+
+- ✅/❌ for each of T1–T6
+- T3's `shiftDuring` / `shiftAfter` numbers (the headline metric — should be < 2)
+- Any console errors (run `browser_console_messages` with `level=error`)
+- Screenshot at 390×844 on `/settings/plans` (`browser_take_screenshot`)
+- Whether kill-switch flips both ways (T5)
+- Whether CloudBanner offset works — if `showCloudPromotion` is true in this environment, T1's `tabbarBottom` should still be exactly `viewport` (the offset CSS var should have shrunk the shell)
+
+If any T fails — jump to Task 8. If everything passes, ask user to test on a real phone (spec risk register U7, X2, X5, X6, X9).
 
 ---
 
@@ -737,14 +817,23 @@ If everything passes, ask user to test on real phone (manual checks U7, X2, X5, 
 
 This task only runs if Task 7 surfaces a regression. Common fix patterns from the spec's risk register:
 
+**If MobileFlowFAB ends up below the tab bar (U4):**
+
+Edit `src/features/Generators/MobileFlowFAB.tsx`. Change `bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)'` to `bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px + 56px)'` — the FAB now sits above the in-layout tab bar instead of the old overlay. Or: import `MOBILE_TAB_BAR_HEIGHT` from MobileTabBar and use it instead of the literal 56.
+
+**If window-level scroll listeners are broken (C5 / Task 4 Step 1 survey):**
+
+Any hit from Task 4 Step 1's `grep` that lives in a mobile-relevant component (chat, image, video, conversation) now reads `window.scrollY` / listens on `window` for scroll, but mobile scroll lives in `<MobileShell.ScrollArea>` (a `<main>` element), not on the window. Two fixes:
+
+1. **Forward a ref into the component** and replace `window.addEventListener('scroll', ...)` with `scrollAreaRef.current.addEventListener('scroll', ...)`. Easiest path is a context: `MobileShell.ScrollArea` provides `<MobileScrollAreaContext.Provider value={ref}>` and consumers read it via `useMobileScrollArea()`. If you go this route, add the context to `MobileShell.tsx` and document in JSDoc.
+2. **Or fall back to `document.addEventListener('scroll', e => ..., true)`** with `capture: true` — captures scroll events on any descendant. Less precise but a quick fix.
+
+Pick (1) if more than \~3 sites need fixing; (2) for one-off.
+
 **If IntersectionObserver lazy-load is broken (C5):**
 
 1. Find observers: `grep -rn "new IntersectionObserver\|useInView" src/ | grep -v ".test."`
-2. Pass `root: scrollAreaRef.current` where they use `root: null` and live inside the mobile shell.
-
-**If MobileFlowFAB ends up below the tab bar (U4):**
-
-Edit `src/features/Generators/MobileFlowFAB.tsx`. Change `bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)'` to `bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px + 56px)'` — the FAB now sits above the in-layout tab bar instead of the old overlay.
+2. Pass `root: scrollAreaRef.current` where they use `root: null` and live inside the mobile shell. Same MobileScrollAreaContext approach as above.
 
 **If Android virtual keyboard pushes input under itself (U7/X2):**
 
@@ -775,13 +864,30 @@ Each fix lands as its own commit with a focused message.
 
 ## After all tasks pass
 
-1. Update `KNOWLEDGE.md` at the repo root with a one-liner:
+1. **Update `KNOWLEDGE.md`** at `/home/deploy/projects/ai-aggregator-lobechat/KNOWLEDGE.md` (per the workspace-wide rule in `/home/deploy/projects/CLAUDE.md` — projects under active development must keep this file). If `KNOWLEDGE.md` doesn't exist yet, create it with the standard header + this entry; if it does, append. Single-bullet entry:
 
    ```
    - Mobile layout uses MobileShell (flex column app shell), not overlay tab bar.
      Kill-switch: ?mobile-shell=off. Spec: docs/superpowers/specs/2026-06-01-mobile-shell-design.md.
+     Plan: docs/superpowers/plans/2026-06-01-mobile-shell-plan.md.
    ```
 
-2. Wait ≥48h of production use without `?mobile-shell=off` complaints.
+   Commit this update as a separate small commit on the same `canary` branch: `docs(knowledge): mobile shell ships`.
 
-3. Then a fifth commit removes the flag and the legacy fallback branch — but ONLY after the wait period. Don't include in this plan; track as a follow-up task.
+2. **Wait ≥48h** of production use with default-on flag and no `?mobile-shell=off` complaints. Track any reports in this period — each one becomes either a Task-8-style smoke fix or (if rare) a documented limitation.
+
+3. **Then** a fifth commit removes:
+   - `src/hooks/useMobileShellFlag.ts` and `.test.ts`
+   - The `else` branch of the ternary in `_layout/index.tsx` (the legacy fallback)
+   - The `isMobileShellEnabled` reference
+
+   Don't include this fifth commit in the present plan — track as a follow-up task once the wait period clears.
+
+4. **Out-of-scope follow-ups** explicitly flagged by the spec / code-review and deferred:
+   - Accessibility: `aria-current="page"` on active tab item, `<nav role="navigation" aria-label="...">` wrapper, focus management on tab switch
+   - Dark-mode shadow tuning if `theme.boxShadowSecondary` proves insufficient
+   - RTL layout verification
+   - Page-level `ScrollRestoration` keyed to scrollArea (UX risk X4)
+   - PWA standalone-mode polish
+
+   Track these as standalone tasks if Task 7 surfaces them as user-facing issues; otherwise they're polish for a later iteration.
