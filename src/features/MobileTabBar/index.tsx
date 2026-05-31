@@ -109,28 +109,35 @@ export default memo<Props>(({ className, tabBarKey }) => {
     [t, tSub, router],
   );
 
-  // SSR-safe portal target. We MUST render the tab bar as a direct
-  // child of document.body (not the regular React tree) because antd
-  // Drawer applies `filter: blur(3px)` to the background container
-  // when open. CSS spec: `filter` (and `transform`, `will-change:
-  // transform`, `perspective`, `contain: paint/strict/layout`) creates
-  // a NEW containing block for `position: fixed` descendants — so a
-  // tab bar nested inside the blurred subtree gets anchored to that
-  // blurred wrapper instead of the viewport. With CloudBanner on top
-  // (41px high), the tab bar ends up 41px below the viewport edge,
-  // invisible. When the Drawer opens/closes, the blur transitions in
-  // 0.2s and the tab bar visibly jumps. Portaling to body sidesteps
-  // every ancestor-induced containing block: it stays viewport-fixed
-  // regardless of what Drawer, transform, or filter rules upstream
-  // ever do. See https://drafts.csswg.org/css-transforms-1/#containing-block-fixpos
-  const [mounted, setMounted] = useState(false);
+  // SSR-safe portal target. We MUST render the tab bar OUTSIDE the
+  // antd Drawer's blur wrapper because Drawer applies `filter: blur(3px)`
+  // to the background container when open. CSS spec: `filter` (and
+  // `transform`, `will-change: transform`, `perspective`, `contain:
+  // paint/strict/layout`) creates a NEW containing block for
+  // `position: fixed` descendants — so a tab bar nested inside the
+  // blurred subtree gets anchored to that blurred wrapper instead of
+  // the viewport. With CloudBanner on top (41px high), the tab bar
+  // ends up 41px below the viewport edge, invisible. When the Drawer
+  // opens/closes, the blur transitions in 0.2s and the tab bar visibly
+  // jumps. We target `.ant-app` (NOT document.body) because:
+  //   1. `.ant-app` is the parent of the blur subtree — portaling here
+  //      makes us a sibling of the blur wrapper, escaping its
+  //      containing block.
+  //   2. `.ant-app` is the antd CSS-in-JS theme scope. CSS vars like
+  //      `--ant-color-bg-container` are declared inside it, so portaling
+  //      to body would resolve those vars to `transparent` and the bar
+  //      would visually melt into the page.
+  // Fallback to body if .ant-app isn't mounted yet (very early render);
+  // background colors are hard-coded so this fallback still looks right.
+  // See https://drafts.csswg.org/css-transforms-1/#containing-block-fixpos
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   useEffect(() => {
-    setMounted(true);
+    setPortalTarget(document.querySelector('.ant-app') ?? document.body);
   }, []);
 
   // Hide on chat threads (`/chat/[topicId]`) so messages have full
   // vertical space. Visible everywhere else, including settings sub-pages.
-  if (!visible || !mounted) return null;
+  if (!visible || !portalTarget) return null;
 
   // Pin to viewport bottom as an overlay so it doesn't shrink the
   // content area. Pages that need to avoid hiding the last bit of
@@ -139,8 +146,11 @@ export default memo<Props>(({ className, tabBarKey }) => {
   return createPortal(
     <div
       style={{
-        backgroundColor: 'var(--ant-color-bg-container)',
-        borderBlockStart: '1px solid var(--ant-color-border-secondary)',
+        // Use the antd CSS var with a hard-coded fallback so the bar
+        // never melts into the page even if the var fails to resolve
+        // (e.g., portaled outside theme scope during a partial mount).
+        backgroundColor: 'var(--ant-color-bg-container, #fff)',
+        borderBlockStart: '1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.06))',
         bottom: 0,
         // Promote to its own compositing layer — paint stays stable
         // during background reflow (URL bar show/hide on iOS Safari).
@@ -154,6 +164,6 @@ export default memo<Props>(({ className, tabBarKey }) => {
     >
       <TabBar safeArea activeKey={activeKey} className={className} items={items} />
     </div>,
-    document.body,
+    portalTarget,
   );
 });
