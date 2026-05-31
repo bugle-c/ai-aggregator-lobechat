@@ -6,6 +6,7 @@ import { localChatModels } from './local';
 import { minimaxChatModels } from './minimax';
 import { moonshotChatModels } from './moonshot';
 import { openaiChatModels } from './openai';
+import { qwenChatModels } from './qwen';
 import { xaiChatModels } from './xai';
 
 export const lobehubChatModels: AIChatModelCard[] = [
@@ -16,6 +17,7 @@ export const lobehubChatModels: AIChatModelCard[] = [
   ...xaiChatModels,
   ...minimaxChatModels,
   ...moonshotChatModels,
+  ...qwenChatModels,
   ...localChatModels,
 ];
 
@@ -26,4 +28,5 @@ export { localChatModels } from './local';
 export { minimaxChatModels } from './minimax';
 export { moonshotChatModels } from './moonshot';
 export { openaiChatModels } from './openai';
+export { qwenChatModels } from './qwen';
 export { xaiChatModels } from './xai';

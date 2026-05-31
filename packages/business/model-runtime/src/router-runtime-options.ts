@@ -78,9 +78,13 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'grok-4-20': 'x-ai/grok-4.20',
   'grok-4': 'x-ai/grok-4',
   // Moonshot
+  'kimi-k2.6': 'moonshotai/kimi-k2.6',
   'kimi-k2.5': 'moonshotai/kimi-k2.5',
   'kimi-k2-0711-preview': 'moonshotai/kimi-k2-0711-preview',
+  // Alibaba Qwen
+  'qwen3.6-max-preview': 'qwen/qwen3.6-max-preview',
   // MiniMax — lowercase, dot-style
+  'MiniMax-M2.7': 'minimax/minimax-m2.7',
   'MiniMax-M2.5': 'minimax/minimax-m2.5',
   'MiniMax-M2.5-highspeed': 'minimax/minimax-m2.5-highspeed',
   'MiniMax-M2.1': 'minimax/minimax-m2.1',

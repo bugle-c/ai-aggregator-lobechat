@@ -8,6 +8,27 @@ export const minimaxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 204_800,
     description:
+      'MiniMax M2.7 — newest in the M2 family, with refined reasoning and tool use. Optimised for code and agent workloads.',
+    displayName: 'MiniMax M2.7',
+    enabled: true,
+    id: 'MiniMax-M2.7',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.26, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-30',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 204_800,
+    description:
       'Optimized for code generation and refactoring, delivering peak performance with ultimate value to master complex tasks.',
     displayName: 'MiniMax M2.5',
     enabled: true,

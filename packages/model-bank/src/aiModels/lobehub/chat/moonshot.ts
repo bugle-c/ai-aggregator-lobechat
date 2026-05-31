@@ -11,6 +11,35 @@ export const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
+      'Kimi K2.6 — successor to K2.5: improved reasoning and tool use, native multimodal (vision + text), thinking/non-thinking modes. 262K context.',
+    displayName: 'Kimi K2.6',
+    enabled: true,
+    id: 'kimi-k2.6',
+    maxOutput: 32_768,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.68, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.42, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-25',
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
       'Kimi K2.5 is Kimi\'s most versatile model to date, featuring a native multimodal architecture that supports both vision and text inputs, "thinking" and "non-thinking" modes, and both conversational and agent tasks.',
     displayName: 'Kimi K2.5',
     enabled: true,
