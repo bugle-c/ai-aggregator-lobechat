@@ -126,9 +126,18 @@ jobs:
           # — HTML rendered fine (200) but every JS/CSS chunk 404'd, breaking the
           # entire client app. We did not notice for 13 hours because /signin
           # returns 307 even when the page is unusable. Net result: 0 signups.
-          chunk=$(curl -s https://ask.gptweb.ru/register | grep -oE '_next/static/chunks/[a-zA-Z0-9_-]+\.js' | head -n 1)
+          #
+          # Probe path notes:
+          #   - /register 308-redirects to /?auth=signup as of 2026-05 (new
+          #     onboarding flow). Without -L the curl received only the
+          #     redirect stub which has no JS chunk reference → false-positive
+          #     failure on every deploy.
+          #   - /?auth=signup renders the same modal-on-root that /register
+          #     used to land on, and it's served as a non-redirect HTML page
+          #     so curl with -L always lands on real content.
+          chunk=$(curl -sL https://ask.gptweb.ru/?auth=signup | grep -oE '_next/static/chunks/[a-zA-Z0-9_-]+\.js' | head -n 1)
           if [ -z "$chunk" ]; then
-            echo "::error::No static chunk reference found in /register HTML"
+            echo "::error::No static chunk reference found in /?auth=signup HTML"
             exit 1
           fi
           chunk_status=$(curl -s -o /dev/null -w '%{http_code}' "https://ask.gptweb.ru/$chunk")
