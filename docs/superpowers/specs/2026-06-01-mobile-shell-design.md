@@ -187,7 +187,7 @@ return (
     {isMobile && isMobileShellEnabled ? (
       <MobileShell>
         <Drawer ...><NavPanel /></Drawer>
-        <main className={mobileStyles.scrollArea}>
+        <MobileShell.ScrollArea>
           <DndContextWrapper>
             <MarketAuthProvider isDesktop={false}>
               <DesktopHomeLayout><DesktopHome /></DesktopHomeLayout>
@@ -196,7 +196,7 @@ return (
               </Suspense>
             </MarketAuthProvider>
           </DndContextWrapper>
-        </main>
+        </MobileShell.ScrollArea>
         <MobileTabBar />
       </MobileShell>
     ) : (
