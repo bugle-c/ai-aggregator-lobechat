@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { UserModel } from '@/database/models/user';
-import { userBilling } from '@/database/schemas';
+import { billingPayments, userBilling } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getTopupPackage, TOPUP_PACKAGES } from '@/server/modules/billing/constants';
@@ -46,19 +46,42 @@ export const topUpRouter = router({
 
       const user = await UserModel.findById(ctx.serverDB, ctx.userId);
 
-      const { paymentId, paymentUrl } = await createYookassaPayment({
-        amountRub: pkg.amountRub,
-        customerEmail: user?.email || undefined,
-        description: `Пополнение ${pkg.label} — WebGPT`,
-        metadata: {
-          payment_id: payment.id,
-          type: 'topup',
-          ...(ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : {}),
-        },
-        paymentMethodType: 'sbp',
-        returnUrl,
-      });
+      // Mirror subscription.createPayment — capture YK error into our row
+      // before re-throwing so reconcile-pending failures carry the cause.
+      let ykResult: { paymentId: string; paymentUrl: string };
+      try {
+        ykResult = await createYookassaPayment({
+          amountRub: pkg.amountRub,
+          customerEmail: user?.email || undefined,
+          description: `Пополнение ${pkg.label} — WebGPT`,
+          metadata: {
+            payment_id: payment.id,
+            type: 'topup',
+            ...(ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : {}),
+          },
+          paymentMethodType: 'sbp',
+          returnUrl,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        await ctx.serverDB
+          .update(billingPayments)
+          .set({
+            metadata: sql`COALESCE(${billingPayments.metadata}, '{}'::jsonb) || ${JSON.stringify({
+              create_error: msg.slice(0, 500),
+              create_error_at: new Date().toISOString(),
+              create_error_source: 'topUp.createPayment',
+            })}::jsonb`,
+            updatedAt: new Date(),
+          })
+          .where(eq(billingPayments.id, payment.id))
+          .catch((updateErr) => {
+            console.error('[topUp.createPayment] metadata patch failed:', updateErr);
+          });
+        throw err;
+      }
 
+      const { paymentId, paymentUrl } = ykResult;
       await BillingService.updatePaymentYookassaId(ctx.serverDB, payment.id, paymentId);
 
       return { paymentUrl };

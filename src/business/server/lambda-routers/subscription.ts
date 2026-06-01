@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { UserModel } from '@/database/models/user';
-import { userBilling } from '@/database/schemas';
+import { billingPayments, userBilling } from '@/database/schemas';
 import { CANCELLATION_REASON_CODES, cancellationSurveys } from '@/database/schemas/lifecycle';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -59,46 +59,75 @@ export const subscriptionRouter = router({
 
       const user = await UserModel.findById(ctx.serverDB, ctx.userId);
 
-      const { paymentId, paymentUrl } = await createYookassaPayment({
-        amountRub: plan.priceRub,
-        customerEmail: user?.email || undefined,
-        description: `Подписка ${plan.name} — WebGPT`,
-        metadata: {
-          payment_id: payment.id,
-          type: 'subscription',
-          ...(ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : {}),
-        },
-        // Force bank_card on the YK hosted form. Subscriptions need a
-        // saveable payment method for renewal cron — SBP is one-shot QR
-        // and can't be saved. Without this preselect, YK shows SBP +
-        // YooMoney + card as equal options; users tap SBP, then YK
-        // either errors or silently delivers a form they don't complete
-        // (see expired_on_confirmation cancellations). Locking to
-        // bank_card avoids the dead-end choice.
-        //
-        // Top-ups (one-shot) use SBP preselect instead — see topUp.ts.
-        // They don't pass savePaymentMethod, so the SBP/save conflict
-        // doesn't arise there.
-        //
-        // yookassa.ts has a fallback: if YK rejects the type for any
-        // reason (400 / unknown-method), the helper retries without
-        // payment_method_data so the user still gets a usable form.
-        paymentMethodType: 'bank_card',
-        returnUrl,
-        // Saves the card token on first payment so the
-        // renew-due-subscriptions cron can charge the user each cycle
-        // without bouncing them back to the YooKassa checkout. The
-        // succeeded-webhook persists `payment_method.id` to
-        // user_billing.payment_method_id.
-        //
-        // Requires the YooKassa store to be approved for recurring
-        // payments. Without that approval, including the flag makes YK
-        // reject the whole payment with 403 'forbidden'. Gate it behind
-        // an env so we can ship subscriptions before recurring is
-        // approved, and flip it on later without code changes.
-        savePaymentMethod: process.env.YOOKASSA_RECURRING_ENABLED === '1',
-      });
+      // YK can throw for many reasons (403 forbidden when recurring isn't
+      // approved, 400 on payment_method_type, network timeouts, auth issues).
+      // Capture the message into the local billing_payments row so the
+      // reconcile-pending cron's "failed" verdict carries the real cause —
+      // otherwise the row turns into a silent loss with no debug trail.
+      // See docs note on May 10-12 cluster (29 290 ₽ of phantom fails).
+      let ykResult: { paymentId: string; paymentUrl: string };
+      try {
+        ykResult = await createYookassaPayment({
+          amountRub: plan.priceRub,
+          customerEmail: user?.email || undefined,
+          description: `Подписка ${plan.name} — WebGPT`,
+          metadata: {
+            payment_id: payment.id,
+            type: 'subscription',
+            ...(ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : {}),
+          },
+          // Force bank_card on the YK hosted form. Subscriptions need a
+          // saveable payment method for renewal cron — SBP is one-shot QR
+          // and can't be saved. Without this preselect, YK shows SBP +
+          // YooMoney + card as equal options; users tap SBP, then YK
+          // either errors or silently delivers a form they don't complete
+          // (see expired_on_confirmation cancellations). Locking to
+          // bank_card avoids the dead-end choice.
+          //
+          // Top-ups (one-shot) use SBP preselect instead — see topUp.ts.
+          // They don't pass savePaymentMethod, so the SBP/save conflict
+          // doesn't arise there.
+          //
+          // yookassa.ts has a fallback: if YK rejects the type for any
+          // reason (400 / unknown-method), the helper retries without
+          // payment_method_data so the user still gets a usable form.
+          paymentMethodType: 'bank_card',
+          returnUrl,
+          // Saves the card token on first payment so the
+          // renew-due-subscriptions cron can charge the user each cycle
+          // without bouncing them back to the YooKassa checkout. The
+          // succeeded-webhook persists `payment_method.id` to
+          // user_billing.payment_method_id.
+          //
+          // Requires the YooKassa store to be approved for recurring
+          // payments. Without that approval, including the flag makes YK
+          // reject the whole payment with 403 'forbidden'. Gate it behind
+          // an env so we can ship subscriptions before recurring is
+          // approved, and flip it on later without code changes.
+          savePaymentMethod: process.env.YOOKASSA_RECURRING_ENABLED === '1',
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // Best-effort metadata patch; if it errors we still re-throw the
+        // original YK failure so the client sees the real cause.
+        await ctx.serverDB
+          .update(billingPayments)
+          .set({
+            metadata: sql`COALESCE(${billingPayments.metadata}, '{}'::jsonb) || ${JSON.stringify({
+              create_error: msg.slice(0, 500),
+              create_error_at: new Date().toISOString(),
+              create_error_source: 'subscription.createPayment',
+            })}::jsonb`,
+            updatedAt: new Date(),
+          })
+          .where(eq(billingPayments.id, payment.id))
+          .catch((updateErr) => {
+            console.error('[subscription.createPayment] metadata patch failed:', updateErr);
+          });
+        throw err;
+      }
 
+      const { paymentId, paymentUrl } = ykResult;
       await BillingService.updatePaymentYookassaId(ctx.serverDB, payment.id, paymentId);
 
       return { paymentUrl };
