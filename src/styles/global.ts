@@ -21,6 +21,19 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
     @media (device-width >= 576px) {
       overflow: hidden;
     }
+
+    /* Lock body on mobile too — MobileShell.ScrollArea owns the only
+       scroll surface, so allowing body to scroll just enables iOS
+       Safari's rubber-band on the entire page, which makes the tab
+       bar (sibling of ScrollArea inside the shell) appear to bounce
+       even though it's structurally flex-shrink:0. Locking html/body
+       removes the bounce surface entirely. ScrollArea's
+       overscroll-behavior: contain keeps scroll-chains from reaching
+       this layer in the first place; this is belt-and-braces for
+       aggressive drag gestures that try to drag the viewport itself. */
+    @media (width <= 575px) {
+      overflow: hidden;
+    }
   }
 
   body {
