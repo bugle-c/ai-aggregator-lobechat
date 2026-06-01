@@ -66,28 +66,41 @@ const Layout: FC = () => {
   // currently above it — not just what showCloudPromotion predicts. The
   // feature flag and the rendered DOM can disagree (banner can be shown
   // by upstream logic without the flag), so measuring reality is the
-  // robust choice. ResizeObserver re-measures when anything above us
-  // resizes (banner mounts, banner dismisses, font reflow, etc.).
+  // robust choice.
+  //
+  // Observation strategy:
+  //   - MutationObserver on body's childList catches CloudBanner / other
+  //     siblings mounting and unmounting above .ant-app. This is the
+  //     primary signal — banner appearance is a sibling-list change.
+  //   - resize / visualViewport listeners catch URL-bar dance and
+  //     orientation flips so we re-measure when the viewport changes.
+  // (An earlier ResizeObserver(document.body) was useless: once we lock
+  // html/body to overflow:hidden with fixed 100dvh, body never resizes
+  // and the observer never fires.)
   useEffect(() => {
     if (!isMobile) return;
     const antApp = document.querySelector<HTMLElement>('.ant-app');
     if (!antApp) return;
 
     const update = () => {
-      // .ant-app's offsetTop is the gap between body's top edge and the
-      // shell wrapper — exactly what we need to subtract from 100dvh.
+      // .ant-app's bounding-rect top is the gap between viewport's top
+      // and the shell wrapper — exactly what we subtract from 100dvh.
       const offset = antApp.getBoundingClientRect().top;
       antApp.style.setProperty(MOBILE_SHELL_BANNER_OFFSET_VAR, `${Math.max(0, offset)}px`);
     };
 
     update();
-    // Watch body so we catch banner mount/dismount, top-bar appearance,
-    // font reflow, viewport changes, etc.
-    const ro = new ResizeObserver(update);
-    ro.observe(document.body);
+
+    const mo = new MutationObserver(update);
+    mo.observe(document.body, { childList: true });
+
+    window.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('resize', update);
 
     return () => {
-      ro.disconnect();
+      mo.disconnect();
+      window.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('resize', update);
       antApp.style.removeProperty(MOBILE_SHELL_BANNER_OFFSET_VAR);
     };
   }, [isMobile]);
