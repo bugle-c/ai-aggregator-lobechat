@@ -236,6 +236,10 @@ out.append("<p>Source: ai-aggregator-lobechat/scripts/monitoring/check-api-delta
 print("".join(out))
 ')
 
-notify_email "[webgpt-alert] API-costs Δ% anomaly" "$BODY"
-log "alert email sent (${ALERT_COUNT} provider(s) beyond threshold)"
+# Migrated 2026-06-01: notify_email → notify_failure (Telegram).
+# Strip HTML to a plain-text summary because Telegram is the transport now.
+# The structured anomaly table is still visible in /admin/finance/api-costs.
+SUMMARY=$(echo "$BODY" | sed -e 's/<[^>]*>//g' -e 's/&ge;/>=/g' -e 's/&nbsp;/ /g' | tr -s ' \n')
+notify_failure "check-api-delta" "${ALERT_COUNT} provider(s) beyond threshold. ${SUMMARY:0:1500}"
+log "alert sent to Telegram (${ALERT_COUNT} provider(s) beyond threshold)"
 log "=== api-costs delta check complete ==="

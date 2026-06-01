@@ -315,8 +315,12 @@ except Exception:
         [[ -n "$u" ]] && BODY+="<li><a href=\"${u}\">${u}</a></li>"
     done <<< "$DROP_URLS"
     BODY+="</ul><p><a href=\"https://ask.gptweb.ru/admin/blog/reoptimize\">Open reoptimize queue</a></p>"
-    notify_email "[Blog traffic] ${DROP_COUNT} drop(s) flagged" "$BODY"
-    log "digest email sent — ${DROP_COUNT} drops"
+    # Migrated 2026-06-01: notify_email → notify_failure (Telegram).
+    # The notify_email helper was removed in the 2026-05-31 blog/notify
+    # migration; this caller was missed. Drops are an alert condition so
+    # notify_failure is the right shape (sends a FAIL-prefixed TG message).
+    notify_failure "track-positions" "${DROP_COUNT} drop(s) flagged: $(echo "$DROP_URLS" | tr '\n' ' ')"
+    log "digest sent to Telegram — ${DROP_COUNT} drops"
 fi
 
 log "=== position tracking complete ==="
