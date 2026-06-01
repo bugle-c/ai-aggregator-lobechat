@@ -202,7 +202,12 @@ export async function POST(req: Request) {
     });
   }
 
-  // ---- B) OpenRouter (no external call — sum usage_logs.cost_usd for openrouter-bucketed rows) ----
+  // ---- B) OpenRouter (no external call — sum usage_logs.provider_cost_rub) ----
+  // NOTE: cost_usd is the user-charged credits in USD (post-markup ×2.5-10),
+  // not the real upstream invoice. Summing it inflates the "Invoiced" column
+  // 4-5× and trips the Booked-vs-Invoiced alert on /admin/finance/api-costs.
+  // Real upstream is provider_cost_rub; we convert through exchange_rate so
+  // the manual_expenses row keeps USD-typed amount_original.
   try {
     const db = await getServerDB();
 
@@ -234,7 +239,7 @@ export async function POST(req: Request) {
 
     const rows = await db
       .select({
-        sum: drizzleSql<number>`COALESCE(SUM(${usageLogs.costUsd}::numeric), 0)::float8`,
+        sum: drizzleSql<number>`COALESCE(SUM(${usageLogs.providerCostRub}::numeric / NULLIF(${usageLogs.exchangeRate}::numeric, 0)), 0)::float8`,
       })
       .from(usageLogs)
       .where(
@@ -252,7 +257,7 @@ export async function POST(req: Request) {
     const upsert = await upsertExpense({
       amountUsd: totalCost,
       date: targetDate,
-      description: `OpenRouter daily (auto): sum of usage_logs.cost_usd for non-WS / non-HF / non-local models`,
+      description: `OpenRouter daily (auto): SUM(provider_cost_rub/exchange_rate) for non-WS / non-HF / non-local models`,
       provider: 'openrouter',
     });
     results.push({
