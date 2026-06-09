@@ -482,10 +482,17 @@ systemctl list-timers --all | grep blog
 
 ## 15. Запланированное (backlog)
 
-- **Cluster-expansion loop:** кластеры с реальным трафиком (blended score
-  `clicks×5 + impressions` из `blog_positions`, top-N, **не-VPN**) →
-  приоритетная генерация статей под их непокрытые `related_keywords`.
-  Подход: hybrid (приоритет + потолок \~50% слотов). На дизайне.
+- **Cluster-expansion loop** — _спека одобрена, в реализации._ Кластеры с
+  реальным трафиком (blended score `clicks×5 + impressions` из
+  `blog_positions`, top-N, **не-VPN**) → приоритетная генерация статей под
+  их непокрытые `related_keywords`. Подход: hybrid (приоритет + потолок
+  \~50% слотов через slot-parity по чётности часа). Дизайн:
+  `docs/superpowers/specs/2026-06-10-cluster-expansion-loop-design.md`.
+  Producer — в `track-positions.sh` (сеет ключи `source='cluster_expansion'`,
+  priority=high). Consumer — slot-parity ветка в `generate-article.sh`
+  (expansion-слоты 08/12/16/20 МСК, normal 10/14/18/22). Флаги:
+  `CLUSTER_EXPANSION_ENABLED/TOP_N/MIN_SCORE/KW_PER_CLUSTER`. Когда выкатим —
+  перенести в основную часть (§8 рядом с реоптимизацией) + runbook-строку в §13.
 
 ---
 
