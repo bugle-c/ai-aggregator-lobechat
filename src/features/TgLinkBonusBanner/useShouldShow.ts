@@ -17,11 +17,16 @@ const DISMISS_KEY = 'tg_link_banner_dismissed_until';
  * sidebar-flicker / "register first" toast cascade. See:
  * https://ask.gptweb.ru/trpc/lambda/subscription.getBillingState ... 401
  */
-// TEMPORARY DISABLE: the bot-mediated linking flow has UX issues that
-// need follow-up. Hide the banner globally to stop confusing users
-// until the flow is solid. Re-enable by removing this early-return
-// (see commit history for the original logic).
-const BANNER_TEMPORARILY_DISABLED = true;
+// Re-enabled 2026-06-09 (was disabled 2026-05-22). Reasoning: the link
+// rate sits at 3.3% (85 / 2602 users) which kills two recovery paths —
+// the payment-recovery-notify cron can only DM users with a chat_id,
+// and 7/7 of the last 14d failed checkouts had no TG link to push a
+// retry to. The earlier UX concern (bot-mediated linking confusion)
+// was addressed by the post-link modal that landed 2026-05-25 with
+// task #36 + the inverted-setWhere fix in task #35. The banner is the
+// cheapest place to surface the +100 кр CTA across all logged-in
+// non-linked users.
+const BANNER_TEMPORARILY_DISABLED = false;
 
 export function useShouldShow(): boolean {
   const isLogin = useUserStore(authSelectors.isLogin);
