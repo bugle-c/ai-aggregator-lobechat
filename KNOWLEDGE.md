@@ -447,3 +447,54 @@ Authenticated waterfall не измерен в данном проходе (Play
 - `VIDEO_TYPES` дублируется между `MasonryItem/index.tsx` и `FileViewer/index.tsx` (`VIDEO_MIME_TYPES`). Извлечь в `src/utils/mimeTypes.ts` при следующем касании этой области.
 - `isVideoUrl` в `PresetZoomModal.tsx` и обратная image-whitelist логика в `PresetMP4Player.tsx` — общая утилита `isVideoPreset(preset)` чище. Или ориентироваться на `preset.modality === 'video'`.
 - iOS Safari может не отрендерить `#t=0.1` poster на `<video>` thumbnail в Library; fallback (`onError` → скрыть `<video>`) оставляет Play-индикатор и Maximize-кнопку видимыми. Если жалобы пойдут — server-side thumbnail generation.
+
+## Phase 17: Audit findings & Board decisions (2026-06-09)
+
+Two-week audit surfaced the following items; documented here so the rationale
+survives future rotations of the team.
+
+### P0 — WaveSpeed video billing leak (FIXED `dee3c9178d`)
+
+WaveSpeed webhook handler returned no `usage.durationSeconds`. The route
+fell through to ffmpeg-derived duration which can be `0` for short clips;
+`chargeAfterGenerate` then early-returned without `writeUsageLog`. Net
+effect: user got the video for free, we paid WaveSpeed.
+
+**Fix:** extract `body.input.duration` echo in
+`packages/model-runtime/src/providers/wavespeed/video/handleCreateVideoWebhook.ts`
+and surface as `usage.durationSeconds`. Type widened in
+`packages/model-runtime/src/types/video.ts`.
+
+**Quantified leak:** 5 calls / 14d. 2 seedance-fast t2v on 2026-06-04 by
+`rss-print@yandex.ru` — \~2 374 ₽ user-billable, \~675 ₽ our margin. Plus
+4 short flux-schnell images at $0.012 total. **Backfill skipped** — op
+time + dispute risk exceeds recovered margin. Recurrence is `0` after fix.
+
+### TG-link banner re-enabled (`013e7fd65e`)
+
+`BANNER_TEMPORARILY_DISABLED` flipped from `true` to `false` in
+`src/features/TgLinkBonusBanner/useShouldShow.ts`. The original UX concern
+(bot-mediated linking confusion) was addressed by tasks #35 + #36 in May.
+TG link rate at audit time: 85 / 2602 = **3.3%**, which:
+
+- blocks `payment-recovery-notify` cron from DM'ing failed-checkout users
+  (7 / 7 of last 14d failures had no `tg_bot_chat_id`)
+- caps broadcast campaign reach to the same 3.3%
+
+### Desktop TG-link card (this commit)
+
+`PcSidebarCard` was already implemented but never mounted. Wired into
+`src/app/[variants]/(main)/home/_layout/SidebarContent.tsx` as
+`<><PcSidebarCard /><Footer /></>` — sits above the action-icon footer
+in the desktop sidebar. Self-gates via `useShouldShow` so anon and
+already-linked users see nothing.
+
+### Recovery email subject prefix (this commit)
+
+`src/server/modules/billing/email-templates/recovery.ts` now prefixes
+the subject with `[<amount> ₽ · <plan>] ` before the copy line. Stage 1
+
+- Stage 2 emails landed 0 / 7 conversions in the 14d audit window —
+  hypothesis is the generic copy line ("Карта стесняется", etc.) reads as
+  marketing spam in inbox preview. Concrete price + plan name signals the
+  message is theirs. Test cap raised from 60 → 80 chars accordingly.

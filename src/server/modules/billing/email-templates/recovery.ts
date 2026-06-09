@@ -38,7 +38,15 @@ function applyAmount(template: string, amount: number): string {
  */
 export function buildRecoveryEmail(input: BuildRecoveryEmailInput): BuildRecoveryEmailOutput {
   const copy = resolveCopy(input.reasonCode, input.stage);
-  const subject = copy.subject;
+  // Subject prefix injects the price tag and (when present) the plan name
+  // so the inbox preview shows "[1490 ₽ · WebGPT Pro] …" instead of just
+  // a generic line. 0% recovered out of 7 attempts in the last 14d
+  // strongly suggested users weren't opening the email at all — a
+  // concrete price and product name make the message recognisable as
+  // theirs, not as spam. The reasonHook still appears as the first
+  // paragraph so the body still tells them what happened.
+  const planSegment = input.payment.planName ? ` · ${input.payment.planName}` : '';
+  const subject = `[${input.payment.amountRub} ₽${planSegment}] ${copy.subject}`;
   const ctaLabel = applyAmount(copy.ctaLabel, input.payment.amountRub);
   const planLine = input.payment.planName
     ? `<p style="margin:8px 0 0;color:#666;font-size:14px;">${escapeHtml(input.payment.planName)}</p>`

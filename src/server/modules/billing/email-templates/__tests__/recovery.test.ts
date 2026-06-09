@@ -21,7 +21,12 @@ describe('buildRecoveryEmail', () => {
     });
 
     expect(out.subject).toContain('Карта стесняется');
-    expect(out.subject.length).toBeLessThanOrEqual(60);
+    // Subject must keep the copy line but now ALSO carry the price tag
+    // and plan name (added 2026-06-09 to lift 0% recovery rate). Inbox
+    // preview generally shows ~70-90 chars on desktop and ~50-60 on
+    // mobile; 80 keeps the headline visible on both.
+    expect(out.subject).toMatch(/^\[490 ₽ · Тариф Стандарт\]/);
+    expect(out.subject.length).toBeLessThanOrEqual(80);
     expect(out.html).toContain('не хватило средств');
     expect(out.html).toContain('Бывает');
     expect(out.html).toContain('490');
