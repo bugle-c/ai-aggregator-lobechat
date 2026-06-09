@@ -1,5 +1,8 @@
-/* eslint-disable typescript-sort-keys/interface */
-import { RuntimeVideoGenParams } from 'model-bank';
+// Note: the prior `eslint-disable typescript-sort-keys/interface` directive
+// was removed in 2026-06-09 because the shared eslint config no longer ships
+// that plugin, and the directive triggered "rule not found" hard-errors in
+// husky pre-commit on any file touching this module.
+import type { RuntimeVideoGenParams } from 'model-bank';
 
 export type CreateVideoPayload = {
   callbackUrl?: string;
@@ -23,7 +26,13 @@ export type HandleCreateVideoWebhookResult =
       inferenceId: string;
       model?: string;
       status: 'success';
-      usage?: { completionTokens: number; totalTokens: number };
+      // `durationSeconds` is the field chargeAfterGenerate needs for video
+      // billing. Providers that echo back the requested duration (e.g.
+      // WaveSpeed via `body.input.duration`) fill it in their per-provider
+      // handler so the webhook → chargeAfter pipeline never falls through
+      // to the ffmpeg-derived duration (which can be 0 for short clips and
+      // causes a silent skip of writeUsageLog).
+      usage?: { completionTokens: number; durationSeconds?: number; totalTokens: number };
       videoUrl: string;
     }
   | { error: string; inferenceId: string; status: 'error' };
