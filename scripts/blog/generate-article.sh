@@ -157,6 +157,16 @@ is_valid_keyword() {
     [[ ${#kw} -le 160 ]] || return 1
     [[ ! "$kw" =~ ^[\{\[] ]] || return 1
     [[ ! "$kw" =~ (превышен[[:space:]]+лимит[[:space:]]+запросов|retryaftersec|windowseconds|error|message) ]] || return 1
+    # RKN safety guard (2026-06-09): hard-reject VPN / circumvention topics.
+    # Roskomnadzor asked us to take down VPN content; publishing more is a
+    # blocking risk for the whole gptweb.ru domain. The keyword queue was
+    # mass-quarantined the same day, but keyword-collection (Wordstat/SERP)
+    # can silently re-introduce these, so this is the defense-in-depth net.
+    # lowercase the keyword for a case-insensitive match (bash regex is CS).
+    local kw_lc="${kw,,}"
+    if [[ "$kw_lc" =~ (vpn|впн|vless|v2ray|xray|amnezia|amneziawg|shadowsocks|wireguard|hiddify|outline|прокси|proxy|обход[[:space:]]*блок|разблок|dpi|byebyedpi) ]]; then
+        return 2
+    fi
     return 0
 }
 
@@ -190,7 +200,12 @@ for attempt in $(seq 1 $MAX_KEYWORD_ATTEMPTS); do
         exit 1
     fi
 
-    if ! is_valid_keyword "$CANDIDATE_KEYWORD"; then
+    is_valid_keyword "$CANDIDATE_KEYWORD"; kw_rc=$?
+    if [[ $kw_rc -eq 2 ]]; then
+        log "RKN-BLOCKED: VPN/circumvention keyword rejected: '${CANDIDATE_KEYWORD:0:120}' (id=$CANDIDATE_ID)"
+        mark_keyword_skipped "$CANDIDATE_ID" "rkn-blocked: vpn topic"
+        continue
+    elif [[ $kw_rc -ne 0 ]]; then
         log "INVALID: keyword payload rejected: '${CANDIDATE_KEYWORD:0:120}' (id=$CANDIDATE_ID)"
         mark_keyword_skipped "$CANDIDATE_ID" "invalid keyword payload"
         continue
