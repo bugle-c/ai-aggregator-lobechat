@@ -7,6 +7,19 @@ Fork of LobeChat (`lobehub/lobe-chat`) customized for ask.gptweb.ru with YooKass
 **GitHub:** `bugle-c/ai-aggregator-lobechat` (private), branch `canary`
 **Upstream:** `lobehub/lobe-chat`, branch `canary`
 
+> ### 📰 SEO BLOG — отдельная исчерпывающая инструкция
+>
+> Вся автоматика SEO-блога gptweb.ru (сбор семантики → кластеры →
+> генерация → SEO-gate → публикация → индексация → трекинг трафика →
+> реоптимизация → новости) описана пошагово в
+> **[`docs/seo_blog_instruction.md`](docs/seo_blog_instruction.md)**.
+> **Читай её ПЕРВОЙ перед любым изменением блог-автоматики** (скрипты
+> `scripts/blog/*`, таблицы `ai_aggregator.blog_*`, timers `blog-*`).
+> Правило: меняешь блог — обновляешь прозу того файла в том же коммите
+> (LIVE STATE блок в нём авто-обновляется cron'ом
+> `blog-instruction-refresh.timer`, проза — нет).
+> 🚫 VPN-тематика запрещена (РКН) — hard-guard в генераторе, не снимать.
+
 ## Architecture
 
 - **Stack:** Next.js 16 + React 19 + Drizzle ORM + Better Auth + tRPC + antd
