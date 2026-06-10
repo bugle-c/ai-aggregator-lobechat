@@ -373,6 +373,7 @@ BEGIN
       LEFT JOIN ai_aggregator.blog_positions pos
            ON pos.post_id = bp.id AND pos.snapshot_date > now() - interval '7 days'
       WHERE bc.primary_keyword !~* '${VPN_RE}'
+        AND bc.category_slug IS NOT NULL  -- never seed an unroutable keyword: consumer can't route NULL category, and normal slots exclude source=cluster_expansion → would sit pending forever
       GROUP BY bc.id, bc.primary_keyword, bc.category_slug, bc.related_keywords
     )
     SELECT id, category_slug, blended, related_keywords
@@ -416,7 +417,9 @@ SQL
     # error text only lands in CE_OUT. Without this it would silently fall
     # through to the "nothing seeded" success path. Alert + skip the seed
     # accounting on a real error.
-    if echo "$CE_OUT" | grep -qE '^(psql:)?.*(ERROR|FATAL):'; then
+    # Match only psql's OWN error prefixes, not a NOTICE payload that happens to
+    # contain the literal token "ERROR:"/"FATAL:" (e.g. a seeded keyword string).
+    if echo "$CE_OUT" | grep -qE '^psql:.*(ERROR|FATAL):|^(ERROR|FATAL):'; then
         CE_ERR=$(echo "$CE_OUT" | grep -E '(ERROR|FATAL):' | head -1)
         log "cluster-expansion: psql ERROR — $CE_ERR"
         notify_failure "cluster-expansion" "Producer SQL failed: ${CE_ERR:0:300}" "$LOG_FILE"
