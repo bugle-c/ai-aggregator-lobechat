@@ -32,10 +32,10 @@
      refresh-instruction-state.sh раз в сутки. Руками НЕ редактировать,
      изменения затрутся. -->
 
-### 📊 LIVE STATE (auto, обновлено 2026-06-10 12:12 МСК)
+### 📊 LIVE STATE (auto, обновлено 2026-06-10 12:13 МСК)
 
 **Контент:** published **315** · archived 20 · draft 2
-· keywords pending **1454** (из них VPN: 3 — должно быть \~0)
+· keywords pending **1450** (из них VPN: 0 — должно быть \~0)
 · clusters used 174 · reoptimize pending 0
 
 **Новости:** профиль истекает **2026-07-19** (осталось 39 дн.) · pipeline 🟢 ok (профиль активен)
