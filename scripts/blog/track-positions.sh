@@ -323,4 +323,109 @@ except Exception:
     log "digest sent to Telegram — ${DROP_COUNT} drops"
 fi
 
+# ── Cluster-expansion producer ──────────────────────────────────────────
+# Seed uncovered related_keywords of high-traffic clusters so the generator
+# writes more around proven winners. Blended score = clicks*5 + impressions
+# over 7d (real delivered traffic from blog_positions, NOT Wordstat volume).
+# VPN clusters are hard-excluded (RKN). See spec
+# docs/superpowers/specs/2026-06-10-cluster-expansion-loop-design.md.
+CE_ENABLED="${CLUSTER_EXPANSION_ENABLED:-1}"
+CE_TOP_N="${CLUSTER_EXPANSION_TOP_N:-5}"
+CE_MIN_SCORE="${CLUSTER_EXPANSION_MIN_SCORE:-5}"
+CE_KW_PER_CLUSTER="${CLUSTER_EXPANSION_KW_PER_CLUSTER:-2}"
+
+if [[ "$CE_ENABLED" == "1" ]]; then
+    log "cluster-expansion: scanning winners (top_n=$CE_TOP_N min_score=$CE_MIN_SCORE kw/cluster=$CE_KW_PER_CLUSTER)"
+    # ⚠️ heredoc is UNQUOTED on purpose: bash interpolates ${CE_*} and ${VPN_RE}
+    # into the SQL. psql does NOT substitute :vars inside dollar-quoted blocks,
+    # so we can't use `-v`. The plpgsql body is dollar-quoted with $BODY$ (not
+    # $$) to avoid colliding with bash $$=PID; the $BODY$ tags are backslash-
+    # escaped so bash leaves them literal. The only `$` in the SQL is the
+    # escaped $BODY$ tags — everything else is plain.
+    VPN_RE='(vpn|впн|vless|v2ray|xray|amnezia|shadowsocks|wireguard|hiddify|outline|прокси|proxy|обход|разблок|dpi|byebyedpi)'
+    CE_OUT=$(docker exec -i supabase-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 2>&1 <<SQL | grep -vE 'WARNING|DETAIL|HINT|collation'
+DO \$BODY\$
+DECLARE
+  topn int := ${CE_TOP_N};
+  minscore int := ${CE_MIN_SCORE};
+  percluster int := ${CE_KW_PER_CLUSTER};
+  c record;
+  kw text;
+  seeded_in_cluster int;
+  total_seeded int := 0;
+  total_clusters int := 0;
+BEGIN
+  FOR c IN
+    WITH cluster_traffic AS (
+      SELECT bc.id, bc.primary_keyword, bc.category_slug, bc.related_keywords,
+             COALESCE(SUM(pos.clicks),0)*5 + COALESCE(SUM(pos.impressions),0) AS blended
+      FROM ai_aggregator.blog_clusters bc
+      JOIN ai_aggregator.blog_posts bp
+           ON bp.cluster_id = bc.id AND bp.status='published'
+      LEFT JOIN ai_aggregator.blog_positions pos
+           ON pos.post_id = bp.id AND pos.snapshot_date > now() - interval '7 days'
+      WHERE bc.primary_keyword !~* '${VPN_RE}'
+      GROUP BY bc.id, bc.primary_keyword, bc.category_slug, bc.related_keywords
+    )
+    SELECT id, category_slug, blended, related_keywords
+    FROM cluster_traffic
+    WHERE blended >= minscore
+    ORDER BY blended DESC
+    LIMIT topn
+  LOOP
+    seeded_in_cluster := 0;
+    IF c.related_keywords IS NOT NULL THEN
+      FOREACH kw IN ARRAY c.related_keywords LOOP
+        EXIT WHEN seeded_in_cluster >= percluster;
+        CONTINUE WHEN kw IS NULL OR length(trim(kw)) = 0;
+        CONTINUE WHEN kw ~* '${VPN_RE}';                     -- VPN double-guard
+        CONTINUE WHEN EXISTS (                               -- coverage check
+          SELECT 1 FROM ai_aggregator.blog_keywords WHERE lower(keyword)=lower(kw)
+        );
+        -- NOTE: impressions here holds the BLENDED traffic score, NOT Wordstat
+        -- volume — intentional (spec) so the consumer orders hottest first.
+        -- Consumers that read blog_keywords.impressions as search-volume will
+        -- mis-read these source='cluster_expansion' rows. LEAST() guards the
+        -- int column against a future >2.1B blended score.
+        INSERT INTO ai_aggregator.blog_keywords
+          (keyword, status, source, priority, category_slug, cluster_id, impressions)
+        VALUES (kw, 'pending', 'cluster_expansion', 'high',
+                c.category_slug, c.id, LEAST(c.blended, 2147483647)::int);
+        seeded_in_cluster := seeded_in_cluster + 1;
+        total_seeded := total_seeded + 1;
+        RAISE NOTICE 'CE_SEEDED cluster=% score=% kw=%', c.id, c.blended, kw;
+      END LOOP;
+      IF seeded_in_cluster > 0 THEN total_clusters := total_clusters + 1; END IF;
+    END IF;
+  END LOOP;
+  RAISE NOTICE 'CE_SUMMARY clusters=% keywords=%', total_clusters, total_seeded;
+END
+\$BODY\$;
+SQL
+)
+    echo "$CE_OUT" | grep -E 'CE_SEEDED|CE_SUMMARY' | while IFS= read -r line; do log "cluster-expansion: $line"; done
+    # Surface hard psql errors: ON_ERROR_STOP=1 aborts the DO block, but the
+    # error text only lands in CE_OUT. Without this it would silently fall
+    # through to the "nothing seeded" success path. Alert + skip the seed
+    # accounting on a real error.
+    if echo "$CE_OUT" | grep -qE '^(psql:)?.*(ERROR|FATAL):'; then
+        CE_ERR=$(echo "$CE_OUT" | grep -E '(ERROR|FATAL):' | head -1)
+        log "cluster-expansion: psql ERROR — $CE_ERR"
+        notify_failure "cluster-expansion" "Producer SQL failed: ${CE_ERR:0:300}" "$LOG_FILE"
+    else
+        CE_SUMMARY_LINE=$(echo "$CE_OUT" | grep -oE 'CE_SUMMARY clusters=[0-9]+ keywords=[0-9]+' | tail -1)
+        CE_KW_COUNT=$(echo "$CE_SUMMARY_LINE" | grep -oE 'keywords=[0-9]+' | cut -d= -f2)
+        CE_CL_COUNT=$(echo "$CE_SUMMARY_LINE" | grep -oE 'clusters=[0-9]+' | cut -d= -f2)
+        if [[ "${CE_KW_COUNT:-0}" -gt 0 ]]; then
+            notify_success "cluster-expansion" "Засеяно ${CE_KW_COUNT} ключей по ${CE_CL_COUNT} выигрышным кластерам"
+            log "cluster-expansion: seeded ${CE_KW_COUNT} keywords across ${CE_CL_COUNT} clusters"
+        else
+            log "cluster-expansion: no clusters above floor (min_score=$CE_MIN_SCORE) — nothing seeded"
+        fi
+    fi
+else
+    log "cluster-expansion: disabled (CLUSTER_EXPANSION_ENABLED=$CE_ENABLED)"
+fi
+# ────────────────────────────────────────────────────────────────────────
+
 log "=== position tracking complete ==="
