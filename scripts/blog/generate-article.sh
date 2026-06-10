@@ -22,6 +22,7 @@ log() {
 # Load notification helper
 source "${SCRIPT_DIR}/notify.sh"
 source "${SCRIPT_DIR}/lib/slot-parity.sh"
+source "${SCRIPT_DIR}/lib/vpn-guard.sh"
 
 # Rotate log
 if [[ -f "$LOG_FILE" ]] && (( $(wc -l < "$LOG_FILE") > 2000 )); then
@@ -192,14 +193,15 @@ is_valid_keyword() {
     [[ ${#kw} -le 160 ]] || return 1
     [[ ! "$kw" =~ ^[\{\[] ]] || return 1
     [[ ! "$kw" =~ (превышен[[:space:]]+лимит[[:space:]]+запросов|retryaftersec|windowseconds|error|message) ]] || return 1
-    # RKN safety guard (2026-06-09): hard-reject VPN / circumvention topics.
-    # Roskomnadzor asked us to take down VPN content; publishing more is a
-    # blocking risk for the whole gptweb.ru domain. The keyword queue was
-    # mass-quarantined the same day, but keyword-collection (Wordstat/SERP)
-    # can silently re-introduce these, so this is the defense-in-depth net.
-    # lowercase the keyword for a case-insensitive match (bash regex is CS).
-    local kw_lc="${kw,,}"
-    if [[ "$kw_lc" =~ (vpn|впн|vless|v2ray|xray|amnezia|amneziawg|shadowsocks|wireguard|hiddify|outline|прокси|proxy|обход[[:space:]]*блок|разблок|dpi|byebyedpi) ]]; then
+    # RKN safety guard: hard-reject VPN / circumvention topics. Roskomnadzor
+    # asked us to take down VPN content; publishing more is a blocking risk for
+    # the whole gptweb.ru domain. Keyword-collection (Wordstat/SERP) silently
+    # re-introduces these, so this is the defense-in-depth net at generation
+    # time. The regex + brand list live in lib/vpn-guard.sh — the SAME source
+    # the producer uses, so the two can never drift (the 2026-06-10 incident:
+    # brand names like "дядя ваня" passed here because only the producer copy
+    # had been hardened). To block a new VPN brand, edit lib/vpn-guard.sh.
+    if is_vpn_keyword "$kw"; then
         return 2
     fi
     return 0

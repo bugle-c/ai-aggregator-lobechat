@@ -342,15 +342,12 @@ if [[ "$CE_ENABLED" == "1" ]]; then
     # $$) to avoid colliding with bash $$=PID; the $BODY$ tags are backslash-
     # escaped so bash leaves them literal. The only `$` in the SQL is the
     # escaped $BODY$ tags — everything else is plain.
-    # Includes VPN-SERVICE BRAND names that lack the literal vpn/впн token
-    # (дядя ваня, амнезия, хапп, etc.). The expansion loop amplifies winners,
-    # and the blog's historical traffic is VPN-heavy, so a brand cluster like
-    # "дядя ваня личный кабинет" (no "впн" token) would otherwise slip the
-    # base regex and get expanded — exactly the RKN content we must not grow.
-    # Broader than the generator's is_valid_keyword guard ON PURPOSE: over-
-    # excluding here only means fewer expansion seeds (safe direction), never
-    # blocks legit content. See seo_blog_instruction.md §10/§15.
-    VPN_RE='(vpn|впн|vless|v2ray|xray|amnezia|amnezi|амнези|shadowsocks|wireguard|hiddify|outline|прокси|proxy|обход|разблок|dpi|byebyedpi|дядя ?ваня|дядяваня|хапп|happ|щука|shchuka|радмин|radmin|windscribe|hidemy|зугвпн|zoog|bebra|бебра|catserver|lagom|fkey|planet ?vpn|планет ?впн)'
+    # VPN_RE is sourced from lib/vpn-guard.sh (canonical, shared with the
+    # generator's is_valid_keyword) and interpolated into the SQL below as a
+    # PostgreSQL ~* pattern. It includes VPN-service BRAND names that lack the
+    # literal vpn/впн token (дядя ваня, щука, хапп…) so the expansion loop —
+    # which amplifies winners on a VPN-heavy historical corpus — can't grow
+    # a brand cluster RKN told us to remove. See seo_blog_instruction.md §10.
     CE_OUT=$(docker exec -i supabase-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 2>&1 <<SQL | grep -vE 'WARNING|DETAIL|HINT|collation'
 DO \$BODY\$
 DECLARE
