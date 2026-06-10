@@ -25,6 +25,7 @@
  *   - `total_executions++`, `last_executed_at=now()`, and (when set)
  *     `remaining_executions--` are written atomically per job.
  */
+import { DEFAULT_MODEL } from '@lobechat/const';
 import debug from 'debug';
 import { and, eq, gt, isNull, lt, or, sql } from 'drizzle-orm';
 
@@ -140,9 +141,13 @@ async function fireOneJob(db: any, job: any): Promise<{ ok: boolean; error?: str
 
   if (!content) return { ok: false, error: 'empty content' };
 
-  // Resolve agent → system prompt + model. Fall back to lobehub gpt-5-mini.
+  // Resolve agent → system prompt + model. Fall back to the global
+  // DEFAULT_MODEL (local Gemma 4 E4B) — same default new agents and the
+  // chat UI use. Was hardcoded to 'gpt-5-mini' which silently routed
+  // every cron-driven scheduled task to a paid cloud model even for
+  // free-tier users.
   let systemPrompt = '';
-  let modelId = 'gpt-5-mini';
+  let modelId: string = DEFAULT_MODEL;
   if (agentId) {
     const [agent] = await db
       .select({ systemRole: agents.systemRole, model: agents.model })
