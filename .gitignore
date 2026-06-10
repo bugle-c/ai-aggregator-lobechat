@@ -54,6 +54,7 @@ bun.lockb
 dist/
 es/
 lib/
+!scripts/blog/lib/
 .next/
 logs/
 test-output/
