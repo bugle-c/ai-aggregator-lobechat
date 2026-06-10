@@ -32,28 +32,29 @@
      refresh-instruction-state.sh раз в сутки. Руками НЕ редактировать,
      изменения затрутся. -->
 
-### 📊 LIVE STATE (auto, обновлено 2026-06-10 04:00 МСК)
+### 📊 LIVE STATE (auto, обновлено 2026-06-10 12:12 МСК)
 
-**Контент:** published **311** · archived 20 · draft 2
-· keywords pending **1458** (из них VPN: 3 — должно быть \~0)
-· clusters used 171 · reoptimize pending 0
+**Контент:** published **315** · archived 20 · draft 2
+· keywords pending **1454** (из них VPN: 3 — должно быть \~0)
+· clusters used 174 · reoptimize pending 0
 
 **Новости:** профиль истекает **2026-07-19** (осталось 39 дн.) · pipeline 🟢 ok (профиль активен)
 
 **Кадэнс публикаций (7 дней):**
 
+- 2026-06-10 — 4 постов
 - 2026-06-09 — 1 постов
 
 **Таймеры (последний запуск):**
 
 | Сервис            | Статус    | Когда                   |
 | ----------------- | --------- | ----------------------- |
-| `blog-generate`   | 🟢 exit=0 | 2026-06-09 22:39:42 MSK |
-| `blog-hype`       | 🔴 exit=1 | 2026-06-09 19:31:56 MSK |
+| `blog-generate`   | 🟢 exit=0 | 2026-06-10 12:09:51 MSK |
+| `blog-hype`       | 🟢 exit=0 | 2026-06-10 09:47:33 MSK |
 | `blog-keywords`   | 🟢 exit=0 | 2026-06-10 03:00:52 MSK |
-| `blog-positions`  | 🟢 exit=0 | 2026-06-09 04:01:53 MSK |
-| `blog-sync`       | 🟢 exit=0 | 2026-06-09 06:00:05 MSK |
-| `blog-reoptimize` | 🟢 exit=0 | 2026-06-10 04:00:02 MSK |
+| `blog-positions`  | 🟢 exit=0 | 2026-06-10 04:09:03 MSK |
+| `blog-sync`       | 🟢 exit=0 | 2026-06-10 06:00:04 MSK |
+| `blog-reoptimize` | 🟢 exit=0 | 2026-06-10 12:00:01 MSK |
 
 <!-- LIVE-STATE:END -->
 
@@ -337,10 +338,58 @@ UPDATE ai_aggregator.reoptimize_queue SET status='pending'
 WHERE status='in_progress' AND flagged_at < now() - interval '1 day';
 ```
 
-**Важно:** это механика **«спасение падающих»**, НЕ «усиление выигрышных».
-Расширения успешных кластеров (написать больше статей под кластер, который
-даёт трафик) в системе **пока нет** — это запланированная фича
-(cluster-expansion loop, см. §13).
+**Важно:** реоптимизация — механика **«спасение падающих»**. Парная ей
+механика **«усиление выигрышных»** — это cluster-expansion loop (ниже §8.1).
+
+### 8.1 Cluster-expansion loop — усиление выигрышных кластеров
+
+Кластеры, которые дают **реальный трафик**, автоматически получают новые
+статьи под свои непокрытые `related_keywords`. Это exploitation-петля в пару
+к реоптимизации (rescue-петля).
+
+**Producer** — в `track-positions.sh` (таймер `blog-positions.timer`, 04:00
+МСК, после снятия позиций):
+
+1. Считает per-cluster **blended score** = `SUM(clicks)×5 + SUM(impressions)`
+   за 7 дней (join `blog_posts.cluster_id` → `blog_positions`, только
+   `published`). ⚠️ Это **реальный** трафик из `blog_positions`, НЕ Wordstat
+   `total_impressions` (по которому топ — сплошь VPN).
+2. Исключает VPN-кластеры расширенным regex `VPN_RE` — он шире, чем guard
+   генератора: ловит и бренды без токена «впн» (`дядя ваня`, `амнезия`,
+   `хапп`, `щука`, `radmin`, `windscribe`…). Переусиление здесь безопасно —
+   просто меньше seed'ов, не блокирует легитимный контент. См. §10.
+3. Берёт `top-N` (default 5) кластеров с `blended ≥ MIN_SCORE` (default 5).
+4. Для каждого сеет до `KW_PER_CLUSTER` (default 2) **непокрытых**
+   `related_keywords` как `blog_keywords` строки: `source='cluster_expansion'`,
+   `priority='high'`, `status='pending'`, `category_slug` и `cluster_id` от
+   кластера, `impressions=blended` (чтобы сортировка выносила горячие наверх).
+   Idempotent: уже засеянные/покрытые ключи пропускаются; остывшие кластеры
+   выпадают из top-N и перестают сеять (естественный спад).
+5. Telegram-сводка `✅ cluster-expansion: Засеяно N ключей из M кластеров`
+   (молчит при N=0, чтобы не шуметь). Hard psql ERROR → `notify_failure`.
+
+**Consumer** — slot-parity ветка в `generate-article.sh` (8 слотов/день
+08–22 МСК):
+
+- **Чётность часа** (`scripts/blog/lib/slot-parity.sh::is_expansion_slot`)
+  делит слоты строго **4/4**: expansion на **08/12/16/20**, normal на
+  **10/14/18/22**. Это и есть потолок \~50%.
+- **Expansion-слот:** берёт pending `source='cluster_expansion'`
+  (`priority.asc, impressions.desc`) → его `category_slug` **перебивает**
+  категорию дня, `cluster_id` переиспользуется (cluster-builder не
+  перестраивает кластер). Все guard'ы (vpn/насыщение/дедуп) работают как
+  обычно. Если pending-expansion нет → **проваливается в normal** (слот не
+  теряется).
+- **Normal-слот:** прежнее поведение + во все запросы ключей добавлен
+  `source=neq.cluster_expansion` — чтобы normal не съедал high-priority
+  expansion-ключи и не ломал 50%-потолок.
+
+**Kill-switch:** `CLUSTER_EXPANSION_ENABLED=0` → всегда normal (см. флаги
+§12). Дизайн: `docs/superpowers/specs/2026-06-10-cluster-expansion-loop-design.md`.
+
+> Пока реальный трафик мал (топ-кластер \~17 кликов/7д), петля почти всегда
+> «спит» — это by design: floor `MIN_SCORE=5` пропускает 0–1 кластер. По мере
+> роста трафика она оживает сама.
 
 ---
 
@@ -356,7 +405,8 @@ WHERE status='in_progress' AND flagged_at < now() - interval '1 day';
 | `reoptimize_queue`                | Очередь спасения        | `post_id, status(pending/in_progress/done), flagged_at`                                                                                    |
 | `agent_news_007.project_profiles` | Профиль новостей        | `project_id, topics_interested[], topics_excluded[], profile_filled_at, ttl_days(40), schema_version`                                      |
 
-**Реальный трафик кластера** (для будущей cluster-expansion):
+**Реальный трафик кластера** (этим запросом cluster-expansion §8.1 выбирает
+выигрышные кластеры):
 
 ```sql
 SELECT bc.id, bc.primary_keyword,
@@ -378,6 +428,11 @@ ORDER BY blended_score DESC NULLS LAST;
 
 1. **Hard-guard в генераторе** (`generate-article.sh::is_valid_keyword`):
    любой VPN/прокси/DPI/обход-ключ → exit 2 → skip с reason `rkn-blocked`.
+   **Plus** расширенный `VPN_RE` в producer'е cluster-expansion
+   (`track-positions.sh`) ловит ещё и VPN-бренды без токена «впн» (`дядя
+ваня`, `амнезия`, `хапп`, `щука`, `radmin`, `windscribe`…) — чтобы петля
+   усиления §8.1 не размножала VPN-кластеры. Бренд-лист расширять при
+   обнаружении новых сервисов.
 2. **Карантин ключей:** все VPN-ключи в `blog_keywords` переведены
    `pending→skipped`. Сбор может занести новые → guard их отсекает на
    генерации.
@@ -433,22 +488,34 @@ curl -X POST "https://api.webmaster.yandex.net/v4/user/${YANDEX_WEBMASTER_USER_I
 | `AGENT_NEWS_URL` / `AGENT_NEWS_API_KEY`            | Новостной агент                                |
 | `NOTIFY_TG_BOT_TOKEN` / `NOTIFY_TG_CHAT_ID`        | Telegram-алерты                                |
 
+**Cluster-expansion (§8.1) — необязательные оверрайды** (скрипты включены по
+умолчанию, эти переменные нужны только чтобы изменить поведение):
+
+| Ключ                               | Default | Назначение                                          |
+| ---------------------------------- | ------- | --------------------------------------------------- |
+| `CLUSTER_EXPANSION_ENABLED`        | `1`     | Kill-switch (producer + consumer); `0` → всё normal |
+| `CLUSTER_EXPANSION_TOP_N`          | `5`     | Сколько кластеров расширять за прогон producer'а    |
+| `CLUSTER_EXPANSION_MIN_SCORE`      | `5`     | Floor blended-score (мёртвые кластеры отсекаются)   |
+| `CLUSTER_EXPANSION_KW_PER_CLUSTER` | `2`     | Ключей сеять на кластер за прогон                   |
+
 Скрипты грузят env через `set -a; source /home/deploy/.config/blog-autogen/env; set +a`.
 
 ---
 
 ## 13. Runbook — типичные поломки и лечение
 
-| Симптом                                                          | Причина                                      | Лечение                                                              |
-| ---------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------- |
-| Новости не пишутся, лог `# profile-required` / `profile_expired` | TTL профиля 40д истёк                        | §6.1 — `UPDATE … profile_filled_at = now()`                          |
-| VPN-статья опубликовалась                                        | Guard обошли / ключ просочился               | §10 — заархивировать + recrawl; проверить guard в `is_valid_keyword` |
-| `blog-generate` падает «No pending keywords»                     | Очередь пуста                                | Триггерни сбор: `POST /api/cron/blog-keywords`                       |
-| Статьи застревают в `draft`                                      | SEO-gate не пройден (score<80 или есть FAIL) | Прочитай лог аудита; обычно слабая структура/FAQ/мета. Промпт в §5.5 |
-| `reoptimize_queue` строка в `in_progress` навсегда               | Процесс умер посреди                         | §8 — `UPDATE … status='pending'`                                     |
-| `added=0, from_api=0` в keywords                                 | xmlriver лимит/падение                       | Проверь `XMLRIVER_*` + баланс xmlriver                               |
-| Нет алертов в TG                                                 | `NOTIFY_TG_*` не заданы / бот упал           | Проверь env + `getMe` бота                                           |
-| Кадэнс публикаций провалился на N дней                           | Claude CLI auth истёк / сервер был офлайн    | Проверь `claude` CLI auth; таймеры догонят сами                      |
+| Симптом                                                          | Причина                                                   | Лечение                                                                                 |
+| ---------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Новости не пишутся, лог `# profile-required` / `profile_expired` | TTL профиля 40д истёк                                     | §6.1 — `UPDATE … profile_filled_at = now()`                                             |
+| VPN-статья опубликовалась                                        | Guard обошли / ключ просочился                            | §10 — заархивировать + recrawl; проверить guard в `is_valid_keyword`                    |
+| `blog-generate` падает «No pending keywords»                     | Очередь пуста                                             | Триггерни сбор: `POST /api/cron/blog-keywords`                                          |
+| Статьи застревают в `draft`                                      | SEO-gate не пройден (score<80 или есть FAIL)              | Прочитай лог аудита; обычно слабая структура/FAQ/мета. Промпт в §5.5                    |
+| `reoptimize_queue` строка в `in_progress` навсегда               | Процесс умер посреди                                      | §8 — `UPDATE … status='pending'`                                                        |
+| `added=0, from_api=0` в keywords                                 | xmlriver лимит/падение                                    | Проверь `XMLRIVER_*` + баланс xmlriver                                                  |
+| Нет алертов в TG                                                 | `NOTIFY_TG_*` не заданы / бот упал                        | Проверь env + `getMe` бота                                                              |
+| Кадэнс публикаций провалился на N дней                           | Claude CLI auth истёк / сервер был офлайн                 | Проверь `claude` CLI auth; таймеры догонят сами                                         |
+| Cluster-expansion (§8.1) не сеет ключи                           | Трафик ниже floor (`MIN_SCORE=5`) ИЛИ все related покрыты | Норма пока трафик мал; проверь `CLUSTER_EXPANSION_*` флаги + дай трафику вырасти        |
+| Expansion засеял VPN-бренд-кластер                               | Бренд без токена «впн» проскочил `VPN_RE`                 | §10 — добавь бренд в `VPN_RE` в `track-positions.sh`; ключи `UPDATE … status='skipped'` |
 
 **Где смотреть логи:**
 
@@ -482,17 +549,12 @@ systemctl list-timers --all | grep blog
 
 ## 15. Запланированное (backlog)
 
-- **Cluster-expansion loop** — _спека одобрена, в реализации._ Кластеры с
-  реальным трафиком (blended score `clicks×5 + impressions` из
-  `blog_positions`, top-N, **не-VPN**) → приоритетная генерация статей под
-  их непокрытые `related_keywords`. Подход: hybrid (приоритет + потолок
-  \~50% слотов через slot-parity по чётности часа). Дизайн:
+- **Cluster-expansion loop** — ✅ **реализовано 2026-06-10, см. §8.1.**
+  Producer в `track-positions.sh`, consumer slot-parity в
+  `generate-article.sh`, флаги в §12, runbook в §13. Дизайн:
   `docs/superpowers/specs/2026-06-10-cluster-expansion-loop-design.md`.
-  Producer — в `track-positions.sh` (сеет ключи `source='cluster_expansion'`,
-  priority=high). Consumer — slot-parity ветка в `generate-article.sh`
-  (expansion-слоты 08/12/16/20 МСК, normal 10/14/18/22). Флаги:
-  `CLUSTER_EXPANSION_ENABLED/TOP_N/MIN_SCORE/KW_PER_CLUSTER`. Когда выкатим —
-  перенести в основную часть (§8 рядом с реоптимизацией) + runbook-строку в §13.
+
+_(backlog пуст — следующие идеи добавлять сюда)_
 
 ---
 
