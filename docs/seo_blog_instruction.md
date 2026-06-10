@@ -32,10 +32,10 @@
      refresh-instruction-state.sh раз в сутки. Руками НЕ редактировать,
      изменения затрутся. -->
 
-### 📊 LIVE STATE (auto, обновлено 2026-06-10 00:16 МСК)
+### 📊 LIVE STATE (auto, обновлено 2026-06-10 04:00 МСК)
 
 **Контент:** published **311** · archived 20 · draft 2
-· keywords pending **1455** (из них VPN: 0 — должно быть \~0)
+· keywords pending **1458** (из них VPN: 3 — должно быть \~0)
 · clusters used 171 · reoptimize pending 0
 
 **Новости:** профиль истекает **2026-07-19** (осталось 39 дн.) · pipeline 🟢 ok (профиль активен)
@@ -50,10 +50,10 @@
 | ----------------- | --------- | ----------------------- |
 | `blog-generate`   | 🟢 exit=0 | 2026-06-09 22:39:42 MSK |
 | `blog-hype`       | 🔴 exit=1 | 2026-06-09 19:31:56 MSK |
-| `blog-keywords`   | 🟢 exit=0 | 2026-06-09 03:00:37 MSK |
+| `blog-keywords`   | 🟢 exit=0 | 2026-06-10 03:00:52 MSK |
 | `blog-positions`  | 🟢 exit=0 | 2026-06-09 04:01:53 MSK |
 | `blog-sync`       | 🟢 exit=0 | 2026-06-09 06:00:05 MSK |
-| `blog-reoptimize` | 🟢 exit=0 | 2026-06-10 00:15:01 MSK |
+| `blog-reoptimize` | 🟢 exit=0 | 2026-06-10 04:00:02 MSK |
 
 <!-- LIVE-STATE:END -->
 
