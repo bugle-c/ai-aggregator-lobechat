@@ -21,6 +21,7 @@ log() {
 
 # Load notification helper
 source "${SCRIPT_DIR}/notify.sh"
+source "${SCRIPT_DIR}/lib/slot-parity.sh"
 
 # Rotate log
 if [[ -f "$LOG_FILE" ]] && (( $(wc -l < "$LOG_FILE") > 2000 )); then
@@ -82,6 +83,40 @@ if [[ -z "$TARGET_CAT" ]]; then
 fi
 
 log "Target category for today: $TARGET_CAT ($TARGET_CAT_NAME)"
+
+# ── Cluster-expansion consumer: slot-parity gate ────────────────────────
+# ~50% of daily slots prefer high-priority cluster_expansion keywords.
+# Expansion on 08/12/16/20 MSK, normal on 10/14/18/22 (is_expansion_slot).
+# On an expansion slot with a pending expansion keyword, that keyword's
+# category OVERRIDES the category-of-the-day. Otherwise fall through to
+# normal rotation (slot never wasted). See spec 2026-06-10.
+CE_ENABLED="${CLUSTER_EXPANSION_ENABLED:-1}"
+EXPANSION_KEYWORD=""; EXPANSION_KW_ID=""; EXPANSION_CLUSTER_ID=""
+SLOT_HOUR_MSK=$(TZ=Europe/Moscow date +%H)
+if [[ "$CE_ENABLED" == "1" ]] && is_expansion_slot "$SLOT_HOUR_MSK"; then
+    CE_ROW=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_keywords?select=id,keyword,category_slug,cluster_id&status=eq.pending&source=eq.cluster_expansion&order=priority.asc,impressions.desc&limit=1" "${SUPA_HDRS[@]}" 2>/dev/null)
+    if [[ -n "$CE_ROW" && "$CE_ROW" != "[]" ]]; then
+        EXPANSION_KEYWORD=$(echo "$CE_ROW" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d[0]['keyword'] if d else '')")
+        EXPANSION_KW_ID=$(echo "$CE_ROW" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d[0]['id'] if d else '')")
+        EXPANSION_CLUSTER_ID=$(echo "$CE_ROW" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d[0].get('cluster_id') or '')")
+        EXP_CAT=$(echo "$CE_ROW" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d[0].get('category_slug') or '')")
+        if [[ -n "$EXPANSION_KEYWORD" && -n "$EXP_CAT" ]]; then
+            EXP_CAT_ROW=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_categories?select=slug,name,id&slug=eq.${EXP_CAT}&is_active=eq.true&limit=1" "${SUPA_HDRS[@]}" 2>/dev/null)
+            if [[ -n "$EXP_CAT_ROW" && "$EXP_CAT_ROW" != "[]" ]]; then
+                TARGET_CAT=$(echo "$EXP_CAT_ROW" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d[0]['slug'])")
+                TARGET_CAT_ID=$(echo "$EXP_CAT_ROW" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d[0]['id'])")
+                TARGET_CAT_NAME=$(echo "$EXP_CAT_ROW" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d[0]['name'])")
+                log "EXPANSION slot ($SLOT_HOUR_MSK MSK): using cluster=$EXPANSION_CLUSTER_ID kw='$EXPANSION_KEYWORD' cat=$TARGET_CAT (overrode category-of-the-day)"
+            else
+                log "EXPANSION slot: cluster category '$EXP_CAT' inactive/missing — falling back to normal"
+                EXPANSION_KEYWORD=""
+            fi
+        fi
+    else
+        log "EXPANSION slot ($SLOT_HOUR_MSK MSK): no pending expansion keywords, falling back to normal rotation"
+    fi
+fi
+# ────────────────────────────────────────────────────────────────────────
 
 # Step 1: Find a non-duplicate keyword. Loop with limited attempts so a single
 # duplicate hit doesn't waste the slot. Each iteration: fetch a candidate, run
@@ -174,24 +209,36 @@ for attempt in $(seq 1 $MAX_KEYWORD_ATTEMPTS); do
     CANDIDATE_KEYWORD=""
     CANDIDATE_ID=""
 
-    KW_CAT_MATCH=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_keywords?select=id,keyword&status=eq.pending&category_slug=eq.${TARGET_CAT}&order=priority.asc,impressions.desc&limit=1" "${SUPA_HDRS[@]}" 2>/dev/null)
-    if [[ -n "$KW_CAT_MATCH" && "$KW_CAT_MATCH" != "[]" ]]; then
-        CANDIDATE_KEYWORD=$(echo "$KW_CAT_MATCH" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['keyword'] if d else '')")
-        CANDIDATE_ID=$(echo "$KW_CAT_MATCH" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
-        log "Attempt ${attempt}/${MAX_KEYWORD_ATTEMPTS} keyword (category-hinted): '$CANDIDATE_KEYWORD' (id=$CANDIDATE_ID)"
+    # Cluster-expansion: on attempt 1, if we pre-picked an expansion keyword,
+    # use it directly (its cluster_id is known so cluster-builder reuses it).
+    if [[ $attempt -eq 1 && -n "$EXPANSION_KEYWORD" ]]; then
+        CANDIDATE_KEYWORD="$EXPANSION_KEYWORD"
+        CANDIDATE_ID="$EXPANSION_KW_ID"
+        log "Attempt 1/${MAX_KEYWORD_ATTEMPTS} keyword (cluster-expansion): '$CANDIDATE_KEYWORD' (id=$CANDIDATE_ID, cluster=$EXPANSION_CLUSTER_ID)"
     else
-        [[ $attempt -eq 1 ]] && log "No category-hinted keyword for '$TARGET_CAT', falling back to global queue"
-        KEYWORD_JSON=$(curl -sf "${API_URL}/api/cron/blog-keywords/next" \
-            -H "Authorization: Bearer ${CRON_SECRET}" || echo "")
-        if [[ -z "$KEYWORD_JSON" || "$KEYWORD_JSON" == "null" ]]; then
-            log "No pending keywords at all. Triggering collection..."
-            curl -sf -X POST "${API_URL}/api/cron/blog-keywords" \
-                -H "Authorization: Bearer ${CRON_SECRET}" || true
-            exit 0
+        # Normal path. Exclude cluster_expansion source so normal slots (and
+        # later attempts on expansion slots) don't consume high-priority
+        # expansion keywords — that would break the 50% cap.
+        KW_CAT_MATCH=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_keywords?select=id,keyword&status=eq.pending&category_slug=eq.${TARGET_CAT}&source=neq.cluster_expansion&order=priority.asc,impressions.desc&limit=1" "${SUPA_HDRS[@]}" 2>/dev/null)
+        if [[ -n "$KW_CAT_MATCH" && "$KW_CAT_MATCH" != "[]" ]]; then
+            CANDIDATE_KEYWORD=$(echo "$KW_CAT_MATCH" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['keyword'] if d else '')")
+            CANDIDATE_ID=$(echo "$KW_CAT_MATCH" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
+            log "Attempt ${attempt}/${MAX_KEYWORD_ATTEMPTS} keyword (category-hinted): '$CANDIDATE_KEYWORD' (id=$CANDIDATE_ID)"
+        else
+            [[ $attempt -eq 1 ]] && log "No category-hinted keyword for '$TARGET_CAT', falling back to global queue"
+            # Direct REST global fallback (was the app cron "next-keyword"
+            # endpoint; replaced with REST so we can exclude cluster_expansion
+            # in-script without an app deploy).
+            GLOBAL_ROW=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_keywords?select=id,keyword&status=eq.pending&source=neq.cluster_expansion&order=priority.asc,impressions.desc&limit=1" "${SUPA_HDRS[@]}" 2>/dev/null)
+            if [[ -z "$GLOBAL_ROW" || "$GLOBAL_ROW" == "[]" ]]; then
+                log "No pending keywords at all. Triggering collection..."
+                curl -sf -X POST "${API_URL}/api/cron/blog-keywords" -H "Authorization: Bearer ${CRON_SECRET}" || true
+                exit 0
+            fi
+            CANDIDATE_KEYWORD=$(echo "$GLOBAL_ROW" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['keyword'] if d else '')")
+            CANDIDATE_ID=$(echo "$GLOBAL_ROW" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
+            log "Attempt ${attempt}/${MAX_KEYWORD_ATTEMPTS} keyword (fallback): '$CANDIDATE_KEYWORD' (id=$CANDIDATE_ID)"
         fi
-        CANDIDATE_KEYWORD=$(echo "$KEYWORD_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin).get('keyword',''))" 2>/dev/null)
-        CANDIDATE_ID=$(echo "$KEYWORD_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
-        log "Attempt ${attempt}/${MAX_KEYWORD_ATTEMPTS} keyword (fallback): '$CANDIDATE_KEYWORD' (id=$CANDIDATE_ID)"
     fi
 
     if [[ -z "$CANDIDATE_KEYWORD" || -z "$CANDIDATE_ID" ]]; then
