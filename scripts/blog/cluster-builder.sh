@@ -35,6 +35,7 @@ CLAUDE_CMD="${CLAUDE_CMD:-/home/deploy/.local/bin/claude}"
 
 SEED="${1:?seed required}"
 CATEGORY="${2:-}"
+EXISTING_CLUSTER_ID="${3:-}"
 
 # Domains to exclude from competition count (generic portals / aggregators /
 # forums — not "real" SEO competitors). Matched as substring in hostname.
@@ -148,6 +149,24 @@ SUPA_HDRS=(
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
   -H "Accept-Profile: ai_aggregator"
 )
+
+# Cluster-expansion reuse: when the caller already knows the cluster id
+# (the keyword was seeded FROM this cluster's related_keywords by the
+# expansion producer), skip the Wordstat + LLM rebuild entirely and echo
+# the existing id. The keyword text is a related_keyword, not the cluster's
+# primary_keyword, so the normal primary_keyword reuse path below would
+# miss it and rebuild — wasting Wordstat/LLM calls.
+if [[ -n "$EXISTING_CLUSTER_ID" ]]; then
+    # Validate it still exists, then return it.
+    EXISTS=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_clusters?id=eq.${EXISTING_CLUSTER_ID}&select=id&limit=1" "${SUPA_HDRS[@]}" 2>/dev/null)
+    if [[ -n "$EXISTS" && "$EXISTS" != "[]" ]]; then
+        log "reusing caller-provided cluster id=$EXISTING_CLUSTER_ID (cluster-expansion, skip rebuild)"
+        echo "$EXISTING_CLUSTER_ID"
+        exit 0
+    else
+        log "WARN: caller-provided cluster id=$EXISTING_CLUSTER_ID not found — rebuilding"
+    fi
+fi
 
 # Idempotency: check if a pending cluster for this seed already exists
 SEED_ENC=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$SEED")

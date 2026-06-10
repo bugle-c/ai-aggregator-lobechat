@@ -325,8 +325,16 @@ for line in sys.stdin:
     KEYWORD="$CANDIDATE_KEYWORD"
     KEYWORD_ID="$CANDIDATE_ID"
 
+    # Only reuse the expansion cluster_id if the winning keyword is actually the
+    # pre-picked expansion keyword (a guard rejection may have fallen us back to
+    # a normal keyword, whose cluster must be built fresh).
+    REUSE_CLUSTER_ID=""
+    if [[ -n "$EXPANSION_KEYWORD" && "$KEYWORD" == "$EXPANSION_KEYWORD" ]]; then
+        REUSE_CLUSTER_ID="$EXPANSION_CLUSTER_ID"
+    fi
+
     # Step 1.75: Build or reuse cluster for this keyword (Wordstat + LLM relevance filter)
-    CLUSTER_ID=$("${SCRIPT_DIR}/cluster-builder.sh" "$KEYWORD" "$TARGET_CAT" 2>>"$LOG_FILE" || echo "")
+    CLUSTER_ID=$("${SCRIPT_DIR}/cluster-builder.sh" "$KEYWORD" "$TARGET_CAT" "${REUSE_CLUSTER_ID:-}" 2>>"$LOG_FILE" || echo "")
     if [[ -z "$CLUSTER_ID" ]]; then
         log "WARN: cluster-builder failed for keyword '$KEYWORD', falling back to single-keyword mode"
     fi
