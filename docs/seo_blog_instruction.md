@@ -426,13 +426,19 @@ ORDER BY blended_score DESC NULLS LAST;
 Роскомнадзор потребовал убрать VPN-контент. Нарушение = риск блокировки
 всего домена `gptweb.ru`. Действующие меры:
 
-1. **Hard-guard в генераторе** (`generate-article.sh::is_valid_keyword`):
-   любой VPN/прокси/DPI/обход-ключ → exit 2 → skip с reason `rkn-blocked`.
-   **Plus** расширенный `VPN_RE` в producer'е cluster-expansion
-   (`track-positions.sh`) ловит ещё и VPN-бренды без токена «впн» (`дядя
-ваня`, `амнезия`, `хапп`, `щука`, `radmin`, `windscribe`…) — чтобы петля
-   усиления §8.1 не размножала VPN-кластеры. Бренд-лист расширять при
-   обнаружении новых сервисов.
+1. **Единый hard-guard** — `scripts/blog/lib/vpn-guard.sh` (ОДИН источник
+   правды): экспортирует `VPN_RE` + `is_vpn_keyword()`. Его **сорсят оба**:
+   генератор (`generate-article.sh::is_valid_keyword` → exit 2 → skip с reason
+   `rkn-blocked`) и producer cluster-expansion (`track-positions.sh`,
+   интерполирует `VPN_RE` в SQL `~*`). Regex ловит и VPN-бренды без токена
+   «впн» (`дядя ваня`, `щука`/`shuka`, `хапп`/`happ`, `amnezia`, `radmin`,
+   `windscribe`, `hiddify`, `zoog`, `bebra`…).
+   ⚠️ **Новый VPN-бренд блокировать ТОЛЬКО в `lib/vpn-guard.sh`** — не дублируй
+   regex по скриптам. Дублирование и было причиной инцидента 2026-06-10:
+   producer-копию усилили брендами, а генератор-копию забыли → бренд-ключи
+   («дядя ваня личный кабинет», без токена «впн») проходили guard генератора
+   и 100+ VPN-статей автопубликовались. Over-block безопасен (ключ просто
+   скипается); false-negative = RKN-риск, поэтому при сомнении — добавляй.
 2. **Карантин ключей:** все VPN-ключи в `blog_keywords` переведены
    `pending→skipped`. Сбор может занести новые → guard их отсекает на
    генерации.
@@ -473,6 +479,14 @@ curl -X POST "https://api.webmaster.yandex.net/v4/user/${YANDEX_WEBMASTER_USER_I
 - **Никаких `notify_email`** — функция удалена. Если видишь вызов
   `notify_email` в каком-то скрипте — это баг (был такой в track-positions и
   check-api-delta, исправлен 2026-06-01), переведи на `notify_failure`.
+
+⚠️ **Второй email-канал был в приложении, не в bash.** Проект `webgpt-admin`
+(Next.js backend блога: роуты `app/api/cron/blog-{generate,publish,sync}`)
+слал `[Blog] Auto-published…` письма через Brevo (`lib/email.ts::sendNotification`)
+— миграция 2026-05-31 покрыла только bash-сторону и пропустила это.
+Отключено 2026-06-10: `sendNotification` сделан no-op. Блог-письма мертвы
+полностью. Если письма по блогу снова появятся — проверь сначала
+`webgpt-admin/lib/email.ts`, а не только bash `notify.sh`.
 
 ---
 
