@@ -3,18 +3,17 @@ import { NextResponse } from 'next/server';
 
 import { userBilling } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
-import { authEnv } from '@/envs/auth';
 import { grantTgLinkBonus } from '@/server/modules/billing/grant-tg-link-bonus';
-import { verifyTgLinkToken } from '@/server/modules/billing/tg-link-token';
 
 /**
  * POST /api/billing/tg-link-confirm
  *
- * Called by the bot after a user taps the inline "Привязать" confirm
- * button. Body carries the HMAC token (minted by /tg-link-start) and
- * the user's Telegram identifiers from `ctx.from`. We verify the
- * token, derive the lobechat user_id, stamp tg_bot_chat_id on
- * user_billing, and call grantTgLinkBonus.
+ * Called by the bot the moment a user opens it via the link deep-link
+ * (`/start link_<code>`). Body carries the short code (minted by
+ * tg-link-start) + the user's Telegram identifiers from `ctx`. We resolve
+ * the code to a lobechat user_id (single-use, unexpired), stamp the REAL
+ * bot chat_id on user_billing, and grant the +100 bonus. No confirm tap —
+ * pressing Start completes the link.
  *
  * Auth: same `X-Internal-Token` pattern as telegram-payment-fulfill —
  * only the bot (sharing BOT_INTERNAL_TOKEN) can call this.
@@ -22,11 +21,11 @@ import { verifyTgLinkToken } from '@/server/modules/billing/tg-link-token';
 export const dynamic = 'force-dynamic';
 
 interface Body {
+  /** Short opaque code from tg-link-start (the `link_<code>` deep-link tail). */
+  code: string;
   first_name?: string;
   tg_chat_id: number;
   tg_user_id: number;
-  /** HMAC token from tg-link-start (the `link_<token>` payload tail). */
-  token: string;
 }
 
 export async function POST(req: Request) {
@@ -42,36 +41,41 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'bad_json' }, { status: 400 });
   }
 
-  const secret = authEnv.AUTH_SECRET || process.env.AUTH_SECRET;
-  if (!secret) {
-    console.error('[tg-link-confirm] AUTH_SECRET missing');
-    return NextResponse.json({ ok: false, error: 'server_misconfigured' }, { status: 500 });
-  }
-
-  const verified = verifyTgLinkToken(body.token, secret);
-  if (!verified) {
-    return NextResponse.json({ ok: false, error: 'invalid_or_expired_token' }, { status: 400 });
-  }
-
   if (
     !body.tg_user_id ||
     typeof body.tg_user_id !== 'number' ||
     !body.tg_chat_id ||
-    typeof body.tg_chat_id !== 'number'
+    typeof body.tg_chat_id !== 'number' ||
+    !body.code ||
+    typeof body.code !== 'string'
   ) {
-    return NextResponse.json({ ok: false, error: 'bad_tg_ids' }, { status: 400 });
+    return NextResponse.json({ ok: false, error: 'bad_request' }, { status: 400 });
   }
 
   const db = await getServerDB();
 
-  // 1) Stamp tg_bot_chat_id on user_billing (idempotent upsert).
+  // Resolve + burn the short code (single-use, must be unexpired). DELETE …
+  // RETURNING makes it atomic — a replayed code finds nothing.
+  const codeRows = await db.execute(sql`
+    DELETE FROM tg_link_codes
+    WHERE code = ${body.code} AND expires_at > now()
+    RETURNING user_id
+  `);
+  const userId = (codeRows.rows as Array<{ user_id: string }>)[0]?.user_id;
+  if (!userId) {
+    return NextResponse.json({ ok: false, error: 'invalid_or_expired_code' }, { status: 400 });
+  }
+
+  // 1) Stamp the REAL bot chat_id on user_billing (idempotent upsert). The
+  //    chat_id comes from the bot, which received an actual /start — so this
+  //    is a genuinely reachable chat (broadcasts/recovery will land).
   try {
     await db
       .insert(userBilling)
-      .values({ planId: 1, tgBotChatId: body.tg_user_id, userId: verified.userId })
+      .values({ planId: 1, tgBotChatId: body.tg_chat_id, userId })
       .onConflictDoUpdate({
         target: userBilling.userId,
-        set: { tgBotChatId: body.tg_user_id, updatedAt: new Date() },
+        set: { tgBotChatId: body.tg_chat_id, updatedAt: new Date() },
       });
   } catch (e) {
     console.error('[tg-link-confirm] failed to stamp tg_bot_chat_id', e);
@@ -84,7 +88,7 @@ export async function POST(req: Request) {
   let alreadyClaimed = false;
   let expiresAt: string | undefined;
   try {
-    const result = await grantTgLinkBonus(db, verified.userId);
+    const result = await grantTgLinkBonus(db, userId);
     granted = result.granted;
     alreadyClaimed = result.alreadyClaimed;
     expiresAt = result.expiresAt;
@@ -103,7 +107,7 @@ export async function POST(req: Request) {
       await fetch(`${botUrl}/internal/link-user`, {
         body: JSON.stringify({
           first_name: body.first_name,
-          lobechat_user_id: verified.userId,
+          lobechat_user_id: userId,
           source: 'auth_signup',
           tg_chat_id: body.tg_chat_id,
           tg_user_id: body.tg_user_id,
@@ -123,7 +127,7 @@ export async function POST(req: Request) {
     await db
       .update(userBilling)
       .set({ updatedAt: new Date() })
-      .where(eq(userBilling.userId, verified.userId));
+      .where(eq(userBilling.userId, userId));
     void sql; // ensure import isn't tree-shaken if unused
   } catch {
     // best-effort
