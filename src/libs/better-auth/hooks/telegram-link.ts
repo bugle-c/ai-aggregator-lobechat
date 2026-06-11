@@ -19,24 +19,24 @@ interface TelegramLinkInput {
  * blocks auth on failure.
  */
 export async function linkTelegramAccount(input: TelegramLinkInput): Promise<void> {
-  // 1) lobechat side — user_billing.tg_bot_chat_id (bigint).
-  //    Existing notify-bot-pending cron reads this column.
+  // 1) lobechat side — ensure a user_billing row exists (planId 1).
+  //    IMPORTANT (2026-06-11): we deliberately do NOT stamp tg_bot_chat_id
+  //    here. This hook fires on Telegram *authentication* (Login Widget),
+  //    which proves identity but does NOT create a chat with @gptwebrubot —
+  //    Telegram bots cannot DM a user who never pressed Start. Stamping
+  //    tg_user_id as tg_bot_chat_id produced "phantom" chats: getChat/
+  //    sendMessage returned "chat not found", yet recovery + notify-bot-
+  //    pending trusted the column and silently failed (93% of linked users
+  //    were unreachable). tg_bot_chat_id is now set ONLY by a real bot
+  //    interaction (tg-link-confirm, fired from the bonus deep-link /start).
+  //    Bonus + banner key off tg_bonus_claimed_at, so they're unaffected.
   try {
     await serverDB
       .insert(userBilling)
-      .values({ userId: input.userId, tgBotChatId: input.telegramId, planId: 1 })
-      .onConflictDoUpdate({
-        target: userBilling.userId,
-        set: { tgBotChatId: input.telegramId },
-        // No setWhere — we always want to overwrite. The previous
-        // `eq(userBilling.tgBotChatId, input.telegramId)` was inverted
-        // logic: it only updated when the row's tg_bot_chat_id was
-        // ALREADY equal to the new value, so pre-existing rows with
-        // NULL never got the link stamp. Pre-existing user_billing
-        // rows can exist for email-signup users who only later link TG.
-      });
+      .values({ userId: input.userId, planId: 1 })
+      .onConflictDoNothing({ target: userBilling.userId });
   } catch (e) {
-    console.error('[tg-link] failed to set tg_bot_chat_id', e);
+    console.error('[tg-link] failed to ensure user_billing row', e);
   }
 
   // 1.5) Bonus grant — fires only on first-ever TG link per user.

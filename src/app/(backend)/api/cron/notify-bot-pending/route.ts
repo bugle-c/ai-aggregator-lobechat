@@ -43,6 +43,7 @@ export async function GET(req: Request) {
   const pending = await db
     .select({
       paymentId: billingPayments.id,
+      userId: billingPayments.userId,
       planId: billingPayments.planId,
       tgBotChatId: userBilling.tgBotChatId,
     })
@@ -81,7 +82,8 @@ export async function GET(req: Request) {
       });
 
       if (res.ok || res.status === 410) {
-        // 200 = delivered, 410 = user blocked bot (never retry).
+        // 200 = delivered, 410 = bot can't reach this chat (blocked OR a
+        // phantom tg_bot_chat_id from a Telegram login with no real /start).
         await db
           .update(billingPayments)
           .set({
@@ -89,6 +91,14 @@ export async function GET(req: Request) {
             botNotifiedAt: new Date(),
           })
           .where(eq(billingPayments.id, row.paymentId));
+        // Self-heal: on 410, null the chat so it stops poisoning future
+        // notifications for this user (see telegram-link.ts root-cause note).
+        if (res.status === 410) {
+          await db
+            .update(userBilling)
+            .set({ tgBotChatId: null })
+            .where(eq(userBilling.userId, row.userId));
+        }
         processed++;
       } else {
         // 5xx or other — leave pending for next tick.
@@ -171,10 +181,17 @@ export async function GET(req: Request) {
       });
 
       if (res.ok || res.status === 410) {
-        // 200 = delivered, 410 = user blocked bot (never retry).
+        // 200 = delivered, 410 = bot can't reach this chat (blocked OR a
+        // phantom tg_bot_chat_id from a login with no real /start). On 410,
+        // also null the chat (self-heal) so it stops poisoning this user's
+        // future notifications. See telegram-link.ts root-cause note.
         await db
           .update(userBilling)
-          .set({ botNotifyPending: false, botNotifyType: null })
+          .set({
+            botNotifyPending: false,
+            botNotifyType: null,
+            ...(res.status === 410 ? { tgBotChatId: null } : {}),
+          })
           .where(eq(userBilling.userId, row.userId));
         processed++;
       } else {

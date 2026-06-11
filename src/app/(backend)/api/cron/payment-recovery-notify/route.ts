@@ -20,7 +20,7 @@
  */
 import { eq, sql } from 'drizzle-orm';
 
-import { billingPayments } from '@/database/schemas';
+import { billingPayments, userBilling } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { describeReason } from '@/server/modules/billing/cancellation-reasons';
@@ -227,6 +227,16 @@ export async function GET(req: Request) {
           updatedAt: new Date(),
         })
         .where(eq(billingPayments.id, r.id));
+      // Self-heal: 'blocked' means the bot can't reach this chat (user blocked
+      // it OR — far more common — tg_bot_chat_id is a phantom from a Telegram
+      // *login* where the user never started @gptwebrubot). Null the column so
+      // it stops poisoning every future recovery/notify attempt for this user.
+      // A real bot /start (tg-link-confirm) re-stamps it if they ever link for
+      // real. See telegram-link.ts for the root-cause note.
+      await db
+        .update(userBilling)
+        .set({ tgBotChatId: null, updatedAt: new Date() })
+        .where(eq(userBilling.userId, r.user_id));
     } else if (result.error === 'rate_limited') {
       summary.rateLimited++;
     } else {
