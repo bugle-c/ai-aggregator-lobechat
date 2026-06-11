@@ -18,11 +18,15 @@ name: Deploy canary → ask.gptweb.ru
 on:
   push:
     branches: [canary]
+    # NOTE: paths-ignore does NOT support `!` negation (GitHub silently drops
+    # such rules). The previous `!.github/workflows/deploy-canary.yml` line was
+    # a no-op, and the workflow had fallen out of GitHub's registered-workflow
+    # list entirely (an auto-sync rewrite of canary dropped it). A real edit
+    # here forces re-registration. Workflow edits now trigger a deploy too —
+    # rare and cheap, and it lets us test the pipeline end-to-end.
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
-      - '.github/workflows/**'
-      - '!.github/workflows/deploy-canary.yml'
   workflow_dispatch: {}
 
 concurrency:
