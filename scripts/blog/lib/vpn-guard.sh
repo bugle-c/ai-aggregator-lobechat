@@ -53,7 +53,7 @@ is_layout_gibberish() {
 is_vpn_keyword() {
     local kw_lc="${1,,}"
     [[ "$kw_lc" =~ $VPN_RE ]] && return 0                                                                                          # 1) VPN / brands
-    [[ "$kw_lc" =~ (без[[:space:]]*цензур|без[[:space:]]*ограничен|раздев|18\+|adult|nsfw|jailbreak|взлом|цензур|обход|обойти|блокировк) ]] && return 0  # 2) circumvention / adult
+    [[ "$kw_lc" =~ (без[[:space:]]*цензур|без[[:space:]]*ограничен|снят[а-я]*[[:space:]]*ограничен|раздев|секс|взросл|порно|грубог|18\+|adult|nsfw|jailbreak|взлом|цензур|обход|обойти|блокировк|не[[:space:]]работает[[:space:]]в[[:space:]]росс|перестал[а-я]*[[:space:]]быть[[:space:]]доступ|перестан[а-я]*[[:space:]]быть[[:space:]]доступ) ]] && return 0  # 2) circumvention / adult / geo-bypass
     [[ "$kw_lc" =~ (wegpt|gpt[[:space:]]?web|личный[[:space:]]+кабинет) ]] && return 0                                             # 3) branded-navigational
     is_layout_gibberish "$kw_lc" && return 0                                                                                       # 4) layout gibberish
     return 1
