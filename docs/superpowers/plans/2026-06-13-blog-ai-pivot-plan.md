@@ -1,121 +1,67 @@
-# Blog AI-pivot Implementation Plan
+# Blog AI-pivot Implementation Plan (v2)
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (this session) or superpowers:executing-plans to implement task-by-task. Steps use checkbox (`- [ ]`) tracking.
 
 **Goal:** Rebuild gptweb.ru blog organic traffic on RKN-safe AI topics by fixing the broken keyword supply that feeds the existing 8-articles/day machine.
 
-**Architecture:** The generator / SEO-gate / publish / cluster-expansion pipeline is untouched. We fix only what feeds it: purge the junk keyword queue, harden the shared keyword guard (bash) AND the ingestion route (TS) against VPN/обход/adult/nav/layout-gibberish/zero-volume, bootstrap a clean AI keyword stream via Wordstat-validated curated seeds (import mode), and stop the public blog from 301-redirecting / VPN-promoting archived content.
+**Architecture:** The generator / SEO-gate / publish / cluster-expansion pipeline is untouched. We fix only what feeds it: harden the shared keyword guard (bash) AND the ingestion route (TS), purge the junk queue, bootstrap a clean AI keyword stream via Wordstat-validated curated seeds (import mode), and stop the public blog from 301-redirecting / VPN-promoting archived content.
 
-**Tech Stack:** bash + Supabase (`docker exec supabase-db psql`, schema `ai_aggregator`) in `ai-aggregator-lobechat`; Next.js route `webgpt-admin/app/api/cron/blog-keywords/route.ts` (ingestion); Next.js `webgpt-landing/app/blog/[category]/[slug]/page.tsx` (public render); Wordstat via `xmlriver` (`scripts/blog/wordstat.sh`).
+**Tech Stack:** bash + Supabase (`docker exec supabase-db psql`, schema `ai_aggregator`) in `ai-aggregator-lobechat`; Next.js `webgpt-admin/app/api/cron/blog-keywords/route.ts` (ingestion); Next.js `webgpt-landing/app/blog/[category]/[slug]/page.tsx` (public render); Wordstat via `xmlriver` (`scripts/blog/wordstat.sh`).
+
+**Order matters (v2 fix):** filters ship FIRST (Tasks 1–2), THEN we purge (Task 3), THEN seed (Task 4). Otherwise the daily Webmaster auto-collect (03:00 UTC) re-pollutes the queue between purge and filter-deploy.
 
 **Three repos / deploys:**
 
-- `ai-aggregator-lobechat` (bash scripts run from disk on the VPS — no deploy; commit to `canary`).
-- `webgpt-admin` (GHA → GHCR → SSH deploy; branch `master`).
-- `webgpt-landing` (deploy = build on VPS; branch per repo).
+- `ai-aggregator-lobechat` — bash runs from disk on the VPS (no deploy; commit `canary`).
+- `webgpt-admin` — GHA → GHCR → SSH deploy; branch `master`.
+- `webgpt-landing` — deploy mechanism CONFIRMED IN TASK 5 STEP 0 before use.
 
 ---
 
-## Task 1: Purge the junk keyword queue
+## The canonical "junk keyword" definition (shared by all tasks)
 
-**Files:**
+A keyword is JUNK if ANY holds (case-insensitive):
 
-- Create: `supabase-migrations/2026-06-13_purge_junk_keywords.sql` (record only; applied via psql)
+1. **VPN/circumvention** — matches `vpn-guard.sh::VPN_RE` (incl. brands browsec, hotspot shield, zenmate, betternet, psiphon, lantern, windscribe, radmin, …).
+2. **Circumvention/adult/uncensored** — `без ?цензур|без ?ограничен|раздев|18\+|adult|nsfw|jailbreak|взлом|цензур`.
+3. **Branded-navigational** — `wegpt|gpt ?web|личный кабинет`.
+4. **Keyboard-layout gibberish** — the keyword is **all-Latin** (no Cyrillic), contains **zero `aeiou` vowels**, and contains **no AI token** (`gpt|claude|gemini|grok|llama|qwen|ai|api|seo`). This precisely catches Russian typed in the Latin layout (`dgy yf gr` = "впн на пк"), because Russian→Latin layout maps almost all Russian vowels to Latin consonants → vowel-starved all-Latin strings. Legit English AI tools (`stable diffusion`, `perplexity`, `copilot`, `midjourney`) have normal vowels → never match; Russian AI keywords have Cyrillic → never match; `gpt`/`chatgpt` are protected by the AI-token clause.
 
-**Step 1: Capture the before-count**
-
-Run:
-
-```bash
-docker exec supabase-db psql -U postgres -d postgres -tAc "
-SELECT 'pending=' || count(*) FROM ai_aggregator.blog_keywords WHERE status='pending';"
-```
-
-Expected: `pending=1424` (±).
-
-**Step 2: Write the purge SQL** (`supabase-migrations/2026-06-13_purge_junk_keywords.sql`)
-
-```sql
--- Quarantine the junk pending keyword queue (AI-pivot 2026-06-13).
--- Junk = VPN/brands that slipped, circumvention/adult, branded-nav,
--- keyboard-layout gibberish, and zero-volume. Survivors must be real
--- RU-volume AI terms. status=skipped (reversible).
-UPDATE ai_aggregator.blog_keywords SET status='skipped'
-WHERE status='pending' AND (
-     keyword ~* '(vpn|впн|vless|amnezi|амнези|hiddify|outline|shadowsocks|wireguard|browsec|hotspot|zenmate|betternet|psiphon|lantern|windscribe|radmin|proxy|прокси|обход|разблок|dpi|byebyedpi|туннел|tunnel)'
-  OR keyword ~* '(без +цензур|без +ограничен|раздев|18\+|adult|nsfw|jailbreak|взлом|цензур)'
-  OR keyword ~* '(wegpt|gpt ?web|личный +кабинет)'
-  -- keyboard-layout gibberish: 3+ consecutive latin consonants w/ no vowel,
-  -- or a token that is mostly latin letters on an otherwise-russian blog
-  OR keyword ~* '[a-z]{4,}'  AND keyword !~* '(gpt|chatgpt|claude|gemini|grok|midjourney|deepseek|llama|qwen|ai|api|seo|web|google|openai)'
-  OR coalesce(impressions,0) < 30
-);
-```
-
-> Note: the `[a-z]{4,}` clause is deliberately broad; the allow-list of AI brand tokens protects legit terms. Over-purge is safe — the machine refills from clean seeds (Task 3).
-
-**Step 3: Dry-run the WHERE (count what it would touch) BEFORE applying**
-
-Run:
-
-```bash
-docker exec supabase-db psql -U postgres -d postgres -tAc "
-SELECT count(*) FROM ai_aggregator.blog_keywords WHERE status='pending' AND (
-  keyword ~* '(vpn|впн|vless|amnezi|амнези|hiddify|outline|shadowsocks|wireguard|browsec|hotspot|zenmate|betternet|psiphon|lantern|windscribe|radmin|proxy|прокси|обход|разблок|dpi|byebyedpi|туннел|tunnel)'
-  OR keyword ~* '(без +цензур|без +ограничен|раздев|18\+|adult|nsfw|jailbreak|взлом|цензур)'
-  OR keyword ~* '(wegpt|gpt ?web|личный +кабинет)'
-  OR (keyword ~* '[a-z]{4,}' AND keyword !~* '(gpt|chatgpt|claude|gemini|grok|midjourney|deepseek|llama|qwen|ai|api|seo|web|google|openai)')
-  OR coalesce(impressions,0) < 30);"
-```
-
-Expected: a large number (likely 1300–1420 of 1424).
-
-**Step 4: Eyeball the SURVIVORS — make sure we are not killing good AI terms**
-
-Run:
-
-```bash
-docker exec supabase-db psql -U postgres -d postgres -c "
-SELECT keyword, impressions FROM ai_aggregator.blog_keywords WHERE status='pending' AND NOT (
-  keyword ~* '(vpn|впн|vless|amnezi|амнези|hiddify|outline|shadowsocks|wireguard|browsec|hotspot|zenmate|betternet|psiphon|lantern|windscribe|radmin|proxy|прокси|обход|разблок|dpi|byebyedpi|туннел|tunnel)'
-  OR keyword ~* '(без +цензур|без +ограничен|раздев|18\+|adult|nsfw|jailbreak|взлом|цензур)'
-  OR keyword ~* '(wegpt|gpt ?web|личный +кабинет)'
-  OR (keyword ~* '[a-z]{4,}' AND keyword !~* '(gpt|chatgpt|claude|gemini|grok|midjourney|deepseek|llama|qwen|ai|api|seo|web|google|openai)')
-  OR coalesce(impressions,0) < 30) ORDER BY impressions DESC;"
-```
-
-Expected: a short list of legit AI terms (or empty). If a legit term is wrongly excluded-from-survivors (i.e. would be purged), widen the brand allow-list and re-check. Do NOT apply until the survivor set looks clean.
-
-**Step 5: Apply the purge**
-
-Run:
-
-```bash
-docker exec -i supabase-db psql -U postgres -d postgres < supabase-migrations/2026-06-13_purge_junk_keywords.sql 2>&1 | grep -E 'UPDATE [0-9]+'
-docker exec supabase-db psql -U postgres -d postgres -tAc "SELECT 'pending_now=' || count(*) FROM ai_aggregator.blog_keywords WHERE status='pending';"
-```
-
-Expected: `UPDATE <n>`; `pending_now=` small.
-
-**Step 6: Commit the SQL record**
-
-```bash
-cd /home/deploy/projects/ai-aggregator-lobechat
-git add supabase-migrations/2026-06-13_purge_junk_keywords.sql
-git commit -m "chore(blog): purge junk keyword queue (VPN/обход/nav/gibberish/zero-volume) — AI-pivot"
-```
+> Rationale for the vowel rule (v2 fix): the earlier `[a-z]{4,}` + allow-list would have blocked every English-named AI tool not on the list (`stable diffusion`, `perplexity`, `leonardo`, `suno`, `flux`, …) — i.e. the exact content we are building. The vowel rule has near-zero false positives on legit AI terms.
 
 ---
 
-## Task 2: Harden the shared keyword guard (bash)
+## Task 1: Harden the shared keyword guard (bash) — ships first
 
 **Files:**
 
 - Modify: `scripts/blog/lib/vpn-guard.sh`
-- Modify: `scripts/blog/tests/` (add `test-keyword-guard.sh`)
-- Test: `scripts/blog/tests/test-keyword-guard.sh`
+- Create: `scripts/blog/tests/test-keyword-guard.sh`
+- Create: `scripts/blog/tests/keyword-fixtures.txt` (shared block/pass fixtures — also used by the TS test in Task 2)
 
-**Step 1: Write the failing test** (`scripts/blog/tests/test-keyword-guard.sh`)
+**Step 1: Write the shared fixtures** (`scripts/blog/tests/keyword-fixtures.txt`)
+
+```
+BLOCK	browsec скачать
+BLOCK	hotspot shield basic
+BLOCK	dgy yf gr
+BLOCK	,tcgkfnysq dgy yf gr
+BLOCK	как обойти блокировку интернета
+BLOCK	промт для раздевания в gemini
+BLOCK	ии чат без цензуры
+BLOCK	wegpt ru личный кабинет
+PASS	нейросеть для генерации картинок
+PASS	chatgpt промпты для учебы
+PASS	как пользоваться claude на русском
+PASS	лучшие нейросети для текста
+PASS	midjourney что это
+PASS	stable diffusion промпты
+PASS	perplexity что это
+PASS	github copilot для кода
+PASS	deepseek нейросеть
+```
+
+**Step 2: Write the failing test** (`scripts/blog/tests/test-keyword-guard.sh`)
 
 ```bash
 #!/usr/bin/env bash
@@ -123,150 +69,228 @@ set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$DIR/lib/vpn-guard.sh"
 fail=0
-must_block() { is_vpn_keyword "$1" && echo "OK block: $1" || {
-  echo "MISS (should block): $1"
-  fail=1
-}; }
-must_pass() { is_vpn_keyword "$1" && {
-  echo "FALSE-BLOCK: $1"
-  fail=1
-} || echo "OK pass: $1"; }
-# VPN brands that slipped + layout gibberish + circumvention/adult/nav
-must_block "browsec скачать"
-must_block "hotspot shield basic"
-must_block "dgy yf gr"
-must_block "как обойти блокировку интернета"
-must_block "промт для раздевания в gemini"
-must_block "ии чат без цензуры"
-must_block "wegpt ru личный кабинет"
-# legit AI keywords must pass
-must_pass "нейросеть для генерации картинок"
-must_pass "chatgpt промпты для учебы"
-must_pass "как пользоваться claude на русском"
-must_pass "лучшие нейросети для текста"
-must_pass "midjourney что это"
+while IFS=$'\t' read -r verdict kw; do
+  [ -z "$verdict" ] && continue
+  if is_vpn_keyword "$kw"; then got=BLOCK; else got=PASS; fi
+  if [ "$got" = "$verdict" ]; then
+    echo "OK   $verdict  $kw"
+  else
+    echo "WRONG want=$verdict got=$got  $kw"
+    fail=1
+  fi
+done < "$DIR/tests/keyword-fixtures.txt"
 [ "$fail" = 0 ] && echo "PASS keyword-guard" || {
   echo "FAIL keyword-guard"
   exit 1
 }
 ```
 
-**Step 2: Run it — expect failures**
+**Step 3: Run it — expect failures**
 
 Run: `bash scripts/blog/tests/test-keyword-guard.sh`
-Expected: MISS lines for `browsec`, `hotspot`, `dgy yf gr`, `раздевания`, `без цензуры`, `wegpt` (current regex misses these) → `FAIL keyword-guard`.
+Expected: WRONG lines for `browsec`, `hotspot`, `dgy yf gr`, `раздевания`, `без цензуры`, `wegpt` → `FAIL keyword-guard`.
 
-**Step 3: Extend `VPN_RE` + add `is_vpn_keyword` junk clauses** in `scripts/blog/lib/vpn-guard.sh`
+**Step 4: Implement in `scripts/blog/lib/vpn-guard.sh`**
 
-Add the new brands to `VPN_RE` (inside the alternation), and extend `is_vpn_keyword()` to also reject circumvention/adult/nav and layout-gibberish:
+(a) Add brands to the `VPN_RE` alternation (find the existing `VPN_RE='(...)'` line, add inside the group): `browsec`, `hotspot ?shield`, `zenmate`, `betternet`, `psiphon`, `lantern`, `туннел`, `tunnel`.
+
+(b) Replace `is_vpn_keyword()` with:
 
 ```bash
-# add to VPN_RE alternation (brands that slipped 2026-06-13):
-#   |browsec|hotspot ?shield|zenmate|betternet|psiphon|lantern|туннел|tunnel
-# new is_vpn_keyword body:
+# AI tokens that must never be treated as gibberish/junk.
+VPN_GUARD_AI_RE='(gpt|chatgpt|claude|gemini|grok|llama|qwen|deepseek|midjourney|openai|google|telegram|\bai\b|api|seo)'
+
+# Keyboard-layout gibberish: all-Latin, zero aeiou vowels, no AI token.
+is_layout_gibberish() {
+  local lc="${1,,}"
+  [[ "$lc" =~ [а-яё] ]] && return 1           # has Cyrillic → not gibberish
+  [[ "$lc" =~ $VPN_GUARD_AI_RE ]] && return 1 # protected AI term
+  local letters="${lc//[^a-z]/}"              # strip non-latin-letters
+  ((${#letters} < 5)) && return 1             # too short to judge
+  local vow="${letters//[^aeiou]/}"
+  ((${#vow} == 0)) && return 0 # all-latin, no vowels → gibberish
+  return 1
+}
+
 is_vpn_keyword() {
   local kw_lc="${1,,}"
-  # 1) VPN / circumvention brands + tokens
-  [[ "$kw_lc" =~ $VPN_RE ]] && return 0
-  # 2) circumvention / adult / uncensored
-  [[ "$kw_lc" =~ (без[[:space:]]*цензур|без[[:space:]]*ограничен|раздев|18\+|adult|nsfw|jailbreak|взлом|цензур) ]] && return 0
-  # 3) our own branded-navigational (thin, converts nothing)
-  [[ "$kw_lc" =~ (wegpt|gpt[[:space:]]?web|личный[[:space:]]+кабинет) ]] && return 0
-  # 4) keyboard-layout gibberish: a token of 4+ latin chars that is NOT a known
-  #    AI brand → almost always Cyrillic typed in the wrong layout (dgy yf gr).
-  if [[ "$kw_lc" =~ [a-z]{4,} ]] && ! [[ "$kw_lc" =~ (gpt|chatgpt|claude|gemini|grok|midjourney|deepseek|llama|qwen|ai|api|seo|web|google|openai|telegram|windows|android|iphone) ]]; then
-    return 0
-  fi
+  [[ "$kw_lc" =~ $VPN_RE ]] && return 0                                                                                        # 1) VPN/brands
+  [[ "$kw_lc" =~ (без[[:space:]]*цензур|без[[:space:]]*ограничен|раздев|18\+|adult|nsfw|jailbreak|взлом|цензур) ]] && return 0 # 2) circumvention/adult
+  [[ "$kw_lc" =~ (wegpt|gpt[[:space:]]?web|личный[[:space:]]+кабинет) ]] && return 0                                           # 3) branded-nav
+  is_layout_gibberish "$kw_lc" && return 0                                                                                     # 4) layout gibberish
   return 1
 }
 ```
 
-> Keep `VPN_RE` as the canonical brand list; the extra clauses live in `is_vpn_keyword` so both the generator and the producer inherit them (single source of truth — see 2026-06-10 incident).
-
-**Step 4: Run the test — expect pass**
+**Step 5: Run the test — expect pass**
 
 Run: `bash scripts/blog/tests/test-keyword-guard.sh`
-Expected: all `OK …` lines, `PASS keyword-guard`.
+Expected: all `OK …`, `PASS keyword-guard`.
 
-**Step 5: Regression — the existing slot-parity/vpn tests still pass**
+**Step 6: Regression — slot-parity + syntax of consumers**
 
-Run: `bash scripts/blog/tests/test-slot-parity.sh; bash -n scripts/blog/generate-article.sh && echo generate-ok; bash -n scripts/blog/track-positions.sh && echo track-ok`
-Expected: `PASS …`, `generate-ok`, `track-ok`.
+Run: `bash scripts/blog/tests/test-slot-parity.sh; bash -n scripts/blog/generate-article.sh && echo gen-ok; bash -n scripts/blog/track-positions.sh && echo trk-ok`
+Expected: `PASS …`, `gen-ok`, `trk-ok`.
 
-**Step 6: Commit**
+**Step 7: Commit**
 
 ```bash
-git add scripts/blog/lib/vpn-guard.sh scripts/blog/tests/test-keyword-guard.sh
-git commit -m "feat(blog): harden keyword guard — VPN brands + layout-gibberish + adult/обход/nav"
+git add scripts/blog/lib/vpn-guard.sh scripts/blog/tests/test-keyword-guard.sh scripts/blog/tests/keyword-fixtures.txt
+git commit -m "feat(blog): harden keyword guard — VPN brands + vowel-based layout-gibberish + adult/обход/nav"
 ```
 
 ---
 
-## Task 3: Stop ingestion from re-importing junk + add volume floor (TS)
+## Task 2: Ingestion filter + volume floor (webgpt-admin) — ships before purge
 
 **Files:**
 
-- Modify: `webgpt-admin/app/api/cron/blog-keywords/route.ts` (`normalizeKeyword`)
+- Modify: `webgpt-admin/app/api/cron/blog-keywords/route.ts` (`normalizeKeyword`, `handleAutoCollect`)
+- Create: `webgpt-admin/lib/__tests__/keyword-junk.test.ts` (mirror of the bash fixtures)
 
-**Step 1: Add a junk/VPN reject + volume awareness to `normalizeKeyword`**
+**Step 1: Add the junk filter to `normalizeKeyword`**
 
-The route's `normalizeKeyword` currently only drops API-error payloads — VPN/обход queries from Webmaster flow straight in. Add a reject mirroring the bash guard (TS can't source the bash lib; keep the regex in sync — reference the same brand list):
+The route's `normalizeKeyword` only drops API-error payloads — Webmaster VPN/обход queries flow straight in (the self-reinforcing loop). Add, mirroring `vpn-guard.sh` (TS can't source bash — KEEP IN SYNC; same vowel rule keeps it simple):
 
 ```ts
-// Reject VPN/circumvention/adult/nav/layout-gibberish at ingestion so the
-// Yandex-Webmaster auto-collect (which harvests the queries we ALREADY rank
-// for — historically VPN) stops re-seeding the junk. Mirror of
-// scripts/blog/lib/vpn-guard.sh::is_vpn_keyword — keep in sync.
+// Mirror of scripts/blog/lib/vpn-guard.sh::is_vpn_keyword — keep in sync.
 const JUNK_RE =
   /(vpn|впн|vless|amnezi|амнези|hiddify|outline|shadowsocks|wireguard|browsec|hotspot|zenmate|betternet|psiphon|lantern|windscribe|radmin|proxy|прокси|обход|разблок|dpi|byebyedpi|туннел|tunnel|без ?цензур|без ?ограничен|раздев|18\+|adult|nsfw|jailbreak|взлом|цензур|wegpt|gpt ?web|личный кабинет)/i;
+const AI_TOKEN_RE =
+  /(gpt|chatgpt|claude|gemini|grok|llama|qwen|deepseek|midjourney|openai|google|telegram|\bai\b|api|seo)/i;
 function isLayoutGibberish(kw: string): boolean {
-  const m = kw.toLowerCase().match(/[a-z]{4,}/);
-  return (
-    !!m &&
-    !/(gpt|chatgpt|claude|gemini|grok|midjourney|deepseek|llama|qwen|\bai\b|api|seo|web|google|openai|telegram|windows|android|iphone)/i.test(
-      kw,
-    )
-  );
+  const lc = kw.toLowerCase();
+  if (/[а-яё]/.test(lc)) return false; // has Cyrillic
+  if (AI_TOKEN_RE.test(lc)) return false; // protected AI term
+  const letters = lc.replace(/[^a-z]/g, '');
+  if (letters.length < 5) return false;
+  return !/[aeiou]/.test(letters); // all-latin, no vowels
+}
+export function isJunkKeyword(kw: string): boolean {
+  return JUNK_RE.test(kw) || isLayoutGibberish(kw);
 }
 ```
 
-Then in `normalizeKeyword`, after the existing checks, add:
+Then in `normalizeKeyword`, after the existing checks and before `return keyword;`:
 
 ```ts
-if (JUNK_RE.test(keyword) || isLayoutGibberish(keyword)) return null;
+if (isJunkKeyword(keyword)) return null;
 ```
 
 **Step 2: Add a volume floor to the auto-collect insert**
 
-In `handleAutoCollect`, skip inserting brand-new keywords below a floor (existing-row metric updates are fine). After computing `impressions`, before the `insert`:
+In `handleAutoCollect`, only for NEW keywords (existing-row metric updates stay), after `const impressions = …` and before the `insert`:
 
 ```ts
-const VOLUME_FLOOR = 30; // RU Webmaster TOTAL_SHOWS over 28d
+const VOLUME_FLOOR = 30; // RU Webmaster TOTAL_SHOWS over the 28-day window
 if (!existing && impressions < VOLUME_FLOOR) {
   skipped++;
   continue;
 }
 ```
 
-**Step 3: Build + typecheck**
+**Step 3: Write the TS test** (`webgpt-admin/lib/__tests__/keyword-junk.test.ts`)
 
-Run:
+Use the same block/pass cases as the bash fixtures (drift guard):
 
-```bash
-cd /home/deploy/projects/webgpt-admin && npx tsc --noEmit 2>&1 | grep -iE 'blog-keywords|error TS' | head
+```ts
+import { describe, it, expect } from 'vitest';
+import { isJunkKeyword } from '@/app/api/cron/blog-keywords/route';
+const BLOCK = [
+  'browsec скачать',
+  'hotspot shield basic',
+  'dgy yf gr',
+  'как обойти блокировку интернета',
+  'промт для раздевания в gemini',
+  'ии чат без цензуры',
+  'wegpt ru личный кабинет',
+];
+const PASS = [
+  'нейросеть для генерации картинок',
+  'chatgpt промпты для учебы',
+  'stable diffusion промпты',
+  'perplexity что это',
+  'github copilot для кода',
+  'deepseek нейросеть',
+  'midjourney что это',
+];
+describe('isJunkKeyword', () => {
+  it.each(BLOCK)('blocks %s', (k) => expect(isJunkKeyword(k)).toBe(true));
+  it.each(PASS)('passes %s', (k) => expect(isJunkKeyword(k)).toBe(false));
+});
 ```
 
-Expected: no errors referencing `blog-keywords/route.ts`.
+> If `isJunkKeyword` can't be exported from a route file under this Next config, move the three helpers into `webgpt-admin/lib/keyword-junk.ts` and import from both the route and the test.
 
-**Step 4: Commit + deploy webgpt-admin**
+**Step 4: Run the test + typecheck**
+
+Run: `cd /home/deploy/projects/webgpt-admin && npx vitest run lib/__tests__/keyword-junk.test.ts 2>&1 | tail -15; npx tsc --noEmit 2>&1 | grep -iE 'blog-keywords|keyword-junk|error TS' | head`
+Expected: tests pass; no TS errors in the touched files. (If vitest isn't configured, run a quick `node`-based assertion instead and note it.)
+
+**Step 5: Commit + deploy webgpt-admin**
 
 ```bash
-git add app/api/cron/blog-keywords/route.ts
+git add app/api/cron/blog-keywords/route.ts lib/__tests__/keyword-junk.test.ts lib/keyword-junk.ts 2> /dev/null
 git commit -m "fix(blog): reject VPN/обход/adult/nav/gibberish at keyword ingestion + volume floor"
-git push origin master # GHA → GHCR → SSH deploy
+git push origin master # GHA → GHCR → SSH
 ```
 
-Verify: GHA run succeeds (`gh run list --limit 1`); endpoint still returns 401 without bearer.
+Verify: `gh run list --limit 1` succeeds; `curl -s -o /dev/null -w '%{http_code}' -X POST https://ask.gptweb.ru/api/cron/blog-keywords` → 401 (route alive). **Both filters (Task 1 bash + Task 2 TS) must be live before Task 3.**
+
+---
+
+## Task 3: Purge the junk keyword queue (SQL) — only after Tasks 1–2 are live
+
+**Files:**
+
+- Create: `supabase-migrations/2026-06-13_purge_junk_keywords.sql`
+
+**Step 1: Capture before-count**
+
+Run: `docker exec supabase-db psql -U postgres -d postgres -tAc "SELECT 'pending=' || count(*) FROM ai_aggregator.blog_keywords WHERE status='pending';"`
+Expected: `pending=1424` (±).
+
+**Step 2: Write the purge SQL** (`supabase-migrations/2026-06-13_purge_junk_keywords.sql`)
+
+The gibberish clause matches the vowel rule: all-Latin (`^[a-z ,._-]+$`, no Cyrillic), zero `aeiou`, no AI token.
+
+```sql
+-- Quarantine the junk pending keyword queue (AI-pivot 2026-06-13).
+-- status=skipped (reversible). Mirrors vpn-guard.sh::is_vpn_keyword.
+UPDATE ai_aggregator.blog_keywords SET status='skipped'
+WHERE status='pending' AND (
+     keyword ~* '(vpn|впн|vless|amnezi|амнези|hiddify|outline|shadowsocks|wireguard|browsec|hotspot|zenmate|betternet|psiphon|lantern|windscribe|radmin|proxy|прокси|обход|разблок|dpi|byebyedpi|туннел|tunnel)'
+  OR keyword ~* '(без ?цензур|без ?ограничен|раздев|18\+|adult|nsfw|jailbreak|взлом|цензур)'
+  OR keyword ~* '(wegpt|gpt ?web|личный кабинет)'
+  OR (keyword !~ '[а-яёА-ЯЁ]' AND keyword !~* '[aeiou]'
+        AND keyword !~* '(gpt|claude|gemini|grok|llama|qwen|ai|api|seo)')
+  OR coalesce(impressions,0) < 30
+);
+```
+
+**Step 3: Dry-run the count BEFORE applying**
+
+Run the same WHERE wrapped in `SELECT count(*) … WHERE status='pending' AND ( … );`
+Expected: a large number (likely 1300–1420).
+
+**Step 4: Eyeball the SURVIVORS — do not kill good AI terms**
+
+Run the same predicate negated (`AND NOT ( … )`), `ORDER BY impressions DESC`.
+Expected: a short clean AI list or empty. If a legit AI term would be purged, widen the AI-token allow-list in the gibberish clause (NOT the broad parts) and re-check. **Do NOT apply until survivors look clean.**
+
+**Step 5: Apply + verify**
+
+```bash
+docker exec -i supabase-db psql -U postgres -d postgres < supabase-migrations/2026-06-13_purge_junk_keywords.sql 2>&1 | grep -E 'UPDATE [0-9]+'
+docker exec supabase-db psql -U postgres -d postgres -tAc "SELECT 'pending_now=' || count(*) FROM ai_aggregator.blog_keywords WHERE status='pending';"
+```
+
+**Step 6: Commit**
+
+```bash
+git add supabase-migrations/2026-06-13_purge_junk_keywords.sql
+git commit -m "chore(blog): purge junk keyword queue (VPN/обход/nav/gibberish/zero-volume) — AI-pivot"
+```
 
 ---
 
@@ -274,12 +298,15 @@ Verify: GHA run succeeds (`gh run list --limit 1`); endpoint still returns 401 w
 
 **Files:**
 
-- Create: `scripts/blog/seed-ai-keywords.sh` (one-shot + re-runnable seeder)
-- Create: `scripts/blog/ai-seed-topics.txt` (curated seed phrases)
+- Create: `scripts/blog/ai-seed-topics.txt`
+- Create: `scripts/blog/seed-ai-keywords.sh`
 
-**Step 1: Curate seed phrases** (`scripts/blog/ai-seed-topics.txt`, one per line)
+**Step 0: Confirm `wordstat.sh` output format**
 
-Seed families from the spec — broad heads that Wordstat will expand. Example starter set (the implementer refines from Wordstat numbers in Step 3):
+Run: `bash scripts/blog/wordstat.sh "нейросеть для текста" | head`
+Note whether it prints `phrase<TAB>shows` lines or JSON; adapt the parser in Step 2 accordingly. Also confirm `jq` exists: `command -v jq`.
+
+**Step 1: Curate seed phrases** (`scripts/blog/ai-seed-topics.txt`)
 
 ```
 нейросеть для генерации картинок
@@ -300,8 +327,6 @@ gemini нейросеть
 
 **Step 2: Write the seeder** (`scripts/blog/seed-ai-keywords.sh`)
 
-Reads the topic file, runs each through `wordstat.sh` to get RU volume + expansions, filters with `is_vpn_keyword` (Task 2 guard) and a volume floor, then POSTs the survivors to the collection route in **import mode** (`{ keywords: [...] }`) with `source:'manual'`, `priority:'high'`. (The route file: `webgpt-admin/app/api/cron/blog-keywords` import branch.)
-
 ```bash
 #!/usr/bin/env bash
 set -uo pipefail
@@ -314,8 +339,7 @@ FLOOR=${SEED_VOLUME_FLOOR:-50}
 batch='[]'
 while IFS= read -r topic; do
   [ -z "$topic" ] && continue
-  # wordstat.sh prints "<phrase>\t<shows>" lines for the head + expansions
-  while IFS=$'\t' read -r phrase shows; do
+  while IFS=$'\t' read -r phrase shows; do # adapt to wordstat.sh format (Step 0)
     [ -z "$phrase" ] && continue
     is_vpn_keyword "$phrase" && continue
     [ "${shows:-0}" -lt "$FLOOR" ] && continue
@@ -325,36 +349,22 @@ while IFS= read -r topic; do
 done < "$DIR/ai-seed-topics.txt"
 n=$(jq 'length' <<< "$batch")
 echo "seeding $n AI keywords (floor=$FLOOR)…"
+[ "$n" -eq 0 ] && {
+  echo "nothing to seed — check wordstat output"
+  exit 1
+}
 curl -sf -X POST "${API_URL:-https://ask.gptweb.ru}/api/cron/blog-keywords" \
   -H "Authorization: Bearer ${CRON_SECRET}" -H 'Content-Type: application/json' \
   -d "{\"keywords\": $batch}" | jq .
 ```
 
-> Verify `wordstat.sh`'s actual output format first (`bash scripts/blog/wordstat.sh "нейросеть"` ) and adapt the `read` parsing if columns differ. If `wordstat.sh` returns JSON, pipe through `jq` instead of `read`.
-
-**Step 3: Dry-run Wordstat for ONE topic (validate volume + format)**
-
-Run: `bash scripts/blog/wordstat.sh "нейросеть для текста" | head`
-Expected: phrase/volume rows. Confirm the parser in Step 2 matches; tune the seed list toward heads with real volume (drop heads returning near-zero).
-
-**Step 4: Run the seeder**
+**Step 3: Run + verify the queue is clean AI**
 
 Run: `bash scripts/blog/seed-ai-keywords.sh`
-Expected: `seeding N AI keywords…` with N≫0 and an import response `{inserted, updated, rejected}`.
+Then: `docker exec supabase-db psql -U postgres -d postgres -c "SELECT left(keyword,50), priority, impressions FROM ai_aggregator.blog_keywords WHERE status='pending' ORDER BY impressions DESC LIMIT 20;"`
+Expected: AI keywords with real volume; no VPN/обход/gibberish. (The ingestion filter from Task 2 also guards this POST — confirm none of the legit seeds were wrongly rejected; if so, fix the gibberish rule.)
 
-**Step 5: Verify the queue is now clean AI keywords**
-
-Run:
-
-```bash
-docker exec supabase-db psql -U postgres -d postgres -c "
-SELECT left(keyword,50), priority, impressions FROM ai_aggregator.blog_keywords
-WHERE status='pending' ORDER BY impressions DESC LIMIT 20;"
-```
-
-Expected: AI keywords with real volume, no VPN/обход/gibberish.
-
-**Step 6: Commit**
+**Step 4: Commit**
 
 ```bash
 git add scripts/blog/seed-ai-keywords.sh scripts/blog/ai-seed-topics.txt
@@ -363,60 +373,61 @@ git commit -m "feat(blog): Wordstat-validated AI keyword seeder (bootstrap RKN-s
 
 ---
 
-## Task 5: Public blog — stop redirecting/promoting archived VPN (webgpt-landing)
+## Task 5: Public blog — archived VPN 404s (no redirect) + remove VPN promo (webgpt-landing)
 
 **Files:**
 
 - Modify: `webgpt-landing/app/blog/[category]/[slug]/page.tsx`
 
-**Step 1: Archived posts → clean 404, never 301-redirect**
+**Step 0: Confirm webgpt-landing's deploy mechanism (v2 fix)**
 
-At lines \~187-191 the page does `getArchivedRedirect(slug)` → `permanentRedirect`. For the RKN takedown we do NOT want to redirect archived VPN to a live page. Change archived handling to `notFound()` (clean 404) unless the redirect target is a non-VPN canonical from the cannibalization map. Minimal safe change: skip the redirect for VPN slugs.
+Run: `ls /home/deploy/projects/webgpt-landing/.github/workflows/ 2>/dev/null; docker ps --format '{{.Names}}' | grep -i landing`
+Determine: GHA workflow vs VPS `docker compose` build. Record the exact deploy command for Step 5. Do NOT guess.
+
+**Step 1: Archived posts → clean 404, never 301 to a VPN page**
+
+At the `if (!post) { … getArchivedRedirect … permanentRedirect … notFound() }` block (\~lines 187–191), skip the redirect for VPN/circumvention slugs:
 
 ```ts
 const post = await getPostBySlug(slug);
 if (!post) {
   const redirectTo = await getArchivedRedirect(slug);
-  // Do NOT redirect VPN/circumvention slugs to live pages (RKN + de-index):
   if (redirectTo && !/\b(vpn|vless|wireguard)\b|впн|прокси|обход/i.test(slug)) {
     permanentRedirect(redirectTo);
   }
-  notFound();
+  notFound(); // clean 404 → Yandex de-indexes the archived VPN page
 }
 ```
 
-**Step 2: Remove the live-page VPN promo block**
+> Decision (v2, was "410" in spec): Next App Router cannot return a 410 from a server component without middleware gymnastics; a clean 404 + the existing `noindex` achieves de-indexing equally for Yandex. 410-via-middleware is a possible later refinement, not needed now.
 
-Lines \~38-70 + \~261 define `isVpnArticle`, `VPN_CLUSTER_LINKS`, `showVpnPromo`. These promote VPN on live pages (RKN leak + off-strategy). Remove the `VPN_CLUSTER_LINKS` array, the `isVpnArticle` helper, the `showVpnPromo` const, and the JSX block that renders it. Grep to find the JSX usage:
+**Step 2: Remove the live-page VPN promo**
+
+Delete `isVpnArticle` (\~38–54), `VPN_CLUSTER_LINKS` (\~56–70+), the `showVpnPromo` const (\~261), and the JSX block that renders the promo. Find every reference first:
 
 ```bash
 grep -n "showVpnPromo\|VPN_CLUSTER_LINKS\|isVpnArticle" "app/blog/[category]/[slug]/page.tsx"
 ```
 
-Delete all references.
+Delete all; ensure no dangling reference remains.
 
 **Step 3: Build + typecheck**
 
 Run: `cd /home/deploy/projects/webgpt-landing && npx tsc --noEmit 2>&1 | grep -iE 'slug/page|error TS' | head`
 Expected: no errors in the page.
 
-**Step 4: Verify locally that an archived VPN slug 404s (no redirect)**
-
-After deploy (Step 5), run:
-
-```bash
-curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' https://gptweb.ru/blog/prompts/dyadya-vanya-skachat-promty-2026
-```
-
-Expected: `404` with empty redirect (not 301).
-
-**Step 5: Commit + deploy webgpt-landing**
+**Step 4: Commit + deploy (use the command confirmed in Step 0)**
 
 ```bash
 git add "app/blog/[category]/[slug]/page.tsx"
-git commit -m "fix(blog): archived VPN slugs 404 (no redirect) + remove live VPN promo blocks (RKN)"
-git push # then deploy per webgpt-landing's pipeline (VPS build)
+git commit -m "fix(blog): archived VPN slugs 404 (no redirect) + remove live VPN promo (RKN)"
+git push # then run the deploy command from Step 0
 ```
+
+**Step 5: Verify live**
+
+Run: `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' https://gptweb.ru/blog/prompts/dyadya-vanya-skachat-promty-2026`
+Expected: `404` with empty redirect (not 301).
 
 ---
 
@@ -424,32 +435,28 @@ git push # then deploy per webgpt-landing's pipeline (VPS build)
 
 **Files:**
 
-- Modify: `docs/seo_blog_instruction.md` (in `ai-aggregator-lobechat`)
+- Modify: `docs/seo_blog_instruction.md`
 
-**Step 1: Update the relevant sections**
+**Step 1:** Update §3 (collection harvests Webmaster own-ranking queries — a VPN feedback loop historically, now filtered at ingestion + volume floor; the clean AI stream comes from `seed-ai-keywords.sh`); §10 (guard now covers slipped VPN brands, vowel-based layout-gibberish, adult/обход/nav; archived VPN slugs 404 no-redirect; live VPN promo removed); add a "Content strategy: AI, not VPN" note pointing to `scripts/blog/ai-seed-topics.txt`.
 
-- §3 (Сбор семантики): document that auto-collect harvests Webmaster _own-ranking_ queries (a VPN feedback loop historically) and is now filtered at ingestion (`normalizeKeyword` JUNK_RE + volume floor); the clean AI stream comes from `seed-ai-keywords.sh` (Wordstat-validated curated seeds, import mode).
-- §10 (RKN): note the guard now also covers VPN brands that slipped (browsec/hotspot…), layout-gibberish, adult/обход/nav; archived VPN slugs 404 (no redirect) and the live VPN promo block is removed.
-- Add a short "Content strategy: AI, not VPN" note: the blog rebuilds traffic on нейросети/модели/промпты/ИИ-задачи; seed families live in `scripts/blog/ai-seed-topics.txt`.
-
-**Step 2: Commit** (commit prose BEFORE any refresh-instruction-state run — auto-commit gotcha)
+**Step 2: Commit** (commit prose BEFORE any refresh-instruction-state run — auto-commit gotcha):
 
 ```bash
 git add docs/seo_blog_instruction.md
-git commit -m "docs(blog): AI-pivot — keyword sourcing, hardened guard, archived 410/404 policy"
+git commit -m "docs(blog): AI-pivot — keyword sourcing, hardened guard, archived 404 policy"
 ```
 
 ---
 
 ## After all tasks
 
-- Push `ai-aggregator-lobechat` `canary` (bash live from disk already; commit for record): `git push origin canary`.
-- Confirm `webgpt-admin` + `webgpt-landing` deploys are live (GHA / VPS build).
-- The next `blog-generate` slots (08–22 MSK) will draw from the clean AI queue; cluster-expansion amplifies any AI cluster that gains traction.
-- Track recovery weekly: `/blog` organic in Metrika (counter 106801684) — building from a tiny non-VPN base, so expect a slow ramp.
+- `git push origin canary` (bash already live from disk; commit for record).
+- Confirm `webgpt-admin` + `webgpt-landing` deploys live.
+- Next `blog-generate` slots draw from the clean AI queue; cluster-expansion amplifies winners.
+- Track weekly: `/blog` organic in Metrika (106801684) — building from a tiny non-VPN base, slow ramp expected.
 
-## Self-review checklist (run before executing)
+## Self-review (v2)
 
-- Spec coverage: §1 purge → T1; §2 seed source → T3+T4; §3 filter → T2+T3; §4 410/hygiene → T5; docs → T6. ✓
-- No placeholders except deliberately-deferred (final seed list / volume floor — produced from live Wordstat in T4). ✓
-- Guard regex stays single-source in bash (`vpn-guard.sh`); the TS `JUNK_RE` is an explicit mirror flagged "keep in sync". ✓
+- Spec coverage: filter §3/§2/§1 → T1+T2; purge §1 → T3; seed §2 → T4; 404/hygiene §4 → T5; docs → T6. ✓
+- Review findings applied: vowel-gibberish (no legit-AI false-block) ✓; order filters→purge→seed ✓; English-AI must_pass cases + shared fixtures ✓; landing deploy confirmed in T5.S0 ✓; SQL parens consistent ✓; 410→404 made conscious ✓; bash↔TS drift mitigated via shared fixtures + simple vowel rule ✓.
+- No remaining placeholders except deliberately-deferred (final seed list / floor — produced from live Wordstat in T4). ✓
