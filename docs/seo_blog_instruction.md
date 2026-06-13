@@ -160,6 +160,32 @@ PostgREST не всегда видит таблицы `ai_aggregator` в кеш�
 **Когда бить тревогу:** `from_api=0` (xmlriver упал / кончились лимиты),
 или скрипт падает с ошибкой → проверь `XMLRIVER_*` креды и баланс xmlriver.
 
+### 3.1 ⚠️ AI-pivot контент-стратегия (2026-06-13)
+
+**Важно про источник ключей.** Авто-сбор (`POST /api/cron/blog-keywords` в
+**webgpt-admin**, домен `ask.gptweb.ru/admin`) тянет не абстрактный Wordstat,
+а **популярные запросы из Yandex Webmaster — те, по которым сайт УЖЕ
+ранжируется**. Это самоусиливающаяся петля: блог исторически был VPN-сайтом →
+Webmaster отдавал VPN-запросы → писались новые VPN-статьи. Когда РКН + Яндекс
+выпилили VPN (трафик упал с \~6000 до \~250 визитов/день за 18 дней), эта петля
+осталась без топлива.
+
+**Что сделано:**
+
+1. **Фильтр на ingestion** (`webgpt-admin/lib/keyword-junk.ts::isJunkKeyword`,
+   зеркало `lib/vpn-guard.sh`) режет VPN/обход/adult/nav/раскладочный-мусор +
+   порог частотности (TOTAL_SHOWS ≥ 30) — Webmaster-петля больше не сеет junk.
+2. **Очередь зачищена** (`supabase-migrations/2026-06-13_purge_junk_keywords.sql`):
+   1424 → 25 ключей.
+3. **Бутстрап чистых ИИ-тем** — `scripts/blog/seed-ai-keywords.sh` расширяет
+   `ai-seed-topics.txt` через Wordstat и заливает ВЧ-ИИ-ключи (нейросети,
+   ChatGPT/Claude/Gemini без «обхода», промпты, ИИ-для-задач) как
+   `priority=high` import'ом. Перезапускаемо. **Темы добавлять сюда.**
+
+**Стратегия:** трафик отстраивается заново на разрешённых ИИ-темах (→ лиды на
+gptweb.ru). VPN не вернётся. Дизайн:
+`docs/superpowers/specs/2026-06-13-blog-ai-pivot-design.md`.
+
 ---
 
 ## 4. Кластеризация (`cluster-builder.sh`)
@@ -433,7 +459,12 @@ ORDER BY blended_score DESC NULLS LAST;
    `rkn-blocked`) и producer cluster-expansion (`track-positions.sh`,
    интерполирует `VPN_RE` в SQL `~*`). Regex ловит и VPN-бренды без токена
    «впн» (`дядя ваня`, `щука`/`shuka`, `хапп`/`happ`, `amnezia`, `radmin`,
-   `windscribe`, `hiddify`, `zoog`, `bebra`…).
+   `windscribe`, `hiddify`, `zoog`, `bebra`, `browsec`, `hotspot shield`…).
+   **С 2026-06-13 guard режет ещё и** circumvention/adult/nav (`обход`,
+   `без цензур`, `снятие ограничений`, `секс/взрослого`, `wegpt`/`gpt web`) и
+   **раскладочный мусор** (all-latin без гласных и без ИИ-токена — `dgy yf gr`
+   \= «впн на пк»). Зеркало в TS: `webgpt-admin/lib/keyword-junk.ts` (держать в
+   синхроне). Тест: `scripts/blog/tests/test-keyword-guard.sh` + фикстуры.
    ⚠️ **Новый VPN-бренд блокировать ТОЛЬКО в `lib/vpn-guard.sh`** — не дублируй
    regex по скриптам. Дублирование и было причиной инцидента 2026-06-10:
    producer-копию усилили брендами, а генератор-копию забыли → бренд-ключи
@@ -446,7 +477,15 @@ ORDER BY blended_score DESC NULLS LAST;
 3. **Исключения в новостном профиле** (`topics_excluded`).
 4. **Архивация + 404:** опубликованные VPN-статьи переведены
    `status='archived'` (фронт отдаёт 404, `getPostBySlug` фильтрует по
-   `published`), URL отправлены на Yandex recrawl/removal.
+   `published`), URL отправлены на Yandex recrawl/removal. **С 2026-06-13**
+   архивные VPN-слаги отдают **чистый 404 без 301-редиректа** (в
+   `webgpt-landing/app/blog/[category]/[slug]/page.tsx` редирект пропускается
+   для vpn/впн/прокси/обход-слагов — чтобы Яндекс деиндексировал, а не
+   передавал релевантность на живую страницу).
+5. **Нет VPN-промо на живом фронте** (с 2026-06-13): из blog-страниц убраны
+   блок «Бесплатный VPN → t.me/freeipru_bot», словарь `VPN_RECOVERY_NOTES`
+   (Огонь/Super/Щука/Express ВПН) и `VPN_CLUSTER_LINKS`. Блог нигде не
+   рекламирует VPN.
 
 **Как заархивировать VPN-статью + убрать из поиска:**
 
