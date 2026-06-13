@@ -24,6 +24,7 @@ log() {
 }
 
 source "${SCRIPT_DIR}/notify.sh"
+source "${SCRIPT_DIR}/lib/vpn-guard.sh"   # is_vpn_keyword — RKN/junk guard for news topics
 
 # Rotate log
 if [[ -f "$LOG_FILE" ]] && (( $(wc -l < "$LOG_FILE") > 2000 )); then
@@ -197,6 +198,18 @@ if [[ -z "$NEWS_EVENT_ID" ]]; then
 fi
 
 log "Selected hype event: '${NEWS_TITLE:0:90}' (event=${NEWS_EVENT_ID:0:8}, rel=${NEWS_REL}, hype=${NEWS_HYPE}, freshness=${NEWS_FRESHNESS:-?}, combined=${NEWS_COMBINED:-?})"
+
+# RKN/junk guard (2026-06-13): agent-news-007 can surface VPN/circumvention/
+# adult topics; publishing them risks a whole-domain RKN block. Check the
+# title + summary + angle against the shared guard (lib/vpn-guard.sh). On a
+# hit, skip THIS event and exit cleanly (no publish, no failure alert) — the
+# next run picks a fresh event. Same guard as the article generator + producer.
+if is_vpn_keyword "${NEWS_TITLE} ${NEWS_SUMMARY} ${NEWS_ANGLE}"; then
+    log "RKN-BLOCKED: news event is VPN/circumvention/adult — skipping: '${NEWS_TITLE:0:90}'"
+    notify_failure "generate-hype-article" "Skipped RKN-blocked news: ${NEWS_TITLE:0:80}" "$LOG_FILE" || true
+    log "=== Hype article generation complete (rkn-skip) ==="
+    exit 0
+fi
 
 # Step 1.5: Title-overlap dedup against last 30 days of news posts
 EXISTING_TITLES=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_posts?select=title&status=eq.published&category_id=eq.${NEWS_CAT_ID}&created_at=gte.$(date -u -d '30 days ago' +%Y-%m-%d)T00:00:00Z&order=created_at.desc&limit=60" "${SUPA_HDRS[@]}" 2>/dev/null | python3 -c "
