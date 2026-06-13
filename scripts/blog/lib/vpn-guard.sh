@@ -23,12 +23,38 @@
 # listed — their keywords carry a literal vpn/впн token which the base set
 # already catches, and bare-listing them would block legit articles.
 
-# shellcheck disable=SC2034  # VPN_RE is consumed by sourcing scripts
-VPN_RE='(vpn|впн|vless|v2ray|xray|amnezia|amneziawg|amnezi|амнези|shadowsocks|wireguard|hiddify|outline|прокси|proxy|обход[[:space:]]*блок|разблок|dpi|byebyedpi|дядя[[:space:]]?ваня|дядяваня|хапп|happ|щука|shchuka|shuka|радмин|radmin|windscribe|hidemy|зугвпн|zoog|bebra|бебра|catserver|lagom|fkey|octohide|onevps|prstovpn|psysovet|planet[[:space:]]?vpn|планет[[:space:]]?впн)'
+# shellcheck disable=SC2034  # VPN_RE is consumed by sourcing scripts (incl. SQL ~*)
+VPN_RE='(vpn|впн|vless|v2ray|xray|amnezia|amneziawg|amnezi|амнези|shadowsocks|wireguard|hiddify|outline|прокси|proxy|обход[[:space:]]*блок|разблок|dpi|byebyedpi|дядя[[:space:]]?ваня|дядяваня|хапп|happ|щука|shchuka|shuka|радмин|radmin|windscribe|hidemy|зугвпн|zoog|bebra|бебра|catserver|lagom|fkey|octohide|onevps|prstovpn|psysovet|planet[[:space:]]?vpn|планет[[:space:]]?впн|browsec|hotspot[[:space:]]?shield|zenmate|betternet|psiphon|lantern|туннел|tunnel)'
 
-# is_vpn_keyword <keyword> → exit 0 if the keyword is VPN/circumvention.
-# Lowercases first because bash =~ is case-sensitive (Cyrillic included).
+# AI tokens that must never be treated as keyboard-layout gibberish.
+VPN_GUARD_AI_RE='(gpt|chatgpt|claude|gemini|grok|llama|qwen|deepseek|midjourney|openai|google|telegram|\bai\b|api|seo)'
+
+# Keyboard-layout gibberish: a keyword that is all-Latin (no Cyrillic), contains
+# ZERO aeiou vowels, and carries no AI token — the signature of Russian typed in
+# the Latin layout (`dgy yf gr` = "впн на пк"), because the Russian→Latin layout
+# maps almost every Russian vowel to a Latin consonant. Legit English AI tools
+# (stable diffusion, perplexity, copilot…) have normal vowels → never match;
+# Russian AI keywords have Cyrillic → never match. Conservative on purpose: it
+# misses gibberish that happens to contain a vowel, but never blocks legit AI.
+is_layout_gibberish() {
+    local lc="${1,,}"
+    [[ "$lc" =~ [а-яё] ]] && return 1            # has Cyrillic → not gibberish
+    [[ "$lc" =~ $VPN_GUARD_AI_RE ]] && return 1  # protected AI term
+    local letters="${lc//[^a-z]/}"               # strip non-Latin-letters
+    (( ${#letters} < 5 )) && return 1            # too short to judge
+    local vow="${letters//[^aeiou]/}"
+    (( ${#vow} == 0 )) && return 0               # all-Latin, no vowels → gibberish
+    return 1
+}
+
+# is_vpn_keyword <keyword> → exit 0 if the keyword is junk (VPN / circumvention /
+# adult / branded-nav / layout-gibberish). Lowercases first (bash =~ is CS).
+# Over-blocking is the safe direction — a skipped keyword just yields the next.
 is_vpn_keyword() {
     local kw_lc="${1,,}"
-    [[ "$kw_lc" =~ $VPN_RE ]]
+    [[ "$kw_lc" =~ $VPN_RE ]] && return 0                                                                                          # 1) VPN / brands
+    [[ "$kw_lc" =~ (без[[:space:]]*цензур|без[[:space:]]*ограничен|раздев|18\+|adult|nsfw|jailbreak|взлом|цензур|обход|обойти|блокировк) ]] && return 0  # 2) circumvention / adult
+    [[ "$kw_lc" =~ (wegpt|gpt[[:space:]]?web|личный[[:space:]]+кабинет) ]] && return 0                                             # 3) branded-navigational
+    is_layout_gibberish "$kw_lc" && return 0                                                                                       # 4) layout gibberish
+    return 1
 }
