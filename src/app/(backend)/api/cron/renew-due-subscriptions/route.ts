@@ -29,7 +29,7 @@
  */
 import crypto from 'node:crypto';
 
-import { and, eq, gte, isNotNull, lte, ne } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, lte, ne, sql } from 'drizzle-orm';
 
 import { billingPayments, userBilling } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
@@ -89,6 +89,37 @@ export async function POST(req: Request) {
         planId: row.planId,
         outcome: 'skipped',
         error: 'plan not found or free',
+      });
+      continue;
+    }
+
+    // Idempotency + cooldown guard. createYookassaPayment uses a RANDOM
+    // Idempotence-Key per call, so YooKassa offers no double-charge protection
+    // — without this guard a more-frequent cron would charge the card multiple
+    // times. Skip the user if they already have a pending/succeeded auto_renew
+    // THIS cycle (never double-charge / never re-charge after success), OR any
+    // auto_renew attempt in the last 4h (gentle retry spacing). Only a user
+    // whose last attempt FAILED/CANCELED ≥4h ago falls through to a fresh retry.
+    const cooldown = new Date(now.getTime() - 4 * 3_600_000);
+    const cycle = new Date(now.getTime() - 28 * 86_400_000);
+    const blockers = await db
+      .select({ id: billingPayments.id })
+      .from(billingPayments)
+      .where(
+        sql`${billingPayments.userId} = ${row.userId}
+            AND ${billingPayments.metadata}->>'kind' = 'auto_renew'
+            AND (
+              (${billingPayments.status} IN ('pending','succeeded') AND ${billingPayments.createdAt} > ${cycle})
+              OR ${billingPayments.createdAt} > ${cooldown}
+            )`,
+      )
+      .limit(1);
+    if (blockers.length > 0) {
+      results.push({
+        userId: row.userId,
+        planId: row.planId,
+        outcome: 'skipped',
+        error: 'recent auto_renew attempt (dedup/cooldown)',
       });
       continue;
     }
