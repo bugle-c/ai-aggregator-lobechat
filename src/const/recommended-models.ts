@@ -5,24 +5,24 @@ export interface RecommendedModel {
   order: number;
 }
 
-// Plan-tiered recommended lists. Gemma 4 E4B (our local Hetzner-hosted
-// model) is now the #1 default for every tier — it's ~2-3x cheaper per
-// token than gpt-5-nano (the cheapest cloud option) and matches
-// DEFAULT_MODEL in @lobechat/const/settings/llm.ts. Paid tiers get
-// premium cloud models below it for users who explicitly want bigger
-// brains.
+// Plan-tiered recommended lists. gpt-5-mini (cloud, via the `lobehub`
+// gateway) is the #1 default — it's the cheapest fast cloud model and
+// matches DEFAULT_MODEL in @lobechat/const/settings/llm.ts. The local
+// Gemma 4 E4B stays available as the free fallback but is demoted: on
+// our CPU-only box it takes 5–10 min/answer, so it's no longer the
+// default. Paid tiers get premium cloud models for bigger brains.
 const RECOMMENDED_BY_PLAN: Record<string, RecommendedModel[]> = {
   free: [
     {
-      creditCost: 0,
-      description: 'Локальная — самая дешёвая. Подходит для большинства задач.',
-      modelId: 'gemma4:e4b',
+      creditCost: 1,
+      description: 'Самый быстрый — подходит для большинства задач',
+      modelId: 'gpt-5-mini',
       order: 1,
     },
     {
-      creditCost: 1,
-      description: 'Самый быстрый из cloud — простые вопросы',
-      modelId: 'gpt-5-mini',
+      creditCost: 0,
+      description: 'Локальная — бесплатная, но медленнее',
+      modelId: 'gemma4:e4b',
       order: 2,
     },
     {
@@ -40,15 +40,15 @@ const RECOMMENDED_BY_PLAN: Record<string, RecommendedModel[]> = {
   ],
   basic: [
     {
-      creditCost: 0,
-      description: 'Локальная — самая дешёвая',
-      modelId: 'gemma4:e4b',
+      creditCost: 1,
+      description: 'Самый быстрый — для большинства задач',
+      modelId: 'gpt-5-mini',
       order: 1,
     },
     {
-      creditCost: 1,
-      description: 'Самый быстрый cloud',
-      modelId: 'gpt-5-mini',
+      creditCost: 0,
+      description: 'Локальная — бесплатная, но медленнее',
+      modelId: 'gemma4:e4b',
       order: 2,
     },
     {
@@ -66,53 +66,53 @@ const RECOMMENDED_BY_PLAN: Record<string, RecommendedModel[]> = {
   ],
   pro: [
     {
-      creditCost: 0,
-      description: 'Локальная — самая дешёвая',
-      modelId: 'gemma4:e4b',
-      order: 1,
-    },
-    {
       creditCost: 13,
       description: 'Умный и быстрый — для большинства задач',
       modelId: 'claude-sonnet-4-6',
-      order: 2,
+      order: 1,
     },
     {
       creditCost: 8,
       description: 'Универсал GPT-5',
       modelId: 'gpt-5.1',
-      order: 3,
+      order: 2,
     },
     {
       creditCost: 8,
       description: 'Глубокий анализ — математика, код',
       modelId: 'deepseek-reasoner',
+      order: 3,
+    },
+    {
+      creditCost: 0,
+      description: 'Локальная — бесплатная, но медленнее',
+      modelId: 'gemma4:e4b',
       order: 4,
     },
   ],
   pro_max: [
     {
-      creditCost: 0,
-      description: 'Локальная — самая дешёвая',
-      modelId: 'gemma4:e4b',
-      order: 1,
-    },
-    {
       creditCost: 25,
       description: 'Премиум — самые сложные задачи',
       modelId: 'claude-opus-4-6',
-      order: 2,
+      order: 1,
     },
     {
       creditCost: 14,
       description: 'Флагман для сложных задач',
       modelId: 'gpt-5.2',
-      order: 3,
+      order: 2,
     },
     {
       creditCost: 13,
       description: 'Универсал',
       modelId: 'claude-sonnet-4-6',
+      order: 3,
+    },
+    {
+      creditCost: 0,
+      description: 'Локальная — бесплатная, но медленнее',
+      modelId: 'gemma4:e4b',
       order: 4,
     },
   ],
