@@ -429,6 +429,21 @@ if [[ -z "$POST_ID" || "$POST_ID" = "?" ]]; then
     exit 1
 fi
 
+# OUTPUT RKN guard (same as generate-article.sh). The event-level check above
+# vets the news topic, but the generated TITLE/SLUG can still drift into a
+# VPN/adult/circumvention angle. Re-run the shared guard on the output; if it
+# trips, archive the draft and never publish.
+GEN_TITLE=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_posts?select=title&id=eq.${POST_ID}" "${SUPA_HDRS[@]}" 2>/dev/null \
+    | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['title'] if d else '')" 2>/dev/null) || true
+if is_vpn_keyword "${GEN_TITLE} ${POST_SLUG}"; then
+    log "RKN-BLOCKED (output): hype article trips VPN/adult guard — title='${GEN_TITLE:0:100}' slug='${POST_SLUG}'. Archiving draft ${POST_ID}, NOT publishing."
+    curl -sf -X PATCH "${SUPABASE_URL}/rest/v1/blog_posts?id=eq.${POST_ID}" \
+        "${SUPA_HDRS[@]}" -H "Content-Profile: ai_aggregator" -H "Content-Type: application/json" \
+        -d '{"status":"archived"}' >/dev/null 2>&1 || true
+    notify_failure "generate-hype-article" "RKN output-guard blocked post ${POST_ID}: '${GEN_TITLE:0:120}' (slug ${POST_SLUG}). Draft archived, not published." "$LOG_FILE"
+    exit 0
+fi
+
 # Step 4: Pre-publish SEO audit gate (same as generate-article.sh)
 if [[ -z "${BLOG_PREVIEW_TOKEN:-}" ]]; then
     log "WARN: BLOG_PREVIEW_TOKEN not set — leaving as draft for manual review"

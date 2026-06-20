@@ -19,3 +19,8 @@ PASS	stable diffusion промпты
 PASS	perplexity что это
 PASS	github copilot для кода
 PASS	deepseek нейросеть
+BLOCK	Чат без правил в ТГ 2026
+BLOCK	chat-bez-pravil-tg-guide-2026
+BLOCK	vipien скачать на андроид
+BLOCK	ИИ-чат без фильтров
+BLOCK	neyronka-bez-cenzury-obzor-2026

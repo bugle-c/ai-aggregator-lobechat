@@ -24,7 +24,7 @@
 # already catches, and bare-listing them would block legit articles.
 
 # shellcheck disable=SC2034  # VPN_RE is consumed by sourcing scripts (incl. SQL ~*)
-VPN_RE='(vpn|впн|vless|v2ray|xray|amnezia|amneziawg|amnezi|амнези|shadowsocks|wireguard|hiddify|outline|прокси|proxy|обход[[:space:]]*блок|разблок|dpi|byebyedpi|дядя[[:space:]]?ваня|дядяваня|хапп|happ|щука|shchuka|shuka|радмин|radmin|windscribe|hidemy|зугвпн|zoog|bebra|бебра|catserver|lagom|fkey|octohide|onevps|prstovpn|psysovet|planet[[:space:]]?vpn|планет[[:space:]]?впн|browsec|hotspot[[:space:]]?shield|zenmate|betternet|psiphon|lantern|туннел|tunnel)'
+VPN_RE='(vpn|впн|vless|v2ray|xray|amnezia|amneziawg|amnezi|амнези|shadowsocks|wireguard|hiddify|outline|прокси|proxy|обход[[:space:]]*блок|разблок|dpi|byebyedpi|дядя[[:space:]]?ваня|дядяваня|хапп|happ|щука|shchuka|shuka|радмин|radmin|windscribe|hidemy|зугвпн|zoog|bebra|бебра|catserver|lagom|fkey|octohide|onevps|prstovpn|psysovet|planet[[:space:]]?vpn|планет[[:space:]]?впн|vipien|випиэн|browsec|hotspot[[:space:]]?shield|zenmate|betternet|psiphon|lantern|туннел|tunnel)'
 
 # AI tokens that must never be treated as keyboard-layout gibberish.
 VPN_GUARD_AI_RE='(gpt|chatgpt|claude|gemini|grok|llama|qwen|deepseek|midjourney|openai|google|telegram|\bai\b|api|seo)'
@@ -53,7 +53,7 @@ is_layout_gibberish() {
 is_vpn_keyword() {
     local kw_lc="${1,,}"
     [[ "$kw_lc" =~ $VPN_RE ]] && return 0                                                                                          # 1) VPN / brands
-    [[ "$kw_lc" =~ (без[[:space:]]*цензур|без[[:space:]]*ограничен|снят[а-я]*[[:space:]]*ограничен|раздев|секс|взросл|порно|грубог|18\+|adult|nsfw|jailbreak|взлом|цензур|обход|обойти|блокировк|не[[:space:]]работает[[:space:]]в[[:space:]]росс|перестал[а-я]*[[:space:]]быть[[:space:]]доступ|перестан[а-я]*[[:space:]]быть[[:space:]]доступ) ]] && return 0  # 2) circumvention / adult / geo-bypass
+    [[ "$kw_lc" =~ (без[[:space:]]*цензур|без[[:space:]]*ограничен|без[[:space:]]*правил|без[[:space:]]*фильтр|снят[а-я]*[[:space:]]*ограничен|раздев|секс|взросл|порно|porn|грубог|18\+|adult|nsfw|jailbreak|взлом|цензур|обход|обойти|блокировк|bez[[:space:]_-]*(cenzur|tsenzur|pravil|ogranichen|filtr)|без[[:space:]]*цензуры[[:space:]]*и[[:space:]]*фильтр|не[[:space:]]работает[[:space:]]в[[:space:]]росс|перестал[а-я]*[[:space:]]быть[[:space:]]доступ|перестан[а-я]*[[:space:]]быть[[:space:]]доступ) ]] && return 0  # 2) circumvention / adult / geo-bypass (incl. "без правил/фильтров" + translit slugs)
     [[ "$kw_lc" =~ (wegpt|gpt[[:space:]]?web|личный[[:space:]]+кабинет) ]] && return 0                                             # 3) branded-navigational
     is_layout_gibberish "$kw_lc" && return 0                                                                                       # 4) layout gibberish
     return 1

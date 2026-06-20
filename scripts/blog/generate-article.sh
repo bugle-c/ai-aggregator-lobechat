@@ -540,6 +540,24 @@ POST_STATUS=$(echo "$RESPONSE_BODY" | python3 -c "import json,sys; print(json.lo
 POST_SLUG=$(echo "$RESPONSE_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('slug',''))" 2>/dev/null) || true
 log "Draft saved. Post ID: ${POST_ID:-unknown}  status=${POST_STATUS:-unknown}  slug=${POST_SLUG}  category=${TARGET_CAT}"
 
+# Step 3.5: OUTPUT RKN guard (defense against drift). is_valid_keyword above
+# only vets the INPUT keyword — but a clean keyword can still yield a
+# VPN/adult/circumvention TITLE or SLUG (e.g. "Чат без правил", the 2026-06-17
+# leak that slipped because the input keyword was clean and "без правил" wasn't
+# yet in the guard). Re-run the shared guard on the GENERATED title+slug; if it
+# trips, archive the draft and NEVER publish. Last gate before going live.
+GEN_TITLE=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_posts?select=title&id=eq.${POST_ID}" "${SUPA_HDRS[@]}" 2>/dev/null \
+    | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['title'] if d else '')" 2>/dev/null) || true
+if is_vpn_keyword "${GEN_TITLE} ${POST_SLUG}"; then
+    log "RKN-BLOCKED (output): generated article trips VPN/adult guard — title='${GEN_TITLE:0:100}' slug='${POST_SLUG}'. Archiving draft ${POST_ID}, NOT publishing."
+    curl -sf -X PATCH "${SUPABASE_URL}/rest/v1/blog_posts?id=eq.${POST_ID}" \
+        "${SUPA_HDRS[@]}" -H "Content-Profile: ai_aggregator" -H "Content-Type: application/json" \
+        -d '{"status":"archived"}' >/dev/null 2>&1 || true
+    [[ -n "${KEYWORD_ID:-}" ]] && mark_keyword_skipped "$KEYWORD_ID" "rkn-blocked: vpn/adult output" || true
+    notify_failure "generate-article" "RKN output-guard blocked post ${POST_ID}: '${GEN_TITLE:0:120}' (slug ${POST_SLUG}). Draft archived, not published." "$LOG_FILE"
+    exit 0
+fi
+
 # Step 4: Pre-publish SEO audit gate. Only promote draft → published if the
 # auditor passes (score >= threshold AND zero FAIL findings). Otherwise the
 # row stays as draft and an admin can review/fix manually.
