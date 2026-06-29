@@ -7,6 +7,7 @@ import { CANCELLATION_REASON_CODES, cancellationSurveys } from '@/database/schem
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { grantTgLinkBonus } from '@/server/modules/billing/grant-tg-link-bonus';
+import { parseDevice } from '@/server/modules/billing/parse-device';
 import { createYookassaPayment } from '@/server/modules/billing/yookassa';
 import { BillingService } from '@/server/services/billing';
 
@@ -44,6 +45,7 @@ export const subscriptionRouter = router({
           // Subscriptions force bank_card on the YooKassa form (not SBP) —
           // SBP can't save a token for recurring renewals.
           card_preselected: true,
+          device: parseDevice(ctx.userAgent),
           tg_user_id: tgChatId,
         },
         planId: plan.id,

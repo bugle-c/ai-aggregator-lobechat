@@ -6,6 +6,7 @@ import { billingPayments, userBilling } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getTopupPackage, TOPUP_PACKAGES } from '@/server/modules/billing/constants';
+import { parseDevice } from '@/server/modules/billing/parse-device';
 import { createYookassaPayment } from '@/server/modules/billing/yookassa';
 import { BillingService } from '@/server/services/billing';
 
@@ -35,6 +36,7 @@ export const topUpRouter = router({
         amountRub: pkg.amountRub,
         metadata: {
           ...(ctx.pricingVariant ? { pricing_variant: ctx.pricingVariant } : {}),
+          device: parseDevice(ctx.userAgent),
           sbp_preselected: true,
           tg_user_id: tgChatId,
         },
