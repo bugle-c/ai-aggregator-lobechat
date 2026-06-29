@@ -7,7 +7,7 @@ docker stop postgres-paradedb 2> /dev/null && docker rm postgres-paradedb 2> /de
 docker run --name postgres-paradedb \
   -e POSTGRES_PASSWORD=mysecretpassword \
   -e POSTGRES_DB=postgres \
-  -p 5432:5432 \
+  -p 127.0.0.1:5432:5432 \
   -d paradedb/paradedb:latest
 
 # 等待PostgreSQL启动
