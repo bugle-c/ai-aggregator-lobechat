@@ -35,7 +35,18 @@ import { billingPayments, userBilling } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { fetchPlanById } from '@/server/services/billing/plans-source';
 
-const RENEW_WINDOW_DAYS = 1; // charge ~24h before expiry
+// Dunning schedule — when/how often we retry the off-session card charge.
+// Start RENEW_LEAD_DAYS BEFORE expiry, then keep retrying AFTER expiry:
+// daily for the first DAILY_PHASE_DAYS (catches payday/top-up), then weekly
+// out to DUNNING_TAIL_DAYS. The subscription itself still lapses at expiry —
+// this governs only the charge attempts. createYookassaPayment uses a random
+// Idempotence-Key, so the per-row cooldown below is the double-charge guard.
+const RENEW_LEAD_DAYS = 2; // begin charging 2 days before expiry
+const DUNNING_TAIL_DAYS = 50; // keep retrying up to 50 days after expiry
+const DAILY_PHASE_DAYS = 3; // daily until +3d past expiry, weekly afterwards
+const DAILY_COOLDOWN_MS = 20 * 3_600_000; // ≈ once per day in the daily phase
+const WEEKLY_COOLDOWN_MS = 7 * 86_400_000; // once per week in the tail phase
+const CYCLE_MS = 28 * 86_400_000; // never re-charge after a success this cycle
 
 interface RenewResult {
   error?: string;
@@ -54,7 +65,8 @@ export async function POST(req: Request) {
 
   const db = await getServerDB();
   const now = new Date();
-  const horizon = new Date(now.getTime() + RENEW_WINDOW_DAYS * 86_400_000);
+  const leadHorizon = new Date(now.getTime() + RENEW_LEAD_DAYS * 86_400_000);
+  const tailFloor = new Date(now.getTime() - DUNNING_TAIL_DAYS * 86_400_000);
 
   const due = await db
     .select({
@@ -70,9 +82,10 @@ export async function POST(req: Request) {
         isNotNull(userBilling.paymentMethodId),
         ne(userBilling.planId, 1), // not free
         isNotNull(userBilling.subscriptionExpiresAt),
-        // expires within the renewal window
-        gte(userBilling.subscriptionExpiresAt, now),
-        lte(userBilling.subscriptionExpiresAt, horizon),
+        // due window: from RENEW_LEAD_DAYS before expiry through the dunning
+        // tail (DUNNING_TAIL_DAYS after). Per-row cadence is enforced below.
+        gte(userBilling.subscriptionExpiresAt, tailFloor),
+        lte(userBilling.subscriptionExpiresAt, leadHorizon),
       ),
     );
 
@@ -94,14 +107,18 @@ export async function POST(req: Request) {
     }
 
     // Idempotency + cooldown guard. createYookassaPayment uses a RANDOM
-    // Idempotence-Key per call, so YooKassa offers no double-charge protection
-    // — without this guard a more-frequent cron would charge the card multiple
-    // times. Skip the user if they already have a pending/succeeded auto_renew
-    // THIS cycle (never double-charge / never re-charge after success), OR any
-    // auto_renew attempt in the last 4h (gentle retry spacing). Only a user
-    // whose last attempt FAILED/CANCELED ≥4h ago falls through to a fresh retry.
-    const cooldown = new Date(now.getTime() - 4 * 3_600_000);
-    const cycle = new Date(now.getTime() - 28 * 86_400_000);
+    // Idempotence-Key per call, so YooKassa offers no double-charge protection.
+    // Skip the user if they already have a pending/succeeded auto_renew THIS
+    // cycle (never double-charge / never re-charge after success), OR a prior
+    // attempt inside the dynamic cadence window. Cadence: DAILY until
+    // DAILY_PHASE_DAYS past expiry (catches a payday top-up), WEEKLY afterwards
+    // — fewer, well-spaced retries are kinder to the acquirer than hammering a
+    // hard decline. (msPastExpiry is negative before expiry → still daily.)
+    const msPastExpiry = now.getTime() - row.expiresAt.getTime();
+    const requiredGapMs =
+      msPastExpiry <= DAILY_PHASE_DAYS * 86_400_000 ? DAILY_COOLDOWN_MS : WEEKLY_COOLDOWN_MS;
+    const cooldown = new Date(now.getTime() - requiredGapMs);
+    const cycle = new Date(now.getTime() - CYCLE_MS);
     const blockers = await db
       .select({ id: billingPayments.id })
       .from(billingPayments)

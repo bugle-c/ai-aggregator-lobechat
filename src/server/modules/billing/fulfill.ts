@@ -39,7 +39,14 @@ export async function fulfillPayment(
     const fromPlan = await billingService.getPlanById(fromPlanId);
     const toPlan = await billingService.getPlanById(payment.planId);
 
-    const expiresAt = new Date();
+    // Extend from whichever is later — now or the current expiry — so an early
+    // (pre-expiry) auto-renewal doesn't forfeit the remaining paid days; a late
+    // dunning success extends from now (the old expiry is already in the past).
+    const renewalBase =
+      currentBilling.subscriptionExpiresAt && currentBilling.subscriptionExpiresAt > new Date()
+        ? new Date(currentBilling.subscriptionExpiresAt)
+        : new Date();
+    const expiresAt = new Date(renewalBase);
     expiresAt.setDate(expiresAt.getDate() + 30);
     await billingService.updatePlan(payment.planId, expiresAt);
 
