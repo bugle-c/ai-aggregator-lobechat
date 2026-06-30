@@ -14,6 +14,7 @@ import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { normalizeThinkTags, processWithArtifact } from '../../utils/markdown';
 import MessageBranch from '../components/MessageBranch';
+import SlowResponseBanner from '../components/SlowResponseBanner';
 import {
   useSetMessageItemActionElementPortialContext,
   useSetMessageItemActionTypeContext,
@@ -86,7 +87,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
     return (
       <ChatItem
         showTitle
-        aboveMessage={null}
+        aboveMessage={isLatestItem ? <SlowResponseBanner messageId={id} /> : null}
         avatar={avatar}
         customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
         editing={editing}
