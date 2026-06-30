@@ -6,6 +6,27 @@ export const minimaxChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
     },
+    contextWindowTokens: 1_048_576,
+    description:
+      'MiniMax M3 — successor to M2.7, refined reasoning and 1M-token context window. Strong on code and agent tasks at a fraction of frontier cost.',
+    displayName: 'MiniMax M3',
+    enabled: true,
+    id: 'MiniMax-M3',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-03',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
     contextWindowTokens: 204_800,
     description:
       'MiniMax M2.7 — newest in the M2 family, with refined reasoning and tool use. Optimised for code and agent workloads.',

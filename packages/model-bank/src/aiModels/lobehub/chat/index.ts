@@ -8,6 +8,7 @@ import { moonshotChatModels } from './moonshot';
 import { openaiChatModels } from './openai';
 import { qwenChatModels } from './qwen';
 import { xaiChatModels } from './xai';
+import { zhipuChatModels } from './zhipu';
 
 export const lobehubChatModels: AIChatModelCard[] = [
   ...anthropicChatModels,
@@ -18,6 +19,7 @@ export const lobehubChatModels: AIChatModelCard[] = [
   ...minimaxChatModels,
   ...moonshotChatModels,
   ...qwenChatModels,
+  ...zhipuChatModels,
   ...localChatModels,
 ];
 
@@ -30,3 +32,4 @@ export { moonshotChatModels } from './moonshot';
 export { openaiChatModels } from './openai';
 export { qwenChatModels } from './qwen';
 export { xaiChatModels } from './xai';
+export { zhipuChatModels } from './zhipu';

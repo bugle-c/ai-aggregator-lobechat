@@ -83,7 +83,10 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'kimi-k2-0711-preview': 'moonshotai/kimi-k2-0711-preview',
   // Alibaba Qwen
   'qwen3.6-max-preview': 'qwen/qwen3.6-max-preview',
+  // Zhipu GLM
+  'glm-5.2': 'z-ai/glm-5.2',
   // MiniMax — lowercase, dot-style
+  'MiniMax-M3': 'minimax/minimax-m3',
   'MiniMax-M2.7': 'minimax/minimax-m2.7',
   'MiniMax-M2.5': 'minimax/minimax-m2.5',
   'MiniMax-M2.5-highspeed': 'minimax/minimax-m2.5-highspeed',
