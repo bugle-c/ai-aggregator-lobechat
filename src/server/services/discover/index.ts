@@ -706,6 +706,40 @@ export class DiscoverService {
       category as AssistantCategory,
     );
 
+    // Prepend the curated WebGPT agents (local, do NOT depend on the remote
+    // marketplace) to whatever the market SDK returned. Runs in BOTH the success
+    // and error paths so a market outage (e.g. 401/unreachable) still yields the
+    // curated catalog instead of an empty list.
+    const buildResult = (
+      transformedItems: DiscoverAssistantItem[],
+      marketMeta: {
+        currentPage?: number;
+        pageSize?: number;
+        totalCount?: number;
+        totalPages?: number;
+      },
+    ): AssistantListResponse => {
+      let finalItems = transformedItems;
+      if (page === 1 && !q && !ownerId) {
+        const filteredCustom =
+          shouldOmitCategory || !category
+            ? WEBGPT_AGENTS
+            : WEBGPT_AGENTS.filter((a) => a.category === category);
+
+        if (filteredCustom.length > 0) {
+          finalItems = [...filteredCustom, ...transformedItems];
+        }
+      }
+
+      return {
+        currentPage: marketMeta.currentPage || page,
+        items: finalItems,
+        pageSize: marketMeta.pageSize || pageSize,
+        totalCount: (marketMeta.totalCount || 0) + (finalItems.length - transformedItems.length),
+        totalPages: marketMeta.totalPages || 0,
+      };
+    };
+
     try {
       const normalizedLocale = normalizeLocale(locale);
 
@@ -778,26 +812,7 @@ export class DiscoverService {
         };
       });
 
-      // Prepend WebGPT custom agents on first page when not searching
-      let finalItems = transformedItems;
-      if (page === 1 && !q && !ownerId) {
-        const filteredCustom =
-          shouldOmitCategory || !category
-            ? WEBGPT_AGENTS
-            : WEBGPT_AGENTS.filter((a) => a.category === category);
-
-        if (filteredCustom.length > 0) {
-          finalItems = [...filteredCustom, ...transformedItems];
-        }
-      }
-
-      const result: AssistantListResponse = {
-        currentPage: data.currentPage || page,
-        items: finalItems,
-        pageSize: data.pageSize || pageSize,
-        totalCount: (data.totalCount || 0) + (finalItems.length - transformedItems.length),
-        totalPages: data.totalPages || 0,
-      };
+      const result = buildResult(transformedItems, data);
 
       log(
         'getAssistantList: returning page %d/%d with %d items (%d custom) from market SDK',
@@ -808,14 +823,12 @@ export class DiscoverService {
       );
       return result;
     } catch (error) {
-      log('getAssistantList: error fetching from market SDK: %O', error);
-      return {
-        currentPage: page,
-        items: [],
-        pageSize,
-        totalCount: 0,
-        totalPages: 0,
-      };
+      log(
+        'getAssistantList: market SDK unavailable, returning curated WebGPT agents only: %O',
+        error,
+      );
+      // Market down → still surface the curated WebGPT agents (empty market items).
+      return buildResult([], {});
     }
   };
 
