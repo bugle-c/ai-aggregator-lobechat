@@ -64,7 +64,7 @@ const PlanGateBanner = memo(() => {
               default text color which adapts to the theme. */}
           <Typography.Text style={{ fontSize: 13, opacity: 0.85 }}>
             На «Старт» бесплатно доступен только чат и базовые картинки. Откройте Sora 2, Veo 3.1,
-            Kling 3 и другие модели на тарифе Basic — от 490 ₽/мес.
+            Kling 3 и другие модели на тарифе «Базовый» — от 490 ₽/мес.
           </Typography.Text>
         </Flexbox>
       </Flexbox>

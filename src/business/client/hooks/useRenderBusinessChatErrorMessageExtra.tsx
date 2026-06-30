@@ -56,7 +56,7 @@ export default function useRenderBusinessChatErrorMessageExtra(
   });
 
   const ctaLabel = t('response.PlanLimitExceeded.cta', {
-    plan: body.requiredPlan ?? 'Pro',
+    plan: body.requiredPlan ?? 'Про',
   });
 
   return (

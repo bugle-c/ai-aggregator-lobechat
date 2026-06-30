@@ -51,7 +51,13 @@ export const POST = checkAuth(
         const billingService = new BillingService(serverDB, userId);
         const planSlug = await billingService.getUserPlanSlug();
         if (!(await isModelAllowedForPlanAsync(modelId, planSlug))) {
-          const requiredPlan = await getRequiredPlanForModelAsync(modelId);
+          const requiredPlanSlug = await getRequiredPlanForModelAsync(modelId);
+          // Map slugs → Russian display names (plans.name) so the upsell
+          // banner reads «Базовый/Про», not the English slug.
+          const plans = await billingService.getActivePlans();
+          const nameOf = (slug: string) => plans.find((p) => p.slug === slug)?.name ?? slug;
+          const currentPlan = nameOf(planSlug);
+          const requiredPlan = nameOf(requiredPlanSlug);
           // Wrap in createErrorResponse so the frontend Error renderer
           // receives `errorType: 'PlanLimitExceeded'` + `body: { ... }` in
           // its expected shape. The previous raw `new Response(...)`
@@ -60,11 +66,11 @@ export const POST = checkAuth(
           // `response.PlanLimitExceeded` with no upgrade CTA. Audit found
           // 16 of 18 plan-blocked users churned silently here.
           return createErrorResponse(ChatErrorType.PlanLimitExceeded, {
-            currentPlan: planSlug,
+            currentPlan,
             modelId,
             provider,
             requiredPlan,
-            errorMessage: `Модель ${modelId} недоступна на тарифе «${planSlug}». Обновите подписку до «${requiredPlan}».`,
+            errorMessage: `Модель ${modelId} недоступна на тарифе «${currentPlan}». Обновите подписку до «${requiredPlan}».`,
           });
         }
       }
@@ -200,8 +206,7 @@ export const POST = checkAuth(
                       u.inputCacheMissTokens ??
                       0,
                   ) || 0,
-                cacheWrite1h:
-                  Number(u.cache_creation?.ephemeral_1h_input_tokens ?? 0) || 0,
+                cacheWrite1h: Number(u.cache_creation?.ephemeral_1h_input_tokens ?? 0) || 0,
                 cacheRead:
                   Number(
                     u.cache_read_input_tokens ??
