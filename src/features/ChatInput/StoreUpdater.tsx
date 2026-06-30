@@ -26,6 +26,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     sendMenu,
     mentionItems,
     allowExpand,
+    placeholder,
   }) => {
     const storeApi = useStoreApi();
     const useStoreUpdater = createStoreUpdater(storeApi);
@@ -38,6 +39,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('leftActions', leftActions!);
     useStoreUpdater('rightActions', rightActions!);
     useStoreUpdater('allowExpand', allowExpand);
+    useStoreUpdater('placeholder', placeholder);
 
     useStoreUpdater('sendButtonProps', sendButtonProps);
     useStoreUpdater('onSend', onSend);

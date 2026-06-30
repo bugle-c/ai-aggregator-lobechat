@@ -9,6 +9,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import FunnelHero from './FunnelHero';
+import HomeAssistants from './HomeAssistants';
 import HomePresetSection from './HomePresetSection';
 import HomeVideoSection from './HomeVideoSection';
 import InputArea from './InputArea';
@@ -41,6 +42,10 @@ const Home = memo(() => {
       <Flexbox gap={40} style={{ display: hideOtherModules ? 'none' : undefined }}>
         <HomePresetSection modality="image" />
         <HomeVideoSection />
+        {/* Popular ready-made assistants from the discover marketplace. Pure
+            navigation showcase — renders for both Light and Pro UI modes and
+            self-hides if the remote list is empty/errors. */}
+        <HomeAssistants />
       </Flexbox>
 
       {/* InputArea renders itself as a fixed bottom overlay (portal to body);

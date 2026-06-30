@@ -3,6 +3,7 @@ import { useTheme } from 'antd-style';
 import { AnimatePresence, m as motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { type ActionKeys } from '@/features/ChatInput';
@@ -32,6 +33,7 @@ const leftActionsFull: ActionKeys[] = ['model', 'search', 'fileUpload', 'tools']
 const leftActionsLight: ActionKeys[] = ['model', 'search', 'fileUpload'];
 
 const InputArea = () => {
+  const { t } = useTranslation('home');
   const { loading, send, inboxAgentId } = useSend();
   // Keep the starter builtin agents (agent / group / write) initialised even
   // though the redundant starter buttons are no longer rendered — the modes are
@@ -164,6 +166,7 @@ const InputArea = () => {
             agentId={inboxAgentId}
             allowExpand={false}
             leftActions={leftActions}
+            placeholder={t('chatPlaceholder')}
             chatInputEditorRef={(instance) => {
               if (!instance) return;
               useChatStore.setState({ mainInputEditor: instance });
