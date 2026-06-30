@@ -64,11 +64,6 @@
       "count": 1
     }
   },
-  "src/app/[variants]/(main)/home/features/index.tsx": {
-    "@eslint-react/no-nested-component-definitions": {
-      "count": 1
-    }
-  },
   "src/app/[variants]/(main)/memory/features/GridView/index.tsx": {
     "@eslint-react/no-nested-component-definitions": {
       "count": 1
