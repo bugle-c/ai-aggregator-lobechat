@@ -50,6 +50,29 @@ const InputArea = () => {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  // Scroll-aware overlay: visible at the top of the page, slides away when the
+  // user scrolls DOWN (so it stops covering the galleries), and returns on
+  // scroll UP or back at the top. A capture-phase scroll listener catches the
+  // inner scroll container (the home content area) without pinning its selector.
+  const [scrollHidden, setScrollHidden] = useState(false);
+  const lastScrollTop = useRef(0);
+  useEffect(() => {
+    const onScroll = (e: Event) => {
+      const tgt = e.target as Document | HTMLElement;
+      const el = (tgt === document ? document.scrollingElement : tgt) as HTMLElement | null;
+      const top = el?.scrollTop ?? 0;
+      const last = lastScrollTop.current;
+      if (top <= 48)
+        setScrollHidden(false); // at the top → always show
+      else if (top > last + 6)
+        setScrollHidden(true); // scrolling down → hide
+      else if (top < last - 6) setScrollHidden(false); // scrolling up → show
+      lastScrollTop.current = top;
+    };
+    window.addEventListener('scroll', onScroll, true);
+    return () => window.removeEventListener('scroll', onScroll, true);
+  }, []);
+
   // When a starter mode is activated (e.g. Create Agent / Create Group / Write),
   // re-focus the editor and scroll it into view so the user can type immediately.
   useEffect(() => {
@@ -195,6 +218,8 @@ const InputArea = () => {
   // tighter on mobile, centered and capped to the conversation width so the
   // galleries scroll behind it. Rendered via portal to document.body to dodge
   // the transformed/contained-ancestor fixed-positioning pitfall.
+  // Hide on scroll-down, but never while a starter mode owns the input.
+  const overlayHidden = scrollHidden && !inputActiveMode;
   const overlay = (
     <div
       style={{
@@ -217,9 +242,12 @@ const InputArea = () => {
           boxShadow: theme.boxShadowSecondary,
           maxHeight: 'calc(100dvh - 140px)',
           maxWidth: 760,
+          opacity: overlayHidden ? 0 : 1,
           overflowY: 'auto',
           padding: 8,
-          pointerEvents: 'auto',
+          pointerEvents: overlayHidden ? 'none' : 'auto',
+          transform: overlayHidden ? 'translateY(140%)' : 'translateY(0)',
+          transition: 'transform 0.28s ease, opacity 0.28s ease',
           width: '100%',
         }}
       >
