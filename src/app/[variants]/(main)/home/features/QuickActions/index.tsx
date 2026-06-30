@@ -2,7 +2,14 @@
 
 import { Block, Center, Flexbox } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
-import { BotIcon, ImageIcon, type LucideIcon, MessageSquareIcon, PenLineIcon, VideoIcon } from 'lucide-react';
+import {
+  BotIcon,
+  ImageIcon,
+  type LucideIcon,
+  MessageSquareIcon,
+  PenLineIcon,
+  VideoIcon,
+} from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
