@@ -19,11 +19,8 @@ import { useHomeStore } from '@/store/home';
 const useStyles = createStyles(({ css, token }) => ({
   card: css`
     cursor: pointer;
-
     width: 100%;
-    height: 100%;
     border: 1px solid ${token.colorBorderSecondary};
-
     transition:
       transform 0.18s ease,
       border-color 0.18s ease,
@@ -177,7 +174,12 @@ const QuickActions = memo(() => {
   const items = useMemo(() => ITEMS, []);
 
   return (
-    <Flexbox horizontal gap={12} style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
+    <Flexbox
+      horizontal
+      align="start"
+      gap={12}
+      style={{ flexWrap: 'wrap', justifyContent: 'center' }}
+    >
       {items.map((item) => {
         const Icon = item.icon;
         return (
