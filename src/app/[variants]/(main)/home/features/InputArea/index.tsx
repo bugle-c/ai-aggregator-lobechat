@@ -1,4 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
+import { useTheme } from 'antd-style';
 import { AnimatePresence, m as motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -31,6 +32,7 @@ const leftActionsLight: ActionKeys[] = ['model', 'search', 'fileUpload'];
 
 const InputArea = () => {
   const { loading, send, inboxAgentId } = useSend();
+  const theme = useTheme();
   const isLight = useIsLightMode();
   const isMobile = useIsMobile();
   const leftActions = isLight ? leftActionsLight : leftActionsFull;
@@ -124,7 +126,10 @@ const InputArea = () => {
         style={{ paddingBottom: showSkillBanner ? 32 : 0, position: 'relative' }}
       >
         {showSkillBanner && <SkillInstallBanner />}
-        <DragUploadZone style={{ position: 'relative', zIndex: 1 }} onUploadFiles={handleUploadFiles}>
+        <DragUploadZone
+          style={{ position: 'relative', zIndex: 1 }}
+          onUploadFiles={handleUploadFiles}
+        >
           <ChatInputProvider
             agentId={inboxAgentId}
             allowExpand={false}
@@ -206,9 +211,14 @@ const InputArea = () => {
     >
       <div
         style={{
+          background: theme.colorBgElevated,
+          border: `1px solid ${theme.colorBorderSecondary}`,
+          borderRadius: theme.borderRadiusLG,
+          boxShadow: theme.boxShadowSecondary,
           maxHeight: 'calc(100dvh - 140px)',
           maxWidth: 760,
           overflowY: 'auto',
+          padding: 8,
           pointerEvents: 'auto',
           width: '100%',
         }}
@@ -220,7 +230,14 @@ const InputArea = () => {
 
   if (!mounted) return null;
 
-  return createPortal(overlay, document.body);
+  // Portal into `.ant-app` (not document.body) so the overlay inherits the
+  // antd theme CSS variables — portaling to bare body left the chat box
+  // transparent/invisible (lesson from the mobile-tabbar fix). `.ant-app`
+  // is not a transformed/contained ancestor, so position:fixed still anchors
+  // to the viewport. Fall back to body if it's somehow absent.
+  const portalTarget = document.querySelector('.ant-app') ?? document.body;
+
+  return createPortal(overlay, portalTarget);
 };
 
 export default InputArea;
