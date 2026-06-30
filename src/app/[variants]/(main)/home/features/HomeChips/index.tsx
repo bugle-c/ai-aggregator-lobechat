@@ -19,16 +19,17 @@ const useStyles = createStyles(({ css, token }) => ({
     gap: 6px;
     align-items: center;
 
-    height: 32px;
+    height: 30px;
     padding-inline: 12px;
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: 999px;
 
     font-size: 13px;
+    font-weight: 500;
     line-height: 1;
     color: ${token.colorTextSecondary};
 
-    background: ${token.colorBgContainer};
+    background: ${token.colorFillQuaternary};
 
     transition:
       border-color 0.15s ease,
@@ -36,8 +37,8 @@ const useStyles = createStyles(({ css, token }) => ({
       background 0.15s ease;
 
     &:hover {
-      color: ${token.colorText};
       border-color: ${token.colorPrimaryBorderHover};
+      color: ${token.colorText};
       background: ${token.colorFillTertiary};
     }
   `,
@@ -48,11 +49,13 @@ const useStyles = createStyles(({ css, token }) => ({
   row: css`
     scrollbar-width: none;
 
+    overflow-x: auto;
     display: flex;
     gap: 8px;
-    justify-content: center;
+    align-items: center;
+    justify-content: flex-start;
 
-    overflow-x: auto;
+    padding-inline: 4px;
 
     -webkit-overflow-scrolling: touch;
 

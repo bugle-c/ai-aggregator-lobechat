@@ -9,6 +9,7 @@ import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import { SuggestedPrompts } from '@/features/Onboarding';
 import { useIsLightMode } from '@/features/UIMode';
+import { useIsDark } from '@/hooks/useIsDark';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
@@ -24,7 +25,7 @@ import HomeChips from '../HomeChips';
 import SuggestQuestions from '../SuggestQuestions';
 import ModeTag from './ModeTag';
 import SkillInstallBanner from './SkillInstallBanner';
-import StarterList from './StarterList';
+import { useInitStarterAgents } from './useInitStarterAgents';
 import { useSend } from './useSend';
 
 const leftActionsFull: ActionKeys[] = ['model', 'search', 'fileUpload', 'tools'];
@@ -32,8 +33,13 @@ const leftActionsLight: ActionKeys[] = ['model', 'search', 'fileUpload'];
 
 const InputArea = () => {
   const { loading, send, inboxAgentId } = useSend();
+  // Keep the starter builtin agents (agent / group / write) initialised even
+  // though the redundant starter buttons are no longer rendered — the modes are
+  // triggered from the home quick-action cards.
+  useInitStarterAgents();
   const theme = useTheme();
   const isLight = useIsLightMode();
+  const isDark = useIsDark();
   const isMobile = useIsMobile();
   const leftActions = isLight ? leftActionsLight : leftActionsFull;
   const inputActiveMode = useHomeStore((s) => s.inputActiveMode);
@@ -95,11 +101,12 @@ const InputArea = () => {
   // Override some default behavior of the chat input
   const inputContainerProps = useMemo(
     () => ({
-      minHeight: 88,
+      // Resting height ~ one tidy line; grows as the user types.
+      minHeight: 48,
       resize: false,
       style: {
-        borderRadius: 20,
-        boxShadow: '0 12px 32px rgba(0,0,0,.04)',
+        borderRadius: 16,
+        boxShadow: 'none',
       },
     }),
     [],
@@ -143,7 +150,7 @@ const InputArea = () => {
   // The inner input + chips block, shared between the fixed overlay and the
   // (rare) SSR/pre-mount fallback path.
   const inner = (
-    <Flexbox data-home-input-area gap={16}>
+    <Flexbox data-home-input-area gap={12}>
       <Flexbox
         ref={chatInputRef}
         style={{ paddingBottom: showSkillBanner ? 32 : 0, position: 'relative' }}
@@ -185,13 +192,9 @@ const InputArea = () => {
       {/* Multimodal suggestion chips (text/image/video) — always under the
           input except while a starter mode owns the surface. */}
       {!inputActiveMode && !showOnboardingPrompts && <HomeChips />}
-      {/* Keep StarterList mounted to prevent useInitBuiltinAgent hooks from re-running */}
-      {/* Hide create-agent / create-group / write buttons in Light (free) plan */}
-      {!isLight && (
-        <div style={{ display: showSuggestQuestions ? 'none' : undefined }}>
-          <StarterList />
-        </div>
-      )}
+      {/* The redundant create-agent / create-group / write starter buttons were
+          removed (they duplicate the home quick-action cards). The builtin
+          agents they relied on are kept warm via useInitStarterAgents() above. */}
       <AnimatePresence mode="popLayout">
         {showSuggestQuestions && (
           <motion.div
@@ -236,18 +239,24 @@ const InputArea = () => {
     >
       <div
         style={{
-          background: theme.colorBgElevated,
+          // Semi-translucent elevated surface + blur → polished floating command
+          // bar. Falls back to the opaque elevated colour when blur is absent.
+          backdropFilter: 'blur(20px) saturate(180%)',
+          background: isDark ? 'rgba(28, 28, 30, 0.72)' : 'rgba(255, 255, 255, 0.78)',
           border: `1px solid ${theme.colorBorderSecondary}`,
-          borderRadius: theme.borderRadiusLG,
-          boxShadow: theme.boxShadowSecondary,
+          borderRadius: 24,
+          boxShadow: isDark
+            ? '0 8px 28px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)'
+            : '0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)',
           maxHeight: 'calc(100dvh - 140px)',
           maxWidth: 760,
           opacity: overlayHidden ? 0 : 1,
           overflowY: 'auto',
-          padding: 8,
+          padding: 12,
           pointerEvents: overlayHidden ? 'none' : 'auto',
           transform: overlayHidden ? 'translateY(140%)' : 'translateY(0)',
           transition: 'transform 0.28s ease, opacity 0.28s ease',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
           width: '100%',
         }}
       >
