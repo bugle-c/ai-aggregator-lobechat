@@ -4,56 +4,55 @@ import { useLocation } from 'react-router-dom';
 
 import PageTitle from '@/components/PageTitle';
 import MobileGlobalHeader from '@/features/MobileGlobalHeader';
-import MobileHome from '@/features/MobileHome';
 import NavHeader from '@/features/NavHeader';
 import { BalanceBadge, FirstMessageToast, WelcomeModal } from '@/features/Onboarding';
 import { UIModeToggle } from '@/features/UIMode';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
+import FunnelHero from './features/FunnelHero';
 import HomeContent from './features';
+import HomePresetSection from './features/HomePresetSection';
+import HomeVideoSection from './features/HomeVideoSection';
 import InputArea from './features/InputArea';
-import { useSend } from './features/InputArea/useSend';
+import QuickActions from './features/QuickActions';
 
 const Home: FC = () => {
   const { pathname } = useLocation();
   const isHomeRoute = pathname === '/';
   const isMobile = useIsMobile();
   const isLogin = useUserStore(authSelectors.isLogin);
-  const { send } = useSend();
-
-  const handlePromptSelect = async (prompt: string) => {
-    const editor = useChatStore.getState().mainInputEditor;
-    editor?.instance?.setDocument('markdown', prompt);
-    useChatStore.setState({ inputMessage: prompt });
-    editor?.focus();
-    await send();
-  };
 
   if (isMobile) {
+    // Mobile now shows a responsive version of the new desktop design
+    // (compact hero + quick actions + image/video presets) instead of the
+    // old chat-only MobileHome. The same section components are reused — they
+    // read useIsMobile() internally and render compact / horizontally
+    // scrollable variants. InputArea renders itself as the bottom overlay.
     return (
       <>
         {isHomeRoute && <PageTitle title="" />}
         <MobileGlobalHeader />
         <Flexbox
           height={'100%'}
-          style={{ overflowY: 'auto', paddingBottom: '16vh' }}
+          style={{ overflowY: 'auto', paddingBottom: 160 }}
           width={'100%'}
         >
-          <MobileHome onSelectPrompt={handlePromptSelect} />
-          {/* Render ONLY the chat editor on mobile — `SuggestedPrompts`
-              auto-send writes through the same editor instance, so we
-              still need it mounted. The desktop modules (WelcomeText,
-              RecentTopic / RecentPage / CommunityAgents / RecentResource,
-              second WelcomeModal) are intentionally dropped per spec
-              — they duplicate the greeting and don't fit on a phone. */}
-          <Flexbox paddingInline={16}>
-            <InputArea />
+          <Flexbox gap={28} paddingBlock={8}>
+            <Flexbox gap={20}>
+              <FunnelHero />
+              <QuickActions />
+            </Flexbox>
+            <Flexbox gap={28}>
+              <HomePresetSection modality="image" />
+              <HomeVideoSection />
+            </Flexbox>
           </Flexbox>
+          {/* Bottom-overlay chat input (portals to body). */}
+          <InputArea />
           {isLogin && <WelcomeModal />}
           {isLogin && <FirstMessageToast />}
         </Flexbox>

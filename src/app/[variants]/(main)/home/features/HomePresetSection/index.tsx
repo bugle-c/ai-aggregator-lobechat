@@ -13,31 +13,30 @@ import { useHomeStore } from '@/store/home';
 import type { PresetModality } from '@/types/preset';
 
 interface Props {
-  /** How many presets to show on the home teaser. */
+  /** How many presets to show in the single row. */
   limit?: number;
   modality: PresetModality;
 }
 
 /**
- * Compact "home variant" of the preset gallery: shows the top-N presets
- * for a modality with an "Все →" link to the full /image or /video page.
+ * Compact "home variant" of the IMAGE preset gallery: a single, non-wrapping
+ * row of the top-N presets with an "Все →" link to the full /image page.
  *
- * Reuses the shared <PresetCard/> (same thumbnails + zoom + badges as the
- * full gallery) but skips the model/category/search filter chrome — the
- * home page is a teaser, not the full picker. Clicking a card routes to
- * the full flow page with ?preset=<slug> so the user lands on the chosen
- * style ready to generate.
+ * Layout: one row of 5 columns on desktop. On mobile it becomes a
+ * horizontally-scrollable strip (each card keeps a fixed width so the row
+ * never collapses). Reuses the shared <PresetCard/> for thumbnails + zoom +
+ * badges.
+ *
+ * NOTE: video uses its own <HomeVideoSection/> (grid row + featured slider),
+ * this component is image-only now.
  */
-const HomePresetSection = memo<Props>(({ limit = 8, modality }) => {
+const HomePresetSection = memo<Props>(({ limit = 5, modality }) => {
   const { t } = useTranslation('home');
   const isMobile = useIsMobile();
   const navigate = useHomeStore((s) => s.navigate);
 
   const targetPath = modality === 'image' ? '/image' : '/video';
 
-  // Same query the full gallery uses (presets.list), unfiltered. Server
-  // returns them sorted by sortOrder, so slicing top-N gives the curated
-  // "featured" set without extra params.
   const { data, isLoading } = lambdaQuery.presets.list.useQuery(
     { modality },
     { staleTime: 5 * 60 * 1000 },
@@ -48,12 +47,17 @@ const HomePresetSection = memo<Props>(({ limit = 8, modality }) => {
 
   const presets = (data ?? []).slice(0, limit);
 
+  // Each cell: equal-width flex column on desktop; fixed-width scroll item on
+  // mobile so the 5 cards stay on one line instead of wrapping into a stack.
+  const cellStyle = {
+    flex: isMobile ? '0 0 140px' : '1 1 0',
+    minWidth: isMobile ? 140 : 0,
+  } as const;
+
   return (
     <Flexbox gap={12}>
       <Flexbox horizontal align="center" justify="space-between" paddingInline={16}>
-        <span style={{ fontSize: 18, fontWeight: 600 }}>
-          {modality === 'image' ? t('presets.imageTitle') : t('presets.videoTitle')}
-        </span>
+        <span style={{ fontSize: 18, fontWeight: 600 }}>{t('presets.imageTitle')}</span>
         <a
           style={{
             alignItems: 'center',
@@ -67,32 +71,37 @@ const HomePresetSection = memo<Props>(({ limit = 8, modality }) => {
             navigate?.(targetPath);
           }}
         >
-          {modality === 'image' ? t('presets.allImages') : t('presets.allVideos')}
+          {t('presets.allImages')}
           <ArrowRight size={14} />
         </a>
       </Flexbox>
 
       <div
         style={{
-          columnCount: isMobile ? 2 : 4,
-          columnGap: 12,
+          display: 'flex',
+          gap: 12,
+          overflowX: isMobile ? 'auto' : 'visible',
+          paddingBlockEnd: isMobile ? 4 : 0,
           paddingInline: 16,
+          WebkitOverflowScrolling: 'touch',
         }}
       >
         {isLoading
           ? Array.from({ length: limit }).map((_, i) => (
-              <Skeleton.Node
-                active
-                key={`preset-skeleton-${i}`}
-                style={{ aspectRatio: '3 / 4', height: 'auto', marginBlockEnd: 12, width: '100%' }}
-              />
+              <div key={`preset-skeleton-${i}`} style={cellStyle}>
+                <Skeleton.Node
+                  active
+                  style={{ aspectRatio: '3 / 4', height: 'auto', width: '100%' }}
+                />
+              </div>
             ))
           : presets.map((p) => (
-              <PresetCard
-                key={p.slug}
-                preset={p}
-                onClick={() => navigate?.(`${targetPath}?preset=${encodeURIComponent(p.slug)}`)}
-              />
+              <div key={p.slug} style={cellStyle}>
+                <PresetCard
+                  preset={p}
+                  onClick={() => navigate?.(`${targetPath}?preset=${encodeURIComponent(p.slug)}`)}
+                />
+              </div>
             ))}
       </div>
     </Flexbox>

@@ -10,6 +10,7 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import FunnelHero from './FunnelHero';
 import HomePresetSection from './HomePresetSection';
+import HomeVideoSection from './HomeVideoSection';
 import InputArea from './InputArea';
 import QuickActions from './QuickActions';
 import RecentPage from './RecentPage';
@@ -24,7 +25,9 @@ const Home = memo(() => {
   const hideOtherModules = inputActiveMode && ['agent', 'group', 'write'].includes(inputActiveMode);
 
   return (
-    <Flexbox gap={40}>
+    // Bottom padding clears the fixed chat overlay (anchored ~100px above the
+    // viewport bottom + the input box height) so nothing is hidden behind it.
+    <Flexbox gap={40} style={{ paddingBottom: 240 }}>
       {/* Capability-showcase funnel: hero → quick actions → preset galleries.
           These render regardless of Light/Pro UI mode — they are pure
           navigation and the free (Light) cohort must see them. */}
@@ -37,9 +40,11 @@ const Home = memo(() => {
           active so the creation surface gets full focus. */}
       <Flexbox gap={40} style={{ display: hideOtherModules ? 'none' : undefined }}>
         <HomePresetSection modality="image" />
-        <HomePresetSection modality="video" />
+        <HomeVideoSection />
       </Flexbox>
 
+      {/* InputArea renders itself as a fixed bottom overlay (portal to body);
+          it must stay mounted here so the editor instance lives. */}
       <InputArea />
 
       {/* Recent rows demoted to the bottom; they self-hide when empty. */}

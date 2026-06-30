@@ -60,6 +60,18 @@ const Layout: FC = () => {
 
   const isMobileShellEnabled = useMobileShellFlag();
 
+  // The left nav Drawer on mobile reuses the desktop `showLeftPanel` flag,
+  // which defaults to `true` (desktop = nav rail expanded). On mobile that
+  // default — or a persisted `true` from a desktop session — force-opens the
+  // Drawer on home load. Reset it closed once when entering mobile so the
+  // Drawer only ever opens via the burger (toggleLeftPanel(true)).
+  useEffect(() => {
+    if (isMobile && showLeftPanel) toggleLeftPanel(false);
+    // Intentionally run only on the mobile transition, not on every
+    // showLeftPanel change — otherwise the burger could never open it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile]);
+
   // MobileShell uses height: calc(100dvh - var(--mobile-shell-banner-offset)).
   // We measure the actual position of .ant-app relative to body top so the
   // offset reflects whatever chrome (CloudBanner, future top bars) is
