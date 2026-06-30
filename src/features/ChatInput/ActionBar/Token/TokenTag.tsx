@@ -13,10 +13,12 @@ import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useTokenCount } from '@/hooks/useTokenCount';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
 import { dbMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 import { useToolStore } from '@/store/tool';
 import { pluginHelpers } from '@/store/tool/helpers';
+import { getTextInputUnitRate, getTextOutputUnitRate } from '@/utils/pricing';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import ActionPopover from '../components/ActionPopover';
@@ -109,6 +111,28 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
   // Total token
   const totalToken = systemRoleToken + historySummaryToken + toolsToken + chatsToken;
 
+  // Pre-flight cost estimate in rubles for this next request. Pulls the
+  // model's $/M input rate from its card, applies our flat tier markup,
+  // and converts to RUB. This is an ESTIMATE only — actual billing uses
+  // the real tokenizer count plus per-tier-row markup at debit time.
+  // See packages/utils/src/pricing.ts and the daily TG report doc.
+  const modelCard = useAiInfraStore(aiModelSelectors.getModelCard(model, provider));
+  const costEstimate = useMemo(() => {
+    if (!modelCard?.pricing) return null;
+    const inputUsdPerM = getTextInputUnitRate(modelCard.pricing);
+    const outputUsdPerM = getTextOutputUnitRate(modelCard.pricing);
+    if (!inputUsdPerM) return null;
+    // Tier classification matches compute-cost.ts on the server side.
+    // We don't know output_per_1m here yet, so we infer the tier from it
+    // when available and fall back to "premium" multiplier otherwise.
+    const out = outputUsdPerM ?? 0;
+    const tierMultiplier = out === 0 ? 2.5 : out <= 1 ? 10 : out <= 5 ? 5 : out <= 15 ? 4 : 2.5;
+    const USD_TO_RUB = 90;
+    const providerCostRub = (totalToken / 1_000_000) * inputUsdPerM * USD_TO_RUB;
+    const userChargedRub = providerCostRub * tierMultiplier;
+    return { providerCostRub, userChargedRub };
+  }, [modelCard, totalToken]);
+
   const content = (
     <Flexbox gap={12} style={{ minWidth: 200 }}>
       <Flexbox horizontal align={'center'} gap={4} justify={'space-between'} width={'100%'}>
@@ -182,6 +206,34 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
           },
         ]}
       />
+      {costEstimate && (
+        <Flexbox
+          gap={4}
+          style={{
+            borderTop: `1px solid ${cssVar.colorFillTertiary}`,
+            paddingTop: 8,
+          }}
+        >
+          <Flexbox horizontal align="center" justify="space-between">
+            <span style={{ color: cssVar.colorTextDescription, fontSize: 12 }}>
+              Стоимость ввода (оценка)
+            </span>
+            <span style={{ fontWeight: 500 }}>
+              ≈{' '}
+              {costEstimate.userChargedRub < 0.01
+                ? '< 0.01'
+                : costEstimate.userChargedRub < 1
+                  ? costEstimate.userChargedRub.toFixed(2)
+                  : numeral(costEstimate.userChargedRub).format('0,0.0')}{' '}
+              ₽
+            </span>
+          </Flexbox>
+          <span style={{ color: cssVar.colorTextDescription, fontSize: 11 }}>
+            Реальная цена считается после ответа модели по фактическим токенам. Output, как правило,
+            в 3–6× дороже input.
+          </span>
+        </Flexbox>
+      )}
     </Flexbox>
   );
 
