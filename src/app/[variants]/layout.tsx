@@ -3,7 +3,6 @@ import './initialize';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { type ResolvingViewport } from 'next';
-import dynamic from 'next/dynamic';
 import Script from 'next/script';
 import { type ReactNode } from 'react';
 import { Suspense } from 'react';
@@ -21,17 +20,6 @@ import { type DynamicLayoutProps } from '@/types/next';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
 const inVercel = process.env.VERCEL === '1';
-
-// `ssr: false` is forbidden in Server Components (this layout is async).
-// VpnPromoStrip is already 'use client' and starts with dismissed=true,
-// so SSR renders nothing — useEffect on the client reveals it if no
-// cookie is set. No hydration flash, no server-rendering harm.
-//
-// Single responsive theme-aware strip — earlier we had separate
-// desktop/mobile components; SSR isMobile mis-detection caused the
-// desktop strip to overflow on phones, and the dark glass looked
-// alien in light theme.
-const VpnPromoStrip = dynamic(() => import('@/features/MobileVpnPromo'));
 
 export interface RootLayoutProps extends DynamicLayoutProps {
   children: ReactNode;
@@ -74,7 +62,6 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
         )}
       </head>
       <body>
-        <VpnPromoStrip />
         {ENABLE_BUSINESS_FEATURES ? (
           <BusinessGlobalProvider>{renderContent()}</BusinessGlobalProvider>
         ) : (
