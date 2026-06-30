@@ -13,8 +13,8 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
-import FunnelHero from './features/FunnelHero';
 import HomeContent from './features';
+import FunnelHero from './features/FunnelHero';
 import HomePresetSection from './features/HomePresetSection';
 import HomeVideoSection from './features/HomeVideoSection';
 import InputArea from './features/InputArea';
@@ -36,11 +36,7 @@ const Home: FC = () => {
       <>
         {isHomeRoute && <PageTitle title="" />}
         <MobileGlobalHeader />
-        <Flexbox
-          height={'100%'}
-          style={{ overflowY: 'auto', paddingBottom: 160 }}
-          width={'100%'}
-        >
+        <Flexbox height={'100%'} style={{ overflowY: 'auto', paddingBottom: 160 }} width={'100%'}>
           <Flexbox gap={28} paddingBlock={8}>
             <Flexbox gap={20}>
               <FunnelHero />
