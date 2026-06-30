@@ -1,10 +1,9 @@
 'use client';
 
-import { Alert, Button } from '@lobehub/ui';
+import { Alert, Button, Flexbox } from '@lobehub/ui';
 import { Settings2, TrendingUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { memo, useEffect, useState } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 import { lambdaQuery } from '@/libs/trpc/client';
 
