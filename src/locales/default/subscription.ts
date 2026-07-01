@@ -437,6 +437,8 @@ export default {
 
   // Low balance warning
   'warning.lowBalance': 'Осталось {{remaining}} кредитов',
+  'warning.switchMini': 'Перейти на дешёвую WebGPT Mini',
+  'warning.switchedToMini': 'Переключено на WebGPT Mini — экономичный режим',
   'warning.topup': 'Пополнить',
   'warning.upgrade': 'Улучшить план',
 
