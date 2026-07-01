@@ -16,6 +16,8 @@ import { lambdaQuery } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -43,6 +45,10 @@ const InputArea = () => {
   const isLight = useIsLightMode();
   const isDark = useIsDark();
   const isMobile = useIsMobile();
+  // Subscribe to sidebar state so the overlay re-measures immediately when the
+  // nav panel toggles or is resized.
+  const showLeftPanel = useGlobalStore(systemStatusSelectors.showLeftPanel);
+  const leftPanelWidth = useGlobalStore(systemStatusSelectors.leftPanelWidth);
   const leftActions = isLight ? leftActionsLight : leftActionsFull;
   const inputActiveMode = useHomeStore((s) => s.inputActiveMode);
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
@@ -80,6 +86,38 @@ const InputArea = () => {
     window.addEventListener('scroll', onScroll, true);
     return () => window.removeEventListener('scroll', onScroll, true);
   }, []);
+
+  // Align the fixed overlay to the real content area (right of the nav panel),
+  // not the whole viewport. Measure the content region and keep it in sync as
+  // the sidebar collapses/expands (DraggablePanel animates its width, so the
+  // ResizeObserver fires throughout) and on window resize.
+  const [contentRect, setContentRect] = useState<{ left: number; width: number } | null>(null);
+  useEffect(() => {
+    const el = document.querySelector('[data-home-content-area]') as HTMLElement | null;
+    if (!el) {
+      setContentRect(null);
+      return;
+    }
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setContentRect((prev) =>
+        prev &&
+        Math.round(prev.left) === Math.round(r.left) &&
+        Math.round(prev.width) === Math.round(r.width)
+          ? prev
+          : { left: r.left, width: r.width },
+      );
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+    // Re-run when the sidebar toggles/resizes so we re-bind + re-measure promptly.
+  }, [showLeftPanel, leftPanelWidth]);
 
   // When a starter mode is activated (e.g. Create Agent / Create Group / Write),
   // re-focus the editor and scroll it into view so the user can type immediately.
@@ -226,17 +264,21 @@ const InputArea = () => {
   // the transformed/contained-ancestor fixed-positioning pitfall.
   // Hide on scroll-down, but never while a starter mode owns the input.
   const overlayHidden = scrollHidden && !inputActiveMode;
+  // On desktop, anchor to the measured content area (right of NavPanel). When we
+  // couldn't measure (mobile / element absent) fall back to full-viewport.
+  const useMeasured = !isMobile && contentRect != null;
   const overlay = (
     <div
       style={{
         bottom: isMobile ? 16 : 100,
         display: 'flex',
         justifyContent: 'center',
-        left: 0,
+        left: useMeasured ? contentRect!.left : 0,
         paddingInline: 16,
         pointerEvents: 'none',
         position: 'fixed',
-        right: 0,
+        right: useMeasured ? undefined : 0,
+        width: useMeasured ? contentRect!.width : undefined,
         zIndex: 50,
       }}
     >

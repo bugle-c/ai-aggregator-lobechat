@@ -47,6 +47,7 @@ const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
       width={'100%'}
     >
       <Flexbox
+        data-home-content-area
         className={styles.innerContainer}
         height={'100%'}
         style={innerCssVariables}
