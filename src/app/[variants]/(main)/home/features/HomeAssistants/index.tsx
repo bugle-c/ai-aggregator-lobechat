@@ -93,7 +93,7 @@ const HomeAssistants = memo(() => {
         });
       }
 
-      message.success(t('assistants.addAgentSuccess', { ns: 'discover' }));
+      message.success(t('assistants.addAgentSuccess'));
       routerNavigate(SESSION_CHAT_URL(result.agentId || result.sessionId, isMobile));
     },
     [createAgent, refreshAgentList, routerNavigate, message, t, isMobile],
@@ -121,8 +121,8 @@ const HomeAssistants = memo(() => {
         if (isDuplicate) {
           modal.confirm({
             cancelText: t('cancel', { ns: 'common' }),
-            content: t('assistants.duplicateAdd.content', { ns: 'discover', title }),
-            okText: t('assistants.duplicateAdd.ok', { ns: 'discover' }),
+            content: t('assistants.duplicateAdd.content', { title }),
+            okText: t('assistants.duplicateAdd.ok'),
             onCancel: () => setStartingId(null),
             onOk: async () => {
               try {
@@ -131,7 +131,7 @@ const HomeAssistants = memo(() => {
                 setStartingId(null);
               }
             },
-            title: t('assistants.duplicateAdd.title', { ns: 'discover' }),
+            title: t('assistants.duplicateAdd.title'),
           });
           // Keep startingId set until the modal is resolved (ok/cancel above).
           return;
