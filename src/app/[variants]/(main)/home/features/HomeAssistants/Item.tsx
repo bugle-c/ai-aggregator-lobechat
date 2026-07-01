@@ -1,13 +1,17 @@
 'use client';
 
-import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
+import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Spin } from 'antd';
 import { cssVar } from 'antd-style';
+import { Loader2 } from 'lucide-react';
 import { memo } from 'react';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
 import { type DiscoverAssistantItem } from '@/types/discover';
 
 interface HomeAssistantItemProps extends DiscoverAssistantItem {
+  /** While true the card shows a spinner overlay and ignores pointer input. */
+  loading?: boolean;
   onClick?: () => void;
 }
 
@@ -16,9 +20,13 @@ interface HomeAssistantItemProps extends DiscoverAssistantItem {
  * description + a subtle meta line (author). Clean outlined block with a hover
  * lift, matching the other home cards. Mirrors the look of the community agent
  * card but compact and grid-friendly.
+ *
+ * Clicking a card starts a chat with the assistant; while that create is
+ * in-flight the card renders `loading` (dimmed + a centered spinner) and
+ * blocks further clicks.
  */
 const HomeAssistantItem = memo<HomeAssistantItemProps>(
-  ({ title, avatar, backgroundColor, author, description, onClick }) => {
+  ({ title, avatar, backgroundColor, author, description, loading, onClick }) => {
     return (
       <Block
         clickable
@@ -29,10 +37,26 @@ const HomeAssistantItem = memo<HomeAssistantItemProps>(
         width={'100%'}
         style={{
           borderRadius: cssVar.borderRadiusLG,
+          opacity: loading ? 0.6 : 1,
           overflow: 'hidden',
+          pointerEvents: loading ? 'none' : undefined,
+          position: 'relative',
         }}
         onClick={onClick}
       >
+        {loading && (
+          <Flexbox
+            align={'center'}
+            justify={'center'}
+            style={{
+              inset: 0,
+              position: 'absolute',
+              zIndex: 1,
+            }}
+          >
+            <Spin indicator={<Icon spin icon={Loader2} size={22} />} />
+          </Flexbox>
+        )}
         <Flexbox horizontal align={'center'} gap={12} style={{ overflow: 'hidden' }}>
           <Avatar
             emojiScaleWithBackground

@@ -1,16 +1,21 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Skeleton } from 'antd';
+import { App, Skeleton } from 'antd';
 import { ArrowRight } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
+import { SESSION_CHAT_URL } from '@/const/url';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { agentService } from '@/services/agent';
+import { discoverService } from '@/services/discover';
+import { useAgentStore } from '@/store/agent';
 import { useDiscoverStore } from '@/store/discover';
 import { useHomeStore } from '@/store/home';
-import { AssistantSorts } from '@/types/discover';
+import { AssistantSorts, type DiscoverAssistantItem } from '@/types/discover';
 
 import HomeAssistantItem from './Item';
 
@@ -30,12 +35,28 @@ const SKELETON_KEYS = Array.from({ length: PAGE_SIZE }, (_, i) => `assistant-ske
  * Robustness: the data is a remote fetch that RU users may have throttled
  * (DPI). It shows a skeleton while loading and self-hides (renders null) when
  * the list is empty or the fetch errors — it must NEVER block or break the
- * home. Clicking a card opens that assistant in the community marketplace.
+ * home.
+ *
+ * Click behavior: clicking a card immediately creates a chat with that
+ * assistant and opens it (GPTunnel-style one-click start), reusing the proven
+ * "add agent and converse" flow from the community detail page. Cards whose
+ * list payload lacks a usable config (no `systemRole`) fall back to the
+ * marketplace detail page, which fetches the full config and has its own
+ * start button.
  */
 const HomeAssistants = memo(() => {
   const { t } = useTranslation('home');
   const isMobile = useIsMobile();
   const navigate = useHomeStore((s) => s.navigate);
+
+  // Proven "add agent and converse" primitives (mirrors community AddAgent).
+  const createAgent = useAgentStore((s) => s.createAgent);
+  const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
+  const routerNavigate = useNavigate();
+  const { message, modal } = App.useApp();
+
+  /** Identifier of the card whose create is in-flight (for the loading UI). */
+  const [startingId, setStartingId] = useState<string | null>(null);
 
   const useAssistantList = useDiscoverStore((s) => s.useAssistantList);
   const { data, isLoading, error } = useAssistantList({
@@ -44,11 +65,85 @@ const HomeAssistants = memo(() => {
     sort: AssistantSorts.Recommended,
   });
 
-  const openAssistant = useCallback(
-    (identifier: string) => {
-      navigate?.(urlJoin(MARKETPLACE_PATH, identifier));
+  const createAndConverse = useCallback(
+    async (item: DiscoverAssistantItem) => {
+      const { identifier, title, avatar, backgroundColor, description, tags, config } = item;
+
+      const meta = {
+        avatar,
+        backgroundColor,
+        description,
+        marketIdentifier: identifier,
+        tags,
+        title,
+      };
+      // Note: agentService.createAgent normalizes market config (model as object).
+      // The home list item has no `editorData`, so we omit it (detail page spreads it).
+      const agentData = { config: { ...config, ...meta } };
+
+      const result = await createAgent(agentData);
+      await refreshAgentList();
+
+      if (identifier) {
+        discoverService.reportAgentInstall(identifier);
+        discoverService.reportAgentEvent({
+          event: 'add',
+          identifier,
+          source: location.pathname,
+        });
+      }
+
+      message.success(t('assistants.addAgentSuccess', { ns: 'discover' }));
+      routerNavigate(SESSION_CHAT_URL(result.agentId || result.sessionId, isMobile));
     },
-    [navigate],
+    [createAgent, refreshAgentList, routerNavigate, message, t, isMobile],
+  );
+
+  const openAssistant = useCallback(
+    async (item: DiscoverAssistantItem) => {
+      // No-op while another card's create is in-flight (prevents double-clicks).
+      if (startingId) return;
+
+      // Fallback: cards without a usable config (e.g. a future remote-market
+      // card whose list payload omits systemRole) go to the detail page.
+      if (!item.config || !item.config.systemRole) {
+        navigate?.(urlJoin(MARKETPLACE_PATH, item.identifier));
+        return;
+      }
+
+      setStartingId(item.identifier);
+      try {
+        const { identifier, title } = item;
+        const isDuplicate = identifier
+          ? await agentService.checkByMarketIdentifier(identifier)
+          : false;
+
+        if (isDuplicate) {
+          modal.confirm({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t('assistants.duplicateAdd.content', { ns: 'discover', title }),
+            okText: t('assistants.duplicateAdd.ok', { ns: 'discover' }),
+            onCancel: () => setStartingId(null),
+            onOk: async () => {
+              try {
+                await createAndConverse(item);
+              } finally {
+                setStartingId(null);
+              }
+            },
+            title: t('assistants.duplicateAdd.title', { ns: 'discover' }),
+          });
+          // Keep startingId set until the modal is resolved (ok/cancel above).
+          return;
+        }
+
+        await createAndConverse(item);
+        setStartingId(null);
+      } catch {
+        setStartingId(null);
+      }
+    },
+    [startingId, navigate, modal, t, createAndConverse],
   );
 
   // Self-hide on a failed remote fetch or a genuinely empty list — never block
@@ -104,7 +199,11 @@ const HomeAssistants = memo(() => {
             ))
           : items.map((item) => (
               <div key={item.identifier} style={cellStyle}>
-                <HomeAssistantItem {...item} onClick={() => openAssistant(item.identifier)} />
+                <HomeAssistantItem
+                  {...item}
+                  loading={startingId === item.identifier}
+                  onClick={() => openAssistant(item)}
+                />
               </div>
             ))}
       </div>
