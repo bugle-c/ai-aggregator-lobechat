@@ -85,7 +85,7 @@ export default {
   'suggested.prompt3': '💡 Help me brainstorm an idea for a project',
   'toast.body': 'Charged {{charged}} credits. {{remaining}} of {{total}} left.',
   'toast.title': 'Message sent',
-  'uiMode.light': 'Light',
+  'uiMode.light': 'Beginner',
   'uiMode.pro': 'Pro',
   'uiMode.switchFailed': 'Failed to switch UI mode',
   'uiMode.modelResetToWebGPT': 'Default model reset to WebGPT.',

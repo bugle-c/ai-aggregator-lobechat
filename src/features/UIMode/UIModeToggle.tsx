@@ -1,7 +1,7 @@
 'use client';
 
 import { App, Segmented } from 'antd';
-import { Settings, Sparkles } from 'lucide-react';
+import { createStyles } from 'antd-style';
 import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,13 +11,59 @@ import { uiModeSelectors } from '@/store/user/slices/uiMode/selectors';
 
 type UiMode = 'light' | 'pro';
 
+// Sliding pill toggle: a rounded track with a knob that slides between the two
+// named modes (Новичок / Про). Built on antd Segmented so it keeps keyboard
+// and aria semantics; the visual is a fully-rounded track + a fully-rounded
+// selected thumb that animates across on change.
+const useStyles = createStyles(({ css, token }) => ({
+  toggle: css`
+    padding: 3px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: 999px;
+    background: ${token.colorFillTertiary};
+
+    .ant-segmented-item {
+      min-width: 74px;
+      border-radius: 999px;
+      color: ${token.colorTextSecondary};
+      transition: color 0.2s ease;
+
+      &:hover:not(.ant-segmented-item-selected) {
+        color: ${token.colorText};
+        background: transparent;
+      }
+    }
+
+    .ant-segmented-item-label {
+      padding-inline: 16px;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 24px;
+    }
+
+    /* The sliding knob (resting selected state) + the animated thumb. */
+    .ant-segmented-item-selected,
+    .ant-segmented-thumb {
+      border-radius: 999px;
+      background: ${token.colorBgElevated};
+      box-shadow: 0 2px 6px rgb(0 0 0 / 12%);
+    }
+
+    .ant-segmented-item-selected {
+      font-weight: 600;
+      color: ${token.colorText};
+    }
+  `,
+}));
+
 /**
- * Top-bar segmented control for toggling between Light and Pro UI modes.
- * Reads/writes the user's `ui_mode` preference via the user store slice
- * (which proxies tRPC `userOnboarding.setUiMode`).
+ * Top-bar sliding toggle for switching between the "Новичок" (light) and "Про"
+ * UI modes. Reads/writes the user's `ui_mode` preference via the user store
+ * slice (which proxies tRPC `userOnboarding.setUiMode`).
  */
 const UIModeToggle = memo(() => {
   const { t } = useTranslation('onboarding');
+  const { styles } = useStyles();
   const { message } = App.useApp();
   const isLogin = useUserStore(authSelectors.isLogin);
   const current = useUserStore(uiModeSelectors.current);
@@ -62,11 +108,11 @@ const UIModeToggle = memo(() => {
 
   return (
     <Segmented
-      size="small"
+      className={styles.toggle}
       value={current}
       options={[
-        { icon: <Sparkles size={14} />, label: t('uiMode.light'), value: 'light' },
-        { icon: <Settings size={14} />, label: t('uiMode.pro'), value: 'pro' },
+        { label: t('uiMode.light'), value: 'light' },
+        { label: t('uiMode.pro'), value: 'pro' },
       ]}
       onChange={onChange}
     />
