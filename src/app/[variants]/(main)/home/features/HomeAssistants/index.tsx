@@ -37,12 +37,12 @@ const SKELETON_KEYS = Array.from({ length: PAGE_SIZE }, (_, i) => `assistant-ske
  * the list is empty or the fetch errors — it must NEVER block or break the
  * home.
  *
- * Click behavior: clicking a card immediately creates a chat with that
- * assistant and opens it (GPTunnel-style one-click start), reusing the proven
- * "add agent and converse" flow from the community detail page. Cards whose
- * list payload lacks a usable config (no `systemRole`) fall back to the
- * marketplace detail page, which fetches the full config and has its own
- * start button.
+ * Click behavior: clicking a card takes the user straight into a chat with
+ * that assistant (GPTunnel-style). If they already have it, we open the
+ * existing chat; otherwise we create it and open the new one — no
+ * duplicate-add prompt. Cards whose list payload lacks a usable config (no
+ * `systemRole`) fall back to the marketplace detail page, which fetches the
+ * full config and has its own start button.
  */
 const HomeAssistants = memo(() => {
   const { t } = useTranslation('home');
@@ -53,7 +53,7 @@ const HomeAssistants = memo(() => {
   const createAgent = useAgentStore((s) => s.createAgent);
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
   const routerNavigate = useNavigate();
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
 
   /** Identifier of the card whose create is in-flight (for the loading UI). */
   const [startingId, setStartingId] = useState<string | null>(null);
@@ -113,37 +113,25 @@ const HomeAssistants = memo(() => {
 
       setStartingId(item.identifier);
       try {
-        const { identifier, title } = item;
-        const isDuplicate = identifier
-          ? await agentService.checkByMarketIdentifier(identifier)
-          : false;
+        // Clicking a card is a "take me to this assistant" intent. If the user
+        // already has it, jump straight into its existing chat — never prompt to
+        // add a duplicate. Otherwise create it and open the new chat.
+        const existingId = item.identifier
+          ? await agentService.getAgentByMarketIdentifier(item.identifier)
+          : null;
 
-        if (isDuplicate) {
-          modal.confirm({
-            cancelText: t('cancel', { ns: 'common' }),
-            content: t('assistants.duplicateAdd.content', { title }),
-            okText: t('assistants.duplicateAdd.ok'),
-            onCancel: () => setStartingId(null),
-            onOk: async () => {
-              try {
-                await createAndConverse(item);
-              } finally {
-                setStartingId(null);
-              }
-            },
-            title: t('assistants.duplicateAdd.title'),
-          });
-          // Keep startingId set until the modal is resolved (ok/cancel above).
-          return;
+        if (existingId) {
+          routerNavigate(SESSION_CHAT_URL(existingId, isMobile));
+        } else {
+          await createAndConverse(item);
         }
-
-        await createAndConverse(item);
-        setStartingId(null);
       } catch {
+        // Swallow — a failed lookup/create just leaves the user on the home.
+      } finally {
         setStartingId(null);
       }
     },
-    [startingId, navigate, modal, t, createAndConverse],
+    [startingId, navigate, isMobile, routerNavigate, createAndConverse],
   );
 
   // Self-hide on a failed remote fetch or a genuinely empty list — never block
