@@ -1,6 +1,17 @@
 import { type DiscoverAssistantItem } from '@/types/discover';
 
 /**
+ * Pin every curated agent to the platform's server-served model, routed via the
+ * `lobehub` gateway. Without an explicit model a created agent inherits the
+ * user's global default (`user_settings.default_agent`), which for many users is
+ * a Google model that has no server key on this deploy — so sending a message
+ * would fail with a "provide your own Google API key" prompt. `gpt-5-mini` is
+ * the platform DEFAULT_MODEL and is served through our keys.
+ */
+const SERVED_MODEL = 'gpt-5-mini';
+const SERVED_PROVIDER = 'lobehub';
+
+/**
  * WebGPT custom agents — always displayed first in the catalog.
  * Focused on Russian market and Russian-speaking users.
  */
@@ -10,6 +21,8 @@ export const WEBGPT_AGENTS = [
     avatar: '✍️',
     category: 'copywriting',
     config: {
+      model: SERVED_MODEL,
+      provider: SERVED_PROVIDER,
       systemRole: `Ты — профессиональный копирайтер с опытом 10+ лет на русскоязычном рынке.
 
 ## Твои компетенции
@@ -43,6 +56,8 @@ export const WEBGPT_AGENTS = [
     avatar: '🔍',
     category: 'marketing',
     config: {
+      model: SERVED_MODEL,
+      provider: SERVED_PROVIDER,
       systemRole: `Ты — SEO-специалист с глубоким знанием алгоритмов Яндекса и Google для русскоязычного сегмента.
 
 ## Твои компетенции
@@ -76,6 +91,8 @@ export const WEBGPT_AGENTS = [
     avatar: '📱',
     category: 'marketing',
     config: {
+      model: SERVED_MODEL,
+      provider: SERVED_PROVIDER,
       systemRole: `Ты — SMM-менеджер, эксперт по продвижению в русскоязычных социальных сетях.
 
 ## Твои компетенции
@@ -110,6 +127,8 @@ export const WEBGPT_AGENTS = [
     avatar: '⚖️',
     category: 'general',
     config: {
+      model: SERVED_MODEL,
+      provider: SERVED_PROVIDER,
       systemRole: `Ты — юрист-консультант, специализирующийся на законодательстве Российской Федерации.
 
 ## Твои компетенции
@@ -144,6 +163,8 @@ export const WEBGPT_AGENTS = [
     avatar: '📊',
     category: 'office',
     config: {
+      model: SERVED_MODEL,
+      provider: SERVED_PROVIDER,
       systemRole: `Ты — бухгалтер-консультант с экспертизой в российском бухгалтерском и налоговом учёте.
 
 ## Твои компетенции
@@ -177,6 +198,8 @@ export const WEBGPT_AGENTS = [
     avatar: '👥',
     category: 'career',
     config: {
+      model: SERVED_MODEL,
+      provider: SERVED_PROVIDER,
       systemRole: `Ты — HR-специалист с опытом подбора персонала на российском рынке труда.
 
 ## Твои компетенции
@@ -212,6 +235,8 @@ export const WEBGPT_AGENTS = [
     avatar: '💼',
     category: 'marketing',
     config: {
+      model: SERVED_MODEL,
+      provider: SERVED_PROVIDER,
       systemRole: `Ты — опытный менеджер по продажам B2B и B2C на российском рынке.
 
 ## Твои компетенции
@@ -245,6 +270,8 @@ export const WEBGPT_AGENTS = [
     avatar: '💻',
     category: 'programming',
     config: {
+      model: SERVED_MODEL,
+      provider: SERVED_PROVIDER,
       systemRole: `Ты — senior-разработчик с опытом 10+ лет в коммерческой разработке.
 
 ## Твои компетенции
@@ -280,6 +307,8 @@ export const WEBGPT_AGENTS = [
     avatar: '📈',
     category: 'general',
     config: {
+      model: SERVED_MODEL,
+      provider: SERVED_PROVIDER,
       systemRole: `Ты — аналитик данных с опытом работы в российских компаниях.
 
 ## Твои компетенции
@@ -314,6 +343,8 @@ export const WEBGPT_AGENTS = [
     avatar: '📧',
     category: 'marketing',
     config: {
+      model: SERVED_MODEL,
+      provider: SERVED_PROVIDER,
       systemRole: `Ты — email-маркетолог с опытом работы на российском рынке.
 
 ## Твои компетенции
