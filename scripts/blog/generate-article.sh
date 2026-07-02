@@ -64,7 +64,10 @@ TARGET_CAT_ID=""
 TARGET_CAT_NAME=""
 while IFS=$'\t' read -r slug cname cid; do
     [[ -z "$slug" ]] && continue
-    count_resp=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_posts?select=id&category_id=eq.${cid}&created_at=gte.${TODAY_UTC}T00:00:00Z&limit=1" "${SUPA_HDRS[@]}" 2>/dev/null)
+    # Freshness expectation is about PUBLIC output. Count only published posts
+    # for today's category slot; archived RKN-blocked drafts or audit-failed
+    # drafts must not make the scheduler think the category is served.
+    count_resp=$(curl -sf "${SUPABASE_URL}/rest/v1/blog_posts?select=id&category_id=eq.${cid}&status=eq.published&published_at=gte.${TODAY_UTC}T00:00:00Z&limit=1" "${SUPA_HDRS[@]}" 2>/dev/null)
     if [[ "$count_resp" == "[]" ]]; then
         TARGET_CAT="$slug"
         TARGET_CAT_ID="$cid"
