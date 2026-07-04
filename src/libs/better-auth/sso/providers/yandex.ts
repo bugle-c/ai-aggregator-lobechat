@@ -18,6 +18,11 @@ const provider: GenericProviderDefinition<{
       clientSecret: env.AUTH_YANDEX_SECRET,
       authorizationUrl: 'https://oauth.yandex.ru/authorize',
       tokenUrl: 'https://oauth.yandex.ru/token',
+      // Yandex's token endpoint rejects Better Auth's PKCE exchange with
+      // `invalid_grant: code_verifier not matched`. Yandex OAuth is a
+      // confidential client (client_secret), so disable PKCE — same as the
+      // feishu/wechat providers do for the same reason.
+      pkce: false,
       scopes: ['login:email', 'login:info', 'login:avatar'],
       getUserInfo: async (tokens) => {
         const response = await fetch('https://login.yandex.ru/info?format=json', {
