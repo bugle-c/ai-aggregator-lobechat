@@ -109,9 +109,13 @@ export const initBetterAuthSSOProviders = () => {
     const config = definition.build(env);
 
     if (config) {
-      // the generic oidc callback url is /api/auth/oauth2/callback/{providerId}
-      // different from builtin providers' /api/auth/callback/{providerId}
-      config.redirectURI = `${appEnv.APP_URL}/api/auth/callback/${definition.id}`;
+      // genericOAuth handles the callback at /api/auth/oauth2/callback/{id}
+      // (NOT the builtin /api/auth/callback/{id}). Pointing redirectURI at the
+      // builtin path lands the callback on the wrong handler, which doesn't
+      // share the init flow's PKCE code_verifier → the provider rejects the
+      // token exchange with `invalid_grant: code_verifier not matched`.
+      // Use the native genericOAuth callback so init + callback stay consistent.
+      config.redirectURI = `${appEnv.APP_URL}/api/auth/oauth2/callback/${definition.id}`;
       genericOAuthProviders.push(config);
     }
   }
