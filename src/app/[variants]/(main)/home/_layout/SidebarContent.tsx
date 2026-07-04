@@ -1,7 +1,6 @@
 import { memo } from 'react';
 
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
-import { PcSidebarCard } from '@/features/TgLinkBonusBanner';
 
 import Body from './Body';
 import { AgentModalProvider } from './Body/Agent/ModalProvider';
@@ -11,21 +10,10 @@ import Header from './Header';
 const Sidebar = memo(() => {
   return (
     <AgentModalProvider>
-      <SideBarLayout
-        body={<Body />}
-        // PcSidebarCard is a +100 кр TG-link nag that lives just above
-        // the existing action-icon Footer. It self-gates via useShouldShow
-        // (logged-in + not-linked + not-dismissed-in-7d), so anonymous
-        // visitors and already-linked users see nothing. The mobile sticky
-        // variant ships separately from TgLinkBonusGlobal in _layout/index.
-        header={<Header />}
-        footer={
-          <>
-            <PcSidebarCard />
-            <Footer />
-          </>
-        }
-      />
+      {/* SideBarLayout already renders the TG-link PcSidebarCard above the
+          footer, so we must NOT add another one here — passing it in the
+          footer duplicated the +100кр nag in the sidebar. */}
+      <SideBarLayout body={<Body />} footer={<Footer />} header={<Header />} />
     </AgentModalProvider>
   );
 });
