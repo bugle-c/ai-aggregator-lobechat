@@ -22,6 +22,9 @@ const AuthModal = memo<Props>(function AuthModal({ defaultTab }) {
   // signup tab requires the checkbox before any registration method works.
   // OAuth auto-creates accounts, so we gate the SSO buttons too, not just email.
   const [accepted, setAccepted] = useState(false);
+  // Email is a fallback path: collapsed behind a link so the SSO buttons
+  // (Telegram first — largest persona segment) stay the primary entry.
+  const [showEmail, setShowEmail] = useState(false);
   const gate = tab === 'signup' && !accepted;
 
   return (
@@ -74,15 +77,22 @@ const AuthModal = memo<Props>(function AuthModal({ defaultTab }) {
           gap: 10,
         }}
       >
-        <YandexButton disabled={gate} mode={tab} />
         <TelegramButton disabled={gate} mode={tab} />
+        <YandexButton disabled={gate} mode={tab} />
       </div>
 
-      <Divider plain style={{ marginBlock: 18, fontSize: 12, color: '#999' }}>
-        или по email
-      </Divider>
-
-      {tab === 'signup' ? <EmailSignUp disabled={gate} /> : <EmailSignIn />}
+      {showEmail ? (
+        <>
+          <Divider plain style={{ marginBlock: 18, fontSize: 12, color: '#999' }}>
+            по email
+          </Divider>
+          {tab === 'signup' ? <EmailSignUp disabled={gate} /> : <EmailSignIn />}
+        </>
+      ) : (
+        <div style={{ marginTop: 14, textAlign: 'center', fontSize: 13 }}>
+          <TextLink onClick={() => setShowEmail(true)}>Войти по почте</TextLink>
+        </div>
+      )}
 
       <div style={{ marginTop: 16, textAlign: 'center', fontSize: 13 }}>
         {tab === 'signup' ? (
