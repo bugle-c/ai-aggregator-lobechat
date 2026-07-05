@@ -29,6 +29,7 @@ import SuggestQuestions from '../SuggestQuestions';
 import ModeTag from './ModeTag';
 import SkillInstallBanner from './SkillInstallBanner';
 import { useInitStarterAgents } from './useInitStarterAgents';
+import { useIntentPrompt } from './useIntentPrompt';
 import { useSend } from './useSend';
 
 const leftActionsFull: ActionKeys[] = ['model', 'search', 'fileUpload', 'tools'];
@@ -41,6 +42,8 @@ const InputArea = () => {
   // though the redundant starter buttons are no longer rendered — the modes are
   // triggered from the home quick-action cards.
   useInitStarterAgents();
+  // Blog CTAs deep-link with `?prompt=` — prefill the editor once it mounts.
+  useIntentPrompt();
   const theme = useTheme();
   const isLight = useIsLightMode();
   const isDark = useIsDark();
