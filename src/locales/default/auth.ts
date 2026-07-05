@@ -81,6 +81,9 @@ export default {
   'betterAuth.signin.continueWithWechat': 'Sign in with WeChat',
   'betterAuth.signin.continueWithTelegram': 'Sign in with Telegram',
   'betterAuth.signin.continueWithZitadel': 'Sign in with Zitadel',
+  'betterAuth.signin.consent':
+    'I accept the <terms>Offer</terms>, the <privacy>Privacy Policy</privacy> and give my <consent>Consent to the processing of personal data</consent>',
+  'betterAuth.signin.consentRequired': 'Please accept the terms to continue',
   'betterAuth.signin.emailPlaceholder': 'Enter your email or username',
   'betterAuth.signin.emailStep.title': 'Sign In',
   'betterAuth.signin.error': 'Sign in failed, please check your email and password',

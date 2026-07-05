@@ -11,11 +11,12 @@ interface FormValues {
   password: string;
 }
 
-export default function EmailSignUp() {
+export default function EmailSignUp({ disabled }: { disabled?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onFinish(values: FormValues) {
+    if (disabled) return;
     setError(null);
     setLoading(true);
     try {
@@ -60,7 +61,14 @@ export default function EmailSignUp() {
         />
       </Form.Item>
       {error && <Alert showIcon message={error} style={{ marginBottom: 12 }} type="error" />}
-      <Button block htmlType="submit" loading={loading} size="large" type="primary">
+      <Button
+        block
+        disabled={disabled}
+        htmlType="submit"
+        loading={loading}
+        size="large"
+        type="primary"
+      >
         Создать аккаунт
       </Button>
     </Form>

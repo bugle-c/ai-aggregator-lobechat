@@ -27,8 +27,9 @@ export const BLOG = urlJoin(OFFICIAL_SITE, 'blog');
 
 export const ABOUT = OFFICIAL_SITE;
 export const FEEDBACK = 'https://t.me/gptwebrubot';
-export const PRIVACY_URL = urlJoin(OFFICIAL_SITE, '/privacy');
-export const TERMS_URL = urlJoin(OFFICIAL_SITE, '/terms');
+export const PRIVACY_URL = urlJoin(OFFICIAL_SITE, '/policy');
+export const TERMS_URL = urlJoin(OFFICIAL_SITE, '/offer');
+export const CONSENT_URL = urlJoin(OFFICIAL_SITE, '/consent');
 
 export const PLUGINS_INDEX_URL = 'https://chat-plugins.lobehub.com';
 

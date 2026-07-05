@@ -1,14 +1,14 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Alert, Button, Flexbox, Icon, Input, Skeleton, Text } from '@lobehub/ui';
 import { type FormInstance, type InputRef } from 'antd';
-import { Divider, Form } from 'antd';
+import { Checkbox, Divider, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight, Mail } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import AuthIcons from '@/components/AuthIcons';
-import { PRIVACY_URL, TERMS_URL } from '@/const/url';
+import { CONSENT_URL, PRIVACY_URL, TERMS_URL } from '@/const/url';
 
 import AuthCard from '../../../../features/AuthCard';
 
@@ -51,9 +51,69 @@ export const SignInEmailStep = ({
   const { t } = useTranslation('auth');
   const emailInputRef = useRef<InputRef>(null);
 
+  // Required legal consent — user must tick this before ANY login method
+  // (Yandex/Telegram OAuth or email/password) is allowed. Local UI state only.
+  const [accepted, setAccepted] = useState(false);
+
   useEffect(() => {
     emailInputRef.current?.focus();
   }, []);
+
+  // Gated wrappers: block the underlying handlers until consent is accepted.
+  const handleSocialClick = (provider: string) => {
+    if (!accepted) return;
+    onSocialSignIn(provider);
+  };
+
+  const handleCheckUserGated = (values: { email: string }) => {
+    if (!accepted) return Promise.resolve();
+    return onCheckUser(values);
+  };
+
+  const consentLinkStyle = {
+    color: 'inherit',
+    cursor: 'pointer',
+    textDecoration: 'underline',
+  } as const;
+
+  const consent = (
+    <Flexbox gap={4} style={{ marginBottom: 12 }}>
+      <Checkbox checked={accepted} onChange={(e) => setAccepted(e.target.checked)}>
+        <Text fontSize={13} type={'secondary'}>
+          <Trans
+            i18nKey={'betterAuth.signin.consent'}
+            ns={'auth'}
+            components={{
+              consent: (
+                <a
+                  href={CONSENT_URL}
+                  rel="noopener noreferrer"
+                  style={consentLinkStyle}
+                  target="_blank"
+                />
+              ),
+              privacy: (
+                <a
+                  href={PRIVACY_URL}
+                  rel="noopener noreferrer"
+                  style={consentLinkStyle}
+                  target="_blank"
+                />
+              ),
+              terms: (
+                <a
+                  href={TERMS_URL}
+                  rel="noopener noreferrer"
+                  style={consentLinkStyle}
+                  target="_blank"
+                />
+              ),
+            }}
+          />
+        </Text>
+      </Checkbox>
+    </Flexbox>
+  );
 
   const divider = (
     <Divider>
@@ -105,6 +165,7 @@ export const SignInEmailStep = ({
       subtitle={t('signin.subtitle', { appName: BRANDING_NAME })}
       title={t('signin.title')}
     >
+      {consent}
       {!serverConfigInit && (
         <Flexbox gap={12}>
           <Skeleton.Button active block size="large" />
@@ -117,6 +178,7 @@ export const SignInEmailStep = ({
           {oAuthSSOProviders.map((provider) => (
             <Button
               block
+              disabled={!accepted}
               key={provider}
               loading={socialLoading === provider}
               size="large"
@@ -130,7 +192,7 @@ export const SignInEmailStep = ({
                   }}
                 />
               }
-              onClick={() => onSocialSignIn(provider)}
+              onClick={() => handleSocialClick(provider)}
             >
               {getProviderLabel(provider)}
             </Button>
@@ -145,7 +207,7 @@ export const SignInEmailStep = ({
         <Form
           form={form}
           layout="vertical"
-          onFinish={(values) => onCheckUser(values as { email: string })}
+          onFinish={(values) => handleCheckUserGated(values as { email: string })}
         >
           <Form.Item
             name="email"
@@ -181,10 +243,15 @@ export const SignInEmailStep = ({
               }}
               suffix={
                 <Button
+                  disabled={!accepted}
                   icon={ChevronRight}
                   loading={loading}
-                  title={t('betterAuth.signin.nextStep')}
                   variant={'filled'}
+                  title={
+                    accepted
+                      ? t('betterAuth.signin.nextStep')
+                      : t('betterAuth.signin.consentRequired')
+                  }
                   onClick={() => form.submit()}
                 />
               }

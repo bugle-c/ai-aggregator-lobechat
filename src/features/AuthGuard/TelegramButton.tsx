@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { signIn } from '@/libs/better-auth/auth-client';
 
 interface Props {
+  disabled?: boolean;
   mode: 'signin' | 'signup';
 }
 
@@ -20,7 +21,7 @@ interface Props {
  *
  * Ref: https://better-auth.com/docs/plugins/generic-oauth
  */
-export default function TelegramButton({ mode }: Props) {
+export default function TelegramButton({ mode, disabled }: Props) {
   const [loading, setLoading] = useState(false);
 
   // Reset loading state when page is restored from bfcache (browser
@@ -37,6 +38,7 @@ export default function TelegramButton({ mode }: Props) {
 
   async function onClick(e: React.MouseEvent<HTMLAnchorElement>) {
     e.preventDefault();
+    if (disabled) return;
     setLoading(true);
     try {
       await signIn.oauth2({
@@ -51,23 +53,24 @@ export default function TelegramButton({ mode }: Props) {
 
   return (
     <a
-      href={href}
+      aria-disabled={disabled}
+      href={disabled ? undefined : href}
       style={{
         alignItems: 'center',
         background: '#0088cc',
         border: 'none',
         borderRadius: 10,
         color: '#fff',
-        cursor: loading ? 'wait' : 'pointer',
+        cursor: disabled ? 'not-allowed' : loading ? 'wait' : 'pointer',
         display: 'flex',
         fontSize: 14,
         fontWeight: 500,
         gap: 10,
         height: 46,
         justifyContent: 'center',
-        opacity: loading ? 0.7 : 1,
+        opacity: disabled ? 0.45 : loading ? 0.7 : 1,
         padding: '0 16px',
-        pointerEvents: loading ? 'none' : 'auto',
+        pointerEvents: disabled || loading ? 'none' : 'auto',
         textDecoration: 'none',
         width: '100%',
       }}

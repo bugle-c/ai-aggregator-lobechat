@@ -1,7 +1,9 @@
 'use client';
 
-import { Card, Divider, Typography } from 'antd';
+import { Card, Checkbox, Divider, Typography } from 'antd';
 import { memo, useState } from 'react';
+
+import { CONSENT_URL, PRIVACY_URL, TERMS_URL } from '@/const/url';
 
 import EmailSignIn from './EmailSignIn';
 import EmailSignUp from './EmailSignUp';
@@ -16,6 +18,11 @@ interface Props {
 
 const AuthModal = memo<Props>(function AuthModal({ defaultTab }) {
   const [tab, setTab] = useState<'signin' | 'signup'>(defaultTab);
+  // Legal consent is collected at the point of registration (152-ФЗ): the
+  // signup tab requires the checkbox before any registration method works.
+  // OAuth auto-creates accounts, so we gate the SSO buttons too, not just email.
+  const [accepted, setAccepted] = useState(false);
+  const gate = tab === 'signup' && !accepted;
 
   return (
     <Card
@@ -36,23 +43,46 @@ const AuthModal = memo<Props>(function AuthModal({ defaultTab }) {
           : 'С возвращением!'}
       </Text>
 
+      {tab === 'signup' && (
+        <Checkbox
+          checked={accepted}
+          style={{ alignItems: 'flex-start', marginTop: 18 }}
+          onChange={(e) => setAccepted(e.target.checked)}
+        >
+          <span style={{ color: '#666', fontSize: 12, lineHeight: 1.5 }}>
+            Я принимаю{' '}
+            <a href={TERMS_URL} rel="noopener noreferrer" target="_blank">
+              Оферту
+            </a>
+            ,{' '}
+            <a href={PRIVACY_URL} rel="noopener noreferrer" target="_blank">
+              Политику конфиденциальности
+            </a>{' '}
+            и даю{' '}
+            <a href={CONSENT_URL} rel="noopener noreferrer" target="_blank">
+              Согласие на обработку персональных данных
+            </a>
+          </span>
+        </Checkbox>
+      )}
+
       <div
         style={{
-          marginTop: 18,
+          marginTop: tab === 'signup' ? 14 : 18,
           display: 'flex',
           flexDirection: 'column',
           gap: 10,
         }}
       >
-        <YandexButton mode={tab} />
-        <TelegramButton mode={tab} />
+        <YandexButton disabled={gate} mode={tab} />
+        <TelegramButton disabled={gate} mode={tab} />
       </div>
 
       <Divider plain style={{ marginBlock: 18, fontSize: 12, color: '#999' }}>
         или по email
       </Divider>
 
-      {tab === 'signup' ? <EmailSignUp /> : <EmailSignIn />}
+      {tab === 'signup' ? <EmailSignUp disabled={gate} /> : <EmailSignIn />}
 
       <div style={{ marginTop: 16, textAlign: 'center', fontSize: 13 }}>
         {tab === 'signup' ? (
