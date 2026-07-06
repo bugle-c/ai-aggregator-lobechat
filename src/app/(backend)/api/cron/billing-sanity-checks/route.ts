@@ -12,6 +12,8 @@
  *   C) reconciliation        — booked usage_logs.cost_usd vs API rate
  *                              sanity (drift detection — coarse)
  *   D) stuck-async-tasks     — video tasks pending/processing > 1h
+ *   F) wow-budget-cap        — earned-magic claims this month exceed the
+ *                              monthly budget cap (alerted once/day)
  *
  * Triggered from a host-level cron: see tasks/cron/billing-sanity-host.cron.
  */
@@ -39,6 +41,15 @@ const STUCK_TASK_ALERT_THRESHOLD = 5;
 // (e.g. forgot the decimal point — `30` instead of `3.0`).
 const MARKUP_MIN = 1.5;
 const MARKUP_MAX = 10;
+
+// Earned-magic wow budget: each claim ≈ 2 nano-banana images ≈ 12 ₽.
+// If the month's estimated spend crosses the cap, consider turning the
+// earned-magic flow off.
+const WOW_COST_PER_CLAIM_RUB = 12;
+const WOW_BUDGET_CAP_RUB = 3500;
+// The cron fires hourly; alert only on the 09:00 MSK run (06:00 UTC) so
+// the budget alert is delivered at most once per day.
+const WOW_ALERT_UTC_HOUR = 6;
 
 export async function POST(req: Request) {
   const auth = req.headers.get('authorization');
@@ -313,6 +324,52 @@ export async function POST(req: Request) {
     checks.push({
       error: err instanceof Error ? err.message : String(err),
       name: 'billing-coverage',
+      severity: 'error',
+    });
+  }
+
+  // --- F) wow-budget-cap ------------------------------------------------------
+  // Estimated earned-magic spend this calendar month: one claim grants
+  // ~2 nano-banana images ≈ WOW_COST_PER_CLAIM_RUB. The check runs on every
+  // hourly tick (so /api response always reflects it) but the Telegram alert
+  // only fires on the 09:00 MSK run — once per day max.
+  try {
+    const monthStart = new Date();
+    monthStart.setUTCDate(1);
+    monthStart.setUTCHours(0, 0, 0, 0);
+
+    const [{ claimCount }] = await db
+      .select({ claimCount: count() })
+      .from(userBilling)
+      .where(sql`${userBilling.magicBonusClaimedAt} >= ${monthStart.toISOString()}`);
+
+    const claims = Number(claimCount ?? 0);
+    const estimatedSpendRub = claims * WOW_COST_PER_CLAIM_RUB;
+
+    if (estimatedSpendRub > WOW_BUDGET_CAP_RUB) {
+      checks.push({
+        details: { capRub: WOW_BUDGET_CAP_RUB, claims, estimatedSpendRub },
+        name: 'wow-budget-cap',
+        severity: 'critical',
+      });
+      if (new Date().getUTCHours() === WOW_ALERT_UTC_HOUR) {
+        await sendAlert({
+          body: `Wow-бюджет превышен: ${claims} клеймов ≈ ${estimatedSpendRub}₽ (cap ${WOW_BUDGET_CAP_RUB}₽) — рассмотреть отключение earned-magic`,
+          severity: 'critical',
+          title: 'Wow-бюджет превышен',
+        });
+      }
+    } else {
+      checks.push({
+        details: { capRub: WOW_BUDGET_CAP_RUB, claims, estimatedSpendRub },
+        name: 'wow-budget-cap',
+        severity: 'ok',
+      });
+    }
+  } catch (err) {
+    checks.push({
+      error: err instanceof Error ? err.message : String(err),
+      name: 'wow-budget-cap',
       severity: 'error',
     });
   }
