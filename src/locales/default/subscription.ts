@@ -436,8 +436,7 @@ export default {
   'widget.upgrade': 'Улучшить план →',
 
   // Low balance warning
-  'warning.halfUsed':
-    'Израсходована половина лимита — осталось {{remaining}} кредитов (≈ {{images}} картинок)',
+  'warning.halfUsed': 'Израсходована половина лимита — осталось {{remaining}} кредитов ({{human}})',
   'warning.lowBalance': 'Осталось {{remaining}} кредитов',
   'warning.switchMini': 'Перейти на дешёвую WebGPT Mini',
   'warning.switchedToMini': 'Переключено на WebGPT Mini — экономичный режим',

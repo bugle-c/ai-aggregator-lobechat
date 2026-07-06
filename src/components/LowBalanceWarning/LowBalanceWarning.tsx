@@ -1,7 +1,7 @@
 'use client';
 
-import { Alert, Flexbox } from '@lobehub/ui';
-import { App, Button } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { Alert, App, Button } from 'antd';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -57,15 +57,22 @@ const LowBalanceWarning = memo(() => {
 
   const isOnMini = currentModel === WEBGPT_MINI.model;
   const human = creditsToHuman(remaining);
+  // Russian plural agreement for «картинка/картинки/картинок».
+  const imgWord = pluralRu(human.images, ['картинка', 'картинки', 'картинок']);
+  const humanStr = `≈ ${human.images} ${imgWord}`;
 
   return (
     <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
       <Alert
         closable
+        showIcon
+        // Buttons live in `description` (always visible). The @lobehub/ui Alert
+        // hides an `extra` block behind an English «Show Details» toggle — we
+        // render plain antd Alert so the CTAs are never collapsed.
         type={isSoft ? 'info' : 'warning'}
-        extra={
-          <Flexbox gap={6} style={{ marginTop: 8 }}>
-            <Flexbox horizontal gap={8}>
+        description={
+          <Flexbox gap={8} style={{ marginTop: 8 }}>
+            <Flexbox horizontal gap={8} wrap="wrap">
               <Button size="small" onClick={() => navigate('/settings/subscription/funds')}>
                 {t('warning.topup')}
               </Button>
@@ -85,9 +92,9 @@ const LowBalanceWarning = memo(() => {
             )}
           </Flexbox>
         }
-        title={
+        message={
           isSoft
-            ? t('warning.halfUsed', { images: human.images, remaining })
+            ? t('warning.halfUsed', { human: humanStr, remaining })
             : t('warning.lowBalance', { remaining })
         }
         onClose={handleDismiss}
@@ -95,6 +102,15 @@ const LowBalanceWarning = memo(() => {
     </Flexbox>
   );
 });
+
+/** Russian plural picker: (1) one, (2-4) few, (0/5-20/…) many. */
+function pluralRu(n: number, [one, few, many]: [string, string, string]): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+  return many;
+}
 
 LowBalanceWarning.displayName = 'LowBalanceWarning';
 export default LowBalanceWarning;
