@@ -140,7 +140,10 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
                       block
                       loading={subscribeMutation.isPending}
                       type={isRecommended ? 'primary' : 'default'}
-                      onClick={() => subscribeMutation.mutate({ planId: plan.id, returnPath })}
+                      // Subscriptions intentionally do NOT take returnPath: the
+                      // recoveryFor param is only handled on /settings/plans, so
+                      // landing it on /agent/* would strand the recovery flow.
+                      onClick={() => subscribeMutation.mutate({ planId: plan.id })}
                     >
                       {isRecommended ? 'Продолжить общение' : t('modal.exhausted.select')}
                     </Button>
