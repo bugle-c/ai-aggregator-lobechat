@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
+import PaymentTrustBadges from '@/components/PaymentTrustBadges';
 import { lambdaQuery } from '@/libs/trpc/client';
 
 const { Title } = Typography;
@@ -85,6 +86,7 @@ const Funds = memo(() => {
               </Card>
             ))}
           </Grid>
+          <PaymentTrustBadges variant="topup" />
         </Card>
       )}
     </>

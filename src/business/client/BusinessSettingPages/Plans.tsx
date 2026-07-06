@@ -19,6 +19,8 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
+import { creditsToHuman } from '@/business/utils/creditsToHuman';
+import PaymentTrustBadges from '@/components/PaymentTrustBadges';
 import MobileCancelFlow from '@/features/Upsell/MobileCancelFlow';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useQueryState } from '@/hooks/useQueryParam';
@@ -685,6 +687,10 @@ const Plans = memo(() => {
                 )}
                 <Divider style={{ margin: '4px 0' }} />
                 <Text strong>{plan.tokenLimit} кредитов/мес</Text>
+                <Text style={{ fontSize: 12, marginTop: -2 }} type="secondary">
+                  ≈ {creditsToHuman(plan.tokenLimit).answers} ответов или{' '}
+                  {creditsToHuman(plan.tokenLimit).images} картинок
+                </Text>
                 {hint && (
                   <Text style={{ fontSize: 12 }} type="secondary">
                     {hint}
@@ -719,6 +725,8 @@ const Plans = memo(() => {
           );
         })}
       </Grid>
+
+      <PaymentTrustBadges variant="subscription" />
 
       {/* Top up */}
       {packages && packages.length > 0 && (
