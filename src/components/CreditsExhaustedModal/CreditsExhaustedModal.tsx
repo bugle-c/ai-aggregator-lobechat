@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { reachGoal } from '@/business/client/analytics/ym';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -43,12 +44,16 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
 
     const subscribeMutation = lambdaQuery.subscription.createPayment.useMutation({
       onSuccess: (d) => {
+        // Payment created, redirecting to checkout.
+        reachGoal('checkout_start', { kind: 'subscribe' });
         if (d.paymentUrl) window.location.href = d.paymentUrl;
       },
     });
 
     const topUpMutation = lambdaQuery.topUp.createPayment.useMutation({
       onSuccess: (d) => {
+        // Payment created, redirecting to checkout.
+        reachGoal('checkout_start', { kind: 'topup' });
         if (d.paymentUrl) window.location.href = d.paymentUrl;
       },
     });
@@ -143,7 +148,10 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
                       // Subscriptions intentionally do NOT take returnPath: the
                       // recoveryFor param is only handled on /settings/plans, so
                       // landing it on /agent/* would strand the recovery flow.
-                      onClick={() => subscribeMutation.mutate({ planId: plan.id })}
+                      onClick={() => {
+                        reachGoal('paywall_click', { kind: 'subscribe' });
+                        subscribeMutation.mutate({ planId: plan.id });
+                      }}
                     >
                       {isRecommended ? 'Продолжить общение' : t('modal.exhausted.select')}
                     </Button>
@@ -158,9 +166,10 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
               block
               loading={topUpMutation.isPending}
               type="dashed"
-              onClick={() =>
-                topUpMutation.mutate({ amountRub: cheapestTopup.amountRub, returnPath })
-              }
+              onClick={() => {
+                reachGoal('paywall_click', { kind: 'topup' });
+                topUpMutation.mutate({ amountRub: cheapestTopup.amountRub, returnPath });
+              }}
             >
               Или разово докупить за {cheapestTopup.amountRub} ₽
             </Button>
