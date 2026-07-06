@@ -8,6 +8,7 @@ import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { reachGoal } from '@/business/client/analytics/ym';
 import CreditsExhaustedModal from '@/components/CreditsExhaustedModal';
 import LowBalanceWarning from '@/components/LowBalanceWarning';
 import { type ActionKeys } from '@/features/ChatInput';
@@ -103,12 +104,15 @@ const ChatInput = memo<ChatInputProps>(
     const { t } = useTranslation('chat');
 
     // ConversationStore state
-    const [agentId, inputMessage, sendMessage, stopGenerating] = useConversationStore((s) => [
-      s.context.agentId,
-      s.inputMessage,
-      s.sendMessage,
-      s.stopGenerating,
-    ]);
+    const [agentId, topicId, inputMessage, sendMessage, stopGenerating] = useConversationStore(
+      (s) => [
+        s.context.agentId,
+        s.context.topicId,
+        s.inputMessage,
+        s.sendMessage,
+        s.stopGenerating,
+      ],
+    );
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
     const setEditor = useConversationStore((s) => s.setEditor);
 
@@ -126,8 +130,16 @@ const ChatInput = memo<ChatInputProps>(
     useEffect(() => {
       if (sendMessageErrorMsg && sendMessageErrorMsg.includes('Кредиты закончились')) {
         setShowExhaustedModal(true);
+        reachGoal('paywall_view');
       }
     }, [sendMessageErrorMsg]);
+
+    // Contextual paywall: path YooKassa returns the payer to after checkout,
+    // so they land back in this exact conversation (topic may be null for a
+    // fresh chat — omit the query param then).
+    const paywallReturnPath = agentId
+      ? `/agent/${agentId}${topicId ? `?topic=${topicId}` : ''}`
+      : undefined;
 
     // File store - for UI state only (disabled button, etc.)
     const fileList = useFileStore(fileChatSelectors.chatUploadFileList);
@@ -225,7 +237,9 @@ const ChatInput = memo<ChatInputProps>(
           {children ?? defaultContent}
         </ChatInputProvider>
         <CreditsExhaustedModal
+          contextNote="Ваш диалог сохранён — после оплаты вы вернётесь ровно сюда"
           open={showExhaustedModal}
+          returnPath={paywallReturnPath}
           onClose={() => setShowExhaustedModal(false)}
         />
       </>

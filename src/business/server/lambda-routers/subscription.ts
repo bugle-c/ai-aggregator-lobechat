@@ -23,6 +23,14 @@ export const subscriptionRouter = router({
     .input(
       z.object({
         planId: z.number(),
+        // Contextual paywall: chat path the user was on when credits ran
+        // out. Whitelisted to in-app routes so return_url can't be abused
+        // as an open redirect.
+        returnPath: z
+          .string()
+          .regex(/^\/(agent|home)/)
+          .max(200)
+          .optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -57,7 +65,15 @@ export const subscriptionRouter = router({
       // landing page can look up the true status server-side and either
       // celebrate (succeeded) or fire the recovery flow (canceled /
       // expired / still pending). See Plans.tsx → recoveryFor handling.
-      const returnUrl = `${process.env.APP_URL || 'https://ask.gptweb.ru'}/settings/plans?recoveryFor=${payment.id}`;
+      // Contextual paywall: when the client passed the chat path it was on,
+      // return the payer straight back there. `recoveryFor=<paymentId>` is
+      // MANDATORY on either path — the recovery flow depends on it — so it
+      // is appended as an extra query param (the path may already carry
+      // ?topic=...).
+      const appUrl = process.env.APP_URL || 'https://ask.gptweb.ru';
+      const returnUrl = input.returnPath
+        ? `${appUrl}${input.returnPath}${input.returnPath.includes('?') ? '&' : '?'}recoveryFor=${payment.id}`
+        : `${appUrl}/settings/plans?recoveryFor=${payment.id}`;
 
       const user = await UserModel.findById(ctx.serverDB, ctx.userId);
 

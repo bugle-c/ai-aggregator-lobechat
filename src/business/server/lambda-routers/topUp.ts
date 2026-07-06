@@ -19,7 +19,19 @@ const billingProcedure = authedProcedure.use(serverDatabase).use(async (opts) =>
 
 export const topUpRouter = router({
   createPayment: billingProcedure
-    .input(z.object({ amountRub: z.number() }))
+    .input(
+      z.object({
+        amountRub: z.number(),
+        // Contextual paywall: chat path the user was on when credits ran
+        // out. Whitelisted to in-app routes so return_url can't be abused
+        // as an open redirect.
+        returnPath: z
+          .string()
+          .regex(/^\/(agent|home)/)
+          .max(200)
+          .optional(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       const pkg = getTopupPackage(input.amountRub);
       if (!pkg) throw new Error('Invalid topup amount');
@@ -44,7 +56,14 @@ export const topUpRouter = router({
         type: 'topup',
       });
 
-      const returnUrl = `${process.env.APP_URL || 'https://ask.gptweb.ru'}/settings/billing?payment=success`;
+      // Contextual paywall: when the client passed the chat path it was on,
+      // send the payer straight back there instead of /settings/billing.
+      // The mandatory `payment=success` marker is appended as an extra
+      // query param (the path may already carry ?topic=...).
+      const appUrl = process.env.APP_URL || 'https://ask.gptweb.ru';
+      const returnUrl = input.returnPath
+        ? `${appUrl}${input.returnPath}${input.returnPath.includes('?') ? '&' : '?'}payment=success`
+        : `${appUrl}/settings/billing?payment=success`;
 
       const user = await UserModel.findById(ctx.serverDB, ctx.userId);
 
