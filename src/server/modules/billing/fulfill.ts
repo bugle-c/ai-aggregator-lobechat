@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { billingPayments, userBilling } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
 import { writeSubscriptionEvent } from '@/server/modules/analytics/writeSubscriptionEvent';
+import { maybeGrantIntroOffer } from '@/server/modules/billing/intro-offer';
 import { sendSubscriptionConfirmation } from '@/server/modules/lifecycle/sendConfirmation';
 import { BillingService } from '@/server/services/billing';
 
@@ -113,6 +114,15 @@ export async function fulfillPayment(
     console.info(
       `[billing] Topup fulfilled: user=${payment.userId} credits=${payment.tokensAmount}`,
     );
+  }
+
+  // 48h intro offer — +1000 credits if this is the user's first payment
+  // within 48h of the earned-magic claim. Best-effort: never breaks fulfill
+  // (the helper catches internally, this is belt-and-suspenders).
+  try {
+    await maybeGrantIntroOffer(db, payment.userId);
+  } catch (error) {
+    console.error('[billing] intro offer hook error:', error);
   }
 
   // (Referral rewards now trigger from the linkTelegramAccount hook;

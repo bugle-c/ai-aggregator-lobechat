@@ -7,6 +7,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { grantMagicImagesBonus } from '@/server/modules/billing/grant-magic-images-bonus';
+import { getIntroOfferState } from '@/server/modules/billing/intro-offer';
 
 const onboardingProcedure = authedProcedure.use(serverDatabase);
 
@@ -58,6 +59,15 @@ export const userOnboardingRouter = router({
       alreadyClaimed: result.alreadyClaimed,
       granted: result.granted > 0,
     };
+  }),
+
+  /**
+   * 48h intro offer (+1000 credits on first payment after the magic claim):
+   * eligible while magic_bonus_claimed_at is within 48h and the user has no
+   * succeeded payments yet.
+   */
+  getIntroOfferState: onboardingProcedure.query(async ({ ctx }) => {
+    return getIntroOfferState(ctx.serverDB, ctx.userId);
   }),
 
   getOnboardingState: onboardingProcedure.query(async ({ ctx }) => {

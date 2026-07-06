@@ -19,6 +19,7 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
+import IntroOfferBanner from '@/business/client/IntroOffer/IntroOfferBanner';
 import { creditsToHuman } from '@/business/utils/creditsToHuman';
 import PaymentTrustBadges from '@/components/PaymentTrustBadges';
 import MobileCancelFlow from '@/features/Upsell/MobileCancelFlow';
@@ -432,6 +433,7 @@ const Plans = memo(() => {
     return (
       <>
         <SettingHeader title={t('tab.plans')} />
+        <IntroOfferBanner />
         <PlansMobileLayout
           features={PLAN_FEATURES}
           subscribePending={subscribeMutation.isPending}
@@ -495,6 +497,8 @@ const Plans = memo(() => {
   return (
     <>
       <SettingHeader title={t('tab.plans')} />
+
+      <IntroOfferBanner />
 
       {/* Current usage */}
       <Card style={{ marginTop: 16 }}>

@@ -8,6 +8,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { reachGoal } from '@/business/client/analytics/ym';
+import IntroOfferBanner from '@/business/client/IntroOffer/IntroOfferBanner';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -100,6 +101,8 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
           <Text type="secondary">
             {t('modal.exhausted.resetIn', { days: daysUntilReset })} · без доступа до сброса
           </Text>
+
+          <IntroOfferBanner />
 
           <Flexbox horizontal gap={12}>
             {upgradePlans.map((plan) => {
