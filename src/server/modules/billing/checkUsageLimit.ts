@@ -169,12 +169,25 @@ export async function recordTokenUsage(
     const plan = await billingService.getPlanById(billing.planId);
     const limit = (plan?.tokenLimit ?? 0) + (billing.tokenBalance ?? 0) + activeBonusFor(billing);
 
+    // Clamp the charge to the credits actually left. Chat billing is
+    // post-completion — the answer already streamed. If the true cost would
+    // overshoot the cap, incrementTokensUsed's conditional guard THROWS and
+    // the whole charge (counter + usage_log) rolls back: the user gets the
+    // message free AND the counter never reaches the cap, so the next
+    // request's start-gate (`tokensUsedMonth >= totalAvailable`) never fires
+    // → free chat forever at the boundary. Charging exactly what remains
+    // drives the counter to the cap so the next message is blocked. The
+    // boundary message costs at most its remaining credits — acceptable.
+    const remainingCredits = Math.max(0, limit - (billing.tokensUsedMonth ?? 0));
+    const chargedCredits = Math.min(credits, remainingCredits);
+    if (chargedCredits <= 0) return; // already at cap — start-gate blocks next request
+
     // Atomic: increment monthly counter + insert usage_logs row. If either
     // fails, rollback — otherwise we end up with phantom credits (the counter
     // moves but no audit row exists). See writeUsageLog.ts for history.
     const { writeUsageLog } = await import('@/server/modules/analytics/writeUsageLog');
     await db.transaction(async (tx) => {
-      await billingService.incrementTokensUsed(credits, tx, { limit });
+      await billingService.incrementTokensUsed(chargedCredits, tx, { limit });
       await writeUsageLog(tx, {
         userId,
         model: modelId || 'unknown',
@@ -184,14 +197,14 @@ export async function recordTokenUsage(
         cacheWrite5mTokens: opts?.cacheWrite5mTokens ?? 0,
         cacheWrite1hTokens: opts?.cacheWrite1hTokens ?? 0,
         cacheReadTokens: opts?.cacheReadTokens ?? 0,
-        creditsCharged: credits,
+        creditsCharged: chargedCredits,
         kind: opts?.kind || 'chat',
         providerCostUsd: opts?.providerCostUsd,
       });
     });
 
     console.info(
-      `[billing] charged ${credits} credits: user=${userId} model=${modelId || 'unknown'} in=${tokensUsed} out=${outputTokens || 0} cw5m=${opts?.cacheWrite5mTokens ?? 0} cw1h=${opts?.cacheWrite1hTokens ?? 0} cr=${opts?.cacheReadTokens ?? 0}`,
+      `[billing] charged ${chargedCredits} credits: user=${userId} model=${modelId || 'unknown'} in=${tokensUsed} out=${outputTokens || 0} cw5m=${opts?.cacheWrite5mTokens ?? 0} cw1h=${opts?.cacheWrite1hTokens ?? 0} cr=${opts?.cacheReadTokens ?? 0}`,
     );
 
     // Post-transaction: flag user for zero_credits bot notification if applicable.
