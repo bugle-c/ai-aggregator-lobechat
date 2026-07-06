@@ -2,7 +2,13 @@ import { useEffect } from 'react';
 
 import { useChatStore } from '@/store/chat';
 
-const STORAGE_KEY = 'webgpt_pending_intent_prompt';
+export const INTENT_PROMPT_STORAGE_KEY = 'webgpt_pending_intent_prompt';
+
+/** Set once the pending prompt has been injected into the editor. The
+ *  welcome modal checks it: a blog-intent user already has a charged
+ *  input, so we must not interrupt with the intent-chips screen even
+ *  after the pending key has been consumed. */
+export const INTENT_PROMPT_CONSUMED_KEY = 'webgpt_intent_prompt_consumed';
 
 /**
  * Blog CTAs deep-link with `?prompt=<template>`. Capture it BEFORE auth can
@@ -16,7 +22,7 @@ export const useIntentPrompt = () => {
     const params = new URLSearchParams(window.location.search);
     const prompt = params.get('prompt');
     if (!prompt) return;
-    sessionStorage.setItem(STORAGE_KEY, prompt.slice(0, 2000));
+    sessionStorage.setItem(INTENT_PROMPT_STORAGE_KEY, prompt.slice(0, 2000));
     // Strip the param so reloads/auth redirects don't re-capture.
     params.delete('prompt');
     const qs = params.toString();
@@ -25,7 +31,7 @@ export const useIntentPrompt = () => {
 
   // Inject phase — poll briefly for the editor (it mounts after hydration).
   useEffect(() => {
-    const pending = sessionStorage.getItem(STORAGE_KEY);
+    const pending = sessionStorage.getItem(INTENT_PROMPT_STORAGE_KEY);
     if (!pending) return;
     let tries = 0;
     const timer = setInterval(() => {
@@ -35,7 +41,8 @@ export const useIntentPrompt = () => {
         editor.instance?.setDocument('markdown', pending);
         useChatStore.setState({ inputMessage: pending });
         editor.focus();
-        sessionStorage.removeItem(STORAGE_KEY);
+        sessionStorage.setItem(INTENT_PROMPT_CONSUMED_KEY, '1');
+        sessionStorage.removeItem(INTENT_PROMPT_STORAGE_KEY);
         clearInterval(timer);
       } else if (tries > 40) {
         clearInterval(timer); // ~10s: editor never mounted (e.g. auth wall) — keep for next visit

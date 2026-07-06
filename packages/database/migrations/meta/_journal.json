@@ -742,6 +742,13 @@
       "when": 1779553912713,
       "tag": "0105_tg_link_bonus",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1783300000000,
+      "tag": "0107_magic_flow",
+      "breakpoints": true
     }
   ],
   "version": "6"

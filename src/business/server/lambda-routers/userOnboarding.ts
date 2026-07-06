@@ -1,11 +1,12 @@
-import { eq } from 'drizzle-orm';
+import { and, count, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import type { UserOnboardingItem } from '@/database/schemas';
-import { userOnboarding } from '@/database/schemas';
+import { messages, userOnboarding } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { grantMagicImagesBonus } from '@/server/modules/billing/grant-magic-images-bonus';
 
 const onboardingProcedure = authedProcedure.use(serverDatabase);
 
@@ -31,6 +32,34 @@ const fetchOrCreate = async (db: LobeChatDatabase, userId: string): Promise<User
 };
 
 export const userOnboardingRouter = router({
+  /**
+   * Server-authoritative gate for the earned free image. The user must
+   * have written at least 2 meaningful messages (>= 10 chars) before the
+   * one-shot magic-images bonus is granted. The grant itself is idempotent.
+   */
+  claimMagicBonus: onboardingProcedure.mutation(async ({ ctx }) => {
+    const [row] = await ctx.serverDB
+      .select({ value: count() })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.userId, ctx.userId),
+          eq(messages.role, 'user'),
+          sql`length(${messages.content}) >= 10`,
+        ),
+      );
+
+    if ((row?.value ?? 0) < 2) {
+      return { alreadyClaimed: false, granted: false, reason: 'not_yet' as const };
+    }
+
+    const result = await grantMagicImagesBonus(ctx.serverDB, ctx.userId);
+    return {
+      alreadyClaimed: result.alreadyClaimed,
+      granted: result.granted > 0,
+    };
+  }),
+
   getOnboardingState: onboardingProcedure.query(async ({ ctx }) => {
     return fetchOrCreate(ctx.serverDB, ctx.userId);
   }),
@@ -61,6 +90,17 @@ export const userOnboardingRouter = router({
       .where(eq(userOnboarding.userId, ctx.userId));
     return { ok: true };
   }),
+
+  setIntent: onboardingProcedure
+    .input(z.object({ intent: z.enum(['post', 'doc', 'essay', 'ask']) }))
+    .mutation(async ({ ctx, input }) => {
+      await fetchOrCreate(ctx.serverDB, ctx.userId);
+      await ctx.serverDB
+        .update(userOnboarding)
+        .set({ intent: input.intent, updatedAt: new Date() })
+        .where(eq(userOnboarding.userId, ctx.userId));
+      return { intent: input.intent, ok: true };
+    }),
 
   setUiMode: onboardingProcedure
     .input(z.object({ mode: z.enum(['light', 'pro']) }))

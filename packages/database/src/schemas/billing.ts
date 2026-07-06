@@ -110,6 +110,10 @@ export const userBilling = pgTable(
     /** Permanent anti-fraud stamp. Set on first TG-link bonus grant;
      *  never cleared. Re-link attempts read this and skip the grant. */
     tgBonusClaimedAt: timestamptz('tg_bonus_claimed_at'),
+
+    /** Permanent anti-fraud stamp for the one-shot magic-images bonus
+     *  (earned free image in the onboarding magic flow); never cleared. */
+    magicBonusClaimedAt: timestamptz('magic_bonus_claimed_at'),
     ...timestamps,
   },
   (table) => [index('user_billing_user_id_idx').on(table.userId)],

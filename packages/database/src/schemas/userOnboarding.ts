@@ -14,10 +14,9 @@ export const userOnboarding = pgTable('user_onboarding', {
   firstLoginSeen: boolean('first_login_seen').notNull().default(false),
   firstMessageSeen: boolean('first_message_seen').notNull().default(false),
   firstToastSeen: boolean('first_toast_seen').notNull().default(false),
-  uiMode: varchar('ui_mode', { length: 8 })
-    .notNull()
-    .default('light')
-    .$type<'light' | 'pro'>(),
+  uiMode: varchar('ui_mode', { length: 8 }).notNull().default('light').$type<'light' | 'pro'>(),
+  /** Task the user picked on the «Что делаем?» intent screen. NULL until chosen. */
+  intent: text('intent').$type<'post' | 'doc' | 'essay' | 'ask'>(),
   bannerDismissedAt: timestamptz('banner_dismissed_at'),
   createdAt: timestamptz('created_at').notNull().defaultNow(),
   updatedAt: timestamptz('updated_at')
