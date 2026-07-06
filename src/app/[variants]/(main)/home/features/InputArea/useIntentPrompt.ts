@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 
+import { reachGoal } from '@/business/client/analytics/ym';
 import { useChatStore } from '@/store/chat';
 
 export const INTENT_PROMPT_STORAGE_KEY = 'webgpt_pending_intent_prompt';
@@ -43,6 +44,7 @@ export const useIntentPrompt = () => {
         editor.focus();
         sessionStorage.setItem(INTENT_PROMPT_CONSUMED_KEY, '1');
         sessionStorage.removeItem(INTENT_PROMPT_STORAGE_KEY);
+        reachGoal('prompt_prefill');
         clearInterval(timer);
       } else if (tries > 40) {
         clearInterval(timer); // ~10s: editor never mounted (e.g. auth wall) — keep for next visit
