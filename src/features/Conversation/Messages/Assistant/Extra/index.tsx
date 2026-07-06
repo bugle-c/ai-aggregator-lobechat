@@ -3,6 +3,7 @@ import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import FollowUpChips from '@/business/client/MagicImage/FollowUpChips';
 import MagicImageExtra from '@/business/client/MagicImage/MagicImageExtra';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -47,6 +48,7 @@ export const AssistantMessageExtra = memo<AssistantMessageExtraProps>(
               </ExtraContainer>
             )}
             {!loading && <MagicImageExtra content={content} id={id} />}
+            {!loading && <FollowUpChips id={id} />}
           </>
         )}
       </Flexbox>
