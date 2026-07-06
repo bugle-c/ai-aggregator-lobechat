@@ -77,6 +77,7 @@ export default {
   // ============ Onboarding flow (welcome modal, balance badge, etc.) ============
   'balance.empty': '💰 0 credits',
   'balance.emptyTooltip': 'Credits run out — top up to keep chatting',
+  'balance.human': '≈ {{images}} картинок или {{answers}} ответов',
   'balance.label': '💰 {{count}} credits',
   'balance.lowTooltip': 'Running low on credits — want to top up?',
   'suggested.hint': 'Try one of these prompts to get started',

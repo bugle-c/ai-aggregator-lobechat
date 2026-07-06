@@ -5,6 +5,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { creditsToHuman } from '@/business/utils/creditsToHuman';
 import BalanceExplainSheet from '@/features/MobileGlobalHeader/BalanceExplainSheet';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { lambdaQuery } from '@/libs/trpc/client';
@@ -71,12 +72,16 @@ const BalanceBadge = memo(() => {
     </Tag>
   );
 
+  // Human-work equivalent so users reason in «картинки и ответы», not credits.
+  const human = creditsToHuman(remaining);
+  const humanLine = t('balance.human', { answers: human.answers, images: human.images });
+
   const wrapped = isEmpty ? (
     <Tooltip title={t('balance.emptyTooltip')}>{tag}</Tooltip>
   ) : isLow ? (
-    <Tooltip title={t('balance.lowTooltip')}>{tag}</Tooltip>
+    <Tooltip title={`${t('balance.lowTooltip')} ${humanLine}`}>{tag}</Tooltip>
   ) : (
-    tag
+    <Tooltip title={humanLine}>{tag}</Tooltip>
   );
 
   return (

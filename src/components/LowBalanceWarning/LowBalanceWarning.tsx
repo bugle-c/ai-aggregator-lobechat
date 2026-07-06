@@ -6,6 +6,7 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { creditsToHuman } from '@/business/utils/creditsToHuman';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -49,17 +50,19 @@ const LowBalanceWarning = memo(() => {
   const { creditsUsed, totalAvailable, usagePercent } = data;
   const remaining = totalAvailable - creditsUsed;
 
-  // Only show when 80-100% used and credits > 0 (modal handles 0 case)
-  if (usagePercent < 80 || remaining <= 0) return null;
+  // Soft heads-up from 50% (info), real warning from 80%; 0 case is handled by
+  // the exhausted modal.
+  if (usagePercent < 50 || remaining <= 0) return null;
+  const isSoft = usagePercent < 80;
 
   const isOnMini = currentModel === WEBGPT_MINI.model;
+  const human = creditsToHuman(remaining);
 
   return (
     <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
       <Alert
         closable
-        title={t('warning.lowBalance', { remaining })}
-        type={'warning'}
+        type={isSoft ? 'info' : 'warning'}
         extra={
           <Flexbox gap={6} style={{ marginTop: 8 }}>
             <Flexbox horizontal gap={8}>
@@ -81,6 +84,11 @@ const LowBalanceWarning = memo(() => {
               </Button>
             )}
           </Flexbox>
+        }
+        title={
+          isSoft
+            ? t('warning.halfUsed', { images: human.images, remaining })
+            : t('warning.lowBalance', { remaining })
         }
         onClose={handleDismiss}
       />

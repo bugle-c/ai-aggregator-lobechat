@@ -2,6 +2,7 @@
   "back": "Назад",
   "balance.empty": "💰 0 кредитов",
   "balance.emptyTooltip": "Кредиты закончились — пополните, чтобы продолжить",
+  "balance.human": "≈ {{images}} картинок или {{answers}} ответов",
   "balance.label": "💰 {{count}} кредитов",
   "balance.lowTooltip": "Скоро закончатся, пополнить?",
   "finish": "Начать",
