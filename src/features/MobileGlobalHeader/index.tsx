@@ -8,10 +8,14 @@ import { Link } from 'react-router-dom';
 import { BalanceBadge } from '@/features/Onboarding';
 import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
+
+import RecentChatsButton from './RecentChatsButton';
 
 const MobileGlobalHeader = memo(() => {
   const avatar = useUserStore((s) => s.user?.avatar);
   const name = useUserStore((s) => s.user?.fullName ?? s.user?.email ?? '');
+  const isLogin = useUserStore(authSelectors.isLogin);
   const toggleLeftPanel = useGlobalStore((s) => s.toggleLeftPanel);
 
   return (
@@ -46,6 +50,8 @@ const MobileGlobalHeader = memo(() => {
           WebGPT
         </Text>
       </Link>
+
+      {isLogin && <RecentChatsButton />}
 
       <BalanceBadge />
 

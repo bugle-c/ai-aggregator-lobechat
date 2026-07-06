@@ -1,7 +1,7 @@
 'use client';
 
 import { Tag, Tooltip } from 'antd';
-import { memo, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -9,6 +9,8 @@ import { creditsToHuman } from '@/business/utils/creditsToHuman';
 import BalanceExplainSheet from '@/features/MobileGlobalHeader/BalanceExplainSheet';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { lambdaQuery } from '@/libs/trpc/client';
+import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -28,11 +30,22 @@ const BalanceBadge = memo(() => {
   const isMobile = useIsMobile();
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const { data } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
+  const { data, refetch } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
     enabled: isLogin,
     refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
     staleTime: 30_000,
   });
+
+  // A message just completed → the balance changed. Refetch immediately instead
+  // of waiting up to 60s for the next poll. We watch the global "AI generating"
+  // flag and refetch on the active→idle transition.
+  const isGenerating = useChatStore(operationSelectors.isAgentRuntimeRunning);
+  const wasGeneratingRef = useRef(isGenerating);
+  useEffect(() => {
+    if (wasGeneratingRef.current && !isGenerating) refetch();
+    wasGeneratingRef.current = isGenerating;
+  }, [isGenerating, refetch]);
 
   if (!isLogin || !data) return null;
 
