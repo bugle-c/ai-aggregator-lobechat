@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BLOG_ENV_FILE="/home/deploy/.config/blog-autogen/env"
 LOG_FILE="/home/deploy/.claude/logs/blog-hype.log"
 API_URL="https://ask.gptweb.ru/admin"
-CLAUDE_CMD="/home/deploy/.local/bin/claude"
+CLAUDE_CMD="${CLAUDE_CMD:-/home/deploy/projects/llm-router/bin/llm-router-claude-shim.py}"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"

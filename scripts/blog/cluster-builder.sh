@@ -7,7 +7,7 @@
 #   CLUSTER_ID=$(cluster-builder.sh "чем заменить midjourney" "reviews")
 #
 # Requires in env: XMLRIVER_USER, XMLRIVER_API_KEY, SUPABASE_URL,
-# SUPABASE_SERVICE_ROLE_KEY, CLAUDE_CMD (optional, defaults to /home/deploy/.local/bin/claude).
+# SUPABASE_SERVICE_ROLE_KEY, CLAUDE_CMD (optional, defaults to llm-router Claude shim).
 #
 # Idempotent: if a pending cluster already exists for primary_keyword=$SEED,
 # returns that id instead of creating a new one.
@@ -31,7 +31,7 @@ log() {
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/wordstat.sh"
 
-CLAUDE_CMD="${CLAUDE_CMD:-/home/deploy/.local/bin/claude}"
+CLAUDE_CMD="${CLAUDE_CMD:-/home/deploy/projects/llm-router/bin/llm-router-claude-shim.py}"
 
 SEED="${1:?seed required}"
 CATEGORY="${2:-}"

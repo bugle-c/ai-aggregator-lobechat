@@ -1,0 +1,26 @@
+{
+  "projectId": "gptweb-blog",
+  "enabled": true,
+  "defaultRoute": "chat",
+  "policy": {
+    "allowDirectApiKeys": false,
+    "allowDirectSdk": false,
+    "allowFallbacks": false
+  },
+  "routes": {
+    "chat": {
+      "provider": "anthropic",
+      "profileId": "anthropic:claude-max"
+    },
+    "embedding": null,
+    "images": null,
+    "transcription": null,
+    "vision": {
+      "provider": "anthropic",
+      "profileId": "anthropic:claude-max"
+    }
+  },
+  "meta": {
+    "notes": "SEO/blog/news article automation routed through Claude Max subscription via llm-router."
+  }
+}

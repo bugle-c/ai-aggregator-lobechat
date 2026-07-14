@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# generate-article.sh — Generate an SEO article using Claude Code CLI
+# generate-article.sh — Generate an SEO article through llm-router
 # Runs via systemd timer in multiple slots per day. Each invocation picks
 # the first active category that hasn't received a post today and writes
 # exactly one article into it. Idempotent: re-running within the same day
@@ -13,7 +13,7 @@ BLOG_ENV_FILE="/home/deploy/.config/blog-autogen/env"
 LOG_FILE="/home/deploy/.claude/logs/blog-generate.log"
 API_URL="https://ask.gptweb.ru/admin"
 CRON_SECRET="${CRON_SECRET:-}"
-CLAUDE_CMD="/home/deploy/.local/bin/claude"
+CLAUDE_CMD="${CLAUDE_CMD:-/home/deploy/projects/llm-router/bin/llm-router-claude-shim.py}"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
