@@ -9,18 +9,18 @@
   },
   "routes": {
     "chat": {
-      "provider": "anthropic",
-      "profileId": "anthropic:claude-max"
+      "provider": "antigravity",
+      "profileId": "ag/claude-sonnet-4-6"
     },
     "embedding": null,
     "images": null,
     "transcription": null,
     "vision": {
-      "provider": "anthropic",
-      "profileId": "anthropic:claude-max"
+      "provider": "antigravity",
+      "profileId": "ag/claude-sonnet-4-6"
     }
   },
   "meta": {
-    "notes": "SEO/blog/news article automation routed through Claude Max subscription via llm-router."
+    "notes": "SEO/blog/news article automation routed through llm-router Anthropic Claude model ag/claude-sonnet-4-6."
   }
 }

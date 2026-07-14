@@ -282,7 +282,10 @@ STOP = {'для', 'как', 'что', 'это', 'или', 'без', 'свой', 
         'скачать', 'установить', 'купить', 'выбрать', 'настроить', 'настройка',
         'ноутбук', 'ноутбуке', 'компьютер', 'компьютере',
         'android', 'iphone', 'mac', 'windows', 'linux', 'iphone,'}
-roots = [w for w in re.findall(r\"[а-яёa-z0-9]{4,}\", kw) if w not in STOP]
+roots = [
+    w for w in re.findall(r\"[а-яёa-z0-9]{4,}\", kw)
+    if w not in STOP and not re.fullmatch(r'20[0-9]{2}', w)
+]
 if not roots: sys.exit(0)
 counts = {r: 0 for r in roots}
 for line in sys.stdin:
