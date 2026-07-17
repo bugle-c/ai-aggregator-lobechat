@@ -23,6 +23,32 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
 }
 
+claude_failure_detail() {
+    local raw_output="$1"
+    local stderr_text="$2"
+    if [[ -n "${stderr_text//[[:space:]]/}" ]]; then
+        printf '%s' "$stderr_text"
+        return 0
+    fi
+    printf '%s' "$raw_output" | python3 -c "
+import json, sys
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+    if isinstance(data, dict):
+        detail = data.get('api_error_message') or data.get('error') or data.get('result') or ''
+        if isinstance(detail, (dict, list)):
+            detail = json.dumps(detail, ensure_ascii=False)
+        detail = str(detail).strip()
+        if detail:
+            print(detail)
+            raise SystemExit(0)
+except Exception:
+    pass
+print(raw.strip())
+" 2>/dev/null
+}
+
 source "${SCRIPT_DIR}/notify.sh"
 source "${SCRIPT_DIR}/lib/vpn-guard.sh"   # is_vpn_keyword — RKN/junk guard for news topics
 
@@ -326,7 +352,8 @@ for try in $(seq 1 $MAX_CLAUDE_ATTEMPTS); do
 
     if [[ $CLI_EXIT -ne 0 || -z "$RAW_OUTPUT" ]]; then
         log "Claude CLI try ${try}/${MAX_CLAUDE_ATTEMPTS} failed (exit=$CLI_EXIT, bytes=$(printf '%s' "$RAW_OUTPUT" | wc -c))"
-        [[ -n "$CLI_STDERR" ]] && log "Stderr: ${CLI_STDERR:0:500}"
+        FAILURE_DETAIL=$(claude_failure_detail "$RAW_OUTPUT" "$CLI_STDERR")
+        [[ -n "$FAILURE_DETAIL" ]] && log "Detail: ${FAILURE_DETAIL:0:500}"
         if [[ $try -lt $MAX_CLAUDE_ATTEMPTS ]]; then
             log "Sleeping 30s before retry..."
             sleep 30
@@ -376,7 +403,8 @@ done
 
 if [[ -z "$ARTICLE_JSON" ]]; then
     log "ERROR: Failed to obtain valid article JSON after ${MAX_CLAUDE_ATTEMPTS} attempts (last cli_exit=$CLI_EXIT, last parse_exit=$PARSE_EXIT)"
-    notify_failure "generate-hype-article" "Claude failed after ${MAX_CLAUDE_ATTEMPTS} attempts (cli=$CLI_EXIT, parse=$PARSE_EXIT). Event: ${NEWS_EVENT_ID:0:8}. Stderr: ${CLI_STDERR:0:200}" "$LOG_FILE"
+    FAILURE_DETAIL=$(claude_failure_detail "$RAW_OUTPUT" "$CLI_STDERR")
+    notify_failure "generate-hype-article" "Claude failed after ${MAX_CLAUDE_ATTEMPTS} attempts (cli=$CLI_EXIT, parse=$PARSE_EXIT). Event: ${NEWS_EVENT_ID:0:8}. Detail: ${FAILURE_DETAIL:0:200}" "$LOG_FILE"
     exit 1
 fi
 

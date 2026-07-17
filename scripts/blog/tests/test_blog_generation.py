@@ -72,6 +72,19 @@ def parse_claude_article_json(raw_output: str, force_category: str = "news") -> 
     return article
 
 
+def extract_claude_failure_detail(raw_output: str, stderr: str) -> str:
+    """Mirror the failure detail sent to Telegram when the Claude shim exits non-zero."""
+    if stderr.strip():
+        return stderr.strip()
+    try:
+        data = json.loads(raw_output)
+        if isinstance(data, dict):
+            return (data.get("api_error_message") or data.get("error") or data.get("result") or "").strip()
+    except Exception:
+        pass
+    return raw_output.strip()
+
+
 # ---------- Tests ----------------------------------------------------------
 
 class TopicalDuplicateTests(unittest.TestCase):
@@ -169,6 +182,26 @@ class ParseClaudeArticleJsonTests(unittest.TestCase):
         self.assertEqual(out["category"], "reviews")
 
 
+class ClaudeFailureDetailTests(unittest.TestCase):
+    def test_extracts_llm_router_api_error_from_stdout_when_stderr_empty(self):
+        raw = json.dumps(
+            {
+                "type": "result",
+                "subtype": "error_llm_router",
+                "is_error": True,
+                "api_error_message": "llm-router HTTP 429: QUOTA_EXHAUSTED reset 2026-07-20",
+                "result": "",
+            }
+        )
+        detail = extract_claude_failure_detail(raw, "")
+        self.assertIn("llm-router HTTP 429", detail)
+        self.assertIn("QUOTA_EXHAUSTED", detail)
+
+    def test_stderr_still_wins_for_real_cli_stderr(self):
+        detail = extract_claude_failure_detail('{"api_error_message":"stdout"}', "stderr details")
+        self.assertEqual(detail, "stderr details")
+
+
 class ScriptContractTests(unittest.TestCase):
     """Asserts the bash scripts use the right values & retry shape.
 
@@ -212,6 +245,16 @@ class ScriptContractTests(unittest.TestCase):
 
     def test_hype_claude_cli_has_retry(self):
         self.assertIn("MAX_CLAUDE_ATTEMPTS", self.hype)
+
+    def test_article_claude_failure_notification_uses_stdout_api_error(self):
+        self.assertIn("claude_failure_detail", self.article)
+        self.assertIn("api_error_message", self.article)
+        self.assertIn("Detail:", self.article)
+
+    def test_hype_claude_failure_notification_uses_stdout_api_error(self):
+        self.assertIn("claude_failure_detail", self.hype)
+        self.assertIn("api_error_message", self.hype)
+        self.assertIn("Detail:", self.hype)
 
     def test_hype_does_not_attempt_parse_on_cli_failure(self):
         """When CLI exits non-zero AND output is missing, parse must be skipped."""
