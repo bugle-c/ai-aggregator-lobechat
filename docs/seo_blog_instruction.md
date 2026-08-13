@@ -32,13 +32,13 @@
      refresh-instruction-state.sh раз в сутки. Руками НЕ редактировать,
      изменения затрутся. -->
 
-### 📊 LIVE STATE (auto, обновлено 2026-08-12 04:00 МСК)
+### 📊 LIVE STATE (auto, обновлено 2026-08-13 04:00 МСК)
 
 **Контент:** published **331** · archived 153 · draft 0
 · keywords pending **0** (из них VPN: 0 — должно быть \~0)
 · clusters used 306 · reoptimize pending 0
 
-**Новости:** профиль истекает **2026-08-29** (осталось 17 дн.) · pipeline 🟢 ok (профиль активен)
+**Новости:** профиль истекает **2026-08-29** (осталось 16 дн.) · pipeline 🟢 ok (профиль активен)
 
 **Кадэнс публикаций (7 дней):**
 
@@ -51,12 +51,12 @@
 
 | Сервис            | Статус    | Когда                   |
 | ----------------- | --------- | ----------------------- |
-| `blog-generate`   | 🟢 exit=0 | 2026-08-11 22:26:11 MSK |
-| `blog-hype`       | 🟢 exit=0 | 2026-08-11 19:32:48 MSK |
-| `blog-keywords`   | 🟢 exit=0 | 2026-08-12 03:00:02 MSK |
-| `blog-positions`  | 🟢 exit=0 | 2026-08-11 04:04:57 MSK |
-| `blog-sync`       | 🟢 exit=0 | 2026-08-11 06:00:18 MSK |
-| `blog-reoptimize` | 🟢 exit=0 | 2026-08-12 04:00:01 MSK |
+| `blog-generate`   | 🟢 exit=0 | 2026-08-12 22:00:57 MSK |
+| `blog-hype`       | 🟢 exit=0 | 2026-08-12 19:41:53 MSK |
+| `blog-keywords`   | 🟢 exit=0 | 2026-08-13 03:00:02 MSK |
+| `blog-positions`  | 🟢 exit=0 | 2026-08-12 04:08:00 MSK |
+| `blog-sync`       | 🟢 exit=0 | 2026-08-12 06:00:29 MSK |
+| `blog-reoptimize` | 🟢 exit=0 | 2026-08-13 04:00:02 MSK |
 
 <!-- LIVE-STATE:END -->
 
