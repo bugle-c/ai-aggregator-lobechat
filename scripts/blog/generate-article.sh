@@ -15,6 +15,22 @@ API_URL="https://ask.gptweb.ru/admin"
 CRON_SECRET="${CRON_SECRET:-}"
 CLAUDE_CMD="${CLAUDE_CMD:-/home/deploy/projects/llm-router/bin/llm-router-claude-shim.py}"
 
+# ── ОПЫТ: этот поток идёт на стенд OmniRoute (2026-08-23) ──────────────
+# Стенд поднят рядом с боевым роутером: OmniRoute v3.8.49 в Docker, порт 20229,
+# один импортированный аккаунт Antigravity. Цель — неделя реального трафика
+# для сравнения с 9Router на живой генерации статей.
+# Модель названа коротким именем: у OmniRoute антигравити зовётся `agy/`, а не
+# наш `ag/`, но короткое имя понимают оба роутера — значит откат безопасен.
+# ОТКАТ: удалить этот блок. Прослойка вернётся к `http://127.0.0.1:3300/v1`.
+export LLM_ROUTER_BASE_URL="http://127.0.0.1:20229/v1"
+# Имя с префиксом ОБЯЗАТЕЛЬНО: короткое `claude-sonnet-4-6` OmniRoute однажды увёл
+# в провайдера `codex`, которого у стенда нет, и вернул 404 вместо перехода к живому.
+# Форсируем БЕЗ ${:-}: юнит blog-generate.service жёстко задаёт
+# LLM_ROUTER_MODEL=cx/gpt-5.4, а codex-токен в стенд намеренно НЕ импортирован —
+# у OpenAI refresh-токены ротируются, и общий токен мог бы выбить боевую фабрику.
+# Поэтому на время опыта статью пишет Claude через антигравити.
+export LLM_ROUTER_MODEL="agy/claude-sonnet-4-6"
+
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
 }
