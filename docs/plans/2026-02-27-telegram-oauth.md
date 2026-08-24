@@ -554,7 +554,7 @@ git commit -m "fix: resolve build issues for Telegram auth"
 
 ```bash
 # Add to /opt/lobechat/.env:
-AUTH_TELEGRAM_BOT_TOKEN=8022195574:AAFYWvTL3wm4RQeOpZV-kuiHIq4JJBhU1Nk
+AUTH_TELEGRAM_BOT_TOKEN=$AUTH_TELEGRAM_BOT_TOKEN
 AUTH_TELEGRAM_BOT_USERNAME=gptwebrubot
 AUTH_SSO_PROVIDERS=telegram
 ```
