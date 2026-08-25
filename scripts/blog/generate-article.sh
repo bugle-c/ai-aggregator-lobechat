@@ -478,15 +478,16 @@ CRITICAL: Return ONLY a valid JSON object. No markdown code blocks, no extra tex
   \"meta_keywords\": \"comma,separated,keywords,in,russian\"
 }"
 
-# Try Claude CLI up to 2 times. A non-zero exit (e.g. transient API/rate-limit
-# error) typically returns within seconds with a tiny error JSON that the parser
-# can't extract — retrying once after a short backoff catches the common case
-# without lengthening the slot. The next scheduled timer slot is the long-tail
-# retry path if both attempts here fail.
+# Try Claude CLI up to 3 times. Treat parser failures as retryable too: some
+# models occasionally return a truncated JSON object or add text around it even
+# after a successful CLI exit. The next scheduled timer slot remains the long-tail
+# retry path if all attempts here fail.
 RAW_OUTPUT=""
 CLI_STDERR=""
 CLI_EXIT=0
-MAX_CLAUDE_ATTEMPTS=2
+PARSE_EXIT=0
+ARTICLE_JSON=""
+MAX_CLAUDE_ATTEMPTS=3
 for try in $(seq 1 $MAX_CLAUDE_ATTEMPTS); do
     STDOUT_FILE=$(mktemp /tmp/claude-stdout-XXXXXX.txt)
     STDERR_FILE=$(mktemp /tmp/claude-stderr-XXXXXX.txt)
@@ -497,41 +498,54 @@ for try in $(seq 1 $MAX_CLAUDE_ATTEMPTS); do
     CLI_STDERR=$(cat "$STDERR_FILE")
     rm -f "$STDOUT_FILE" "$STDERR_FILE"
 
-    if [[ $CLI_EXIT -eq 0 && -n "$RAW_OUTPUT" ]]; then
-        break
-    fi
-    log "Claude CLI try ${try}/${MAX_CLAUDE_ATTEMPTS} failed (exit=$CLI_EXIT, bytes=$(printf '%s' "$RAW_OUTPUT" | wc -c))"
-    FAILURE_DETAIL=$(claude_failure_detail "$RAW_OUTPUT" "$CLI_STDERR")
-    [[ -n "$FAILURE_DETAIL" ]] && log "Detail: ${FAILURE_DETAIL:0:500}"
-    if [[ $try -lt $MAX_CLAUDE_ATTEMPTS ]]; then
-        log "Sleeping 30s before retry..."
-        sleep 30
-    fi
-done
-
-if [[ $CLI_EXIT -ne 0 || -z "$RAW_OUTPUT" ]]; then
-    log "ERROR: Claude CLI exhausted ${MAX_CLAUDE_ATTEMPTS} attempts (last exit=$CLI_EXIT)"
-    FAILURE_DETAIL=$(claude_failure_detail "$RAW_OUTPUT" "$CLI_STDERR")
-    notify_failure "generate-article" "Claude CLI failed after ${MAX_CLAUDE_ATTEMPTS} attempts (exit=$CLI_EXIT). Keyword: ${KEYWORD:-unknown}. Detail: ${FAILURE_DETAIL:0:200}" "$LOG_FILE"
-    exit 1
-fi
-
-log "Claude CLI returned $(echo "$RAW_OUTPUT" | wc -c) bytes"
-
-# Extract the article JSON from Claude CLI wrapper (--output-format json wraps in {"result": "..."})
-ARTICLE_JSON=$(echo "$RAW_OUTPUT" | python3 -c "
+    if [[ $CLI_EXIT -ne 0 || -z "$RAW_OUTPUT" ]]; then
+        log "Claude CLI try ${try}/${MAX_CLAUDE_ATTEMPTS} failed (exit=$CLI_EXIT, bytes=$(printf '%s' "$RAW_OUTPUT" | wc -c))"
+        FAILURE_DETAIL=$(claude_failure_detail "$RAW_OUTPUT" "$CLI_STDERR")
+        [[ -n "$FAILURE_DETAIL" ]] && log "Detail: ${FAILURE_DETAIL:0:500}"
+        ARTICLE_JSON=""
+    else
+        log "Claude CLI returned $(echo "$RAW_OUTPUT" | wc -c) bytes on try ${try}"
+        # Extract the article JSON from Claude CLI wrapper (--output-format json wraps in {"result": "..."}).
+        # Use JSONDecoder.raw_decode from each '{' candidate instead of a greedy rfind('}') so trailing prose
+        # or braces in non-JSON text don't poison an otherwise valid object.
+        ARTICLE_JSON=$(echo "$RAW_OUTPUT" | python3 -c "
 import json, sys, re
-data = json.load(sys.stdin)
-result = data.get('result', '').strip()
-result = re.sub(r'^\`\`\`(?:json)?\s*\n?', '', result)
-result = re.sub(r'\n?\`\`\`\s*$', '', result)
+
+def iter_json_objects(text):
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r'\{', text):
+        try:
+            obj, _ = decoder.raw_decode(text[match.start():])
+        except Exception:
+            continue
+        if isinstance(obj, dict):
+            yield obj
+
+try:
+    data = json.load(sys.stdin)
+except Exception as exc:
+    print(f'ERROR: wrapper JSON parse failed: {exc}', file=sys.stderr); sys.exit(1)
+result = data.get('result', '')
+if not isinstance(result, str):
+    print('ERROR: wrapper result is not a string', file=sys.stderr); sys.exit(1)
 result = result.strip()
-start = result.find('{')
-end = result.rfind('}')
-if start == -1 or end == -1 or end <= start:
-    print('ERROR: No JSON object found in result', file=sys.stderr); sys.exit(1)
-article = json.loads(result[start:end+1])
-# Force category in case LLM ignored the instruction
+result = re.sub(r'^\`\`\`(?:json)?\s*\n?', '', result)
+result = re.sub(r'\n?\`\`\`\s*$', '', result).strip()
+article = None
+# Fast path: exact JSON object.
+try:
+    maybe = json.loads(result)
+    if isinstance(maybe, dict):
+        article = maybe
+except Exception:
+    pass
+if article is None:
+    for obj in iter_json_objects(result):
+        if all(obj.get(k) for k in ('title', 'slug', 'content')):
+            article = obj
+            break
+if article is None:
+    print('ERROR: No complete article JSON object found in result', file=sys.stderr); sys.exit(1)
 article['category'] = '${TARGET_CAT}'
 required = ['title', 'slug', 'content', 'category']
 missing = [f for f in required if not article.get(f)]
@@ -539,12 +553,24 @@ if missing:
     print(f'ERROR: Missing fields: {missing}', file=sys.stderr); sys.exit(1)
 print(json.dumps(article, ensure_ascii=False))
 " 2>&1)
+        PARSE_EXIT=$?
+        if [[ $PARSE_EXIT -eq 0 && -n "$ARTICLE_JSON" && "$ARTICLE_JSON" != ERROR:* ]]; then
+            break
+        fi
+        log "Parse failed on try ${try}/${MAX_CLAUDE_ATTEMPTS} (exit=$PARSE_EXIT): ${ARTICLE_JSON:0:300}"
+        ARTICLE_JSON=""
+    fi
 
-PARSE_EXIT=$?
-if [[ $PARSE_EXIT -ne 0 || -z "$ARTICLE_JSON" || "$ARTICLE_JSON" == ERROR:* ]]; then
-    log "ERROR: Failed to extract article JSON from Claude output (exit=$PARSE_EXIT)"
-    log "Parse output: ${ARTICLE_JSON:0:300}"
-    notify_failure "generate-article" "Failed to parse article JSON from Claude output. Keyword: ${KEYWORD:-unknown}" "$LOG_FILE"
+    if [[ $try -lt $MAX_CLAUDE_ATTEMPTS && -z "$ARTICLE_JSON" ]]; then
+        log "Sleeping 30s before retry..."
+        sleep 30
+    fi
+done
+
+if [[ -z "$ARTICLE_JSON" ]]; then
+    log "ERROR: Failed to obtain valid article JSON after ${MAX_CLAUDE_ATTEMPTS} attempts (last cli_exit=$CLI_EXIT, last parse_exit=$PARSE_EXIT)"
+    FAILURE_DETAIL=$(claude_failure_detail "$RAW_OUTPUT" "$CLI_STDERR")
+    notify_failure "generate-article" "Claude failed after ${MAX_CLAUDE_ATTEMPTS} attempts (cli=$CLI_EXIT, parse=$PARSE_EXIT). Keyword: ${KEYWORD:-unknown}. Detail: ${FAILURE_DETAIL:0:200}" "$LOG_FILE"
     exit 1
 fi
 
