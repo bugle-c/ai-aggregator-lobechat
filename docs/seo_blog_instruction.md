@@ -32,7 +32,7 @@
      refresh-instruction-state.sh раз в сутки. Руками НЕ редактировать,
      изменения затрутся. -->
 
-### 📊 LIVE STATE (auto, обновлено 2026-08-31 04:00 МСК)
+### 📊 LIVE STATE (auto, обновлено 2026-09-01 04:00 МСК)
 
 **Контент:** published **347** · archived 154 · draft 0
 · keywords pending **0** (из них VPN: 0 — должно быть \~0)
@@ -43,18 +43,17 @@
 **Кадэнс публикаций (7 дней):**
 
 - 2026-08-25 — 7 постов
-- 2026-08-24 — 6 постов
 
 **Таймеры (последний запуск):**
 
 | Сервис            | Статус    | Когда                   |
 | ----------------- | --------- | ----------------------- |
-| `blog-generate`   | 🟢 exit=0 | 2026-08-30 22:39:03 MSK |
-| `blog-hype`       | 🔴 exit=1 | 2026-08-30 19:35:15 MSK |
-| `blog-keywords`   | 🟢 exit=0 | 2026-08-31 03:00:01 MSK |
-| `blog-positions`  | 🟢 exit=0 | 2026-08-30 04:02:09 MSK |
-| `blog-sync`       | 🟢 exit=0 | 2026-08-30 06:00:38 MSK |
-| `blog-reoptimize` | 🟢 exit=0 | 2026-08-31 04:00:02 MSK |
+| `blog-generate`   | 🟢 exit=0 | 2026-08-31 22:32:40 MSK |
+| `blog-hype`       | 🔴 exit=1 | 2026-08-31 19:38:49 MSK |
+| `blog-keywords`   | 🟢 exit=0 | 2026-09-01 03:00:01 MSK |
+| `blog-positions`  | 🟢 exit=0 | 2026-08-31 04:08:04 MSK |
+| `blog-sync`       | 🟢 exit=0 | 2026-08-31 06:00:42 MSK |
+| `blog-reoptimize` | 🟢 exit=0 | 2026-09-01 04:00:01 MSK |
 
 <!-- LIVE-STATE:END -->
 
