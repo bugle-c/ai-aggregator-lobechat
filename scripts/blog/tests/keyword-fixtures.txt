@@ -37,3 +37,7 @@ BLOCK	дпи обход на пк
 PASS	chat gpt подписка
 PASS	Подписка ChatGPT в 2026: тарифы, цены и оплата из России
 PASS	как gpt подписка окупается в ежедневных задачах
+BLOCK	dpi обход на пк
+BLOCK	goodbyedpi скачать
+PASS	kak-gpt-podpiska-okupaetsya-v-ezhednevnyh-zadachah
+PASS	chatgpt-podpiska-plus-2026

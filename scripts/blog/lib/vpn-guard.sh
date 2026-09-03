@@ -26,14 +26,14 @@
 # 2026-09-03 leak: transliterated / misspelled forms bypassed the guard and 8
 # VPN/DPI articles auto-published (slugs skachat-vrn-*, bye-bye-dpi-*,
 # ai-bez-ogranicheniy-*). Added: врн/vrn (ВПН typed as ВРН), дпай/dpai + a
-# word-bounded дпи (bare "дпи" would hit "подписка"), bye-bye/байбай/byedpi/
+# word-bounded дпи and dpi (bare they hit "подписка"/"podpiska"), bye-bye/байбай/byedpi/
 # goodbyedpi (ByeByeDPI tool), zapret (DPI tool), v2raytun. The circumvention
 # set below already has bez-ogranich* translit; keep both sides in sync with
 # webgpt-admin/lib/keyword-junk.ts and the landing 404 regex
 # (webgpt-landing app/blog/[category]/[slug]/page.tsx).
 
 # shellcheck disable=SC2034  # VPN_RE is consumed by sourcing scripts (incl. SQL ~*)
-VPN_RE='(vpn|впн|vless|v2ray|xray|amnezia|amneziawg|amnezi|амнези|shadowsocks|wireguard|hiddify|outline|прокси|proxy|обход[[:space:]]*блок|разблок|dpi|byebyedpi|дядя[[:space:]]?ваня|дядяваня|хапп|happ|щука|shchuka|shuka|радмин|radmin|windscribe|hidemy|зугвпн|zoog|bebra|бебра|catserver|lagom|fkey|octohide|onevps|prstovpn|psysovet|planet[[:space:]]?vpn|планет[[:space:]]?впн|vipien|випиэн|browsec|hotspot[[:space:]]?shield|zenmate|betternet|psiphon|lantern|туннел|tunnel|врн|vrn|дпай|dpai|(^|[^а-яё])дпи([^а-яё]|$)|bye[[:space:]_-]?bye|байбай|бай[[:space:]_-]?бай|byedpi|goodbyedpi|zapret|v2raytun)'
+VPN_RE='(vpn|впн|vless|v2ray|xray|amnezia|amneziawg|amnezi|амнези|shadowsocks|wireguard|hiddify|outline|прокси|proxy|обход[[:space:]]*блок|разблок|(^|[^a-z])dpi([^a-z]|$)|byebyedpi|дядя[[:space:]]?ваня|дядяваня|хапп|happ|щука|shchuka|shuka|радмин|radmin|windscribe|hidemy|зугвпн|zoog|bebra|бебра|catserver|lagom|fkey|octohide|onevps|prstovpn|psysovet|planet[[:space:]]?vpn|планет[[:space:]]?впн|vipien|випиэн|browsec|hotspot[[:space:]]?shield|zenmate|betternet|psiphon|lantern|туннел|tunnel|врн|vrn|дпай|dpai|(^|[^а-яё])дпи([^а-яё]|$)|bye[[:space:]_-]?bye|байбай|бай[[:space:]_-]?бай|byedpi|goodbyedpi|zapret|v2raytun)'
 
 # AI tokens that must never be treated as keyboard-layout gibberish.
 VPN_GUARD_AI_RE='(gpt|chatgpt|claude|gemini|grok|llama|qwen|deepseek|midjourney|openai|google|telegram|\bai\b|api|seo)'
