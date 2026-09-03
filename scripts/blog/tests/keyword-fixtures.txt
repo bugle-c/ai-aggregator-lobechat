@@ -24,3 +24,16 @@ BLOCK	chat-bez-pravil-tg-guide-2026
 BLOCK	vipien скачать на андроид
 BLOCK	ИИ-чат без фильтров
 BLOCK	neyronka-bez-cenzury-obzor-2026
+BLOCK	скачать врн бесплатно
+BLOCK	skachat-vrn-free-android-iphone-russia-prompts-2026
+BLOCK	бай бай дпай на пк скачать
+BLOCK	bye-bye-dpi-pc-download-prompts-2026
+BLOCK	Бай бай дпай на ПК скачать в 2026: где взять ByeDPI, ByeByeDPI и GoodbyeDPI
+BLOCK	ii-bez-ogranicheniy-guide-2026
+BLOCK	ИИ без ограничений и фильтров: пошаговый гайд 2026
+BLOCK	v2raytun скачать на пк
+BLOCK	zapret для gemini
+BLOCK	дпи обход на пк
+PASS	chat gpt подписка
+PASS	Подписка ChatGPT в 2026: тарифы, цены и оплата из России
+PASS	как gpt подписка окупается в ежедневных задачах

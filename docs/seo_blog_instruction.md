@@ -463,6 +463,15 @@ ORDER BY blended_score DESC NULLS LAST;
    **раскладочный мусор** (all-latin без гласных и без ИИ-токена — `dgy yf gr`
    \= «впн на пк»). Зеркало в TS: `webgpt-admin/lib/keyword-junk.ts` (держать в
    синхроне). Тест: `scripts/blog/tests/test-keyword-guard.sh` + фикстуры.
+   **С 2026-09-03 guard режет и транслит/опечатки** — `врн`/`vrn` («впн» в
+   раскладке-опечатке), `дпай`/`dpai`, `дпи` (только как отдельное слово —
+   голое `дпи` бьёт по «по-дпи-ске»), `bye-bye`/`байбай`/`byedpi`/`goodbyedpi`,
+   `zapret`, `v2raytun`, `bez-ogranich*`. Причина: 8 статей
+   (`skachat-vrn-*`, `bye-bye-dpi-*`, `ai-bez-ogranicheniy-*`) прошли
+   guard по транслиту и жили в проде до 2026-09-03. Третья копия regex —
+   404-гейт архивных слагов в `webgpt-landing app/blog/[category]/[slug]/page.tsx`
+   (archived + canonical_url → 301 только если slug НЕ VPN); правя guard,
+   правь все три.
    ⚠️ **Новый VPN-бренд блокировать ТОЛЬКО в `lib/vpn-guard.sh`** — не дублируй
    regex по скриптам. Дублирование и было причиной инцидента 2026-06-10:
    producer-копию усилили брендами, а генератор-копию забыли → бренд-ключи
