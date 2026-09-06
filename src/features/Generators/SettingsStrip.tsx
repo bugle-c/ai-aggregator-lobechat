@@ -1,9 +1,9 @@
 'use client';
 
-import { ActionIcon, Tooltip } from '@lobehub/ui';
+import { Tooltip } from '@lobehub/ui';
 import { Button, Drawer, Popover } from 'antd';
 import { createStyles } from 'antd-style';
-import { ChevronDown, Lock, Settings2 } from 'lucide-react';
+import { ChevronDown, Lock, SlidersHorizontal } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 /** Model names longer than this are ellipsised in the chip; the full name goes in `title`. */
-const CHIP_LABEL_MAX = 14;
+const CHIP_LABEL_MAX = 24;
 
 const truncateChipLabel = (label: string): string =>
   label.length > CHIP_LABEL_MAX ? `${label.slice(0, CHIP_LABEL_MAX - 1)}…` : label;
@@ -23,13 +23,49 @@ const useStyles = createStyles(({ css, token }) => ({
     gap: 8px;
     min-inline-size: 0;
   `,
-  row: css`
+  /**
+   * Chips wrap onto a second line instead of scrolling: at the sidebar's
+   * 288px the video strip (model + aspect + duration) never fit on one line
+   * next to the cost, and a horizontally clipped row read as broken.
+   */
+  chips: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+
+    min-inline-size: 0;
+  `,
+  /** Cost on the left, the «Ещё настройки» disclosure on the right. */
+  footer: css`
     display: flex;
     gap: 8px;
     align-items: center;
-    min-inline-size: 0;
+    justify-content: space-between;
   `,
-  /** The inline «Дополнительные настройки» panel under the chip row. */
+  toggle: css`
+    gap: 4px;
+
+    margin-inline-start: auto;
+    padding-inline: 6px;
+
+    font-size: 12px;
+    color: ${token.colorTextSecondary};
+
+    &:hover {
+      color: ${token.colorText};
+    }
+  `,
+  toggleOpen: css`
+    color: ${token.colorPrimary} !important;
+  `,
+  chevron: css`
+    transition: transform 0.2s ease;
+  `,
+  chevronOpen: css`
+    transform: rotate(180deg);
+  `,
+  /** The inline «Ещё настройки» panel under the footer. */
   advanced: css`
     display: flex;
     flex-direction: column;
@@ -46,44 +82,21 @@ const useStyles = createStyles(({ css, token }) => ({
     font-weight: 500;
     color: ${token.colorTextSecondary};
   `,
-  gearOpen: css`
-    color: ${token.colorPrimary} !important;
-    background: ${token.colorPrimaryBg} !important;
-  `,
   /**
-   * Left group scrolls (hidden scrollbar, right-edge fade) so on a 360px
-   * phone the video strip's third chip slides under the fixed right group
-   * instead of wrapping onto a second row.
+   * The Popover's click target. antd `Popover(Tooltip(Button))` attaches the
+   * click to the Tooltip element, not the DOM button, and the chip stopped
+   * opening as soon as it had a tooltip (locked / mismatch state). A plain
+   * span between the two triggers fixes that.
    */
-  scroller: css`
-    scrollbar-width: none;
-
-    overflow-x: auto;
-    display: flex;
-    flex: 1 1 auto;
-    gap: 8px;
-    align-items: center;
-
-    min-inline-size: 0;
-
-    mask-image: linear-gradient(90deg, #000 calc(100% - 16px), transparent 100%);
-
-    -webkit-overflow-scrolling: touch;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  `,
-  fixed: css`
-    display: flex;
+  chipWrap: css`
+    display: inline-flex;
     flex: 0 0 auto;
-    gap: 4px;
-    align-items: center;
+    max-inline-size: 100%;
   `,
   chip: css`
     flex: 0 0 auto;
     gap: 6px;
-    max-inline-size: 220px;
+    max-inline-size: 240px;
     white-space: nowrap;
   `,
   chipOpen: css`
@@ -195,7 +208,7 @@ export const SettingsChip = memo<ChipProps>(
         trigger="click"
         onOpenChange={setOpen}
       >
-        {withTooltip}
+        <span className={styles.chipWrap}>{withTooltip}</span>
       </Popover>
     );
   },
@@ -219,9 +232,10 @@ AdvancedItem.displayName = 'SettingsAdvancedItem';
 interface StripProps {
   /**
    * The model's remaining knobs (seed, resolution, steps, references…) that
-   * have no chip of their own. Rendered inline under the chip row, toggled by
-   * ⚙ — no drawer, so it can never cover the prompt or the CTA. Omit it when
-   * the model has nothing extra and the gear disappears.
+   * have no chip of their own. Rendered inline under the footer, toggled by
+   * the «Ещё настройки ▾» disclosure — no drawer, so it can never cover the
+   * prompt or the CTA. Omit it when the model has nothing extra and the
+   * disclosure disappears.
    */
   advanced?: ReactNode;
   children: ReactNode;
@@ -229,13 +243,14 @@ interface StripProps {
 }
 
 /**
- * The settings row above the prompt input:
- * `[Model ▾][3:4 ▾][5 s ▾] … [≈ 12 cr][⚙]`, plus the collapsible
- * «Дополнительные настройки» panel right under it.
+ * The settings block above the prompt input:
+ *
+ *   [Model ▾] [3:4 ▾] [5 s ▾]        ← chips, wrapping
+ *   ≈ 12 cr          Ещё настройки ▾  ← footer
+ *   ┌ advanced panel (when open) ┐
  *
  * Presentational — the modality bindings (`FlowSidebarControls`) decide
- * which chips exist and wire them to the stores. Two groups: the chips
- * scroll, the cost and the gear stay put.
+ * which chips exist and wire them to the stores.
  */
 const SettingsStrip = memo<StripProps>(({ advanced, children, cost }) => {
   const { styles, cx } = useStyles();
@@ -244,12 +259,13 @@ const SettingsStrip = memo<StripProps>(({ advanced, children, cost }) => {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const insufficient = cost.credits !== null && !cost.sufficient;
   const showAdvanced = !!advanced && advancedOpen;
+  const showFooter = cost.credits !== null || !!advanced;
 
   return (
     <div className={styles.root}>
-      <div className={styles.row}>
-        <div className={styles.scroller}>{children}</div>
-        <div className={styles.fixed}>
+      <div className={styles.chips}>{children}</div>
+      {showFooter && (
+        <div className={styles.footer}>
           {cost.credits !== null &&
             (insufficient ? (
               <Tooltip title={t('preset.insufficientCredits')}>
@@ -266,18 +282,23 @@ const SettingsStrip = memo<StripProps>(({ advanced, children, cost }) => {
               <span className={styles.cost}>{t('preset.credits', { count: cost.credits })}</span>
             ))}
           {advanced && (
-            <ActionIcon
+            <Button
               aria-expanded={advancedOpen}
-              aria-label={t('preset.settings.more')}
-              className={cx(advancedOpen && styles.gearOpen)}
-              icon={Settings2}
+              className={cx(styles.toggle, advancedOpen && styles.toggleOpen)}
+              icon={<SlidersHorizontal size={14} />}
               size="small"
-              title={t('preset.settings.more')}
+              type="text"
               onClick={() => setAdvancedOpen((v) => !v)}
-            />
+            >
+              {t('preset.settings.more')}
+              <ChevronDown
+                className={cx(styles.chevron, advancedOpen && styles.chevronOpen)}
+                size={14}
+              />
+            </Button>
           )}
         </div>
-      </div>
+      )}
       {showAdvanced && <div className={styles.advanced}>{advanced}</div>}
     </div>
   );

@@ -237,10 +237,14 @@ const FlowSidebarControls = memo(() => {
     [aspect.enumValues],
   );
 
-  const showStartFrame = supportsImageUrl && !showPhotoChip;
+  // With a style selected only the knobs the style leaves open remain: an
+  // i2v style asks for its photo through the «Фото» chip, everything else
+  // is text-to-video — start/end frame uploaders would only confuse.
+  const showStartFrame = supportsImageUrl && !showPhotoChip && !preset;
+  const showEndFrame = supportsEndImageUrl && !preset;
   const hasAdvanced =
     showStartFrame ||
-    supportsEndImageUrl ||
+    showEndFrame ||
     supportsResolution ||
     supportsSeed ||
     supportsGenerateAudio ||
@@ -252,7 +256,7 @@ const FlowSidebarControls = memo(() => {
       advanced={
         hasAdvanced ? (
           <VideoAdvanced
-            showEndFrame={supportsEndImageUrl}
+            showEndFrame={showEndFrame}
             showResolution={supportsResolution}
             showSeed={supportsSeed}
             showStartFrame={showStartFrame}

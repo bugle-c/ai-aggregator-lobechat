@@ -388,7 +388,7 @@
   "preset.settings.duration": "Длительность",
   "preset.settings.durationUnit": "{{count}} с",
   "preset.settings.model": "Модель",
-  "preset.settings.more": "Дополнительные настройки",
+  "preset.settings.more": "Ещё настройки",
   "preset.settings.photo": "Фото",
   "preset.settings.photoAttached": "Фото добавлено",
   "preset.settings.photoMissing": "Добавьте фото для этого стиля",

@@ -150,13 +150,19 @@ const FlowSidebarControls = memo(() => {
 
   const aspectItems = useMemo(() => aspectOptions.map((v) => ({ value: v })), [aspectOptions]);
 
+  // With a style selected only the knobs the style leaves open remain:
+  // references and exact pixel dimensions are the style's business.
+  const showImageUrl = supportsImageUrl && !preset;
+  const showImageUrls = supportsImageUrls && !preset;
+  const showDimensions = showDimensionControl && !preset;
+
   const hasAdvanced =
-    supportsImageUrl ||
-    supportsImageUrls ||
+    showImageUrl ||
+    showImageUrls ||
     supportsSize ||
     supportsQuality ||
     supportsResolution ||
-    showDimensionControl ||
+    showDimensions ||
     supportsSteps ||
     supportsCfg ||
     supportsSeed;
@@ -168,9 +174,9 @@ const FlowSidebarControls = memo(() => {
         hasAdvanced ? (
           <ImageAdvanced
             showCfg={supportsCfg}
-            showDimensions={showDimensionControl}
-            showImageUrl={supportsImageUrl}
-            showImageUrls={supportsImageUrls}
+            showDimensions={showDimensions}
+            showImageUrl={showImageUrl}
+            showImageUrls={showImageUrls}
             showQuality={supportsQuality}
             showResolution={supportsResolution}
             showSeed={supportsSeed}
