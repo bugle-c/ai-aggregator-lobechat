@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
+import { resolveVideoEndpoint } from '../../../packages/model-runtime/src/providers/wavespeed/utils/pairedEndpoint';
 import {
+  DEFAULT_MODEL,
   deriveAttribution,
   deriveCategory,
   deriveTitle,
   FALLBACK_CATEGORY,
+  I2V_RECOMMENDED_MODEL,
   isSourcePostId,
   MAX_TITLE_LENGTH,
   posterKeyFor,
   previewKeyFor,
   publicUrlFor,
+  recommendedModelFor,
   slugFor,
   trimLabel,
 } from '../derive';
@@ -31,6 +35,29 @@ describe('slugFor / media keys', () => {
     expect(publicUrlFor('presets/trend-123.mp4')).toBe(
       'https://ask.gptweb.ru/s3/lobe/presets/trend-123.mp4',
     );
+  });
+});
+
+describe('recommendedModelFor', () => {
+  it('pins i2v video presets to the paired text-to-video card, not an image-to-video id', () => {
+    expect(recommendedModelFor('video', true)).toBe(I2V_RECOMMENDED_MODEL);
+    // The i2v cards are disabled in model-bank; the UI could never switch to one.
+    expect(I2V_RECOMMENDED_MODEL).not.toContain('image-to-video');
+  });
+
+  it('routes to the image-to-video endpoint once a reference image is attached', () => {
+    expect(resolveVideoEndpoint(I2V_RECOMMENDED_MODEL, { imageUrl: 'https://cdn/x.jpg' })).toBe(
+      'bytedance/seedance-2.0-fast/image-to-video',
+    );
+    expect(resolveVideoEndpoint(I2V_RECOMMENDED_MODEL, { imageUrl: null })).toBe(
+      I2V_RECOMMENDED_MODEL,
+    );
+  });
+
+  it('leaves t2v and image presets on the modality default', () => {
+    expect(recommendedModelFor('video', false)).toBe(DEFAULT_MODEL.video);
+    expect(recommendedModelFor('image', true)).toBe(DEFAULT_MODEL.image);
+    expect(recommendedModelFor('image', false)).toBe(DEFAULT_MODEL.image);
   });
 });
 

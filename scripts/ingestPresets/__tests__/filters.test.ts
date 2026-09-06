@@ -78,6 +78,7 @@ describe('detectRequiresImage', () => {
     'place @[image1] into the scene',
     'animate the uploaded image of a cat',
     'use the uploaded photo as the base',
+    'create a separate poster for each uploaded photo',
     'keep the reference face consistent',
   ])('flags %s', (prompt) => {
     expect(detectRequiresImage(prompt)).toBe(true);
@@ -165,11 +166,34 @@ describe('evaluateItem', () => {
     });
   });
 
-  it('queues i2v items until Ф5 ships the model-switch UX', () => {
+  it('publishes an i2v item that passes the other rules, flagged requiresImage (Ф5)', () => {
     const result = evaluate(item({ prompt: `${LONG_PROMPT}. Use @image1 as the subject.` }));
-    expect(result.requiresImage).toBe(true);
-    expect(result.verdict).toBe('queue');
-    expect(result.reasons).toContain('requires-image-pending-f5');
+    expect(result).toMatchObject({ reasons: [], requiresImage: true, verdict: 'publish' });
+  });
+
+  it('keeps image (i2i) reference-image prompts queued — no image-side gate yet', () => {
+    const [{ evaluation }] = evaluateBatch(
+      [
+        item({
+          image: 'https://images.meigen.ai/tweets/1/0.jpg',
+          prompt: `${LONG_PROMPT}. Use @image1 as the subject.`,
+          videoUrl: undefined,
+        }),
+      ],
+      { known: new Set(), modality: 'image' },
+    );
+    expect(evaluation).toMatchObject({
+      reasons: ['requires-image-i2i-pending'],
+      requiresImage: true,
+      verdict: 'queue',
+    });
+  });
+
+  it('still queues an i2v item that fails a quality rule', () => {
+    const result = evaluate(
+      item({ prompt: `${LONG_PROMPT}. Use @image1 as the subject.`, stats: { likes: 3 } }),
+    );
+    expect(result).toMatchObject({ reasons: ['low-likes'], requiresImage: true, verdict: 'queue' });
   });
 
   it('reports every failed rule, not just the first', () => {
