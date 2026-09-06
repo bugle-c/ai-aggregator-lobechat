@@ -18,6 +18,11 @@ interface Props {
   className?: string;
   /** Used as the fallback label inside the placeholder if the MP4 fails to load. */
   fallbackLabel?: string;
+  /**
+   * Reports when the `<video>` is actually mounted and playing, so the
+   * card can drop its play badge while the motion itself is the cue.
+   */
+  onPlayingChange?: (playing: boolean) => void;
   /** Still frame. This is the resting state of the card — see below. */
   posterUrl?: string;
   previewUrl: string;
@@ -100,7 +105,15 @@ const isImageUrl = (url: string): boolean =>
  * goes black.
  */
 const PresetMP4Player = memo<Props>(
-  ({ ariaHidden, autoplayInView = true, className, fallbackLabel, posterUrl, previewUrl }) => {
+  ({
+    ariaHidden,
+    autoplayInView = true,
+    className,
+    fallbackLabel,
+    onPlayingChange,
+    posterUrl,
+    previewUrl,
+  }) => {
     const isMobile = useIsMobile();
     const reducedMotion = usePrefersReducedMotion();
     const isImage = isImageUrl(previewUrl);
@@ -115,6 +128,13 @@ const PresetMP4Player = memo<Props>(
     useEffect(() => {
       previewPlayback.setMax(isMobile ? MAX_CONCURRENT_MOBILE : MAX_CONCURRENT_DESKTOP);
     }, [isMobile]);
+
+    // A video that errored or was unmounted mid-play must report "stopped",
+    // hence deriving from `playing && !errored` rather than the raw grant.
+    const effectivelyPlaying = playing && !errored && !isImage;
+    useEffect(() => {
+      onPlayingChange?.(effectivelyPlaying);
+    }, [effectivelyPlaying, onPlayingChange]);
 
     // Registration and visibility reporting are one unit: a preview the
     // coordinator cannot hear from is a preview it can never revoke.
