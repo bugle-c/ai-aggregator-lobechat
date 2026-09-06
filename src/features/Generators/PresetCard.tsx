@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import type { PresetBadge, PresetListItem } from '@/types/preset';
 
+import { categoryLabel } from './PRESET_CATEGORIES';
 import { cardMediaAspectRatio } from './presetAspect';
 import PresetMP4Player from './PresetMP4Player';
 
@@ -77,26 +78,33 @@ const CATEGORY_HINTS: Record<string, string> = {
   realistic: 'Опишите сцену; чем конкретнее детали — тем точнее результат.',
 };
 
+/**
+ * "1,2 тыс." rather than "1200" — the number is a texture cue on a 140px
+ * card, not a figure anyone reads digit by digit.
+ */
+const compactCount = new Intl.NumberFormat('ru-RU', {
+  maximumFractionDigits: 1,
+  notation: 'compact',
+});
+
 const useStyles = createStyles(({ css, token }) => ({
   card: css`
     cursor: pointer;
 
-    position: relative;
-
     overflow: hidden;
-    display: block;
-    break-inside: avoid;
+    display: flex;
+    flex-direction: column;
 
     width: 100%;
-    margin-block: 0 12px;
-    margin-inline: 0;
+    margin: 0;
     padding: 0;
-    border: 1px solid transparent;
+    border: 1px solid ${token.colorBorderSecondary};
     border-radius: 12px;
 
     color: inherit;
+    text-align: start;
 
-    background: ${token.colorFillTertiary};
+    background: ${token.colorBgContainer};
 
     transition:
       transform 0.18s ease,
@@ -115,10 +123,73 @@ const useStyles = createStyles(({ css, token }) => ({
       opacity: 1;
     }
   `,
+  /**
+   * The media box. Every card in a grid shares one aspect ratio (see
+   * `cardMediaAspectRatio`) and the preview is cover-cropped into it, so
+   * rows stay flush and the captions below them line up.
+   */
+  media: css`
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    background: ${token.colorFillTertiary};
+  `,
+  /**
+   * Always visible, below the media, in the page's own text colour.
+   *
+   * The title used to be the only permanent text and it sat in a gradient
+   * over the preview; the Russian description and the category hint lived
+   * exclusively in a `:hover` overlay, which touch devices never trigger.
+   * Since legacy titles are English, a phone user saw an English word on a
+   * picture and nothing else. Sized to stay legible on a ~140px-wide card
+   * (two columns on a small phone).
+   */
+  caption: css`
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    padding-block: 8px;
+    padding-inline: 10px;
+  `,
+  captionTitle: css`
+    overflow: hidden;
+
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.25;
+    color: ${token.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  captionSub: css`
+    overflow: hidden;
+
+    font-size: 11px;
+    line-height: 1.3;
+    color: ${token.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  /** Author handle + popularity. Full credit lives in the zoom modal. */
+  captionMeta: css`
+    overflow: hidden;
+
+    font-size: 11px;
+    line-height: 1.3;
+    color: ${token.colorTextQuaternary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
   active: css`
     border-color: ${token.colorPrimary};
     border-width: 2px;
   `,
+  /**
+   * Desktop-only enrichment: the same facts as the caption plus the usage
+   * hint, larger, over the preview. Hidden entirely where there is no
+   * hover, so it can never be the only carrier of information.
+   */
   hoverOverlay: css`
     pointer-events: none;
 
@@ -136,6 +207,10 @@ const useStyles = createStyles(({ css, token }) => ({
     background: linear-gradient(180deg, rgb(0 0 0 / 0%) 0%, rgb(0 0 0 / 80%) 60%);
 
     transition: opacity 0.18s ease;
+
+    @media (hover: none) {
+      display: none;
+    }
   `,
   title: css`
     font-size: 13px;
@@ -155,25 +230,6 @@ const useStyles = createStyles(({ css, token }) => ({
     font-size: 11px;
     line-height: 1.3;
     color: rgb(255 255 255 / 75%);
-  `,
-  bottomLabel: css`
-    pointer-events: none;
-
-    position: absolute;
-    inset-block-end: 0;
-    inset-inline: 0;
-
-    padding-block: 24px 10px;
-    padding-inline: 12px;
-
-    font-size: 13px;
-    font-weight: 600;
-    color: #fff;
-    text-transform: uppercase;
-
-    background: linear-gradient(180deg, transparent 0%, rgb(0 0 0 / 70%) 100%);
-
-    transition: opacity 0.18s ease;
   `,
   zoomBtn: css`
     /* Hidden until hover. Without pointer-events:none the fully
@@ -226,82 +282,100 @@ const PresetCard = memo<Props>(({ isActive, mediaAspectRatio, onClick, onZoom, p
   const hint = CATEGORY_HINTS[preset.category] ?? GENERIC_HINT;
   const isMobile = useIsMobile();
 
+  // Ingested rows often have no description; the Russian category label is
+  // still more use than a blank line, and it is never English.
+  const subtitle = preset.description || categoryLabel(preset.category);
+
   return (
     <button
       aria-label={preset.title}
       className={cx(styles.card, isActive && styles.active)}
-      style={{ aspectRatio: mediaAspectRatio ?? cardMediaAspectRatio(preset.modality) }}
       type="button"
       onClick={() => onClick(preset)}
     >
-      <PresetMP4Player
-        ariaHidden
-        // Desktop plays on hover — that is a deliberate "show me this one".
-        // Touch has no hover, so there the most-visible card plays instead.
-        autoplayInView={isMobile}
-        fallbackLabel={preset.title}
-        posterUrl={preset.posterUrl ?? undefined}
-        previewUrl={preset.previewUrl}
-      />
+      <div
+        className={styles.media}
+        style={{ aspectRatio: mediaAspectRatio ?? cardMediaAspectRatio(preset.modality) }}
+      >
+        <PresetMP4Player
+          ariaHidden
+          // Desktop plays on hover — that is a deliberate "show me this one".
+          // Touch has no hover, so there the most-visible card plays instead.
+          autoplayInView={isMobile}
+          fallbackLabel={preset.title}
+          posterUrl={preset.posterUrl ?? undefined}
+          previewUrl={preset.previewUrl}
+        />
 
-      {onZoom && (
-        <span
-          aria-label="Подробнее о стиле"
-          className={cx(styles.zoomBtn, isMobile && styles.zoomBtnTouch, 'preset-zoom-btn')}
-          role="button"
-          tabIndex={0}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onZoom(preset);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
+        {onZoom && (
+          <span
+            aria-label="Подробнее о стиле"
+            className={cx(styles.zoomBtn, isMobile && styles.zoomBtnTouch, 'preset-zoom-btn')}
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               onZoom(preset);
-            }
-          }}
-        >
-          <ZoomIn size={16} />
-        </span>
-      )}
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                onZoom(preset);
+              }
+            }}
+          >
+            <ZoomIn size={16} />
+          </span>
+        )}
 
-      {preset.badges.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            gap: 4,
-            insetBlockStart: 8,
-            insetInlineStart: 8,
-            pointerEvents: 'none',
-            position: 'absolute',
-          }}
-        >
-          {preset.badges.map((b) => (
-            <span
-              key={b}
-              style={{
-                background: BADGE_COLORS[b],
-                borderRadius: 6,
-                color: b === 'top_choice' ? '#000' : '#fff',
-                fontSize: 11,
-                fontWeight: 600,
-                padding: '2px 6px',
-              }}
-            >
-              {BADGE_LABELS[b]}
-            </span>
-          ))}
+        {preset.badges.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              gap: 4,
+              insetBlockStart: 8,
+              insetInlineStart: 8,
+              pointerEvents: 'none',
+              position: 'absolute',
+            }}
+          >
+            {preset.badges.map((b) => (
+              <span
+                key={b}
+                style={{
+                  background: BADGE_COLORS[b],
+                  borderRadius: 6,
+                  color: b === 'top_choice' ? '#000' : '#fff',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: '2px 6px',
+                }}
+              >
+                {BADGE_LABELS[b]}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className={cx(styles.hoverOverlay, 'preset-hover-overlay')}>
+          <div className={styles.title}>{preset.title}</div>
+          {preset.description && <div className={styles.description}>{preset.description}</div>}
+          {hint && <div className={styles.hint}>{hint}</div>}
         </div>
-      )}
+      </div>
 
-      <div className={styles.bottomLabel}>{preset.title}</div>
-
-      <div className={cx(styles.hoverOverlay, 'preset-hover-overlay')}>
-        <div className={styles.title}>{preset.title}</div>
-        {preset.description && <div className={styles.description}>{preset.description}</div>}
-        {hint && <div className={styles.hint}>{hint}</div>}
+      <div className={styles.caption}>
+        <div className={styles.captionTitle}>{preset.title}</div>
+        <div className={styles.captionSub}>{subtitle}</div>
+        {(preset.authorName || preset.popularity !== null) && (
+          <div className={styles.captionMeta}>
+            {preset.authorName}
+            {preset.authorName && preset.popularity !== null && ' · '}
+            {preset.popularity !== null && `♥ ${compactCount.format(preset.popularity)}`}
+          </div>
+        )}
       </div>
     </button>
   );
