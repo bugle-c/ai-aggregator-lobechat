@@ -2,12 +2,14 @@
 
 import { ChatInput } from '@lobehub/editor/react';
 import { Flexbox, TextArea } from '@lobehub/ui';
+import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import type { KeyboardEvent } from 'react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import VideoFreeQuotaInfo from '@/business/client/features/VideoFreeQuotaInfo';
+import { decideGenerateReadiness } from '@/features/Generators/presetImageGate';
 import { useVideoGenerate } from '@/features/Generators/useVideoGenerate';
 import { detectVideoPromptHints } from '@/features/Generators/videoPromptHints';
 import { useIsDark } from '@/hooks/useIsDark';
@@ -51,12 +53,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isDarkMode = useIsDark();
   const { t } = useTranslation('video');
+  const { message } = App.useApp();
   const { value, setValue } = useVideoGenerationConfigParam('prompt');
+  const { value: imageUrl } = useVideoGenerationConfigParam('imageUrl');
   const isCreating = useVideoStore(createVideoSelectors.isCreating);
   const isLogin = useUserStore(authSelectors.isLogin);
   // A selected style is a ready prompt: the textarea becomes optional and
   // shrinks so the settings strip and the CTA stay on a phone screen.
-  const hasTemplate = useVideoStore((s) => !!presetSelectors.currentPreset(s)?.promptTemplate);
+  const preset = useVideoStore(presetSelectors.currentPreset);
+  const hasTemplate = !!preset?.promptTemplate;
   const generate = useVideoGenerate();
 
   // Read prompt from query parameter
@@ -79,8 +84,17 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      if (!isCreating && (value.trim() || hasTemplate)) {
+      // Same gate as the CTA: an i2v style without its photo does not run.
+      const readiness = decideGenerateReadiness({
+        imageUrl,
+        isGenerating: isCreating,
+        preset,
+        prompt: value,
+      });
+      if (readiness.canGenerate) {
         void generate(value);
+      } else if (readiness.blocker === 'missing-image') {
+        message.warning(t('preset.addPhoto', { ns: 'common' }));
       }
     }
   };

@@ -18,18 +18,19 @@ import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 
 import { sendAlert } from '../../src/server/services/alerts';
-import { deriveAttribution, deriveCategory, deriveTitle, LICENSE, slugFor } from './derive';
+import {
+  deriveAttribution,
+  deriveCategory,
+  deriveTitle,
+  LICENSE,
+  recommendedModelFor,
+  slugFor,
+} from './derive';
 import { discoverNewItems } from './fetchCatalog';
 import { evaluateBatch } from './filters';
 import { assertFfmpegAvailable, MediaUploader, processMedia, s3ConfigFromEnv } from './media';
 import type { Evaluation, Modality, PresetInsert, RunReport, SourceItem } from './types';
-import {
-  createClient,
-  DEFAULT_MODEL,
-  insertPreset,
-  loadKnownExternalIds,
-  maxSortOrder,
-} from './upsert';
+import { createClient, insertPreset, loadKnownExternalIds, maxSortOrder } from './upsert';
 
 // Bounds that keep a single run finite. `--limit` overrides MAX_NEW_PER_RUN.
 const MAX_PAGES_PER_RUN = 15;
@@ -112,7 +113,7 @@ export const buildRow = (
     posterUrl: media.posterUrl,
     previewUrl: media.previewUrl,
     promptTemplate: prompt,
-    recommendedModelId: DEFAULT_MODEL[modality],
+    recommendedModelId: recommendedModelFor(modality, evaluation.requiresImage),
     requiresImage: evaluation.requiresImage,
     slug: slugFor(item.id),
     sortOrder,

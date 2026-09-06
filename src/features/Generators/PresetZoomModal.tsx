@@ -8,6 +8,7 @@ import type { PresetListItem } from '@/types/preset';
 
 import { presetAspectRatio } from './presetAspect';
 import PresetAttribution from './PresetAttribution';
+import RequiresImageBadge from './RequiresImageBadge';
 
 interface Props {
   onApply: () => void;
@@ -74,6 +75,14 @@ const PresetZoomModal = memo<Props>(({ onApply, onClose, open, preset }) => {
           {preset.description && (
             <div style={{ color: 'var(--lobe-chat-text-secondary)', fontSize: 13 }}>
               {preset.description}
+            </div>
+          )}
+          {preset.requiresImage && (
+            <div style={{ alignItems: 'center', display: 'flex', gap: 8 }}>
+              <RequiresImageBadge variant="inline" />
+              <span style={{ color: 'var(--lobe-chat-text-secondary)', fontSize: 13 }}>
+                {t('preset.requiresImageHint')}
+              </span>
             </div>
           )}
           <PresetAttribution preset={preset} />

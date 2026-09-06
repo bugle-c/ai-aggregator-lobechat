@@ -2,16 +2,20 @@
 
 import { Segmented, SliderWithInput } from '@lobehub/ui';
 import { Drawer } from 'antd';
-import { memo, useMemo, useState } from 'react';
+import { Image as ImageIcon } from 'lucide-react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AspectRatioSelect from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/AspectRatioSelect';
 import ConfigPanel from '@/app/[variants]/(main)/video/_layout/ConfigPanel';
+import FrameUpload from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/FrameUpload';
 import VideoModelItem from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/ModelSelect/VideoModelItem';
 import ModelSettingsChip from '@/features/Generators/ModelSettingsChip';
+import { hasReferenceImage } from '@/features/Generators/presetImageGate';
 import SettingsStrip, { SettingsChip } from '@/features/Generators/SettingsStrip';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import Image from '@/libs/next/Image';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/slices/aiProvider/selectors';
 import { useUserStore } from '@/store/user';
@@ -76,9 +80,55 @@ const DurationPicker = memo<{ close: () => void }>(({ close }) => {
 DurationPicker.displayName = 'VideoDurationPicker';
 
 /**
+ * «Фото» chip body: the ConfigPanel's own start-frame uploader, so the photo
+ * lands in `parameters.imageUrl` exactly as if it came from ⚙. Closes itself
+ * once a photo arrives — the chip then shows the thumbnail.
+ */
+const PhotoPicker = memo<{ close: () => void }>(({ close }) => {
+  const { value } = useVideoGenerationConfigParam('imageUrl');
+  const hadPhotoRef = useRef(hasReferenceImage(value));
+
+  useEffect(() => {
+    const has = hasReferenceImage(value);
+    if (has && !hadPhotoRef.current) close();
+    hadPhotoRef.current = has;
+  }, [close, value]);
+
+  return (
+    <div style={{ minInlineSize: 240 }}>
+      <FrameUpload paramName="imageUrl" />
+    </div>
+  );
+});
+
+PhotoPicker.displayName = 'VideoPhotoPicker';
+
+/** 16px thumbnail of the attached photo, as the chip's icon. */
+const PhotoThumb = memo<{ src: string }>(({ src }) => (
+  <span
+    aria-hidden
+    style={{
+      blockSize: 16,
+      borderRadius: 4,
+      display: 'inline-block',
+      flex: '0 0 auto',
+      inlineSize: 16,
+      overflow: 'hidden',
+      position: 'relative',
+    }}
+  >
+    <Image fill unoptimized alt="" sizes="16px" src={src} style={{ objectFit: 'cover' }} />
+  </span>
+));
+
+PhotoThumb.displayName = 'VideoPhotoThumb';
+
+/**
  * Video binding of the `SettingsStrip`:
- * `[Model ▾][16:9 ▾][5 s ▾] … [≈ 40 cr][⚙]`, plus the drawer with the full
- * `ConfigPanel` (frames, resolution, seed, audio…) the gear opens.
+ * `[Model ▾][Фото ▾][16:9 ▾][5 s ▾] … [≈ 40 cr][⚙]`, plus the drawer with the
+ * full `ConfigPanel` (frames, resolution, seed, audio…) the gear opens. The
+ * «Фото» chip appears for an i2v style (warning dot until a photo is
+ * attached) and whenever a photo is attached on a model that takes one.
  */
 const FlowSidebarControls = memo(() => {
   const { t } = useTranslation('common');
@@ -97,8 +147,15 @@ const FlowSidebarControls = memo(() => {
   const supportsDuration = useVideoStore(
     videoGenerationConfigSelectors.isSupportedParam('duration'),
   );
+  const supportsImageUrl = useVideoStore(
+    videoGenerationConfigSelectors.isSupportedParam('imageUrl'),
+  );
   const aspect = useVideoGenerationConfigParam('aspectRatio');
   const duration = useVideoGenerationConfigParam('duration');
+  const imageUrl = useVideoStore((s) => videoGenerationConfigSelectors.parameters(s)?.imageUrl);
+  const hasPhoto = hasReferenceImage(imageUrl);
+  const requiresImage = !!preset?.requiresImage;
+  const showPhotoChip = requiresImage || (supportsImageUrl && hasPhoto);
 
   const uiMode = useUserStore(uiModeSelectors.current);
   const providers = useAiInfraStore(aiProviderSelectors.enabledVideoModelListByMode(uiMode));
@@ -124,6 +181,22 @@ const FlowSidebarControls = memo(() => {
           )}
           onPick={setModelAndProviderOnSelect}
         />
+        {showPhotoChip && (
+          <SettingsChip
+            ariaLabel={t('preset.settings.photo')}
+            content={(close) => <PhotoPicker close={close} />}
+            icon={hasPhoto ? <PhotoThumb src={imageUrl as string} /> : <ImageIcon size={14} />}
+            indicator={requiresImage && !hasPhoto ? 'warning' : undefined}
+            label={t('preset.settings.photo')}
+            tooltip={
+              requiresImage && !hasPhoto
+                ? t('preset.settings.photoMissing')
+                : hasPhoto
+                  ? t('preset.settings.photoAttached')
+                  : undefined
+            }
+          />
+        )}
         {supportsAspectRatio && aspectItems.length > 0 && (
           <SettingsChip
             ariaLabel={t('preset.settings.aspect')}

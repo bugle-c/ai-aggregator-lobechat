@@ -16,6 +16,30 @@ export const PUBLIC_MEDIA_BASE = 'https://ask.gptweb.ru/s3/lobe';
 
 export const slugFor = (externalId: string): string => `trend-${externalId}`;
 
+// --- recommended model --------------------------------------------------------
+
+/** Model each modality is pinned to; matches what the curated rows use. */
+export const DEFAULT_MODEL: Record<Modality, string> = {
+  image: 'google/nano-banana-pro/text-to-image',
+  video: 'bytedance/seedance-2.0-fast/text-to-video',
+};
+
+/**
+ * Model an image-to-video preset recommends.
+ *
+ * Deliberately the `/text-to-video` card, not `…/image-to-video`: the i2v
+ * cards are `enabled: false` in model-bank (no picker entry, no parameter
+ * schema), and the runtime swaps the endpoint by itself when `imageUrl` is
+ * set (`model-runtime/providers/wavespeed/utils/pairedEndpoint.ts`). Storing
+ * the i2v id would make `findEnabledModel` miss it, so the preset's model
+ * switch could never fire and the model chip would warn forever. What makes
+ * a preset i2v is `requires_image`, which gates the run on a reference image.
+ */
+export const I2V_RECOMMENDED_MODEL = 'bytedance/seedance-2.0-fast/text-to-video';
+
+export const recommendedModelFor = (modality: Modality, requiresImage: boolean): string =>
+  modality === 'video' && requiresImage ? I2V_RECOMMENDED_MODEL : DEFAULT_MODEL[modality];
+
 // --- attribution ------------------------------------------------------------
 
 export interface Attribution {

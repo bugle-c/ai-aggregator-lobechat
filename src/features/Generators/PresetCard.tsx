@@ -11,6 +11,7 @@ import type { PresetBadge, PresetListItem } from '@/types/preset';
 import { categoryLabel } from './PRESET_CATEGORIES';
 import { tileAspectRatio } from './presetAspect';
 import PresetMP4Player from './PresetMP4Player';
+import RequiresImageBadge from './RequiresImageBadge';
 
 interface Props {
   isActive?: boolean;
@@ -385,7 +386,7 @@ const PresetCard = memo<Props>(
             onPlayingChange={setPlaying}
           />
 
-          {badges.length > 0 && (
+          {(badges.length > 0 || preset.requiresImage) && (
             <div className={styles.badges}>
               {badges.map((b) => (
                 <span
@@ -399,6 +400,9 @@ const PresetCard = memo<Props>(
                   {BADGE_LABELS[b]}
                 </span>
               ))}
+              {/* i2v: the user must know before tapping that a photo is needed.
+                  Short form on a phone so it fits a 140px tile beside one badge. */}
+              {preset.requiresImage && <RequiresImageBadge short={isMobile} variant="overlay" />}
             </div>
           )}
 

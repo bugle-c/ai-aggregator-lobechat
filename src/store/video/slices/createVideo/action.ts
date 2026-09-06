@@ -5,6 +5,7 @@ import { type StateCreator } from 'zustand';
 import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { message } from '@/components/AntdStaticMethods';
 import { applyPresetTemplate } from '@/features/Generators/applyPresetTemplate';
+import { decidePresetImageGate } from '@/features/Generators/presetImageGate';
 import { videoService } from '@/services/video';
 
 import { type VideoStore } from '../../store';
@@ -54,6 +55,14 @@ export const createCreateVideoSlice: StateCreator<
     // nothing at all to send is rejected.
     if (!finalPrompt) {
       throw new TypeError('prompt is empty');
+    }
+
+    // Validate: an image-to-video style needs its reference image. The CTAs
+    // already refuse; this is the one place every entry point passes.
+    if (decidePresetImageGate({ imageUrl: parameters.imageUrl, preset }).kind === 'missing') {
+      message.warning({ content: t('preset.addPhoto', { ns: 'common' }), duration: 3 });
+      set({ isCreating: false }, false, 'createVideo/endCreateVideo');
+      return;
     }
 
     // Validate: end frame requires start frame (driven by model schema)

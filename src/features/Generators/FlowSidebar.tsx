@@ -19,6 +19,11 @@ interface Props {
   creditCost?: number;
   /** Set to false to hint the user lacks balance — recolours the CTA red. */
   creditSufficient?: boolean;
+  /**
+   * Blocks the CTA and replaces its label with the reason («Добавьте фото»
+   * for an i2v style without a photo). Undefined → the CTA is live.
+   */
+  disabledReason?: string;
   isGenerating: boolean;
   onClearPreset: () => void;
   onGenerate: () => void;
@@ -46,6 +51,7 @@ const FlowSidebar = memo<Props>(
   ({
     creditCost,
     creditSufficient = true,
+    disabledReason,
     isGenerating,
     onClearPreset,
     onGenerate,
@@ -78,15 +84,17 @@ const FlowSidebar = memo<Props>(
         <Button
           block
           danger={insufficient}
+          disabled={!!disabledReason}
           loading={isGenerating}
           size="large"
           style={{ marginBlockStart: 'auto' }}
           type="primary"
           onClick={onGenerate}
         >
-          {creditCost === undefined
-            ? label
-            : `${label} · ${t('preset.credits', { count: creditCost })}`}
+          {disabledReason ??
+            (creditCost === undefined
+              ? label
+              : `${label} · ${t('preset.credits', { count: creditCost })}`)}
         </Button>
       </Flexbox>
     );

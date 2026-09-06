@@ -560,5 +560,17 @@ Spec: `docs/superpowers/specs/2026-09-06-preset-platform-design.md`.
   therefore auto-publish) is impossible.
 - **Failing a quality rule queues, it never deletes** (`active=false`). Failing the _safety_
   stop-list stores nothing at all. Failing _media_ also stores nothing — `preview_url` is NOT NULL.
-  i2v items are ingested with `requires_image=true` but parked in the queue until Ф5 ships the
-  model-switch UX; Ф5 flips them on with an UPDATE, not a re-ingest.
+- **i2v presets (Ф5, 2026-09-06)**: detected by prompt text only (`@image1`, `uploaded photo`,
+  `reference face`… — `filters.detectRequiresImage`) → `requires_image=true`, published like any
+  row. `recommended_model_id` is the paired **t2v** card `bytedance/seedance-2.0-fast/text-to-video`,
+  NOT `…/image-to-video`: every i2v card is `enabled:false` in model-bank (no picker entry, no
+  params schema), so `findEnabledModel` would miss it and the Ф3b switch would be `unavailable`
+  forever; the wavespeed runtime swaps the endpoint itself when `imageUrl` is set
+  (`pairedEndpoint.resolveVideoEndpoint`). The photo lives in the video store's
+  `parameters.imageUrl` (the ConfigPanel start-frame param, written by `FrameUpload`). Gating is
+  one pure function `features/Generators/presetImageGate.ts` (`decideGenerateReadiness`) shared
+  by the desktop CTA, mobile CTA, Enter key and `createVideo`; CTA reads «Добавьте фото»; removing
+  the style lifts it. `usePresetModelSwitch` re-applies `imageUrl` after a switch (a switch resets
+  params to model defaults). Image (i2i) hits stay queued (`requires-image-i2i-pending`) — no
+  image-side gate yet. Pre-Ф5 queued video rows: `scripts/ingestPresets/activateI2v.ts` (dry run;
+  `--apply` writes) re-runs current filters and activates only rows that would publish today.

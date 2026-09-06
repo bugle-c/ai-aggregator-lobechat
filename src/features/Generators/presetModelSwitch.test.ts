@@ -39,6 +39,34 @@ describe('findEnabledModel', () => {
   it('returns null for a model no enabled provider offers', () => {
     expect(findEnabledModel(enabled, 'x/y/z')).toBeNull();
   });
+
+  it('cannot find an image-to-video id — those cards are never in the enabled list (Ф5)', () => {
+    // model-bank ships `…/image-to-video` with `enabled: false`; the paired
+    // `/text-to-video` card auto-routes when `imageUrl` is set. This is why
+    // i2v presets recommend the t2v card: an i2v id would be `unavailable`
+    // here and the switch would never fire.
+    const T2V = 'bytedance/seedance-2.0-fast/text-to-video';
+    const I2V = 'bytedance/seedance-2.0-fast/image-to-video';
+    const video = [provider('lobehub', [{ displayName: 'Seedance 2.0 Fast', id: T2V }])];
+
+    expect(findEnabledModel(video, I2V)).toBeNull();
+    expect(
+      decidePresetModelSwitch({
+        currentModel: 'kwaivgi/kling-v2.6-pro/text-to-video',
+        enabled: video,
+        lock: null,
+        recommendedModelId: I2V,
+      }),
+    ).toEqual({ kind: 'unavailable' });
+    expect(
+      decidePresetModelSwitch({
+        currentModel: 'kwaivgi/kling-v2.6-pro/text-to-video',
+        enabled: video,
+        lock: null,
+        recommendedModelId: T2V,
+      }),
+    ).toEqual({ kind: 'switch', target: findEnabledModel(video, T2V) });
+  });
 });
 
 describe('decidePresetModelSwitch', () => {

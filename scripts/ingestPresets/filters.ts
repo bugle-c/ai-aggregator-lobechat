@@ -190,10 +190,18 @@ export const findUnsafeTerm = (text: string): string | null => {
  * The payload's `referenceInputContract` / `contentType` / `promptReady` are
  * constants (`legacy` / `gallery_video` / `true`) and useless as i2v
  * discriminators — the only signal is the prompt text itself.
+ *
+ * A hit on a video prompt is not a quality failure (since Ф5): the row is
+ * stored with `requires_image=true`, the UI shows the «Нужно фото» badge and
+ * refuses to run until a reference image is attached, and the runtime routes
+ * the paired `/text-to-video` model to its `/image-to-video` endpoint by
+ * itself. Rows queued under the pre-Ф5 hold are flipped on by
+ * `activateI2v.ts`. Image (i2i) hits stay queued — see `evaluateItem`.
  */
 const I2V_PATTERNS: readonly RegExp[] = [
   /@\[?image\s?\d\]?/i,
-  /\buploaded image\b/i,
+  // "each uploaded photo" — seen live on an image row that `the uploaded` missed
+  /\buploaded (?:image|photo|picture)s?\b/i,
   /\bthe uploaded\b/i,
   /\buse the uploaded\b/i,
   /\battach(?:ed)? your image\b/i,
@@ -309,12 +317,11 @@ export const evaluateItem = (item: SourceItem, ctx: EvaluateContext): Evaluation
   if (!mediaUrl) reasons.push('no-media-url');
 
   /**
-   * i2v presets need the model-switch UX from Ф5 (`selectPreset` flipping to
-   * an image-to-video model plus the "нужно фото" badge). Until that ships,
-   * they are ingested but parked in the queue — Ф5 flips them on with a
-   * single UPDATE instead of a re-ingest.
+   * Ф5 wired the reference-image gate for video only. The image flow has no
+   * «Добавьте фото» gate yet, so an image prompt that says "@image1" would
+   * run with nothing attached — keep those queued until i2i gating exists.
    */
-  if (requiresImage) reasons.push('requires-image-pending-f5');
+  if (requiresImage && ctx.modality === 'image') reasons.push('requires-image-i2i-pending');
 
   const authorCount = ctx.authorPublishCount.get(authorKey(item)) ?? 0;
   if (authorCount >= MAX_PER_AUTHOR_PER_RUN) reasons.push('author-cap');
