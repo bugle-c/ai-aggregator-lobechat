@@ -41,10 +41,6 @@ export const createCreateVideoSlice: StateCreator<
       throw new TypeError('parameters is not initialized');
     }
 
-    if (!parameters.prompt) {
-      throw new TypeError('prompt is empty');
-    }
-
     // If a preset is active, wrap the user's prompt through its template
     // so the model receives the curated style + user-typed subject.
     const preset = store.currentPreset;
@@ -52,6 +48,13 @@ export const createCreateVideoSlice: StateCreator<
       ? applyPresetTemplate(preset.promptTemplate, parameters.prompt as string)
       : parameters.prompt;
     const finalParameters = { ...parameters, prompt: finalPrompt };
+
+    // Checked *after* the template: a preset is a ready prompt, so an empty
+    // input with a style selected is a valid one-tap run. Only a run with
+    // nothing at all to send is rejected.
+    if (!finalPrompt) {
+      throw new TypeError('prompt is empty');
+    }
 
     // Validate: end frame requires start frame (driven by model schema)
     const parametersSchema = videoGenerationConfigSelectors.parametersSchema(store);
@@ -79,7 +82,7 @@ export const createCreateVideoSlice: StateCreator<
 
     if (!generationTopicId) {
       isNewTopic = true;
-      const prompts = [parameters.prompt];
+      const prompts = [finalPrompt];
       const newGenerationTopicId = await createGenerationTopic(prompts);
       finalTopicId = newGenerationTopicId;
 

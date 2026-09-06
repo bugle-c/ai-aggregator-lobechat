@@ -43,14 +43,13 @@ const VideoPage = memo(() => {
   return (
     <Flexbox horizontal flex={1} height={'100%'} width={'100%'}>
       <FlowSidebar
-        controls={<FlowSidebarControls />}
         creditCost={cost.credits ?? undefined}
         creditSufficient={cost.sufficient}
         isGenerating={isGenerating}
-        modality="video"
         preset={preset}
         promptInput={<PromptInput />}
         promptPreview={<PresetPromptPreview />}
+        settings={<FlowSidebarControls />}
         onClearPreset={clearPreset}
         onGenerate={() => generate(promptValue)}
       />

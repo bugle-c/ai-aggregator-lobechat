@@ -1,12 +1,12 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Segmented } from 'antd';
-import { Settings, Sparkles } from 'lucide-react';
+import { Button } from 'antd';
+import { Sparkles } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import FrameUpload from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/FrameUpload';
-import ModelSelect from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/ModelSelect';
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
@@ -15,40 +15,35 @@ import { useVideoStore } from '@/store/video';
 import { videoGenerationConfigSelectors } from '@/store/video/selectors';
 import { presetSelectors } from '@/store/video/slices/preset/selectors';
 
+import FlowSidebarControls from './FlowSidebarControls';
 import PresetPromptPreview from './PresetPromptPreview';
 import PromptInput from './PromptInput';
 
-const ASPECT_OPTIONS = ['16:9', '9:16', '1:1'];
-const DURATION_OPTIONS = [
-  { label: '5 сек', value: 5 },
-  { label: '10 сек', value: 10 },
-];
+const DEFAULT_DURATION = 5;
 
 interface Props {
   onAfterGenerate: () => void;
-  onOpenSettings: () => void;
 }
 
 /**
- * Mirror of image/MobileFlowContent + duration_sec selector.
+ * Mirror of image/MobileFlowContent for video: style card → frame uploads
+ * (when the model takes them) → prompt preview → SettingsStrip (model /
+ * aspect / duration / cost / ⚙) → prompt → sticky «Сгенерировать».
  */
-const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
+const MobileFlowContent = memo<Props>(({ onAfterGenerate }) => {
+  const { t } = useTranslation('common');
   const url = useFlowUrlState('presets');
 
   const preset = useVideoStore(presetSelectors.currentPreset);
   const clearPreset = useVideoStore((s) => s.clearPreset);
   const isGenerating = useVideoStore((s) => s.isCreating);
-  const setParamOnInput = useVideoStore((s) => s.setParamOnInput);
   const parameters = useVideoStore(videoGenerationConfigSelectors.parameters);
   const generate = useVideoGenerate();
   const promptValue = (parameters?.prompt as string | undefined) ?? '';
-  const aspect = (parameters?.aspectRatio as string | undefined) ?? null;
   const duration = (parameters?.duration as number | undefined) ?? null;
   const currentModel = useVideoStore(videoGenerationConfigSelectors.model);
-  // Default to 5s when the slider hasn't been touched yet — matches the
-  // common Wavespeed model default. Keeps the preview from flashing 0.
   const cost = useGenerationCostPreview({
-    durationSeconds: duration ?? 5,
+    durationSeconds: duration ?? DEFAULT_DURATION,
     kind: 'video',
     model: currentModel,
   });
@@ -63,25 +58,22 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
     videoGenerationConfigSelectors.isSupportedParam('endImageUrl'),
   );
 
-  const canGenerate = !isGenerating && promptValue.trim().length > 0;
+  // A preset is a ready prompt: with one selected, an empty input is a
+  // valid one-tap run.
+  const canGenerate = !isGenerating && (promptValue.trim().length > 0 || !!preset?.promptTemplate);
+  const insufficient = cost.credits !== null && !cost.sufficient;
 
   const handleGenerate = async () => {
     if (!canGenerate) return;
-    // Mobile-only extra: close the create sheet so the user lands on
-    // the gallery with the in-flight skeleton tile. The shared hook
-    // handles tab switch + toast + createVideo.
     url.setView(undefined);
     await generate(promptValue);
     onAfterGenerate();
   };
 
   return (
-    <Flexbox gap={12} style={{ paddingBlockEnd: 'env(safe-area-inset-bottom, 0)' }}>
+    <Flexbox gap={12} style={{ minBlockSize: '100%' }}>
       <PresetThumbCard preset={preset} onClear={clearPreset} />
 
-      {/* Frame uploads — only rendered when the active video model
-          schema declares support. Two slots side-by-side: start frame
-          and (optional) end frame. */}
       {(supportsStartFrame || supportsEndFrame) && (
         <Flexbox horizontal gap={8}>
           {supportsStartFrame && (
@@ -105,89 +97,39 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
 
       <PresetPromptPreview />
 
+      <FlowSidebarControls />
+
       <PromptInput />
 
-      <Flexbox gap={8}>
-        <Flexbox gap={4}>
-          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>Модель</span>
-          <ModelSelect />
-        </Flexbox>
-
-        <Flexbox gap={4}>
-          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
-            Соотношение сторон
-          </span>
-          <Segmented
-            block
-            options={ASPECT_OPTIONS}
-            value={aspect ?? '16:9'}
-            onChange={(v) => setParamOnInput('aspect_ratio' as any, v as any)}
-          />
-        </Flexbox>
-
-        <Flexbox gap={4}>
-          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
-            Длительность
-          </span>
-          <Segmented
-            block
-            options={DURATION_OPTIONS}
-            value={duration ?? 5}
-            onChange={(v) => setParamOnInput('duration_sec' as any, v as any)}
-          />
-        </Flexbox>
-
-        <button
-          type="button"
-          style={{
-            alignItems: 'center',
-            background: 'transparent',
-            border: 0,
-            color: 'var(--ant-color-link)',
-            cursor: 'pointer',
-            display: 'flex',
-            fontSize: 13,
-            gap: 6,
-            padding: '4px 0',
-          }}
-          onClick={onOpenSettings}
-        >
-          <Settings size={14} />
-          Дополнительные настройки
-        </button>
-      </Flexbox>
-
-      <button
-        disabled={!canGenerate}
-        type="button"
+      <div
         style={{
-          alignItems: 'center',
-          background: !canGenerate
-            ? 'var(--ant-color-bg-text-hover)'
-            : cost.credits != null && !cost.sufficient
-              ? '#ff7875'
-              : '#c4ff4d',
-          border: 0,
-          borderRadius: 12,
-          color: canGenerate ? '#0a0a0a' : 'var(--ant-color-text-tertiary)',
-          cursor: canGenerate ? 'pointer' : 'not-allowed',
-          display: 'flex',
-          fontSize: 16,
-          fontWeight: 700,
-          gap: 8,
-          justifyContent: 'center',
-          padding: '14px 16px',
+          background: 'var(--ant-color-bg-layout)',
+          insetBlockEnd: 0,
+          marginBlockStart: 'auto',
+          paddingBlockEnd: 'env(safe-area-inset-bottom, 0px)',
+          paddingBlockStart: 8,
+          position: 'sticky',
+          zIndex: 5,
         }}
-        onClick={handleGenerate}
       >
-        <Sparkles size={18} />
-        {isGenerating ? 'Создаём…' : 'Создать'}
-        {cost.credits != null && !isGenerating ? (
-          <span style={{ fontWeight: 700, marginInlineStart: 2, opacity: 0.85 }}>
-            · ~{cost.credits} кр
-          </span>
-        ) : null}
-      </button>
+        <Button
+          block
+          danger={insufficient}
+          disabled={!canGenerate}
+          icon={<Sparkles size={18} />}
+          loading={isGenerating}
+          size="large"
+          style={{ blockSize: 48, fontWeight: 700 }}
+          type="primary"
+          onClick={handleGenerate}
+        >
+          {isGenerating
+            ? t('preset.generating')
+            : cost.credits === null
+              ? t('preset.generate')
+              : `${t('preset.generate')} · ${t('preset.credits', { count: cost.credits })}`}
+        </Button>
+      </div>
     </Flexbox>
   );
 });

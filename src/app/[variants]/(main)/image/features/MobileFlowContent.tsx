@@ -1,13 +1,13 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Segmented } from 'antd';
-import { Settings, Sparkles } from 'lucide-react';
+import { Button } from 'antd';
+import { Sparkles } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import ImageUrl from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ImageUrl';
 import ImageUrlsUpload from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ImageUrlsUpload';
-import ModelSelect from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ModelSelect';
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
@@ -16,35 +16,32 @@ import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
 import { presetSelectors } from '@/store/image/slices/preset/selectors';
 
+import FlowSidebarControls from './FlowSidebarControls';
 import PresetPromptPreview from './PresetPromptPreview';
 import PromptInput from './PromptInput';
 
-const ASPECT_OPTIONS = ['1:1', '16:9', '9:16', '4:3', '3:4'];
-
 interface Props {
   onAfterGenerate: () => void;
-  onOpenSettings: () => void;
 }
 
 /**
- * Higgsfield-style mobile creation surface:
- *   1. Preset preview card (or empty placeholder)
- *   2. Prompt input (with its embedded toolbar + sparkles button)
- *   3. Inline settings: Model picker + Aspect ratio segmented
- *   4. "Доп. настройки" link that opens the full ConfigPanel drawer
- *      (seed / steps / cfg / image upload — power-user knobs)
- *   5. Big yellow Generate button (disabled when prompt empty)
+ * Mobile creation screen (`?view=create`), top to bottom:
+ *   1. PresetThumbCard — selected style, «Подробнее» / «Убрать»
+ *   2. Reference-image uploaders, when the model schema lists them
+ *   3. PresetPromptPreview — what the style will actually send
+ *   4. SettingsStrip — model / aspect / count / cost / ⚙, right above the words
+ *   5. PromptInput — optional when a style is selected
+ *   6. Sticky «Сгенерировать · ≈ N кр», 48px, above the safe area
  */
-const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
+const MobileFlowContent = memo<Props>(({ onAfterGenerate }) => {
+  const { t } = useTranslation('common');
   const url = useFlowUrlState('presets');
 
   const preset = useImageStore(presetSelectors.currentPreset);
   const clearPreset = useImageStore((s) => s.clearPreset);
   const isGenerating = useImageStore((s) => s.isCreating);
-  const setParamOnInput = useImageStore((s) => s.setParamOnInput);
   const parameters = useImageStore(imageGenerationConfigSelectors.parameters);
   const promptValue = (parameters?.prompt as string | undefined) ?? '';
-  const aspect = (parameters?.aspectRatio as string | undefined) ?? null;
   const currentModel = useImageStore(imageGenerationConfigSelectors.model);
   const imageNum = useImageStore(imageGenerationConfigSelectors.imageNum);
   const cost = useGenerationCostPreview({ images: imageNum, kind: 'image', model: currentModel });
@@ -60,12 +57,15 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
     imageGenerationConfigSelectors.isSupportedParam('imageUrls'),
   );
 
-  const canGenerate = !isGenerating && promptValue.trim().length > 0;
+  // A preset is a ready prompt: with one selected, an empty input is a
+  // valid one-tap run (`applyPresetTemplate('', tpl)` → `tpl`).
+  const canGenerate = !isGenerating && (promptValue.trim().length > 0 || !!preset?.promptTemplate);
+  const insufficient = cost.credits !== null && !cost.sufficient;
 
   const handleGenerate = async () => {
     if (!canGenerate) return;
     // The hook handles tab switch + toast + Chinese warning + createImage.
-    // Mobile-only extras: close the create sheet so the user lands on the
+    // Mobile-only extra: leave the create screen so the user lands on the
     // gallery with the in-flight skeleton tile.
     url.setView(undefined);
     await generate(promptValue);
@@ -73,12 +73,9 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
   };
 
   return (
-    <Flexbox gap={12} style={{ paddingBlockEnd: 'env(safe-area-inset-bottom, 0)' }}>
+    <Flexbox gap={12} style={{ minBlockSize: '100%' }}>
       <PresetThumbCard preset={preset} onClear={clearPreset} />
 
-      {/* Reference image upload — visible only when the active model
-          schema declares support. Two distinct slots: single ref image
-          (img2img / FLUX Kontext-style) vs multi-image input. */}
       {supportsImageUrl && (
         <Flexbox gap={4}>
           <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
@@ -98,86 +95,41 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
 
       <PresetPromptPreview />
 
+      <FlowSidebarControls />
+
       <PromptInput />
 
-      {/* Inline settings — visible at all times so the user knows
-          they can tweak model + aspect right here. Power-user knobs
-          (seed, steps, cfg, image upload) live behind "Доп. настройки". */}
-      <Flexbox gap={8}>
-        <Flexbox gap={4}>
-          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>Модель</span>
-          <ModelSelect />
-        </Flexbox>
-
-        <Flexbox gap={4}>
-          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
-            Соотношение сторон
-          </span>
-          <Segmented
-            block
-            options={ASPECT_OPTIONS}
-            // Pass through to existing param setter so upstream
-            // generation logic and Drizzle-validated config stay
-            // unchanged. `as any` because the param key is loose.
-            value={aspect ?? '1:1'}
-            onChange={(v) => setParamOnInput('aspect_ratio' as any, v as any)}
-          />
-        </Flexbox>
-
-        <button
-          type="button"
-          style={{
-            alignItems: 'center',
-            background: 'transparent',
-            border: 0,
-            color: 'var(--ant-color-link)',
-            cursor: 'pointer',
-            display: 'flex',
-            fontSize: 13,
-            gap: 6,
-            padding: '4px 0',
-          }}
-          onClick={onOpenSettings}
-        >
-          <Settings size={14} />
-          Дополнительные настройки
-        </button>
-      </Flexbox>
-
-      <button
-        disabled={!canGenerate}
-        type="button"
+      {/* Sticky inside the scroll container so it survives a long prompt
+          preview and the keyboard; padded above the home indicator. */}
+      <div
         style={{
-          alignItems: 'center',
-          // Highlight insufficient balance with a red CTA — clicking still
-          // works (server will return the canonical error), this is just a
-          // hint so the user can top up before submitting.
-          background: !canGenerate
-            ? 'var(--ant-color-bg-text-hover)'
-            : cost.credits != null && !cost.sufficient
-              ? '#ff7875'
-              : '#c4ff4d',
-          border: 0,
-          borderRadius: 12,
-          color: canGenerate ? '#0a0a0a' : 'var(--ant-color-text-tertiary)',
-          cursor: canGenerate ? 'pointer' : 'not-allowed',
-          display: 'flex',
-          fontSize: 16,
-          fontWeight: 700,
-          gap: 8,
-          justifyContent: 'center',
-          padding: '14px 16px',
+          background: 'var(--ant-color-bg-layout)',
+          insetBlockEnd: 0,
+          marginBlockStart: 'auto',
+          paddingBlockEnd: 'env(safe-area-inset-bottom, 0px)',
+          paddingBlockStart: 8,
+          position: 'sticky',
+          zIndex: 5,
         }}
-        onClick={handleGenerate}
       >
-        <Sparkles size={18} />
-        {isGenerating ? 'Создаём…' : 'Создать'}
-        {cost.credits != null && !isGenerating ? (
-          <span style={{ fontWeight: 700, marginInlineStart: 2, opacity: 0.85 }}>
-            · ~{cost.credits} кр
-          </span>
-        ) : null}
-      </button>
+        <Button
+          block
+          danger={insufficient}
+          disabled={!canGenerate}
+          icon={<Sparkles size={18} />}
+          loading={isGenerating}
+          size="large"
+          style={{ blockSize: 48, fontWeight: 700 }}
+          type="primary"
+          onClick={handleGenerate}
+        >
+          {isGenerating
+            ? t('preset.generating')
+            : cost.credits === null
+              ? t('preset.generate')
+              : `${t('preset.generate')} · ${t('preset.credits', { count: cost.credits })}`}
+        </Button>
+      </div>
     </Flexbox>
   );
 });
