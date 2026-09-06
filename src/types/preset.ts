@@ -15,7 +15,15 @@ export interface PresetParamsLock {
   steps?: number;
 }
 
-export interface Preset {
+/**
+ * What `presets.list` returns per row.
+ *
+ * Deliberately excludes `prompt_template`: it is only needed once the user
+ * actually picks a preset, and ingested rows carry multi-KB prompts — at a
+ * ~1000-row catalogue shipping it with every page would dominate the payload.
+ * Use `presets.getBySlug` (see `usePresetHydrate`) to get the full `Preset`.
+ */
+export interface PresetListItem {
   authorAvatar: string | null;
   authorName: string | null;
   authorUrl: string | null;
@@ -34,7 +42,6 @@ export interface Preset {
   /** Still frame shown before the mp4 preview loads. */
   posterUrl: string | null;
   previewUrl: string;
-  promptTemplate: string;
   /** Suggested model. UI surfaces a hint when it differs from the current model. */
   recommendedModelId: string | null;
   /** True for image-to-video presets that need a reference image. */
@@ -48,10 +55,43 @@ export interface Preset {
   title: string;
 }
 
+/**
+ * A fully hydrated preset — what `selectPreset` needs to actually run a
+ * generation (prompt template + params lock).
+ */
+export interface Preset extends PresetListItem {
+  promptTemplate: string;
+}
+
+/** Ordering offered by `presets.list`. */
+export type PresetSort = 'curated' | 'popular' | 'new';
+
 export interface PresetListFilters {
   category?: string;
   modality: PresetModality;
   q?: string;
   /** Filters by `recommended_model_id`. */
   recommendedModelId?: string;
+  sort?: PresetSort;
+}
+
+/** One `{ category, count }` row of the `presets.facets` response. */
+export interface PresetCategoryFacet {
+  category: string;
+  count: number;
+}
+
+/** One `{ modelId, count }` row of the `presets.facets` response. */
+export interface PresetModelFacet {
+  count: number;
+  modelId: string;
+}
+
+/**
+ * Everything the gallery's filter strips need, in one round trip: which
+ * categories and models actually have active presets for this modality.
+ */
+export interface PresetFacets {
+  categories: PresetCategoryFacet[];
+  models: PresetModelFacet[];
 }

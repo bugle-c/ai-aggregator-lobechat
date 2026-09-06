@@ -10,6 +10,7 @@ import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/featur
 import PresetGallery from '@/features/Generators/PresetGallery';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { usePresetDeepLink } from '@/features/Generators/usePresetDeepLink';
+import { usePresetHydrate } from '@/features/Generators/usePresetHydrate';
 import ResourceExplorer from '@/features/ResourceManager/components/Explorer';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useVideoStore } from '@/store/video';
@@ -33,6 +34,10 @@ const FlowMainArea = memo(() => {
   useFetchGenerationBatches(activeTopicId);
 
   const url = useFlowUrlState('presets');
+
+  // Gallery cards carry a slim `PresetListItem` (no prompt_template), so the
+  // click path fetches the full preset before handing it to selectPreset.
+  const hydratePreset = usePresetHydrate();
 
   // Home-page cards link here as /video?preset=<slug>; resolve that slug
   // into the actual selected preset.
@@ -87,8 +92,10 @@ const FlowMainArea = memo(() => {
             onModelChange={url.setModel}
             onSearchChange={url.setQ}
             onPresetSelect={(p) => {
-              selectPreset(p);
               url.setPreset(p.slug);
+              void hydratePreset(p.slug).then((full) => {
+                if (full) selectPreset(full);
+              });
               if (isMobile) url.setView('create');
             }}
           />

@@ -7,6 +7,8 @@ import { prettifyModelId } from '@/features/Generators/prettifyModelId';
 import { lambdaQuery } from '@/libs/trpc/client';
 import type { PresetModality } from '@/types/preset';
 
+const ALL_MODELS_KEY = '__all';
+
 interface Props {
   modality: PresetModality;
   onSelect: (modelId: string | undefined) => void;
@@ -15,36 +17,30 @@ interface Props {
 }
 
 /**
- * Top tabs for the preset gallery — one tab per model that has at
- * least one active preset for the current modality. Derived from the
- * preset list itself (no separate models endpoint), so adding a new
- * model+preset auto-adds a tab.
+ * Top tabs for the preset gallery — one tab per model that has at least one
+ * active preset for the current modality, so adding a new model+preset
+ * auto-adds a tab.
+ *
+ * Reads `presets.facets`, the same query `CategoryTabs` uses (react-query
+ * dedupes it). This used to fetch the entire preset list a second time purely
+ * to collect distinct model ids.
  */
 const ModelTabs = memo<Props>(({ modality, onSelect, selected }) => {
-  const { data: presets } = lambdaQuery.presets.list.useQuery(
-    { modality },
-    { staleTime: 5 * 60 * 1000 },
-  );
+  const { data } = lambdaQuery.presets.facets.useQuery({ modality }, { staleTime: 5 * 60 * 1000 });
 
   const items = useMemo(() => {
-    if (!presets) return [{ key: '__all', label: 'Все' }];
-    const seen = new Set<string>();
-    const tabs: { key: string; label: string }[] = [{ key: '__all', label: 'Все' }];
-    for (const p of presets) {
-      const id = p.recommendedModelId;
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      tabs.push({ key: id, label: prettifyModelId(id) });
-    }
+    const tabs = [{ key: ALL_MODELS_KEY, label: 'Все' }];
+    for (const f of data?.models ?? [])
+      tabs.push({ key: f.modelId, label: prettifyModelId(f.modelId) });
     return tabs;
-  }, [presets]);
+  }, [data]);
 
   return (
     <Tabs
-      activeKey={selected ?? '__all'}
+      activeKey={selected ?? ALL_MODELS_KEY}
       items={items}
       size="small"
-      onChange={(key) => onSelect(key === '__all' ? undefined : key)}
+      onChange={(key) => onSelect(key === ALL_MODELS_KEY ? undefined : key)}
     />
   );
 });
