@@ -15,4 +15,5 @@ ALTER TABLE "presets"
 --> statement-breakpoint
 -- Dedup key for the ingest pipeline. Unique index rather than a UNIQUE
 -- constraint so multiple NULLs (hand-curated presets) stay allowed.
-CREATE UNIQUE INDEX IF NOT EXISTS "presets_external_id_key" ON "presets" ("external_id");
+-- Name matches what Drizzle's `.unique()` on the column expects.
+CREATE UNIQUE INDEX IF NOT EXISTS "presets_external_id_unique" ON "presets" ("external_id");

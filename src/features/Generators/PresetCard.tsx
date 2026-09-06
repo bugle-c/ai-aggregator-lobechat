@@ -230,7 +230,12 @@ const PresetCard = memo<Props>(({ isActive, onClick, preset }) => {
         type="button"
         onClick={() => onClick(preset)}
       >
-        <PresetMP4Player ariaHidden fallbackLabel={preset.title} previewUrl={preset.previewUrl} />
+        <PresetMP4Player
+          ariaHidden
+          fallbackLabel={preset.title}
+          posterUrl={preset.posterUrl ?? undefined}
+          previewUrl={preset.previewUrl}
+        />
 
         <span
           aria-label="Подробнее о стиле"
