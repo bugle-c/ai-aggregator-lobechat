@@ -18,7 +18,15 @@ const styles = {
   },
 } as const;
 
-const DimensionControlGroup = memo(() => {
+interface Props {
+  /**
+   * Skip the aspect-ratio picker (the flow's SettingsStrip already has it as
+   * a chip) and keep only the lock + exact width / height sliders.
+   */
+  hideAspectRatio?: boolean;
+}
+
+const DimensionControlGroup = memo<Props>(({ hideAspectRatio }) => {
   const { t } = useTranslation('image');
   const {
     isLocked,
@@ -48,32 +56,41 @@ const DimensionControlGroup = memo(() => {
 
   const lockIcon = isLocked ? LockIcon : UnlockIcon;
 
+  const lockButton = (
+    <ActionIcon
+      aria-label={lockButtonTitle}
+      icon={lockIcon}
+      size="small"
+      title={lockButtonTitle}
+      onClick={toggleLock}
+    />
+  );
+
   return (
     <Flexbox gap={16}>
       {/* 宽高比选择器 */}
-      <Flexbox gap={8}>
-        <Flexbox horizontal align="center" distribution="space-between">
-          <span style={styles.label}>{t('config.aspectRatio.label')}</span>
-          <ActionIcon
-            aria-label={lockButtonTitle}
-            icon={lockIcon}
-            size="small"
-            title={lockButtonTitle}
-            onClick={toggleLock}
+      {!hideAspectRatio && (
+        <Flexbox gap={8}>
+          <Flexbox horizontal align="center" distribution="space-between">
+            <span style={styles.label}>{t('config.aspectRatio.label')}</span>
+            {lockButton}
+          </Flexbox>
+          <AspectRatioSelect
+            options={aspectRatioOptions}
+            style={styles.aspectRatioSelect}
+            value={aspectRatio}
+            onChange={setAspectRatio}
           />
         </Flexbox>
-        <AspectRatioSelect
-          options={aspectRatioOptions}
-          style={styles.aspectRatioSelect}
-          value={aspectRatio}
-          onChange={setAspectRatio}
-        />
-      </Flexbox>
+      )}
 
       {/* 宽度滑块 */}
       {widthSchema && (
         <Flexbox gap={8}>
-          <span style={styles.label}>{t('config.width.label')}</span>
+          <Flexbox horizontal align="center" distribution="space-between">
+            <span style={styles.label}>{t('config.width.label')}</span>
+            {hideAspectRatio && lockButton}
+          </Flexbox>
           <SliderWithInput
             max={widthSchema.max}
             min={widthSchema.min}

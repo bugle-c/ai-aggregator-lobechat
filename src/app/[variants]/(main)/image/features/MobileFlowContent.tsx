@@ -6,8 +6,6 @@ import { Sparkles } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ImageUrl from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ImageUrl';
-import ImageUrlsUpload from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ImageUrlsUpload';
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
@@ -47,15 +45,8 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate }) => {
   const cost = useGenerationCostPreview({ images: imageNum, kind: 'image', model: currentModel });
   const generate = useImageGenerate();
 
-  // The selected model may support a single reference image (img2img,
-  // FLUX Kontext etc.) and/or multiple reference images. Surface these
-  // uploaders inline when the model schema lists them — otherwise hide.
-  const supportsImageUrl = useImageStore(
-    imageGenerationConfigSelectors.isSupportedParam('imageUrl'),
-  );
-  const supportsImageUrls = useImageStore(
-    imageGenerationConfigSelectors.isSupportedParam('imageUrls'),
-  );
+  // Reference-image uploaders live in the strip's inline «Дополнительные
+  // настройки», same as on desktop — not duplicated above it.
 
   // A preset is a ready prompt: with one selected, an empty input is a
   // valid one-tap run (`applyPresetTemplate('', tpl)` → `tpl`).
@@ -75,23 +66,6 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate }) => {
   return (
     <Flexbox gap={12} style={{ minBlockSize: '100%' }}>
       <PresetThumbCard preset={preset} onClear={clearPreset} />
-
-      {supportsImageUrl && (
-        <Flexbox gap={4}>
-          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
-            Референсное изображение
-          </span>
-          <ImageUrl />
-        </Flexbox>
-      )}
-      {supportsImageUrls && (
-        <Flexbox gap={4}>
-          <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
-            Референсные изображения
-          </span>
-          <ImageUrlsUpload />
-        </Flexbox>
-      )}
 
       <PresetPromptPreview />
 

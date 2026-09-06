@@ -49,19 +49,11 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate }) => {
     model: currentModel,
   });
 
-  // img2vid / frame-conditioned generation — surface uploaders when
-  // the model schema supports them. `imageUrl` = start frame,
-  // `endImageUrl` = optional end frame.
-  const supportsStartFrame = useVideoStore(
-    videoGenerationConfigSelectors.isSupportedParam('imageUrl'),
-  );
-  const supportsEndFrame = useVideoStore(
-    videoGenerationConfigSelectors.isSupportedParam('endImageUrl'),
-  );
-
   // A preset is a ready prompt: with one selected, an empty input is a
   // valid one-tap run. An i2v preset additionally needs its photo
   // (`parameters.imageUrl`) — the CTA says so instead of silently greying.
+  // Optional start/end frames live in the strip's inline «Дополнительные
+  // настройки» (same as desktop); only the mandatory photo stays up here.
   const requiresImage = !!preset?.requiresImage;
   const readiness = decideGenerateReadiness({
     imageUrl: parameters?.imageUrl,
@@ -83,32 +75,18 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate }) => {
     <Flexbox gap={12} style={{ minBlockSize: '100%' }}>
       <PresetThumbCard preset={preset} onClear={clearPreset} />
 
-      {(supportsStartFrame || supportsEndFrame || requiresImage) && (
-        <Flexbox horizontal gap={8}>
-          {(supportsStartFrame || requiresImage) && (
-            <Flexbox flex={1} gap={4}>
-              <span
-                style={{
-                  color: requiresImage
-                    ? 'var(--ant-color-warning-text)'
-                    : 'var(--ant-color-text-tertiary)',
-                  fontSize: 11,
-                  fontWeight: requiresImage ? 600 : undefined,
-                }}
-              >
-                {requiresImage ? t('preset.requiresImage') : 'Стартовый кадр'}
-              </span>
-              <FrameUpload paramName="imageUrl" />
-            </Flexbox>
-          )}
-          {supportsEndFrame && (
-            <Flexbox flex={1} gap={4}>
-              <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
-                Конечный кадр
-              </span>
-              <FrameUpload paramName="endImageUrl" />
-            </Flexbox>
-          )}
+      {requiresImage && (
+        <Flexbox gap={4}>
+          <span
+            style={{
+              color: 'var(--ant-color-warning-text)',
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            {t('preset.requiresImage')}
+          </span>
+          <FrameUpload paramName="imageUrl" />
         </Flexbox>
       )}
 

@@ -85,7 +85,7 @@ const ImageAdvanced = memo<AdvancedProps>(
             <ResolutionSelect />
           </AdvancedItem>
         )}
-        {showDimensions && <DimensionControlGroup />}
+        {showDimensions && <DimensionControlGroup hideAspectRatio />}
         {showSteps && (
           <AdvancedItem label={t('config.steps.label')}>
             <StepsSliderInput />
