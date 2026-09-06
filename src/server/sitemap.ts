@@ -41,22 +41,55 @@ export class Sitemap {
 
   private discoverService = new DiscoverService();
 
+  // Market-backed paginated sitemaps (plugins / assistants / models) are OPT-IN for
+  // this fork. They enumerate LobeHub's public marketplace — not our content — and
+  // their page counts come from a live upstream call at BUILD time (`app/sitemap.tsx`
+  // is `force-static`). On 2026-09-06 the market returned ~2900 assistant pages and
+  // every chunk re-fetched upstream during static export → 60s page timeouts → the
+  // whole build failed. Default off; set SITEMAP_INCLUDE_MARKET=1 to re-enable.
+  // Even when enabled, a slow upstream must never block the build: the call is
+  // bounded and falls back to 0 pages.
+  private static readonly MARKET_COUNT_TIMEOUT_MS = 15_000;
+
+  private async marketPageCount(
+    label: string,
+    fetchIdentifiers: () => Promise<unknown[]>,
+  ): Promise<number> {
+    if (process.env.SITEMAP_INCLUDE_MARKET !== '1') return 0;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const list = await Promise.race([
+        fetchIdentifiers(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`sitemap ${label} count timed out`)),
+            Sitemap.MARKET_COUNT_TIMEOUT_MS,
+          );
+        }),
+      ]);
+      return Math.ceil(list.length / ITEMS_PER_PAGE);
+    } catch (error) {
+      console.warn(`[sitemap] ${label} page count unavailable, emitting 0 pages:`, error);
+      return 0;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   // Get total number of plugin pages
   async getPluginPageCount(): Promise<number> {
-    const list = await this.discoverService.getPluginIdentifiers();
-    return Math.ceil(list.length / ITEMS_PER_PAGE);
+    return this.marketPageCount('plugins', () => this.discoverService.getPluginIdentifiers());
   }
 
   // Get total number of assistant pages
   async getAssistantPageCount(): Promise<number> {
-    const list = await this.discoverService.getAssistantIdentifiers();
-    return Math.ceil(list.length / ITEMS_PER_PAGE);
+    return this.marketPageCount('assistants', () => this.discoverService.getAssistantIdentifiers());
   }
 
   // Get total number of model pages
   async getModelPageCount(): Promise<number> {
-    const list = await this.discoverService.getModelIdentifiers();
-    return Math.ceil(list.length / ITEMS_PER_PAGE);
+    return this.marketPageCount('models', () => this.discoverService.getModelIdentifiers());
   }
 
   private _generateSitemapLink(url: string) {
