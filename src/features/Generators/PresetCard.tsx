@@ -4,6 +4,7 @@ import { createStyles } from 'antd-style';
 import { ZoomIn } from 'lucide-react';
 import { memo, useState } from 'react';
 
+import { useIsMobile } from '@/hooks/useIsMobile';
 import type { Preset, PresetBadge } from '@/types/preset';
 
 import PresetMP4Player from './PresetMP4Player';
@@ -90,6 +91,7 @@ const useStyles = createStyles(({ css, token }) => ({
     }
 
     &:hover .preset-zoom-btn {
+      pointer-events: auto;
       opacity: 1;
     }
   `,
@@ -154,6 +156,10 @@ const useStyles = createStyles(({ css, token }) => ({
     transition: opacity 0.18s ease;
   `,
   zoomBtn: css`
+    /* Hidden until hover. Without pointer-events:none the fully
+       transparent 28×28 hit area still swallowed taps on touch devices,
+       opening the zoom modal instead of applying the preset. */
+    pointer-events: none;
     cursor: pointer;
 
     position: absolute;
@@ -184,6 +190,15 @@ const useStyles = createStyles(({ css, token }) => ({
       background: rgb(0 0 0 / 80%);
     }
   `,
+  /**
+   * Touch devices have no hover, so the details entry point must be
+   * permanently visible — semi-transparent so it stays unobtrusive over
+   * the preview.
+   */
+  zoomBtnTouch: css`
+    pointer-events: auto;
+    opacity: 0.75;
+  `,
 }));
 
 /**
@@ -204,6 +219,7 @@ const PresetCard = memo<Props>(({ isActive, onClick, preset }) => {
   const { styles, cx } = useStyles();
   const hint = CATEGORY_HINTS[preset.category];
   const [zoomOpen, setZoomOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   return (
     <>
@@ -217,8 +233,8 @@ const PresetCard = memo<Props>(({ isActive, onClick, preset }) => {
         <PresetMP4Player ariaHidden fallbackLabel={preset.title} previewUrl={preset.previewUrl} />
 
         <span
-          aria-label="Увеличить превью"
-          className={cx(styles.zoomBtn, 'preset-zoom-btn')}
+          aria-label="Подробнее о стиле"
+          className={cx(styles.zoomBtn, isMobile && styles.zoomBtnTouch, 'preset-zoom-btn')}
           role="button"
           tabIndex={0}
           onClick={(e) => {
