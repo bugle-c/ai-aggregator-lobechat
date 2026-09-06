@@ -511,3 +511,35 @@ the subject with `[<amount> ₽ · <plan>] ` before the copy line. Stage 1
   hypothesis is the generic copy line ("Карта стесняется", etc.) reads as
   marketing spam in inbox preview. Concrete price + plan name signals the
   message is theirs. Test cap raised from 60 → 80 chars accordingly.
+
+## Preset platform: ingest + scale (2026-09-06)
+
+Spec: `docs/superpowers/specs/2026-09-06-preset-platform-design.md`.
+
+- **External source (meigen.ai)**: whole domain sits behind a Cloudflare _managed challenge_ — curl,
+  headless Chromium and bot UAs all get 403. Only workable channel is a reader proxy:
+  `https://r.jina.ai/<url>` with `x-respond-with: text` + `x-no-cache: true` (without no-cache it
+  serves a stale body from a _different_ endpoint). Pagination is `?offset=N` step 20 — `?page=` is
+  silently ignored and returns page 1 forever. Their media CDN `images.meigen.ai` is **not** challenged:
+  `/videos/<id>/video.mp4`, `/videos/<id>/thumb.jpg`, `/tweets/<id>/<n>.jpg` fetch directly.
+- **It is not an effects library** — it is a feed of third-party X posts (`title` = truncated prompt,
+  `id` = the source tweet snowflake). Attribution is therefore derivable and mandatory:
+  `https://x.com/<username>/status/<id>`. `referenceInputContract`/`contentType`/`promptReady` are
+  constants in their payload and useless as i2v discriminators — detect reference-image prompts by text.
+- **Preview pipeline**: download → `ffmpeg -t 5 -an -vf scale=640:-2 -crf 30 -preset slow -movflags +faststart`
+  → RustFS via S3 API (11 MB source ⇒ 77–440 KB). Posters: source `thumb.jpg` → webp.
+- **`presets.list` is paginated and slim**: keyset cursor (base64url `{id,k}` where `k` is the sort key),
+  and `prompt_template` is deliberately NOT selected — cards use `PresetListItem`, and the click path
+  hydrates the full row via `getBySlug` (`usePresetHydrate`) before `selectPreset`. The `?preset=` deep
+  link shares that same query through the react-query cache.
+  Gotcha: for `sort:'new'` the cursor truncates `ingested_at` to ms in BOTH the ORDER BY and the
+  predicate — a µs-precision timestamp compares greater than its own ms cursor and re-serves the row.
+- **Search**: `searchable()` in `presets.ts` spans title/description/category/author_name, folds case and
+  `ё→е`, and escapes `\ % _` in user input (a typed `%` used to act as a wildcard). Its SQL expression
+  must stay textually identical to the indexed expressions in migration `0109_presets_search_trgm.sql`
+  or postgres silently seq-scans.
+- **Categories come from the DB** (`presets.facets`), not from a hardcoded list — an ingested category
+  must never be unreachable in the UI. `PRESET_CATEGORIES.ts` is now only a label map with a
+  capitalize-the-slug fallback.
+- There is **no `featured` column**; home ranking uses `sort:'popular'` (`popularity` = source likes).
+  Image presets are hand-made with `popularity NULL`, so home images stay on `curated`.
