@@ -53,7 +53,10 @@ const VideoPage = memo(() => {
         onClearPreset={clearPreset}
         onGenerate={() => generate(promptValue)}
       />
-      <Flexbox flex={1} height={'100%'}>
+      {/* min-width: 0 — a flex item defaults to min-width:auto, so the toolbar's
+          nowrap search row inflated this column to its min-content width (~1800px
+          at a 1440px viewport) and pushed the masonry's 4th column off-screen. */}
+      <Flexbox flex={1} height={'100%'} style={{ minWidth: 0 }}>
         <PlanGateBanner />
         <FlowMainArea />
       </Flexbox>
