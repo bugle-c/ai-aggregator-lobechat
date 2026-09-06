@@ -90,7 +90,9 @@ Telegram alert; a successful run prints the summary block below.
      dependency, a `publish` verdict is demoted to `queue` with the reason
      `requires-image-llm` (same Ф5 parking as the regex path).
    - `unsafe = true` is treated exactly like a stop-list hit: **nothing is
-     stored**, counted under `skipped-safety (llm-unsafe: N)`.
+     stored**, counted under `skipped-safety (llm-unsafe: N)`. (For rows that
+     are already in the table the verdict is persisted instead — see
+     `license = 'blocked'` under `--relabel`.)
    - Skips (stop-list, duplicate) and items without a media URL never cost a
      call.
 4. **Media.** `images.meigen.ai` → `ffmpeg` → RustFS via the S3 API →
@@ -128,12 +130,25 @@ labelling step is boxed in:
 For rows ingested before the LLM step (or after a prompt change). Reads the
 `N` oldest rows with `external_id IS NOT NULL`, re-runs the classifier on the
 stored `prompt_template` and prints a before→after table (title, category,
-i2v flag, active flag, flags such as `i2v→off`, `unsafe→off`, `cat?<slug>`).
-Rules: `requires_image` = stored OR regex OR llm (never flips back); a row that
-*becomes* i2v while `active` is parked (`active=false`) for Ф5 to re-activate
-with its own script; a row the model flags unsafe is parked too; a failed
+i2v flag, active flag, blocked flag, flags such as `i2v→off`, `unsafe→off`,
+`blocked+`, `cat?<slug>`). Rules: `requires_image` = stored OR regex OR llm
+(never flips back); a row that *becomes* i2v while `active` is parked
+(`active=false`) for Ф5 to re-activate with its own script; a row the model
+flags unsafe is parked too **and stamped `license = 'blocked'`**; a failed
 classification leaves the row untouched. **Nothing is written without
 `--apply`.** Curated rows (`external_id IS NULL`) are never touched.
+
+**`license = 'blocked'` is the durable unsafe verdict.** `active=false` on its
+own is not: `activateI2v.ts` re-runs only the heuristic filters and once
+re-activated a "use the provided facial reference" prompt the model had parked.
+There is no dedicated column (and no migration), so the verdict rides on
+`license`, which nothing else writes (`source-attribution` for every ingested
+row). Every activation path skips these rows — `planActivation` keeps them
+with reason `blocked-by-llm` and the `UPDATE` repeats the check — and the
+verdict is sticky: a later run where the model answers `unsafe=false` keeps
+the row blocked and parked (`blocked` flag). Unblocking is a human decision:
+`UPDATE presets SET license = 'source-attribution' WHERE slug = '…'`. The
+summary prints `blocked: N (new: M)`.
 
 **Do not relabel the first 40 ingested rows blindly.** The 2026-09-06 13:33
 batch (`trend-2091396663718117706` … `trend-2091040255818236292`) carries
@@ -206,7 +221,9 @@ the trimmed source title; `description` `NULL`.
 Queue reasons are not stored, so `activateI2v.ts` re-runs the _current_
 `filters.ts` over every queued `requires_image` row (stored prompt, aspect,
 likes, attribution, per-author cap) and activates only the rows that would
-publish today. Dry run by default; `--apply` writes in one transaction.
+publish today. Rows with `license = 'blocked'` (LLM unsafe verdict, see
+`--relabel`) are kept back with reason `blocked-by-llm` whatever the filters
+say. Dry run by default; `--apply` writes in one transaction.
 
 ```bash
 npx tsx scripts/ingestPresets/activateI2v.ts         # report only

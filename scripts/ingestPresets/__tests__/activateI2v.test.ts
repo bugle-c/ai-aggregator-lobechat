@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatPlan, planActivation, type QueuedRow, rowToSourceItem } from '../activateI2v';
-import { I2V_RECOMMENDED_MODEL } from '../derive';
+import {
+  BLOCKED_REASON,
+  formatPlan,
+  planActivation,
+  type QueuedRow,
+  rowToSourceItem,
+} from '../activateI2v';
+import { BLOCKED_LICENSE, I2V_RECOMMENDED_MODEL, LICENSE } from '../derive';
 
 const PROMPT =
   'Use @image1 as the subject. Cinematic slow push-in on the person, soft rim light, ' +
@@ -12,6 +18,7 @@ const row = (overrides: Partial<QueuedRow> = {}): QueuedRow => ({
   author_url: 'https://x.com/jane_doe',
   external_id: '2094046000000000001',
   id: '101',
+  license: LICENSE,
   modality: 'video',
   params_lock: { aspect_ratio: '16:9' },
   popularity: 320,
@@ -87,6 +94,24 @@ describe('planActivation', () => {
     ]);
     expect(plan.activate.map((r) => r.slug)).toEqual(['a', 'b']);
     expect(plan.keep).toEqual([{ id: '3', reasons: ['author-cap'], slug: 'c' }]);
+  });
+
+  it('never activates a row the LLM blocked, however clean the filters find it', () => {
+    const plan = planActivation([row({ license: BLOCKED_LICENSE })]);
+    expect(plan.activate).toEqual([]);
+    expect(plan.keep).toEqual([
+      { id: '101', reasons: [BLOCKED_REASON], slug: 'trend-2094046000000000001' },
+    ]);
+  });
+
+  it('does not let a blocked row use up the author cap', () => {
+    const plan = planActivation([
+      row({ external_id: '2094046000000000001', id: '1', license: BLOCKED_LICENSE, slug: 'x' }),
+      row({ external_id: '2094046000000000002', id: '2', slug: 'a' }),
+      row({ external_id: '2094046000000000003', id: '3', slug: 'b' }),
+    ]);
+    expect(plan.activate.map((r) => r.slug)).toEqual(['a', 'b']);
+    expect(plan.keep).toEqual([{ id: '1', reasons: [BLOCKED_REASON], slug: 'x' }]);
   });
 
   it('ignores image (i2i) rows entirely — no image-side gate exists', () => {
