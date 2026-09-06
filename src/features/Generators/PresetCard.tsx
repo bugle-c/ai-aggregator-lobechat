@@ -39,9 +39,16 @@ const BADGE_COLORS: Record<PresetBadge, string> = {
 };
 
 /**
+ * Shown for any category we have no tailored hint for — the ingest cron can
+ * introduce categories this map has never heard of, and a blank hint area
+ * looked like a rendering bug.
+ */
+const GENERIC_HINT = 'Опишите, что показать — стиль возьмётся из пресета.';
+
+/**
  * Category-keyed usage hint. Shown on hover overlay so the user
  * understands what to put in the prompt for this preset to "click".
- * Falls back to a generic line if a new category appears.
+ * Falls back to GENERIC_HINT if a new category appears.
  */
 const CATEGORY_HINTS: Record<string, string> = {
   action: 'Кратко опишите героя/действие — стиль кадра уже зашит в пресет.',
@@ -217,7 +224,7 @@ const cardAspectRatio = (preset: PresetListItem): string => {
 
 const PresetCard = memo<Props>(({ isActive, onClick, preset }) => {
   const { styles, cx } = useStyles();
-  const hint = CATEGORY_HINTS[preset.category];
+  const hint = CATEGORY_HINTS[preset.category] ?? GENERIC_HINT;
   const [zoomOpen, setZoomOpen] = useState(false);
   const isMobile = useIsMobile();
 

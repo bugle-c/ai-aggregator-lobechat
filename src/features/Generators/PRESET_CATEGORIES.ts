@@ -1,30 +1,29 @@
-import type { PresetModality } from '@/types/preset';
+/**
+ * Russian display labels for preset category slugs.
+ *
+ * This is a *label* map, not a category list — the list of categories the
+ * gallery renders comes from `presets.facets` (the DB), so a category the
+ * ingest cron invents is still reachable. Anything missing here falls back to
+ * the capitalized slug rather than disappearing from the UI.
+ */
+export const CATEGORY_LABELS: Record<string, string> = {
+  action: 'Экшн',
+  ambient: 'Атмосфера',
+  anime: 'Аниме',
+  artistic: 'Арт',
+  camera: 'Камера',
+  character: 'Персонажи',
+  effects: 'Эффекты',
+  landscape: 'Пейзаж',
+  portrait: 'Портрет',
+  product: 'Продукт',
+  realistic: 'Реализм',
+};
 
-export interface CategoryDef {
-  /** Displayed to user (Russian). */
-  label: string;
-  /** Matches `presets.category` in DB. `'__all'` is the synthetic "no filter" tab. */
-  slug: string;
-}
+/** Synthetic "no category filter" tab key. */
+export const ALL_CATEGORIES_KEY = '__all';
 
-export const VIDEO_CATEGORIES: CategoryDef[] = [
-  { label: 'Все', slug: '__all' },
-  { label: 'Камера', slug: 'camera' },
-  { label: 'Эффекты', slug: 'effects' },
-  { label: 'Персонажи', slug: 'character' },
-  { label: 'Атмосфера', slug: 'ambient' },
-  { label: 'Экшн', slug: 'action' },
-];
+const capitalize = (s: string): string =>
+  s.length === 0 ? s : s[0].toUpperCase() + s.slice(1).replaceAll(/[_-]/g, ' ');
 
-export const IMAGE_CATEGORIES: CategoryDef[] = [
-  { label: 'Все', slug: '__all' },
-  { label: 'Портрет', slug: 'portrait' },
-  { label: 'Пейзаж', slug: 'landscape' },
-  { label: 'Аниме', slug: 'anime' },
-  { label: 'Реализм', slug: 'realistic' },
-  { label: 'Продукт', slug: 'product' },
-  { label: 'Арт', slug: 'artistic' },
-];
-
-export const getCategories = (modality: PresetModality): CategoryDef[] =>
-  modality === 'video' ? VIDEO_CATEGORIES : IMAGE_CATEGORIES;
+export const categoryLabel = (slug: string): string => CATEGORY_LABELS[slug] ?? capitalize(slug);

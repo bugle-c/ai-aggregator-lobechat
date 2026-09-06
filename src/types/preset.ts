@@ -80,3 +80,18 @@ export interface PresetCategoryFacet {
   category: string;
   count: number;
 }
+
+/** One `{ modelId, count }` row of the `presets.facets` response. */
+export interface PresetModelFacet {
+  count: number;
+  modelId: string;
+}
+
+/**
+ * Everything the gallery's filter strips need, in one round trip: which
+ * categories and models actually have active presets for this modality.
+ */
+export interface PresetFacets {
+  categories: PresetCategoryFacet[];
+  models: PresetModelFacet[];
+}

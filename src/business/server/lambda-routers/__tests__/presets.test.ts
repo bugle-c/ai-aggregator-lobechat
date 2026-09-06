@@ -149,6 +149,29 @@ let lastWhereArg: unknown;
 /** Column map handed to `.select(...)`, or undefined for a bare `select()`. */
 let lastSelectArg: Record<string, unknown> | undefined;
 
+/** SeedRow key behind a grouped column, keyed by both JS and SQL column name. */
+const GROUP_KEYS: Record<string, 'category' | 'recommendedModelId'> = {
+  category: 'category',
+  recommendedModelId: 'recommendedModelId',
+  recommended_model_id: 'recommendedModelId',
+};
+
+/**
+ * Mimics `GROUP BY <col>` + `count()` ordered by count desc — enough for the
+ * facets procedure, which is the only grouped query in this router.
+ */
+const applyGroupBy = (rows: SeedRow[], column: string): Record<string, unknown>[] => {
+  const key = GROUP_KEYS[column];
+  if (!key) throw new Error(`unhandled groupBy column in stub: ${column}`);
+  const tally = new Map<string, number>();
+  for (const r of rows) tally.set(r[key], (tally.get(r[key]) ?? 0) + 1);
+  return [...tally.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([value, n]) =>
+      key === 'category' ? { category: value, count: n } : { count: n, modelId: value },
+    );
+};
+
 const applyFilter = (rows: SeedRow[]): SeedRow[] => {
   let out = rows.filter((r) => r.active);
   if (pendingFilter.modality) out = out.filter((r) => r.modality === pendingFilter.modality);
@@ -184,13 +207,35 @@ class QueryProxy<T> extends Promise<T[]> {
     return this;
   }
 
+  // Per-query state: `facets` fires two grouped selects in a Promise.all, so
+  // a shared module-level slot would have the second overwrite the first.
+  state: { groupBy?: string } = {};
+
+  groupBy(col: unknown) {
+    this.state.groupBy = (col as { name?: string })?.name ?? String(col);
+    return this;
+  }
+
   limit(n: number) {
     pendingFilter.limit = n;
     return this;
   }
 }
 
-const buildQueryProxy = () => new QueryProxy<SeedRow>((resolve) => resolve(applyFilter(SEEDS)));
+// Resolution is deferred to a microtask so the synchronously-chained
+// `.where().groupBy().orderBy()` calls are already recorded by the time the
+// stub decides what to return.
+const buildQueryProxy = () => {
+  const state: { groupBy?: string } = {};
+  const proxy = new QueryProxy<SeedRow>((resolve) =>
+    queueMicrotask(() => {
+      const rows = applyFilter(SEEDS);
+      resolve((state.groupBy ? applyGroupBy(rows, state.groupBy) : rows) as unknown as SeedRow[]);
+    }),
+  );
+  proxy.state = state;
+  return proxy;
+};
 
 const buildDbStub = () => ({
   select: vi.fn((cols?: Record<string, unknown>) => {
@@ -363,5 +408,29 @@ describe('presetsRouter', () => {
     const caller = presetsRouter.createCaller({} as any);
     const p = await caller.getBySlug({ slug: 'does-not-exist' });
     expect(p).toBeNull();
+  });
+  it('facets returns categories and models present in the DB, ordered by count', async () => {
+    pendingFilter = { modality: 'video' };
+    const caller = presetsRouter.createCaller({} as any);
+    const facets = await caller.facets({ modality: 'video' });
+
+    // 3 camera + 1 effects among the video seeds.
+    expect(facets.categories).toEqual([
+      { category: 'camera', count: 3 },
+      { category: 'effects', count: 1 },
+    ]);
+    expect(facets.models.map((m) => m.modelId)).toEqual([
+      'bytedance/seedance-2.0-fast/text-to-video',
+      'kwaivgi/kling-v3.0-pro/text-to-video',
+    ]);
+    expect(facets.models[0].count).toBe(3);
+  });
+
+  it('facets scopes to the requested modality', async () => {
+    pendingFilter = { modality: 'image' };
+    const caller = presetsRouter.createCaller({} as any);
+    const facets = await caller.facets({ modality: 'image' });
+    expect(facets.categories).toEqual([{ category: 'portrait', count: 1 }]);
+    expect(facets.models).toEqual([{ count: 1, modelId: 'flux-pro' }]);
   });
 });

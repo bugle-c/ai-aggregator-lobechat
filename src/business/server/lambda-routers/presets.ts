@@ -1,4 +1,4 @@
-import { and, eq, ilike, type SQL, sql } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, isNotNull, type SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { presets } from '@/database/schemas';
@@ -7,6 +7,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import type {
   Preset,
   PresetBadge,
+  PresetFacets,
   PresetListItem,
   PresetParamsLock,
   PresetSort,
@@ -178,6 +179,43 @@ const keysetOf = (sort: PresetSort, c: Cursor): SQL => {
 };
 
 export const presetsRouter = router({
+  /**
+   * Distinct categories and models that actually exist in the catalogue for a
+   * modality, with row counts. The gallery's tab strips are built from this
+   * instead of a hardcoded list, so a category introduced by the ingest cron
+   * is reachable in the UI the moment the first row lands. It also replaces
+   * the second full `list` fetch `ModelTabs` used to make just to derive tabs.
+   */
+  facets: procedure
+    .input(z.object({ modality: modalityEnum }))
+    .query(async ({ ctx, input }): Promise<PresetFacets> => {
+      const where = and(eq(presets.active, true), eq(presets.modality, input.modality));
+
+      const [categoryRows, modelRows] = await Promise.all([
+        ctx.serverDB
+          .select({ category: presets.category, count: count() })
+          .from(presets)
+          .where(where)
+          .groupBy(presets.category)
+          .orderBy(desc(count()), presets.category),
+        ctx.serverDB
+          .select({ count: count(), modelId: presets.recommendedModelId })
+          .from(presets)
+          .where(and(where, isNotNull(presets.recommendedModelId)))
+          .groupBy(presets.recommendedModelId)
+          .orderBy(desc(count()), presets.recommendedModelId),
+      ]);
+
+      return {
+        categories: categoryRows.map((r) => ({ category: r.category, count: Number(r.count) })),
+        models: modelRows
+          // `isNotNull` already filtered these out; the guard is only here to
+          // satisfy the nullable column type.
+          .filter((r): r is typeof r & { modelId: string } => r.modelId !== null)
+          .map((r) => ({ count: Number(r.count), modelId: r.modelId })),
+      };
+    }),
+
   getBySlug: procedure
     .input(z.object({ slug: z.string() }))
     .query(async ({ ctx, input }): Promise<Preset | null> => {
