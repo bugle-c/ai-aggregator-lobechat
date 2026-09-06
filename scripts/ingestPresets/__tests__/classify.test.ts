@@ -6,8 +6,10 @@ import {
   buildUserPrompt,
   ClassificationSchema,
   Classifier,
+  cleanTitle,
   MAX_CLASSIFICATIONS_PER_RUN,
   OPENROUTER_URL,
+  SHORT_TITLE_TARGET,
   tidyTitle,
   truncatePrompt,
 } from '../classify';
@@ -213,5 +215,79 @@ describe('Classifier', () => {
 
   it('refuses to construct without an API key', () => {
     expect(() => new Classifier({ apiKey: '' })).toThrow(/OPENROUTER_API_KEY/);
+  });
+});
+
+describe('over-long title follow-up', () => {
+  // 47 chars: the classifier overshot; a plain trim gave «… на пустынной».
+  const LONG = 'Финал гонки на закате на пустынной трассе в пустыне';
+  const SHORT = 'Финал гонки на закате';
+
+  it('asks the same model once to shorten and uses the answer', async () => {
+    const fetchImpl = mockFetch(completion({ ...GOOD, title_ru: `«${LONG}».` }), completion({ title_ru: SHORT }));
+    const c = classifier(fetchImpl);
+
+    const result = await c.classify(input);
+    expect(result.ok && result.title).toBe(SHORT);
+    expect(result.ok && result.summary).toBe(GOOD.summary_ru);
+    expect(c.stats).toMatchObject({ calls: 2, failed: 0, retries: 0, shortened: 1 });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    const body = JSON.parse((fetchImpl.mock.calls[1]![1] as RequestInit).body as string);
+    expect(body.model).toBe('openai/gpt-5-mini');
+    expect(body.max_tokens).toBeLessThanOrEqual(100);
+    expect(body.messages[0].content).toContain(`at most ${SHORT_TITLE_TARGET} characters`);
+    // the cleaned phrase (quotes / period stripped), not the trimmed one
+    expect(body.messages[1].content).toContain(`Title: ${LONG}`);
+    expect(body.messages[1].content).toContain(GOOD.summary_ru);
+  });
+
+  it('does not follow up on a title that already fits', async () => {
+    const fetchImpl = mockFetch(completion(GOOD), completion({ title_ru: 'x' }));
+    const c = classifier(fetchImpl);
+    const result = await c.classify(input);
+    expect(result.ok && result.title).toBe(GOOD.title_ru);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(c.stats.shortened).toBe(0);
+  });
+
+  it('falls back to the trimmed title when the follow-up fails, without counting a failure', async () => {
+    const trimmed = tidyTitle(LONG);
+    expect(trimmed.length).toBeLessThanOrEqual(40);
+
+    const nonJson = jsonResponse({ choices: [{ finish_reason: 'stop', message: { content: 'nope' } }] });
+    const c = classifier(mockFetch(completion({ ...GOOD, title_ru: LONG }), nonJson));
+    const result = await c.classify(input);
+    expect(result.ok && result.title).toBe(trimmed);
+    expect(c.stats).toMatchObject({ calls: 2, failed: 0, shortened: 1 });
+
+    // An empty answer fails the follow-up schema and falls back the same way.
+    const empty = classifier(mockFetch(completion({ ...GOOD, title_ru: LONG }), completion({ title_ru: '' })));
+    const result2 = await empty.classify(input);
+    expect(result2.ok && result2.title).toBe(trimmed);
+    expect(empty.stats).toMatchObject({ calls: 2, failed: 0, shortened: 1 });
+  });
+
+  it('trims a follow-up that is itself still too long, from the shorter phrase', async () => {
+    const c = classifier(
+      mockFetch(completion({ ...GOOD, title_ru: LONG }), completion({ title_ru: 'Финал гонки на закате на пустынной трассе' })),
+    );
+    const result = await c.classify(input);
+    expect(result.ok && result.title).toBe('Финал гонки на закате на пустынной');
+  });
+
+  it('skips the follow-up (keeps the trim) when the per-run cap is spent', async () => {
+    const fetchImpl = mockFetch(completion({ ...GOOD, title_ru: LONG }), completion({ title_ru: SHORT }));
+    const c = classifier(fetchImpl, { maxCalls: 1 });
+    const result = await c.classify(input);
+    expect(result.ok && result.title).toBe(tidyTitle(LONG));
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(c.stats).toMatchObject({ calls: 1, capped: 0, shortened: 0 });
+    expect(c.callsLeft).toBe(0);
+  });
+
+  it('cleanTitle strips only the wrapper, never the length', () => {
+    expect(cleanTitle(`«${LONG}».`)).toBe(LONG);
+    expect(cleanTitle('Титры фильма «Пепел дня»')).toBe('Титры фильма «Пепел дня»');
   });
 });

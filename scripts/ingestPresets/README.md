@@ -115,6 +115,14 @@ labelling step is boxed in:
   `--relabel` stops at the cap instead of scanning on.
 - **One retry, never more** (transport error, 429/5xx, empty or malformed
   answer). 20 s timeout per attempt. No background timers, no queue.
+- **One follow-up for an over-long title, never more.** The model overshoots
+  the 40-char title limit in roughly a third of answers and a word-boundary
+  trim left «Финал гонки на закате на пустынной». When the (quote-stripped)
+  title is over the limit, one extra call asks the same model to restate it
+  in ≤35 characters (`max_tokens` 80, ~$0.0001); if that fails, is empty or
+  the per-run cap is already spent, the trimmed title is used as before. The
+  follow-up counts against the same 60-call cap and shows up as
+  `shortened=N` in the summary.
 - **Usage is printed** in the run summary: calls, retries, failures, tokens
   in/out and USD (from OpenRouter's `usage.cost`, else list price
   $0.25/M in · $2/M out). Measured: ~600 prompt + ~80 completion tokens per
