@@ -6,6 +6,8 @@
  * failed check rather than crashing the run.
  */
 
+import type { ClassifierStats } from './classify';
+
 export type Modality = 'image' | 'video';
 
 export interface SourceAuthor {
@@ -71,6 +73,8 @@ export interface PresetInsert {
   authorName: string | null;
   authorUrl: string | null;
   category: string;
+  /** One-line Russian summary of what the user will get (LLM step); `null` for heuristic rows. */
+  description: string | null;
   externalId: string;
   license: string;
   modality: Modality;
@@ -91,10 +95,15 @@ export interface PresetInsert {
 export interface RunReport {
   failedMedia: number;
   fetched: number;
+  /** Token/cost accounting of the LLM labelling step; absent under `--no-llm`. */
+  llm?: ClassifierStats;
   new: number;
   pagesFetched: number;
   published: number;
   queued: number;
   skippedDuplicate: number;
+  /** Stop-list hits plus items the LLM flagged as unsafe. */
   skippedSafety: number;
+  /** Subset of `skippedSafety` that came from the LLM rather than the stop-list. */
+  skippedUnsafeLlm: number;
 }

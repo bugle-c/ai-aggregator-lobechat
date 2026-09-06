@@ -60,13 +60,13 @@ const insertPresetRow = async (client: Client, row: PresetInsert): Promise<boole
        params_lock, preview_url, poster_url, sort_order, active,
        external_id, source_platform, source_url,
        author_name, author_url, author_avatar,
-       popularity, requires_image, ingested_at, license
+       popularity, requires_image, ingested_at, license, description
      ) VALUES (
        $1, $2, $3, $4, $5, $6,
        $7::jsonb, $8, $9, $10, $11,
        $12, $13, $14,
        $15, $16, $17,
-       $18, $19, NOW(), $20
+       $18, $19, NOW(), $20, $21
      )
      ON CONFLICT (external_id) DO NOTHING`,
     [
@@ -90,8 +90,67 @@ const insertPresetRow = async (client: Client, row: PresetInsert): Promise<boole
       row.popularity,
       row.requiresImage,
       row.license,
+      row.description,
     ],
   );
 
   return (rowCount ?? 0) > 0;
+};
+
+// --- relabel ----------------------------------------------------------------
+
+/** The subset of `pg.Client` the relabel path needs — mockable in tests. */
+export type Queryable = Pick<Client, 'query'>;
+
+/** An ingested row as read back for `--relabel`. */
+export interface StoredPreset {
+  active: boolean;
+  category: string;
+  description: string | null;
+  id: number;
+  modality: Modality;
+  params_lock: Record<string, string> | null;
+  prompt_template: string;
+  requires_image: boolean;
+  slug: string;
+  title: string;
+}
+
+/** Ingested rows (never curated ones), oldest first, for re-labelling. */
+export const loadIngestedPresets = async (
+  client: Queryable,
+  limit: number,
+): Promise<StoredPreset[]> => {
+  const { rows } = await client.query<StoredPreset>(
+    `SELECT id, slug, modality, category, title, description, prompt_template,
+            params_lock, requires_image, active
+       FROM presets
+      WHERE external_id IS NOT NULL
+      ORDER BY ingested_at ASC NULLS LAST, id ASC
+      LIMIT $1`,
+    [limit],
+  );
+  return rows;
+};
+
+export interface PresetLabelUpdate {
+  active: boolean;
+  category: string;
+  description: string | null;
+  requiresImage: boolean;
+  title: string;
+}
+
+export const updatePresetLabels = async (
+  client: Queryable,
+  id: number,
+  update: PresetLabelUpdate,
+): Promise<void> => {
+  await client.query(
+    `UPDATE presets
+        SET title = $1, description = $2, category = $3, requires_image = $4, active = $5,
+            updated_at = NOW()
+      WHERE id = $6`,
+    [update.title, update.description, update.category, update.requiresImage, update.active, id],
+  );
 };

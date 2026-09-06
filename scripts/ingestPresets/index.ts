@@ -8,6 +8,8 @@
  *
  *   npx tsx scripts/ingestPresets/index.ts --dry-run
  *   npx tsx scripts/ingestPresets/index.ts --modality=video --limit=10
+ *   npx tsx scripts/ingestPresets/index.ts --relabel=20          # dry-run table
+ *   npx tsx scripts/ingestPresets/index.ts --relabel=20 --apply  # writes
  *
  * See ./README.md for flags, the crontab line and failure modes.
  */
@@ -18,10 +20,13 @@ import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 
 import { sendAlert } from '../../src/server/services/alerts';
+import { Classifier, type ClassifyResult, formatStats } from './classify';
 import { deriveAttribution, deriveCategory, deriveTitle, LICENSE, slugFor } from './derive';
 import { discoverNewItems } from './fetchCatalog';
 import { evaluateBatch } from './filters';
+import { type Labels, mergeLabels } from './labeling';
 import { assertFfmpegAvailable, MediaUploader, processMedia, s3ConfigFromEnv } from './media';
+import { DEFAULT_RELABEL_LIMIT, formatRelabelTable, runRelabel } from './relabel';
 import type { Evaluation, Modality, PresetInsert, RunReport, SourceItem } from './types';
 import {
   createClient,
@@ -45,23 +50,42 @@ const loadEnv = () => {
 // --- CLI --------------------------------------------------------------------
 
 export interface Options {
+  /** `--relabel` writes only with this; ingest ignores it. */
+  apply: boolean;
   dryRun: boolean;
   limit: number;
+  /** `--no-llm` → false: pure heuristics, the pre-LLM behaviour. */
+  llm: boolean;
   maxPages: number;
   modalities: Modality[];
+  /** `--relabel[=N]`: re-classify N stored rows instead of ingesting. */
+  relabel: number | null;
 }
 
 export const parseArgs = (argv: string[]): Options => {
   const options: Options = {
+    apply: false,
     dryRun: false,
     limit: MAX_NEW_PER_RUN,
+    llm: true,
     maxPages: MAX_PAGES_PER_RUN,
     modalities: ['video', 'image'],
+    relabel: null,
   };
 
   for (const arg of argv) {
     if (arg === '--dry-run') {
       options.dryRun = true;
+    } else if (arg === '--no-llm') {
+      options.llm = false;
+    } else if (arg === '--apply') {
+      options.apply = true;
+    } else if (arg === '--relabel') {
+      options.relabel = DEFAULT_RELABEL_LIMIT;
+    } else if (arg.startsWith('--relabel=')) {
+      const value = Number.parseInt(arg.slice('--relabel='.length), 10);
+      if (!Number.isInteger(value) || value <= 0) throw new Error(`bad --relabel: ${arg}`);
+      options.relabel = value;
     } else if (arg.startsWith('--limit=')) {
       const value = Number.parseInt(arg.slice('--limit='.length), 10);
       if (!Number.isInteger(value) || value <= 0) throw new Error(`bad --limit: ${arg}`);
@@ -80,6 +104,10 @@ export const parseArgs = (argv: string[]): Options => {
     }
   }
 
+  if (options.relabel !== null && !options.llm) {
+    throw new Error('--relabel needs the LLM; drop --no-llm');
+  }
+
   return options;
 };
 
@@ -88,12 +116,20 @@ export const parseArgs = (argv: string[]): Options => {
 const mediaSourceUrl = (item: SourceItem, modality: Modality): string | undefined =>
   modality === 'video' ? item.videoUrl : (item.images?.[0] ?? item.image);
 
+/** Labels the keyword tables produce — the fallback when the LLM step is off or failed. */
+export const heuristicLabels = (item: SourceItem, modality: Modality): Labels => ({
+  category: deriveCategory(item.prompt ?? '', modality),
+  description: null,
+  title: deriveTitle(item),
+});
+
 export const buildRow = (
   item: SourceItem,
   evaluation: Evaluation,
   modality: Modality,
   media: { posterUrl: string | null; previewUrl: string },
   sortOrder: number,
+  labels: Labels = heuristicLabels(item, modality),
 ): PresetInsert => {
   const attribution = deriveAttribution(item);
   const prompt = item.prompt ?? '';
@@ -103,7 +139,8 @@ export const buildRow = (
     authorAvatar: attribution.authorAvatar,
     authorName: attribution.authorName,
     authorUrl: attribution.authorUrl,
-    category: deriveCategory(prompt, modality),
+    category: labels.category,
+    description: labels.description,
     externalId: item.id,
     license: LICENSE,
     modality,
@@ -118,7 +155,7 @@ export const buildRow = (
     sortOrder,
     sourcePlatform: attribution.sourcePlatform,
     sourceUrl: attribution.sourceUrl,
-    title: deriveTitle(item),
+    title: labels.title,
   };
 };
 
@@ -133,6 +170,7 @@ const emptyReport = (): RunReport => ({
   queued: 0,
   skippedDuplicate: 0,
   skippedSafety: 0,
+  skippedUnsafeLlm: 0,
 });
 
 export const formatReport = (report: RunReport, dryRun: boolean): string =>
@@ -143,10 +181,32 @@ export const formatReport = (report: RunReport, dryRun: boolean): string =>
     `new: ${report.new}`,
     `published: ${report.published}`,
     `queued: ${report.queued}`,
-    `skipped-safety: ${report.skippedSafety}`,
+    `skipped-safety: ${report.skippedSafety} (llm-unsafe: ${report.skippedUnsafeLlm})`,
     `skipped-duplicate: ${report.skippedDuplicate}`,
     `failed-media: ${report.failedMedia}`,
+    report.llm ? formatStats(report.llm) : 'llm: off',
   ].join('\n');
+
+/** One log line per item showing heuristic → LLM so label quality can be judged from the log. */
+const describeLabels = (
+  heuristic: Labels,
+  decision: ReturnType<typeof mergeLabels>,
+  llm: ClassifyResult | null,
+): string => {
+  if (decision.source === 'heuristic') {
+    const why = llm && !llm.ok ? ` (llm failed: ${llm.reason})` : '';
+    return `«${heuristic.title}» cat=${heuristic.category}${why}`;
+  }
+  const { labels } = decision;
+  const catNote =
+    llm?.ok && llm.category === null ? ` (llm wanted "${llm.rawCategory}")` : '';
+  return (
+    `«${heuristic.title}» → «${labels.title}» cat=${heuristic.category}→${labels.category}${catNote}` +
+    ` i2v=${decision.evaluation.requiresImage ? 'Y' : '-'}` +
+    (decision.unsafe ? ' UNSAFE' : '') +
+    `\n           ${labels.description ?? ''}`
+  );
+};
 
 // --- run --------------------------------------------------------------------
 
@@ -167,6 +227,12 @@ const preflightS3 = async () => {
 
 const run = async (options: Options): Promise<RunReport> => {
   const report = emptyReport();
+
+  // Constructed up front so a missing key fails before any network work, but
+  // it makes no call until an item actually needs a label — a run with
+  // nothing new costs nothing.
+  const classifier = options.llm ? Classifier.fromEnv() : null;
+  if (classifier) report.llm = classifier.stats;
 
   const client = createClient();
   await client.connect();
@@ -205,11 +271,11 @@ const run = async (options: Options): Promise<RunReport> => {
 
       const evaluated = evaluateBatch(discovery.fresh, { known, modality });
 
-      for (const { evaluation, item } of evaluated) {
-        if (evaluation.verdict === 'skip') {
-          if (evaluation.reasons[0] === 'duplicate') report.skippedDuplicate += 1;
+      for (const { evaluation: heuristicEvaluation, item } of evaluated) {
+        if (heuristicEvaluation.verdict === 'skip') {
+          if (heuristicEvaluation.reasons[0] === 'duplicate') report.skippedDuplicate += 1;
           else report.skippedSafety += 1;
-          console.log(`[ingest] skip ${item.id}: ${evaluation.reasons.join(',')}`);
+          console.log(`[ingest] skip ${item.id}: ${heuristicEvaluation.reasons.join(',')}`);
           continue;
         }
 
@@ -220,14 +286,34 @@ const run = async (options: Options): Promise<RunReport> => {
           continue;
         }
 
+        // LLM labelling — only for items that survived the free checks above,
+        // so stop-list hits and duplicates never cost a call.
+        const heuristic = heuristicLabels(item, modality);
+        const llm = classifier
+          ? await classifier.classify({
+              aspectRatio: heuristicEvaluation.aspectRatio,
+              modality,
+              prompt: item.prompt ?? '',
+            })
+          : null;
+        const decision = mergeLabels({ evaluation: heuristicEvaluation, heuristic, llm });
+        const { evaluation, labels } = decision;
+
+        if (decision.unsafe) {
+          report.skippedSafety += 1;
+          report.skippedUnsafeLlm += 1;
+          console.log(`[ingest] skip ${item.id}: safety:llm «${labels.title}»`);
+          continue;
+        }
+
         if (options.dryRun) {
           if (evaluation.verdict === 'publish') report.published += 1;
           else report.queued += 1;
           console.log(
-            `[ingest] would ${evaluation.verdict} ${item.id} «${deriveTitle(item)}» ` +
-              `cat=${deriveCategory(item.prompt ?? '', modality)} ar=${evaluation.aspectRatio ?? '-'} ` +
+            `[ingest] would ${evaluation.verdict} ${item.id} ar=${evaluation.aspectRatio ?? '-'} ` +
               `likes=${item.stats?.likes ?? 0}` +
-              (evaluation.reasons.length > 0 ? ` reasons=${evaluation.reasons.join(',')}` : ''),
+              (evaluation.reasons.length > 0 ? ` reasons=${evaluation.reasons.join(',')}` : '') +
+              `\n           ${describeLabels(heuristic, decision, llm)}`,
           );
           budget -= 1;
           continue;
@@ -243,16 +329,17 @@ const run = async (options: Options): Promise<RunReport> => {
         }
 
         sortOrder += 1;
-        const row = buildRow(item, evaluation, modality, media, sortOrder);
+        const row = buildRow(item, evaluation, modality, media, sortOrder, labels);
         const inserted = await insertPreset(client, row);
 
         if (inserted) {
           if (row.active) report.published += 1;
           else report.queued += 1;
           console.log(
-            `[ingest] ${row.active ? 'published' : 'queued'} ${row.slug} «${row.title}» ` +
-              `cat=${row.category} ${Math.round(media.size / 1024)}KB` +
-              (evaluation.reasons.length > 0 ? ` reasons=${evaluation.reasons.join(',')}` : ''),
+            `[ingest] ${row.active ? 'published' : 'queued'} ${row.slug} ` +
+              `${Math.round(media.size / 1024)}KB` +
+              (evaluation.reasons.length > 0 ? ` reasons=${evaluation.reasons.join(',')}` : '') +
+              `\n           ${describeLabels(heuristic, decision, llm)}`,
           );
         } else {
           report.skippedDuplicate += 1;
@@ -274,6 +361,50 @@ const run = async (options: Options): Promise<RunReport> => {
   }
 };
 
+/**
+ * `--relabel[=N]`: re-classify stored rows. Dry-run unless `--apply`. Does
+ * not touch the catalogue, S3 or ffmpeg, and exits 0 without a single LLM
+ * call when there is nothing to relabel.
+ */
+const relabel = async (options: Options): Promise<void> => {
+  const limit = options.relabel!;
+  const classifier = Classifier.fromEnv();
+  const client = createClient();
+  await client.connect();
+
+  try {
+    console.log(
+      `[relabel] ${options.apply ? 'APPLY — rows will be updated' : 'DRY RUN — nothing written (add --apply)'}; ` +
+        `up to ${limit} oldest ingested rows, llm cap ${classifier.callsLeft}`,
+    );
+
+    const outcome = await runRelabel(client, classifier, { apply: options.apply, limit });
+
+    if (outcome.scanned === 0) {
+      console.log('[relabel] no ingested rows — nothing to do');
+      return;
+    }
+
+    console.log(`\n${formatRelabelTable(outcome)}\n`);
+    console.log(
+      [
+        options.apply ? 'relabel complete' : 'RELABEL DRY RUN — nothing written',
+        `scanned: ${outcome.scanned}`,
+        `relabelled: ${outcome.changes.length} (changed: ${outcome.changes.filter((c) => c.changed).length})`,
+        `written: ${outcome.written}`,
+        `failed: ${outcome.failed.length}`,
+        formatStats(classifier.stats),
+      ].join('\n'),
+    );
+  } finally {
+    await client.end();
+  }
+};
+
+const USAGE =
+  'usage: tsx scripts/ingestPresets/index.ts [--dry-run] [--limit=N] [--max-pages=N] ' +
+  '[--modality=video|image|both] [--no-llm] | --relabel[=N] [--apply]';
+
 const main = async () => {
   loadEnv();
 
@@ -282,10 +413,18 @@ const main = async () => {
     options = parseArgs(process.argv.slice(2));
   } catch (error) {
     console.error(String(error));
-    console.error(
-      'usage: tsx scripts/ingestPresets/index.ts [--dry-run] [--limit=N] [--max-pages=N] [--modality=video|image|both]',
-    );
+    console.error(USAGE);
     process.exit(2);
+  }
+
+  if (options.relabel !== null) {
+    try {
+      await relabel(options);
+      process.exit(0);
+    } catch (error) {
+      console.error('[relabel] failed:', error instanceof Error ? error.stack : String(error));
+      process.exit(1);
+    }
   }
 
   try {
