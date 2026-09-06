@@ -90,8 +90,9 @@ const useStyles = createStyles(({ css, token }) => ({
  *      video previews (the "featured" set), each ~one grid-column wide but
  *      ~2 rows tall, played via PresetMP4Player (lazy, muted, looping).
  *
- * Data: one `presets.list({modality:'video'})` call. The top items become
- * the featured slider; the next 4 fill the thumbnail row.
+ * Data: one `presets.list` page of exactly FEATURED_COUNT + THUMB_COUNT rows,
+ * ranked by popularity. The top items become the featured slider; the next 4
+ * fill the thumbnail row.
  */
 const HomeVideoSection = memo(() => {
   const { t } = useTranslation('home');
@@ -99,8 +100,11 @@ const HomeVideoSection = memo(() => {
   const isMobile = useIsMobile();
   const navigate = useHomeStore((s) => s.navigate);
 
+  // Server-side limit + ranking: pull exactly the 8 rows this section
+  // renders, best-first. `popular` is meaningful here because the video
+  // catalogue is ingested and carries source-side like counts.
   const { data, isLoading } = lambdaQuery.presets.list.useQuery(
-    { limit: FEATURED_COUNT + THUMB_COUNT, modality: 'video' },
+    { limit: FEATURED_COUNT + THUMB_COUNT, modality: 'video', sort: 'popular' },
     { staleTime: 5 * 60 * 1000 },
   );
 
@@ -170,6 +174,9 @@ const HomeVideoSection = memo(() => {
       </div>
 
       {/* Part 2: featured big-landscape (16:9) horizontal slider. */}
+      <span style={{ fontSize: 16, fontWeight: 600, paddingInline: 16 }}>
+        {t('presets.videoFeaturedTitle')}
+      </span>
       <div className={styles.slider}>
         {isLoading
           ? Array.from({ length: 3 }).map((_, i) => (

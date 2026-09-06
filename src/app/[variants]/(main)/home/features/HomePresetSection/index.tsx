@@ -37,6 +37,10 @@ const HomePresetSection = memo<Props>(({ limit = 5, modality }) => {
 
   const targetPath = modality === 'image' ? '/image' : '/video';
 
+  // Server-side limit: pull exactly the row we render, not the whole table.
+  // Deliberately NOT `sort: 'popular'` — image presets are hand-curated and
+  // carry no source-side popularity, so ranking by it would drop them to id
+  // order and throw away the curated `sort_order`.
   const { data, isLoading } = lambdaQuery.presets.list.useQuery(
     { limit, modality },
     { staleTime: 5 * 60 * 1000 },
