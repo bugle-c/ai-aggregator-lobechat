@@ -106,6 +106,25 @@ const SEEDS: SeedRow[] = [
   },
   {
     active: true,
+    badges: [],
+    category: 'ambient',
+    createdAt: now,
+    // Mirrors the real catalogue: English title, Russian description. The
+    // old title-only search made this row unreachable from a Russian query.
+    description: 'Тёплый ламповый закат над городом',
+    id: 5,
+    modality: 'video',
+    recommendedModelId: 'kwaivgi/kling-v3.0-pro/text-to-video',
+    paramsLock: { duration_sec: 5 },
+    previewUrl: 'https://rustfs.gptweb.ru/presets/golden-hour.mp4',
+    promptTemplate: 'golden hour over {subject}',
+    slug: 'golden-hour',
+    sortOrder: 50,
+    title: 'Golden Hour',
+    updatedAt: now,
+  },
+  {
+    active: true,
     badges: ['top_choice'],
     category: 'portrait',
     createdAt: now,
@@ -179,8 +198,13 @@ const applyFilter = (rows: SeedRow[]): SeedRow[] => {
     out = out.filter((r) => r.recommendedModelId === pendingFilter.recommendedModelId);
   if (pendingFilter.category) out = out.filter((r) => r.category === pendingFilter.category);
   if (pendingFilter.q) {
-    const needle = pendingFilter.q.toLowerCase();
-    out = out.filter((r) => r.title.toLowerCase().includes(needle));
+    // Mirrors `searchable()` / `searchNeedle()` in the router: case-folded,
+    // «ё» folded onto «е», across the same columns.
+    const fold = (v: string | null) => (v ?? '').toLowerCase().replaceAll('ё', 'е');
+    const needle = fold(pendingFilter.q);
+    out = out.filter((r) =>
+      [r.title, r.description, r.category].some((v) => fold(v).includes(needle)),
+    );
   }
   if (pendingFilter.slug) out = out.filter((r) => r.slug === pendingFilter.slug);
   out.sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
@@ -417,6 +441,7 @@ describe('presetsRouter', () => {
     // 3 camera + 1 effects among the video seeds.
     expect(facets.categories).toEqual([
       { category: 'camera', count: 3 },
+      { category: 'ambient', count: 1 },
       { category: 'effects', count: 1 },
     ]);
     expect(facets.models.map((m) => m.modelId)).toEqual([
@@ -432,5 +457,37 @@ describe('presetsRouter', () => {
     const facets = await caller.facets({ modality: 'image' });
     expect(facets.categories).toEqual([{ category: 'portrait', count: 1 }]);
     expect(facets.models).toEqual([{ count: 1, modelId: 'flux-pro' }]);
+  });
+  it('list finds a preset by its Russian description', async () => {
+    // The regression this whole search rework exists for: 0/76 legacy titles
+    // contain Cyrillic, so a title-only ILIKE answered every Russian query
+    // with "Пресеты не найдены".
+    pendingFilter = { modality: 'video', q: 'закат' };
+    const caller = presetsRouter.createCaller({} as any);
+    const { items } = await caller.list({ modality: 'video', q: 'закат' });
+    expect(items.map((p) => p.slug)).toEqual(['golden-hour']);
+  });
+
+  it('list folds «ё» onto «е» in the search needle', async () => {
+    pendingFilter = { modality: 'video', q: 'Тёплый' };
+    const caller = presetsRouter.createCaller({} as any);
+    await caller.list({ modality: 'video', q: 'Тёплый' });
+
+    // Both sides of the comparison are normalised — the column side by the
+    // `translate(lower(...))` expression the trigram indexes are built on,
+    // the needle side here.
+    const literals = collectValues(lastWhereArg);
+    expect(literals).toContain('%теплый%');
+  });
+
+  it('list escapes LIKE metacharacters in the search needle', async () => {
+    pendingFilter = { modality: 'video', q: '50%_x' };
+    const caller = presetsRouter.createCaller({} as any);
+    await caller.list({ modality: 'video', q: '50%_x' });
+
+    // Unescaped, `%` and `_` from user input would silently turn into
+    // wildcards and match everything.
+    const literals = collectValues(lastWhereArg);
+    expect(literals).toContain(String.raw`%50\%\_x%`);
   });
 });

@@ -4,7 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
 import { Input } from 'antd';
 import { Search } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { PresetListItem, PresetModality } from '@/types/preset';
@@ -32,34 +32,28 @@ const PresetGallery = memo<Props>((props) => {
   const { onCategoryChange, onModelChange, onSearchChange, q } = props;
   const { t } = useTranslation('common');
 
-  // The input is driven locally so typing stays instant; the debounced push
-  // is what reaches the URL and the query.
+  // The input is driven locally so typing stays instant; the debounced push is
+  // what reaches the URL and the query. `q` is only read for the initial value
+  // — the gallery writes it with `replace: true`, so it never changes
+  // underneath us except through `resetFilters` below, which clears both.
   const [text, setText] = useState(q ?? '');
-  /** Last value we pushed upwards, so our own echo doesn't clobber typing. */
-  const lastPushed = useRef(q ?? '');
 
-  useEffect(() => {
-    const incoming = q ?? '';
-    if (incoming === lastPushed.current) return;
-    lastPushed.current = incoming;
-    setText(incoming);
-  }, [q]);
-
-  const { run: pushSearch } = useDebounceFn(
-    (value: string) => {
-      lastPushed.current = value;
-      onSearchChange(value || undefined);
-    },
+  const { cancel: cancelSearch, run: pushSearch } = useDebounceFn(
+    (value: string) => onSearchChange(value || undefined),
     { wait: SEARCH_DEBOUNCE_MS },
   );
 
   const hasFilters = !!props.category || !!props.modelId || !!q;
 
   const resetFilters = useCallback(() => {
+    // Drop any keystroke still waiting in the debounce window, otherwise it
+    // would re-apply the search a moment after the reset.
+    cancelSearch();
+    setText('');
     onCategoryChange(undefined);
     onModelChange(undefined);
     onSearchChange(undefined);
-  }, [onCategoryChange, onModelChange, onSearchChange]);
+  }, [cancelSearch, onCategoryChange, onModelChange, onSearchChange]);
 
   return (
     <Flexbox flex={1} gap={8} style={{ overflowY: 'auto' }}>
