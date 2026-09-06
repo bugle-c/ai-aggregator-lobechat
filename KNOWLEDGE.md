@@ -573,3 +573,17 @@ Spec: `docs/superpowers/specs/2026-09-06-preset-platform-design.md`.
   gpt-5-mini needs `reasoning.effort=minimal` or its reasoning eats the whole `max_tokens` and the
   message comes back empty. `--no-llm` = old behaviour; `--relabel[=N]` re-labels stored rows,
   dry-run unless `--apply`.
+- **i2v presets (Ф5, 2026-09-06)**: detected by prompt text only (`@image1`, `uploaded photo`,
+  `reference face`… — `filters.detectRequiresImage`) → `requires_image=true`, published like any
+  row. `recommended_model_id` is the paired **t2v** card `bytedance/seedance-2.0-fast/text-to-video`,
+  NOT `…/image-to-video`: every i2v card is `enabled:false` in model-bank (no picker entry, no
+  params schema), so `findEnabledModel` would miss it and the Ф3b switch would be `unavailable`
+  forever; the wavespeed runtime swaps the endpoint itself when `imageUrl` is set
+  (`pairedEndpoint.resolveVideoEndpoint`). The photo lives in the video store's
+  `parameters.imageUrl` (the ConfigPanel start-frame param, written by `FrameUpload`). Gating is
+  one pure function `features/Generators/presetImageGate.ts` (`decideGenerateReadiness`) shared
+  by the desktop CTA, mobile CTA, Enter key and `createVideo`; CTA reads «Добавьте фото»; removing
+  the style lifts it. `usePresetModelSwitch` re-applies `imageUrl` after a switch (a switch resets
+  params to model defaults). Image (i2i) hits stay queued (`requires-image-i2i-pending`) — no
+  image-side gate yet. Pre-Ф5 queued video rows: `scripts/ingestPresets/activateI2v.ts` (dry run;
+  `--apply` writes) re-runs current filters and activates only rows that would publish today.

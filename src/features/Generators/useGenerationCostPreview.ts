@@ -16,6 +16,8 @@
 import { useEffect, useState } from 'react';
 
 import { lambdaQuery } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 interface ImageInput {
   images?: number;
@@ -67,6 +69,9 @@ export function useGenerationCostPreview(input: Input): CostPreview {
       ? { kind: 'image', model, images: (input as ImageInput).images ?? 1 }
       : { kind: 'video', model, durationSeconds: (input as VideoInput).durationSeconds },
   );
+  // quote.* are authed procedures: for anonymous visitors (auth overlay up) the
+  // calls just 401 in a loop, so gate them on login.
+  const isLogin = useUserStore(authSelectors.isLogin);
   const debouncedKey = useDebouncedKey(liveKey);
   const debounced = JSON.parse(debouncedKey) as
     | { images: number; kind: 'image'; model: string | undefined }
@@ -78,7 +83,7 @@ export function useGenerationCostPreview(input: Input): CostPreview {
       params: { images: debounced.kind === 'image' ? debounced.images : 1 },
     },
     {
-      enabled: !!debounced.model && debounced.kind === 'image',
+      enabled: isLogin && !!debounced.model && debounced.kind === 'image',
       // Keep the previous preview visible while a new one is loading.
       placeholderData: (prev) => prev,
       staleTime: 30_000,
@@ -92,6 +97,7 @@ export function useGenerationCostPreview(input: Input): CostPreview {
     },
     {
       enabled:
+        isLogin &&
         !!debounced.model &&
         debounced.kind === 'video' &&
         (debounced as { durationSeconds: number }).durationSeconds > 0,

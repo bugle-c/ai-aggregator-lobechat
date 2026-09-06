@@ -2,8 +2,10 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import FlowSidebar from '@/features/Generators/FlowSidebar';
+import { decideGenerateReadiness } from '@/features/Generators/presetImageGate';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
 import { useVideoGenerate } from '@/features/Generators/useVideoGenerate';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -20,6 +22,7 @@ import VideoWorkspaceMobile from './VideoWorkspaceMobile';
 
 const VideoPage = memo(() => {
   const isMobile = useIsMobile();
+  const { t } = useTranslation('common');
 
   const preset = useVideoStore(presetSelectors.currentPreset);
   const clearPreset = useVideoStore((s) => s.clearPreset);
@@ -38,6 +41,16 @@ const VideoPage = memo(() => {
     model: currentModel,
   });
 
+  // An i2v style is gated on its photo (`parameters.imageUrl`); the other
+  // blockers keep the desktop CTA's existing behaviour (the store rejects
+  // an empty run itself).
+  const readiness = decideGenerateReadiness({
+    imageUrl: videoParameters?.imageUrl,
+    isGenerating,
+    preset,
+    prompt: promptValue,
+  });
+
   if (isMobile) return <VideoWorkspaceMobile />;
 
   return (
@@ -45,6 +58,7 @@ const VideoPage = memo(() => {
       <FlowSidebar
         creditCost={cost.credits ?? undefined}
         creditSufficient={cost.sufficient}
+        disabledReason={readiness.blocker === 'missing-image' ? t('preset.addPhoto') : undefined}
         isGenerating={isGenerating}
         preset={preset}
         promptInput={<PromptInput />}
@@ -53,7 +67,10 @@ const VideoPage = memo(() => {
         onClearPreset={clearPreset}
         onGenerate={() => generate(promptValue)}
       />
-      <Flexbox flex={1} height={'100%'}>
+      {/* min-width: 0 — a flex item defaults to min-width:auto, so the toolbar's
+          nowrap search row inflated this column to its min-content width (~1800px
+          at a 1440px viewport) and pushed the masonry's 4th column off-screen. */}
+      <Flexbox flex={1} height={'100%'} style={{ minWidth: 0 }}>
         <PlanGateBanner />
         <FlowMainArea />
       </Flexbox>

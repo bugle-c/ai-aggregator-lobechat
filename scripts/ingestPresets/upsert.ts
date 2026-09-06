@@ -8,13 +8,7 @@
  */
 import { Client } from 'pg';
 
-import type { Modality, PresetInsert } from './types';
-
-/** Model each modality is pinned to; matches what the curated rows use. */
-export const DEFAULT_MODEL: Record<Modality, string> = {
-  image: 'google/nano-banana-pro/text-to-image',
-  video: 'bytedance/seedance-2.0-fast/text-to-video',
-};
+import type { PresetInsert } from './types';
 
 export const createClient = (connectionString?: string): Client => {
   const url = connectionString ?? process.env.DATABASE_URL;

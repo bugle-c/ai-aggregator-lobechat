@@ -172,11 +172,17 @@ Two deliberate refinements over a literal reading of the spec:
   is 11% from 3:4 and correctly fails). The images endpoint ships **no**
   `aspectRatio` field at all, so images resolve from `imageWidth`/`imageHeight`.
 
-- **i2v presets are queued on purpose.** Prompts referencing a reference image
-  (`@image1`, `@[image1]`, `uploaded image`, `reference face`, …) are ingested
-  with `requires_image=true` but `active=false`, because the model-switch UX
-  they need ships in Ф5. Ф5 flips them on with a single `UPDATE`, not a
-  re-ingest.
+- **i2v presets publish like any other (since Ф5).** Prompts referencing a
+  reference image (`@image1`, `@[image1]`, `uploaded image`, `reference face`,
+  …) are stored with `requires_image=true`; the UI shows «Нужно фото» and will
+  not run until a reference image is attached. Their `recommended_model_id` is
+  the paired **`/text-to-video`** card (`bytedance/seedance-2.0-fast/text-to-video`),
+  not the `…/image-to-video` id: the i2v cards are disabled in model-bank and
+  the runtime swaps the endpoint itself when `imageUrl` is set
+  (`pairedEndpoint.ts`). Rows queued under the pre-Ф5 hold are activated with
+  `activateI2v.ts` (below). **Image** prompts that reference an image (i2i)
+  still queue as `requires-image-i2i-pending` — the image flow has no
+  «Добавьте фото» gate yet.
 
 - **Not every id is an X post.** The images endpoint also serves the source's
   own community uploads under ids like `community_34e69cb0-4906-…`. A
@@ -194,6 +200,18 @@ fallback when the LLM step is off or failed: `category` from a keyword table
 falling back to `trends` (categories are DB-driven since Ф2, so a new slug is
 reachable); `title` a short Russian label from a keyword table falling back to
 the trimmed source title; `description` `NULL`.
+
+## Activating pre-Ф5 i2v rows (one-off)
+
+Queue reasons are not stored, so `activateI2v.ts` re-runs the _current_
+`filters.ts` over every queued `requires_image` row (stored prompt, aspect,
+likes, attribution, per-author cap) and activates only the rows that would
+publish today. Dry run by default; `--apply` writes in one transaction.
+
+```bash
+npx tsx scripts/ingestPresets/activateI2v.ts         # report only
+npx tsx scripts/ingestPresets/activateI2v.ts --apply # activate
+```
 
 ## Failure modes
 

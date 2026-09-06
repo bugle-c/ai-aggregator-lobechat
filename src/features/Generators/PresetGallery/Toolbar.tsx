@@ -43,9 +43,9 @@ const useStyles = createStyles(({ css, token }) => ({
 
     padding-block: 8px;
     padding-inline: 16px;
+    border-block-end: 1px solid ${token.colorBorderSecondary};
 
     background: ${token.colorBgLayout};
-    border-block-end: 1px solid ${token.colorBorderSecondary};
   `,
   row: css`
     display: flex;
@@ -56,6 +56,10 @@ const useStyles = createStyles(({ css, token }) => ({
   grow: css`
     flex: 1 1 auto;
     min-inline-size: 0;
+
+    /* Search is used once a session — cap it so it doesn't span the whole row
+       on wide screens (reference keeps it compact). */
+    max-inline-size: 480px;
   `,
 }));
 

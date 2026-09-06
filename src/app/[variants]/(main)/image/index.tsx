@@ -52,7 +52,9 @@ const ImagePage = memo(() => {
         onClearPreset={clearPreset}
         onGenerate={() => generate(promptValue)}
       />
-      <Flexbox flex={1} height={'100%'}>
+      {/* min-width: 0 — see video/index.tsx: without it the column grows to the
+          toolbar's min-content width and the masonry overflows the viewport. */}
+      <Flexbox flex={1} height={'100%'} style={{ minWidth: 0 }}>
         <FlowMainArea />
       </Flexbox>
     </Flexbox>
