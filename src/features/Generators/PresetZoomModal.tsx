@@ -3,7 +3,7 @@
 import { Image, Modal } from 'antd';
 import { memo } from 'react';
 
-import type { Preset } from '@/types/preset';
+import type { PresetListItem } from '@/types/preset';
 
 import PresetAttribution from './PresetAttribution';
 
@@ -11,7 +11,7 @@ interface Props {
   onApply: () => void;
   onClose: () => void;
   open: boolean;
-  preset: Preset;
+  preset: PresetListItem;
 }
 
 const isVideoUrl = (url: string): boolean => {

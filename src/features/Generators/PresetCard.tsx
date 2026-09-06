@@ -5,15 +5,15 @@ import { ZoomIn } from 'lucide-react';
 import { memo, useState } from 'react';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
-import type { Preset, PresetBadge } from '@/types/preset';
+import type { PresetBadge, PresetListItem } from '@/types/preset';
 
 import PresetMP4Player from './PresetMP4Player';
 import PresetZoomModal from './PresetZoomModal';
 
 interface Props {
   isActive?: boolean;
-  onClick: (preset: Preset) => void;
-  preset: Preset;
+  onClick: (preset: PresetListItem) => void;
+  preset: PresetListItem;
 }
 
 const BADGE_LABELS: Record<PresetBadge, string> = {
@@ -206,7 +206,7 @@ const useStyles = createStyles(({ css, token }) => ({
  * into a CSS aspect-ratio value. Falls back to "3 / 4" for untagged
  * presets so the layout never collapses.
  */
-const cardAspectRatio = (preset: Preset): string => {
+const cardAspectRatio = (preset: PresetListItem): string => {
   const raw = preset.paramsLock?.aspect_ratio;
   if (typeof raw === 'string') {
     const m = raw.match(/^(\d+)\s*[:×x/]\s*(\d+)$/);

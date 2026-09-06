@@ -12,7 +12,12 @@ import PresetMP4Player from '@/features/Generators/PresetMP4Player';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useHomeStore } from '@/store/home';
-import type { Preset } from '@/types/preset';
+import type { PresetListItem } from '@/types/preset';
+
+/** Big 16:9 cards in the slider. */
+const FEATURED_COUNT = 4;
+/** Portrait thumbnails in the row above the slider. */
+const THUMB_COUNT = 4;
 
 const useStyles = createStyles(({ css, token }) => ({
   featuredCard: css`
@@ -25,8 +30,9 @@ const useStyles = createStyles(({ css, token }) => ({
     /* width = one column of the 4-grid above; height = 16:9 landscape,
        which reads as ~2 grid-rows tall against the portrait thumbnails. */
     flex: 0 0 auto;
-    width: clamp(280px, 46%, 520px);
+
     aspect-ratio: 16 / 9;
+    width: clamp(280px, 46%, 520px);
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: 14px;
 
@@ -60,17 +66,16 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   slider: css`
     scrollbar-width: thin;
-
-    display: flex;
-    gap: 14px;
+    scroll-snap-type: x mandatory;
 
     overflow-x: auto;
+    display: flex;
+    gap: 14px;
 
     padding-block-end: 4px;
     padding-inline: 16px;
 
     -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x mandatory;
 
     > * {
       scroll-snap-align: start;
@@ -95,21 +100,20 @@ const HomeVideoSection = memo(() => {
   const navigate = useHomeStore((s) => s.navigate);
 
   const { data, isLoading } = lambdaQuery.presets.list.useQuery(
-    { modality: 'video' },
+    { limit: FEATURED_COUNT + THUMB_COUNT, modality: 'video' },
     { staleTime: 5 * 60 * 1000 },
   );
 
-  if (!isLoading && (!data || data.length === 0)) return null;
+  const all = data?.items ?? [];
 
-  const all = data ?? [];
+  if (!isLoading && all.length === 0) return null;
   // Featured slider gets the top items; thumbnail row gets the next 4. If
   // there are few presets, fall back to showing what we have in the row.
-  const featuredCount = Math.min(4, all.length);
+  const featuredCount = Math.min(FEATURED_COUNT, all.length);
   const featured = all.slice(0, featuredCount);
-  const thumbs = all.slice(featuredCount, featuredCount + 4);
+  const thumbs = all.slice(featuredCount, featuredCount + THUMB_COUNT);
 
-  const goPreset = (p: Preset) =>
-    navigate?.(`/video?preset=${encodeURIComponent(p.slug)}`);
+  const goPreset = (p: PresetListItem) => navigate?.(`/video?preset=${encodeURIComponent(p.slug)}`);
 
   const thumbCellStyle = {
     flex: isMobile ? '0 0 140px' : '1 1 0',
@@ -150,7 +154,7 @@ const HomeVideoSection = memo(() => {
         }}
       >
         {isLoading
-          ? Array.from({ length: 4 }).map((_, i) => (
+          ? Array.from({ length: THUMB_COUNT }).map((_, i) => (
               <div key={`vthumb-skeleton-${i}`} style={thumbCellStyle}>
                 <Skeleton.Node
                   active

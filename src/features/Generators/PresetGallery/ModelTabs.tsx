@@ -21,10 +21,14 @@ interface Props {
  * model+preset auto-adds a tab.
  */
 const ModelTabs = memo<Props>(({ modality, onSelect, selected }) => {
-  const { data: presets } = lambdaQuery.presets.list.useQuery(
-    { modality },
+  // `limit: 100` (the endpoint's max) rather than the default page size —
+  // this list only exists to derive the tab strip. Replaced by the facets
+  // endpoint in the next commit.
+  const { data } = lambdaQuery.presets.list.useQuery(
+    { limit: 100, modality },
     { staleTime: 5 * 60 * 1000 },
   );
+  const presets = data?.items;
 
   const items = useMemo(() => {
     if (!presets) return [{ key: '__all', label: 'Все' }];

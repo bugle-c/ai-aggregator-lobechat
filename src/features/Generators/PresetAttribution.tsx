@@ -2,12 +2,12 @@
 
 import { memo } from 'react';
 
-import type { Preset } from '@/types/preset';
+import type { PresetListItem } from '@/types/preset';
 
 interface Props {
   /** Compact variant used inside the small selected-style card. */
   compact?: boolean;
-  preset: Preset;
+  preset: PresetListItem;
 }
 
 const linkStyle = { color: 'inherit', textDecoration: 'underline' } as const;

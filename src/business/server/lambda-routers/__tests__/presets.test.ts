@@ -146,6 +146,8 @@ interface PendingFilter {
 
 let pendingFilter: PendingFilter = {};
 let lastWhereArg: unknown;
+/** Column map handed to `.select(...)`, or undefined for a bare `select()`. */
+let lastSelectArg: Record<string, unknown> | undefined;
 
 const applyFilter = (rows: SeedRow[]): SeedRow[] => {
   let out = rows.filter((r) => r.active);
@@ -191,14 +193,16 @@ class QueryProxy<T> extends Promise<T[]> {
 const buildQueryProxy = () => new QueryProxy<SeedRow>((resolve) => resolve(applyFilter(SEEDS)));
 
 const buildDbStub = () => ({
-  select: vi.fn(() => ({
-    from: vi.fn(() => buildQueryProxy()),
-  })),
+  select: vi.fn((cols?: Record<string, unknown>) => {
+    lastSelectArg = cols;
+    return { from: vi.fn(() => buildQueryProxy()) };
+  }),
 });
 
 beforeEach(() => {
   pendingFilter = {};
   lastWhereArg = undefined;
+  lastSelectArg = undefined;
   vi.mocked(getServerDB).mockResolvedValue(buildDbStub() as any);
 });
 
@@ -235,10 +239,51 @@ describe('presetsRouter', () => {
   it('list returns active presets filtered by modality', async () => {
     pendingFilter = { modality: 'video' };
     const caller = presetsRouter.createCaller({} as any);
-    const result = await caller.list({ modality: 'video' });
-    expect(result.length).toBeGreaterThan(0);
-    expect(result.every((p) => p.modality === 'video')).toBe(true);
-    expect(result.every((p) => typeof p.previewUrl === 'string')).toBe(true);
+    const { items } = await caller.list({ modality: 'video' });
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((p) => p.modality === 'video')).toBe(true);
+    expect(items.every((p) => typeof p.previewUrl === 'string')).toBe(true);
+  });
+
+  it('list omits prompt_template from every item', async () => {
+    pendingFilter = { modality: 'video' };
+    const caller = presetsRouter.createCaller({} as any);
+    const { items } = await caller.list({ modality: 'video' });
+    expect(items.length).toBeGreaterThan(0);
+    // The whole point of the slim payload: prompt templates (multi-KB on
+    // ingested rows) must never ride along with a list page. Assert both the
+    // mapped output and the column list actually sent to postgres.
+    expect(items.every((p) => !('promptTemplate' in p))).toBe(true);
+    expect(lastSelectArg).toBeDefined();
+    expect(Object.keys(lastSelectArg as Record<string, unknown>)).not.toContain('promptTemplate');
+  });
+
+  it('list returns nextCursor when more rows remain and null on the last page', async () => {
+    const caller = presetsRouter.createCaller({} as any);
+
+    pendingFilter = { modality: 'video' };
+    const firstPage = await caller.list({ limit: 2, modality: 'video' });
+    expect(firstPage.items).toHaveLength(2);
+    expect(firstPage.nextCursor).toBeTruthy();
+
+    // The cursor is an opaque base64 blob carrying the last row's keyset
+    // position — decode it to prove it points at the row we actually served.
+    const decoded = JSON.parse(
+      Buffer.from(firstPage.nextCursor as string, 'base64url').toString('utf8'),
+    );
+    expect(decoded).toEqual({ id: firstPage.items[1].id, k: firstPage.items[1].sortOrder });
+
+    pendingFilter = { modality: 'image' };
+    const onlyPage = await caller.list({ limit: 24, modality: 'image' });
+    expect(onlyPage.items.length).toBeGreaterThan(0);
+    expect(onlyPage.nextCursor).toBeNull();
+  });
+
+  it('list ignores a malformed cursor instead of throwing', async () => {
+    pendingFilter = { modality: 'video' };
+    const caller = presetsRouter.createCaller({} as any);
+    const { items } = await caller.list({ cursor: 'not-a-cursor', modality: 'video' });
+    expect(items.length).toBeGreaterThan(0);
   });
 
   it('list filters by recommendedModelId', async () => {
@@ -247,13 +292,13 @@ describe('presetsRouter', () => {
       recommendedModelId: 'bytedance/seedance-2.0-fast/text-to-video',
     };
     const caller = presetsRouter.createCaller({} as any);
-    const result = await caller.list({
+    const { items } = await caller.list({
       modality: 'video',
       recommendedModelId: 'bytedance/seedance-2.0-fast/text-to-video',
     });
-    expect(result.length).toBeGreaterThan(0);
+    expect(items.length).toBeGreaterThan(0);
     expect(
-      result.every((p) => p.recommendedModelId === 'bytedance/seedance-2.0-fast/text-to-video'),
+      items.every((p) => p.recommendedModelId === 'bytedance/seedance-2.0-fast/text-to-video'),
     ).toBe(true);
 
     // Regression guard: the captured where-clause must reference the recommendedModelId
@@ -268,9 +313,9 @@ describe('presetsRouter', () => {
   it('list filters by category', async () => {
     pendingFilter = { category: 'camera', modality: 'video' };
     const caller = presetsRouter.createCaller({} as any);
-    const result = await caller.list({ modality: 'video', category: 'camera' });
-    expect(result.length).toBeGreaterThan(0);
-    expect(result.every((p) => p.category === 'camera')).toBe(true);
+    const { items } = await caller.list({ modality: 'video', category: 'camera' });
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((p) => p.category === 'camera')).toBe(true);
 
     // Regression guard: same shape as the recommendedModelId case — the category literal
     // must surface in the captured condition tree.
@@ -282,9 +327,9 @@ describe('presetsRouter', () => {
   it('list filters by q (case-insensitive title match)', async () => {
     pendingFilter = { modality: 'video', q: 'zoom' };
     const caller = presetsRouter.createCaller({} as any);
-    const result = await caller.list({ modality: 'video', q: 'zoom' });
-    expect(result.length).toBeGreaterThan(0);
-    expect(result.every((p) => p.title.toLowerCase().includes('zoom'))).toBe(true);
+    const { items } = await caller.list({ modality: 'video', q: 'zoom' });
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((p) => p.title.toLowerCase().includes('zoom'))).toBe(true);
 
     // Regression guard: the ilike pattern (`%zoom%`) must show up in the tree.
     expect(lastWhereArg).toBeDefined();

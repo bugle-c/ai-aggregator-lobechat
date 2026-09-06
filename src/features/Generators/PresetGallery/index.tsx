@@ -5,7 +5,7 @@ import { Input } from 'antd';
 import { Search } from 'lucide-react';
 import { memo } from 'react';
 
-import type { Preset, PresetModality } from '@/types/preset';
+import type { PresetListItem, PresetModality } from '@/types/preset';
 
 import CategoryTabs from './CategoryTabs';
 import ModelTabs from './ModelTabs';
@@ -17,7 +17,7 @@ interface Props {
   modelId: string | undefined;
   onCategoryChange: (slug: string | undefined) => void;
   onModelChange: (modelId: string | undefined) => void;
-  onPresetSelect: (preset: Preset) => void;
+  onPresetSelect: (preset: PresetListItem) => void;
   onSearchChange: (q: string | undefined) => void;
   q: string | undefined;
   selectedSlug: string | null;

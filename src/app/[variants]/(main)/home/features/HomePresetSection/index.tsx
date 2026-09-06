@@ -38,14 +38,14 @@ const HomePresetSection = memo<Props>(({ limit = 5, modality }) => {
   const targetPath = modality === 'image' ? '/image' : '/video';
 
   const { data, isLoading } = lambdaQuery.presets.list.useQuery(
-    { modality },
+    { limit, modality },
     { staleTime: 5 * 60 * 1000 },
   );
 
-  // Self-hide when there are genuinely no presets for this modality.
-  if (!isLoading && (!data || data.length === 0)) return null;
+  const presets = data?.items ?? [];
 
-  const presets = (data ?? []).slice(0, limit);
+  // Self-hide when there are genuinely no presets for this modality.
+  if (!isLoading && presets.length === 0) return null;
 
   // Each cell: equal-width flex column on desktop; fixed-width scroll item on
   // mobile so the 5 cards stay on one line instead of wrapping into a stack.
