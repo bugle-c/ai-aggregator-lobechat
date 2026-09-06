@@ -15,6 +15,7 @@ import { useVideoStore } from '@/store/video';
 import { videoGenerationConfigSelectors } from '@/store/video/selectors';
 import { presetSelectors } from '@/store/video/slices/preset/selectors';
 
+import PresetPromptPreview from './PresetPromptPreview';
 import PromptInput from './PromptInput';
 
 const ASPECT_OPTIONS = ['16:9', '9:16', '1:1'];
@@ -101,6 +102,8 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
           )}
         </Flexbox>
       )}
+
+      <PresetPromptPreview />
 
       <PromptInput />
 

@@ -16,6 +16,7 @@ import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
 import { presetSelectors } from '@/store/image/slices/preset/selectors';
 
+import PresetPromptPreview from './PresetPromptPreview';
 import PromptInput from './PromptInput';
 
 const ASPECT_OPTIONS = ['1:1', '16:9', '9:16', '4:3', '3:4'];
@@ -94,6 +95,8 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate, onOpenSettings }) => {
           <ImageUrlsUpload />
         </Flexbox>
       )}
+
+      <PresetPromptPreview />
 
       <PromptInput />
 
