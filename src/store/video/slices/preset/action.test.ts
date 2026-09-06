@@ -10,6 +10,17 @@ import type { Preset } from '@/types/preset';
 import { createPresetSlice, initialPresetState } from './action';
 
 const fakePreset: Preset = {
+  authorAvatar: null,
+  authorName: null,
+  authorUrl: null,
+  externalId: null,
+  ingestedAt: null,
+  license: null,
+  popularity: null,
+  posterUrl: null,
+  requiresImage: false,
+  sourcePlatform: null,
+  sourceUrl: null,
   badges: ['new'],
   category: 'camera',
   description: null,

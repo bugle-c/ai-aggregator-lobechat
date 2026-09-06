@@ -21,17 +21,28 @@ const rowToPreset = (r: typeof presets.$inferSelect): Preset => {
       : {};
 
   return {
+    authorAvatar: r.authorAvatar,
+    authorName: r.authorName,
+    authorUrl: r.authorUrl,
     badges: (r.badges as PresetBadge[]) ?? [],
     category: r.category,
     description: r.description,
+    externalId: r.externalId,
     id: r.id,
+    ingestedAt: r.ingestedAt ? r.ingestedAt.toISOString() : null,
+    license: r.license,
     modality: r.modality as Preset['modality'],
     paramsLock: safeLock,
+    popularity: r.popularity,
+    posterUrl: r.posterUrl,
     previewUrl: r.previewUrl,
     promptTemplate: r.promptTemplate,
     recommendedModelId: r.recommendedModelId,
+    requiresImage: r.requiresImage ?? false,
     slug: r.slug,
     sortOrder: r.sortOrder,
+    sourcePlatform: r.sourcePlatform,
+    sourceUrl: r.sourceUrl,
     title: r.title,
   };
 };
