@@ -560,6 +560,19 @@ Spec: `docs/superpowers/specs/2026-09-06-preset-platform-design.md`.
   therefore auto-publish) is impossible.
 - **Failing a quality rule queues, it never deletes** (`active=false`). Failing the _safety_
   stop-list stores nothing at all. Failing _media_ also stores nothing — `preview_url` is NOT NULL.
+  i2v items are ingested with `requires_image=true` but parked in the queue until Ф5 ships the
+  model-switch UX; Ф5 flips them on with an UPDATE, not a re-ingest.
+- **Labels come from an LLM, not keyword tables** (`scripts/ingestPresets/classify.ts`, since
+  2026-09-06). The heuristics mislabelled the first live batch («Портрет: макро» = burger ad,
+  «Космос: акварель» = per-uploaded-photo poster that also slipped the i2v regex). One
+  `openai/gpt-5-mini` call per item via OpenRouter (`OPENROUTER_API_KEY` in `.env.local`) returns
+  `title_ru / summary_ru / category / requires_image / unsafe`; `labeling.ts` merges it over the
+  heuristic result (`requires_image` = heuristic OR llm; `unsafe` = safety skip), so `derive.ts` /
+  `filters.ts` stay untouched. Guards: no call unless an item survived the free checks, hard cap 60
+  calls/run, 20 s timeout, one retry, usage + USD in the run summary (~$0.0003/item). Gotcha:
+  gpt-5-mini needs `reasoning.effort=minimal` or its reasoning eats the whole `max_tokens` and the
+  message comes back empty. `--no-llm` = old behaviour; `--relabel[=N]` re-labels stored rows,
+  dry-run unless `--apply`.
 - **i2v presets (Ф5, 2026-09-06)**: detected by prompt text only (`@image1`, `uploaded photo`,
   `reference face`… — `filters.detectRequiresImage`) → `requires_image=true`, published like any
   row. `recommended_model_id` is the paired **t2v** card `bytedance/seedance-2.0-fast/text-to-video`,
