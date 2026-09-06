@@ -28,6 +28,12 @@ interface Props {
   preset: Preset | null;
   /** PromptInput component instance — modality-specific so we keep this pluggable. */
   promptInput: ReactNode;
+  /**
+   * Composed-prompt preview for the selected preset. Sits directly above the
+   * input it describes, so the user reads what will run before typing into
+   * it. Modality-specific, like `promptInput`.
+   */
+  promptPreview?: ReactNode;
 }
 
 /**
@@ -35,8 +41,9 @@ interface Props {
  * Layout from top to bottom:
  *   1. PresetThumbCard (selected style or empty placeholder)
  *   2. Modality-specific controls (image upload, model selector, etc.)
- *   3. PromptInput (textarea + enhance toggle)
- *   4. Generate button with credit cost
+ *   3. PresetPromptPreview (what the preset will actually send)
+ *   4. PromptInput (textarea + enhance toggle)
+ *   5. Generate button with credit cost
  */
 const FlowSidebar = memo<Props>(
   ({
@@ -50,6 +57,7 @@ const FlowSidebar = memo<Props>(
     onGenerate,
     preset,
     promptInput,
+    promptPreview,
   }) => {
     const label = generateLabel ?? (modality === 'video' ? 'Создать видео' : 'Создать');
     const insufficient = creditCost !== undefined && !creditSufficient;
@@ -68,6 +76,7 @@ const FlowSidebar = memo<Props>(
       >
         <PresetThumbCard preset={preset} onClear={onClearPreset} />
         {controls}
+        {promptPreview}
         {promptInput}
         <Button
           block

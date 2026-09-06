@@ -18,6 +18,8 @@ export const CATEGORY_LABELS: Record<string, string> = {
   portrait: 'Портрет',
   product: 'Продукт',
   realistic: 'Реализм',
+  // fallback slug used by the ingest cron when no keyword rule matches
+  trends: 'Тренды',
 };
 
 /** Synthetic "no category filter" tab key. */

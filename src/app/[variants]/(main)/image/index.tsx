@@ -13,6 +13,7 @@ import { presetSelectors } from '@/store/image/slices/preset/selectors';
 
 import FlowMainArea from './features/FlowMainArea';
 import FlowSidebarControls from './features/FlowSidebarControls';
+import PresetPromptPreview from './features/PresetPromptPreview';
 import PromptInput from './features/PromptInput';
 import ImageWorkspaceMobile from './ImageWorkspaceMobile';
 
@@ -48,6 +49,7 @@ const ImagePage = memo(() => {
         modality="image"
         preset={preset}
         promptInput={<PromptInput />}
+        promptPreview={<PresetPromptPreview />}
         onClearPreset={clearPreset}
         onGenerate={() => generate(promptValue)}
       />

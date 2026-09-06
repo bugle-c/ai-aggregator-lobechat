@@ -3,14 +3,15 @@
 import { Flexbox } from '@lobehub/ui';
 import { Skeleton } from 'antd';
 import { ArrowRight } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PresetCard from '@/features/Generators/PresetCard';
+import PresetZoomModal from '@/features/Generators/PresetZoomModal';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useHomeStore } from '@/store/home';
-import type { PresetModality } from '@/types/preset';
+import type { PresetListItem, PresetModality } from '@/types/preset';
 
 interface Props {
   /** How many presets to show in the single row. */
@@ -34,6 +35,8 @@ const HomePresetSection = memo<Props>(({ limit = 5, modality }) => {
   const { t } = useTranslation('home');
   const isMobile = useIsMobile();
   const navigate = useHomeStore((s) => s.navigate);
+  // Single modal for the whole row — PresetCard no longer carries one.
+  const [zoomPreset, setZoomPreset] = useState<PresetListItem | null>(null);
 
   const targetPath = modality === 'image' ? '/image' : '/video';
 
@@ -104,10 +107,20 @@ const HomePresetSection = memo<Props>(({ limit = 5, modality }) => {
                 <PresetCard
                   preset={p}
                   onClick={() => navigate?.(`${targetPath}?preset=${encodeURIComponent(p.slug)}`)}
+                  onZoom={setZoomPreset}
                 />
               </div>
             ))}
       </div>
+
+      {zoomPreset && (
+        <PresetZoomModal
+          open
+          preset={zoomPreset}
+          onApply={() => navigate?.(`${targetPath}?preset=${encodeURIComponent(zoomPreset.slug)}`)}
+          onClose={() => setZoomPreset(null)}
+        />
+      )}
     </Flexbox>
   );
 });

@@ -14,6 +14,7 @@ import { presetSelectors } from '@/store/video/slices/preset/selectors';
 import FlowMainArea from './features/FlowMainArea';
 import FlowSidebarControls from './features/FlowSidebarControls';
 import PlanGateBanner from './features/PlanGateBanner';
+import PresetPromptPreview from './features/PresetPromptPreview';
 import PromptInput from './features/PromptInput';
 import VideoWorkspaceMobile from './VideoWorkspaceMobile';
 
@@ -49,6 +50,7 @@ const VideoPage = memo(() => {
         modality="video"
         preset={preset}
         promptInput={<PromptInput />}
+        promptPreview={<PresetPromptPreview />}
         onClearPreset={clearPreset}
         onGenerate={() => generate(promptValue)}
       />
