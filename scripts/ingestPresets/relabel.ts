@@ -41,6 +41,8 @@ export interface RelabelOutcome {
 export interface RelabelOptions {
   apply: boolean;
   limit: number;
+  /** Only rows with `ingested_at >= since` (ISO timestamp or date). */
+  since?: string;
 }
 
 type ClassifierLike = Pick<Classifier, 'classify' | 'stats'>;
@@ -95,7 +97,7 @@ export const runRelabel = async (
   classifier: ClassifierLike,
   options: RelabelOptions,
 ): Promise<RelabelOutcome> => {
-  const rows = await loadIngestedPresets(client, options.limit);
+  const rows = await loadIngestedPresets(client, options.limit, options.since);
   const outcome: RelabelOutcome = { changes: [], failed: [], scanned: rows.length, written: 0 };
 
   if (rows.length === 0) return outcome;

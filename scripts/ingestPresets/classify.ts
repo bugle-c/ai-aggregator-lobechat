@@ -48,15 +48,20 @@ export const PRICE_PER_TOKEN = { input: 0.25 / 1e6, output: 2 / 1e6 };
 // --- categories -------------------------------------------------------------
 
 /**
- * Image slugs are the tail of `CATEGORY_ORDER`; everything else in the label
- * map is a video slug. Listed explicitly (and checked against the label map
- * at load time) so a renamed slug fails loudly instead of silently routing
- * every item to the heuristic category.
+ * Image-only slugs are the tail of `CATEGORY_ORDER`; `anime` is the one slug
+ * both modalities use (the image keyword table emits it too); everything else
+ * in the label map is video-only. Listed explicitly (and checked against the
+ * label map at load time) so a renamed slug fails loudly instead of silently
+ * routing every item to the heuristic category.
  */
-const IMAGE_CATEGORIES = ['portrait', 'realistic', 'artistic', 'landscape', 'product'] as const;
+const IMAGE_ONLY_CATEGORIES = ['portrait', 'realistic', 'artistic', 'landscape', 'product'] as const;
+const SHARED_CATEGORIES = ['anime'] as const;
+
+const IMAGE_CATEGORIES: readonly string[] = [...IMAGE_ONLY_CATEGORIES, ...SHARED_CATEGORIES];
 
 const VIDEO_CATEGORIES = Object.keys(CATEGORY_LABELS).filter(
-  (slug) => slug !== FALLBACK_CATEGORY && !(IMAGE_CATEGORIES as readonly string[]).includes(slug),
+  (slug) =>
+    slug !== FALLBACK_CATEGORY && !(IMAGE_ONLY_CATEGORIES as readonly string[]).includes(slug),
 );
 
 for (const slug of IMAGE_CATEGORIES) {
@@ -92,6 +97,66 @@ export const allowedCategories = (modality: Modality): readonly string[] =>
 // --- schema -----------------------------------------------------------------
 
 /**
+ * Russian function words a trimmed title must not end on. The model overshoots
+ * 40 chars in roughly a third of answers and a plain word-boundary cut left
+ * «Молодой бегун в стартовой позе для» / «Миниатюрная невеста в бумажной» in
+ * the first live run.
+ */
+const DANGLING_TAIL = new Set([
+  'а',
+  'без',
+  'в',
+  'во',
+  'для',
+  'до',
+  'за',
+  'и',
+  'из',
+  'или',
+  'к',
+  'ко',
+  'между',
+  'на',
+  'над',
+  'не',
+  'но',
+  'о',
+  'об',
+  'от',
+  'перед',
+  'по',
+  'под',
+  'при',
+  'про',
+  'с',
+  'со',
+  'сквозь',
+  'у',
+  'через',
+]);
+
+/** Strip a wrapping quote pair / final period, fit to the card, drop a dangling tail. */
+export const tidyTitle = (raw: string, max = MAX_TITLE_LENGTH): string => {
+  let clean = raw.trim().replace(/[.\s]+$/, '');
+  // Only a pair that wraps the whole title — a quoted name inside («Пепел дня») stays balanced.
+  if (/^[«"']/.test(clean) && /[»"']$/.test(clean)) clean = clean.slice(1, -1);
+
+  let title = trimLabel(clean, max);
+
+  for (;;) {
+    const words = title.split(' ');
+    const last = words.at(-1) ?? '';
+    // An opening bracket whose pair got cut: «… (bullet» → «…».
+    const openBracket = last.startsWith('(') && !last.includes(')');
+    if (words.length > 1 && (DANGLING_TAIL.has(last.toLowerCase()) || openBracket)) {
+      title = words.slice(0, -1).join(' ').replace(/[\s,:;–—-]+$/, '');
+      continue;
+    }
+    return title;
+  }
+};
+
+/**
  * Wire format. Strings are bounded generously and then trimmed on a word
  * boundary to the card limits — a 45-char title is a trim, not a failure.
  * Anything beyond twice the limit is a runaway answer and does fail.
@@ -110,7 +175,8 @@ export const ClassificationSchema = z.object({
     .trim()
     .min(1)
     .max(MAX_TITLE_LENGTH * 2)
-    .transform((value) => trimLabel(value.replaceAll(/^[«"']+|[»"'.]+$/g, ''), MAX_TITLE_LENGTH)),
+    .transform((value) => tidyTitle(value))
+    .refine((value) => value.length > 0, 'title is empty after trimming'),
   unsafe: z.boolean(),
 });
 
@@ -180,18 +246,22 @@ export const buildSystemPrompt = (modality: Modality): string => {
     `You receive the generation prompt of one preset. Answer with ONE JSON object and nothing else:`,
     '',
     '{',
-    `  "title_ru": string,       // Russian, at most ${MAX_TITLE_LENGTH} characters. A concrete noun phrase saying WHAT the ${kind} shows`,
-    '                            // (subject first, then genre/style if it matters), e.g. "Реклама бургера в стиле кино",',
-    '                            // "Кошка на белом фоне", "Курьер в неоновом мегаполисе". Never a bare style word',
-    '                            // ("Кино", "Аниме", "Макро"), never a translation of the whole prompt, no quotes, no final period.',
+    `  "title_ru": string,       // Russian, 20-35 characters, HARD MAXIMUM ${MAX_TITLE_LENGTH} — count them. A complete noun phrase`,
+    `                            // saying WHAT the ${kind} shows (subject first, then genre/style only if it fits), e.g.`,
+    '                            // "Реклама бургера в стиле кино", "Кошка на белом фоне", "Курьер в неоновом мегаполисе".',
+    '                            // Too long? Drop the style part, never cut a phrase mid-way. Never a bare style word',
+    '                            // ("Кино", "Аниме", "Макро"), never a translation of the whole prompt, normal sentence',
+    '                            // capitalisation (not Title Case), no quotes, no final period.',
     `  "summary_ru": string,     // Russian, at most ${MAX_SUMMARY_LENGTH} characters, one plain sentence: what the user will get.`,
     '  "category": string,       // exactly one slug from the list below; "trends" only when nothing fits.',
     '  "requires_image": boolean,// true when the result depends on an image the USER must supply: an uploaded/attached',
     '                            // photo or picture, a reference image/still/frame/face, a character sheet, @image1-style',
     '                            // placeholders, "this photo", "the person in the picture", "each uploaded photo" — in any',
     `                            // language or wording. false for pure text-to-${kind}.`,
-    '  "unsafe": boolean         // true for nudity or sexual content, graphic violence or gore, real politicians or',
-    '                            // celebrities named or clearly implied, hate or extremist content, drug use.',
+    '  "unsafe": boolean         // true ONLY for: nudity or sexual content; explicit gore (mutilation, dismemberment,',
+    '                            // realistic killing of people); real politicians or celebrities named or clearly implied;',
+    '                            // hate or extremist content; drug use. Stylised action, fantasy or survival combat,',
+    '                            // weapons in a film context and horror mood are NOT unsafe.',
     '}',
     '',
     'Category slugs:',

@@ -31,7 +31,7 @@ const ok = (overrides: Partial<Extract<ClassifyResult, { ok: true }>> = {}): Cla
 
 /** A `pg`-shaped mock: SELECT returns `rows`, every other statement is recorded. */
 const mockDb = (rows: StoredPreset[]) => {
-  const query = vi.fn(async (sql: string) => {
+  const query = vi.fn(async (sql: string, _params?: unknown[]) => {
     if (/^\s*SELECT/i.test(sql)) return { rowCount: rows.length, rows };
     return { rowCount: 1, rows: [] };
   });
@@ -118,7 +118,14 @@ describe('runRelabel', () => {
     expect(outcome.written).toBe(0);
     expect(writes(query)).toHaveLength(0);
     expect(classifier.classify).toHaveBeenCalledTimes(2);
-    expect(query.mock.calls[0]![1]).toEqual([10]);
+    expect(query.mock.calls[0]![1]).toEqual([10, null]);
+  });
+
+  it('passes --since through to the SELECT', async () => {
+    const { client, query } = mockDb([]);
+    await runRelabel(client, mockClassifier(), { apply: false, limit: 5, since: '2026-09-06T12:00:00Z' });
+    expect(query.mock.calls[0]![0]).toMatch(/ingested_at >= \$2/);
+    expect(query.mock.calls[0]![1]).toEqual([5, '2026-09-06T12:00:00Z']);
   });
 
   it('--apply writes one UPDATE per changed row', async () => {

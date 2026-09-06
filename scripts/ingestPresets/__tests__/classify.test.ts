@@ -8,6 +8,7 @@ import {
   Classifier,
   MAX_CLASSIFICATIONS_PER_RUN,
   OPENROUTER_URL,
+  tidyTitle,
   truncatePrompt,
 } from '../classify';
 
@@ -25,7 +26,13 @@ const jsonResponse = (body: unknown, status = 200) =>
     status,
   });
 
-const completion = (content: unknown, usage = { completion_tokens: 80, prompt_tokens: 600 }) =>
+const completion = (
+  content: unknown,
+  usage: { completion_tokens: number; cost?: number; prompt_tokens: number } = {
+    completion_tokens: 80,
+    prompt_tokens: 600,
+  },
+) =>
   jsonResponse({
     choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(content) } }],
     usage,
@@ -57,7 +64,29 @@ describe('ClassificationSchema', () => {
       title_ru: 'Очень длинное название которое явно не помещается в карточку',
     });
     expect(parsed.title_ru.length).toBeLessThanOrEqual(40);
-    expect(parsed.title_ru).toBe('Очень длинное название которое явно не');
+    // word-boundary cut gives «… явно не»; the dangling «не» is dropped as well
+    expect(parsed.title_ru).toBe('Очень длинное название которое явно');
+  });
+
+  it('drops a dangling preposition or open bracket left by the trim', () => {
+    expect(tidyTitle('Молодой бегун в стартовой позе для рекламы кроссовок')).toBe(
+      'Молодой бегун в стартовой позе',
+    );
+    expect(tidyTitle('Бизнесмен на замороженной улице (bullet time)')).toBe(
+      'Бизнесмен на замороженной улице',
+    );
+    expect(tidyTitle('Кошка на белом фоне')).toBe('Кошка на белом фоне');
+    // a quoted name inside keeps its closing quote; a wrapping pair is removed
+    expect(tidyTitle('Титры фильма «Пепел дня»')).toBe('Титры фильма «Пепел дня»');
+    expect(tidyTitle('«Титры фильма «Пепел дня»»')).toBe('Титры фильма «Пепел дня»');
+    // 39 chars: fits, so nothing is touched
+    expect(tidyTitle('Миниатюрная невеста в бумажной открытке')).toBe(
+      'Миниатюрная невеста в бумажной открытке',
+    );
+    // 41 chars: the trim leaves «… в», which is then dropped too
+    expect(tidyTitle('Миниатюрная невеста в бумажной открытке в')).toBe(
+      'Миниатюрная невеста в бумажной открытке',
+    );
   });
 
   it('rejects a runaway title, a missing field and a non-boolean flag', () => {
@@ -76,6 +105,9 @@ describe('prompt building', () => {
     expect(video).not.toContain('"portrait"');
     expect(image).toContain('"portrait"');
     expect(image).not.toContain('"cinematic"');
+    // anime is the one shared slug: the image keyword table emits it too
+    expect(allowedCategories('image')).toContain('anime');
+    expect(allowedCategories('video')).toContain('anime');
     expect(allowedCategories('image')).toContain('trends');
     expect(allowedCategories('video')).toContain('trends');
   });

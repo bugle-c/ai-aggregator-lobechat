@@ -60,6 +60,8 @@ export interface Options {
   modalities: Modality[];
   /** `--relabel[=N]`: re-classify N stored rows instead of ingesting. */
   relabel: number | null;
+  /** `--since=<ts>`: with `--relabel`, only rows ingested at or after this time. */
+  since?: string;
 }
 
 export const parseArgs = (argv: string[]): Options => {
@@ -86,6 +88,10 @@ export const parseArgs = (argv: string[]): Options => {
       const value = Number.parseInt(arg.slice('--relabel='.length), 10);
       if (!Number.isInteger(value) || value <= 0) throw new Error(`bad --relabel: ${arg}`);
       options.relabel = value;
+    } else if (arg.startsWith('--since=')) {
+      const value = arg.slice('--since='.length);
+      if (Number.isNaN(Date.parse(value))) throw new Error(`bad --since (need ISO date/time): ${arg}`);
+      options.since = value;
     } else if (arg.startsWith('--limit=')) {
       const value = Number.parseInt(arg.slice('--limit='.length), 10);
       if (!Number.isInteger(value) || value <= 0) throw new Error(`bad --limit: ${arg}`);
@@ -106,6 +112,9 @@ export const parseArgs = (argv: string[]): Options => {
 
   if (options.relabel !== null && !options.llm) {
     throw new Error('--relabel needs the LLM; drop --no-llm');
+  }
+  if (options.since && options.relabel === null) {
+    throw new Error('--since only applies to --relabel');
   }
 
   return options;
@@ -375,10 +384,15 @@ const relabel = async (options: Options): Promise<void> => {
   try {
     console.log(
       `[relabel] ${options.apply ? 'APPLY — rows will be updated' : 'DRY RUN — nothing written (add --apply)'}; ` +
-        `up to ${limit} oldest ingested rows, llm cap ${classifier.callsLeft}`,
+        `up to ${limit} oldest ingested rows${options.since ? ` since ${options.since}` : ''}, ` +
+        `llm cap ${classifier.callsLeft}`,
     );
 
-    const outcome = await runRelabel(client, classifier, { apply: options.apply, limit });
+    const outcome = await runRelabel(client, classifier, {
+      apply: options.apply,
+      limit,
+      since: options.since,
+    });
 
     if (outcome.scanned === 0) {
       console.log('[relabel] no ingested rows — nothing to do');
@@ -403,7 +417,7 @@ const relabel = async (options: Options): Promise<void> => {
 
 const USAGE =
   'usage: tsx scripts/ingestPresets/index.ts [--dry-run] [--limit=N] [--max-pages=N] ' +
-  '[--modality=video|image|both] [--no-llm] | --relabel[=N] [--apply]';
+  '[--modality=video|image|both] [--no-llm] | --relabel[=N] [--since=<iso>] [--apply]';
 
 const main = async () => {
   loadEnv();

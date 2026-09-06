@@ -116,19 +116,26 @@ export interface StoredPreset {
   title: string;
 }
 
-/** Ingested rows (never curated ones), oldest first, for re-labelling. */
+/**
+ * Ingested rows (never curated ones), oldest first, for re-labelling.
+ * `since` (any timestamp Postgres parses) narrows to rows ingested at or after
+ * it — the first 40 ingested rows carry hand-written titles that must not be
+ * overwritten, so the operator targets the heuristic batches explicitly.
+ */
 export const loadIngestedPresets = async (
   client: Queryable,
   limit: number,
+  since?: string,
 ): Promise<StoredPreset[]> => {
   const { rows } = await client.query<StoredPreset>(
     `SELECT id, slug, modality, category, title, description, prompt_template,
             params_lock, requires_image, active
        FROM presets
       WHERE external_id IS NOT NULL
+        AND ($2::timestamptz IS NULL OR ingested_at >= $2::timestamptz)
       ORDER BY ingested_at ASC NULLS LAST, id ASC
       LIMIT $1`,
-    [limit],
+    [limit, since ?? null],
   );
   return rows;
 };
