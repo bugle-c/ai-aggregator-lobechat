@@ -11,6 +11,7 @@ import PresetGallery from '@/features/Generators/PresetGallery';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { usePresetDeepLink } from '@/features/Generators/usePresetDeepLink';
 import { usePresetHydrate } from '@/features/Generators/usePresetHydrate';
+import { usePresetModelSwitch } from '@/features/Generators/usePresetModelSwitch';
 import ResourceExplorer from '@/features/ResourceManager/components/Explorer';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useVideoStore } from '@/store/video';
@@ -39,11 +40,17 @@ const FlowMainArea = memo(() => {
   // click path fetches the full preset before handing it to selectPreset.
   const hydratePreset = usePresetHydrate();
 
+  // The style brings its model: after the store has the preset, the UI
+  // layer switches to `recommendedModelId` (toast + «Вернуть»), or shows
+  // the tier upsell when that model is locked. Silent for deep links.
+  const { applyPresetModel, prefetchLock, upsellNode } = usePresetModelSwitch('video');
+
   // Home-page cards link here as /video?preset=<slug>; resolve that slug
   // into the actual selected preset.
   usePresetDeepLink({
     currentSlug: selectedSlug,
     modality: 'video',
+    onApplied: (full) => void applyPresetModel(full, { silent: true }),
     selectPreset,
     slug: url.preset,
   });
@@ -90,11 +97,14 @@ const FlowMainArea = memo(() => {
             selectedSlug={selectedSlug}
             onCategoryChange={url.setCategory}
             onModelChange={url.setModel}
+            onPresetPrefetch={(p) => prefetchLock(p.recommendedModelId)}
             onSearchChange={url.setQ}
             onPresetSelect={(p) => {
               url.setPreset(p.slug);
               void hydratePreset(p.slug).then((full) => {
-                if (full) selectPreset(full);
+                if (!full) return;
+                selectPreset(full);
+                void applyPresetModel(full);
               });
               if (isMobile) url.setView('create');
             }}
@@ -103,6 +113,7 @@ const FlowMainArea = memo(() => {
           <ResourceExplorer />
         )}
       </Flexbox>
+      {upsellNode}
     </Flexbox>
   );
 });
