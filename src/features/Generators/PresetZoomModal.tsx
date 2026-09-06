@@ -5,6 +5,7 @@ import { memo } from 'react';
 
 import type { PresetListItem } from '@/types/preset';
 
+import { presetAspectRatio } from './presetAspect';
 import PresetAttribution from './PresetAttribution';
 
 interface Props {
@@ -47,7 +48,16 @@ const PresetZoomModal = memo<Props>(({ onApply, onClose, open, preset }) => {
               loop
               playsInline
               src={preset.previewUrl}
-              style={{ display: 'block', maxHeight: '70vh', maxWidth: '90vw' }}
+              // The gallery grid crops every card to one aspect per modality;
+              // this is the surface that shows the preset at its true shape.
+              // Declaring it up front also stops the dialog jumping from the
+              // 300×150 default <video> box once metadata arrives.
+              style={{
+                aspectRatio: presetAspectRatio(preset),
+                display: 'block',
+                maxHeight: '70vh',
+                maxWidth: '90vw',
+              }}
             />
           ) : (
             <Image

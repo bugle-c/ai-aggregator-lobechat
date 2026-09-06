@@ -4,11 +4,12 @@ import { Flexbox } from '@lobehub/ui';
 import { Skeleton } from 'antd';
 import { createStyles } from 'antd-style';
 import { ArrowRight } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PresetCard from '@/features/Generators/PresetCard';
 import PresetMP4Player from '@/features/Generators/PresetMP4Player';
+import PresetZoomModal from '@/features/Generators/PresetZoomModal';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useHomeStore } from '@/store/home';
@@ -99,6 +100,8 @@ const HomeVideoSection = memo(() => {
   const { styles } = useStyles();
   const isMobile = useIsMobile();
   const navigate = useHomeStore((s) => s.navigate);
+  // Single modal for the whole section — PresetCard no longer carries one.
+  const [zoomPreset, setZoomPreset] = useState<PresetListItem | null>(null);
 
   // Server-side limit + ranking: pull exactly the 8 rows this section
   // renders, best-first. `popular` is meaningful here because the video
@@ -168,7 +171,14 @@ const HomeVideoSection = memo(() => {
             ))
           : thumbs.map((p) => (
               <div key={p.slug} style={thumbCellStyle}>
-                <PresetCard preset={p} onClick={() => goPreset(p)} />
+                {/* This row is a portrait strip by design, so it opts out of
+                    the 16:9 the gallery grid uses for video presets. */}
+                <PresetCard
+                  mediaAspectRatio="3 / 4"
+                  preset={p}
+                  onClick={() => goPreset(p)}
+                  onZoom={setZoomPreset}
+                />
               </div>
             ))}
       </div>
@@ -204,6 +214,15 @@ const HomeVideoSection = memo(() => {
               </button>
             ))}
       </div>
+
+      {zoomPreset && (
+        <PresetZoomModal
+          open
+          preset={zoomPreset}
+          onApply={() => goPreset(zoomPreset)}
+          onClose={() => setZoomPreset(null)}
+        />
+      )}
     </Flexbox>
   );
 });

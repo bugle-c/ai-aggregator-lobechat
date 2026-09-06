@@ -2,17 +2,30 @@
 
 import { createStyles } from 'antd-style';
 import { ZoomIn } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import type { PresetBadge, PresetListItem } from '@/types/preset';
 
+import { cardMediaAspectRatio } from './presetAspect';
 import PresetMP4Player from './PresetMP4Player';
-import PresetZoomModal from './PresetZoomModal';
 
 interface Props {
   isActive?: boolean;
+  /**
+   * Overrides the per-modality default from `cardMediaAspectRatio`. The home
+   * page keeps its video thumbnails portrait even though the gallery grid
+   * shows video presets in 16:9.
+   */
+  mediaAspectRatio?: string;
   onClick: (preset: PresetListItem) => void;
+  /**
+   * Opens the details view for this preset. The modal itself lives one level
+   * up (one instance for the whole list, not one per card — at ~1000 rows
+   * a per-card modal meant ~1000 mounted antd dialogs). Omit to hide the
+   * zoom affordance entirely.
+   */
+  onZoom?: (preset: PresetListItem) => void;
   preset: PresetListItem;
 }
 
@@ -208,42 +221,27 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
 }));
 
-/**
- * Convert a `params_lock.aspect_ratio` string like "3:4" / "16:9" / "1:1"
- * into a CSS aspect-ratio value. Falls back to "3 / 4" for untagged
- * presets so the layout never collapses.
- */
-const cardAspectRatio = (preset: PresetListItem): string => {
-  const raw = preset.paramsLock?.aspect_ratio;
-  if (typeof raw === 'string') {
-    const m = raw.match(/^(\d+)\s*[:×x/]\s*(\d+)$/);
-    if (m) return `${m[1]} / ${m[2]}`;
-  }
-  return '3 / 4';
-};
-
-const PresetCard = memo<Props>(({ isActive, onClick, preset }) => {
+const PresetCard = memo<Props>(({ isActive, mediaAspectRatio, onClick, onZoom, preset }) => {
   const { styles, cx } = useStyles();
   const hint = CATEGORY_HINTS[preset.category] ?? GENERIC_HINT;
-  const [zoomOpen, setZoomOpen] = useState(false);
   const isMobile = useIsMobile();
 
   return (
-    <>
-      <button
-        aria-label={preset.title}
-        className={cx(styles.card, isActive && styles.active)}
-        style={{ aspectRatio: cardAspectRatio(preset) }}
-        type="button"
-        onClick={() => onClick(preset)}
-      >
-        <PresetMP4Player
-          ariaHidden
-          fallbackLabel={preset.title}
-          posterUrl={preset.posterUrl ?? undefined}
-          previewUrl={preset.previewUrl}
-        />
+    <button
+      aria-label={preset.title}
+      className={cx(styles.card, isActive && styles.active)}
+      style={{ aspectRatio: mediaAspectRatio ?? cardMediaAspectRatio(preset.modality) }}
+      type="button"
+      onClick={() => onClick(preset)}
+    >
+      <PresetMP4Player
+        ariaHidden
+        fallbackLabel={preset.title}
+        posterUrl={preset.posterUrl ?? undefined}
+        previewUrl={preset.previewUrl}
+      />
 
+      {onZoom && (
         <span
           aria-label="Подробнее о стиле"
           className={cx(styles.zoomBtn, isMobile && styles.zoomBtnTouch, 'preset-zoom-btn')}
@@ -252,63 +250,57 @@ const PresetCard = memo<Props>(({ isActive, onClick, preset }) => {
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            setZoomOpen(true);
+            onZoom(preset);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               e.stopPropagation();
-              setZoomOpen(true);
+              onZoom(preset);
             }
           }}
         >
           <ZoomIn size={16} />
         </span>
+      )}
 
-        {preset.badges.length > 0 && (
-          <div
-            style={{
-              display: 'flex',
-              gap: 4,
-              insetBlockStart: 8,
-              insetInlineStart: 8,
-              pointerEvents: 'none',
-              position: 'absolute',
-            }}
-          >
-            {preset.badges.map((b) => (
-              <span
-                key={b}
-                style={{
-                  background: BADGE_COLORS[b],
-                  borderRadius: 6,
-                  color: b === 'top_choice' ? '#000' : '#fff',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  padding: '2px 6px',
-                }}
-              >
-                {BADGE_LABELS[b]}
-              </span>
-            ))}
-          </div>
-        )}
-
-        <div className={styles.bottomLabel}>{preset.title}</div>
-
-        <div className={cx(styles.hoverOverlay, 'preset-hover-overlay')}>
-          <div className={styles.title}>{preset.title}</div>
-          {preset.description && <div className={styles.description}>{preset.description}</div>}
-          {hint && <div className={styles.hint}>{hint}</div>}
+      {preset.badges.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 4,
+            insetBlockStart: 8,
+            insetInlineStart: 8,
+            pointerEvents: 'none',
+            position: 'absolute',
+          }}
+        >
+          {preset.badges.map((b) => (
+            <span
+              key={b}
+              style={{
+                background: BADGE_COLORS[b],
+                borderRadius: 6,
+                color: b === 'top_choice' ? '#000' : '#fff',
+                fontSize: 11,
+                fontWeight: 600,
+                padding: '2px 6px',
+              }}
+            >
+              {BADGE_LABELS[b]}
+            </span>
+          ))}
         </div>
-      </button>
-      <PresetZoomModal
-        open={zoomOpen}
-        preset={preset}
-        onApply={() => onClick(preset)}
-        onClose={() => setZoomOpen(false)}
-      />
-    </>
+      )}
+
+      <div className={styles.bottomLabel}>{preset.title}</div>
+
+      <div className={cx(styles.hoverOverlay, 'preset-hover-overlay')}>
+        <div className={styles.title}>{preset.title}</div>
+        {preset.description && <div className={styles.description}>{preset.description}</div>}
+        {hint && <div className={styles.hint}>{hint}</div>}
+      </div>
+    </button>
   );
 });
 
