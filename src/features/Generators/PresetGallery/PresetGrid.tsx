@@ -2,6 +2,7 @@
 
 import { Button, Empty, Spin } from 'antd';
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { lambdaQuery } from '@/libs/trpc/client';
@@ -13,7 +14,10 @@ const PAGE_SIZE = 24;
 
 interface Props {
   category: string | undefined;
+  /** True when a category / model / search filter is narrowing the list. */
+  hasFilters: boolean;
   modality: PresetModality;
+  onResetFilters: () => void;
   onSelect: (preset: PresetListItem) => void;
   q: string | undefined;
   /** Filter by recommendedModelId — the "Model" tab in the gallery. */
@@ -23,8 +27,19 @@ interface Props {
 }
 
 const PresetGrid = memo<Props>(
-  ({ category, modality, recommendedModelId, onSelect, q, selectedSlug, sort }) => {
+  ({
+    category,
+    hasFilters,
+    modality,
+    recommendedModelId,
+    onResetFilters,
+    onSelect,
+    q,
+    selectedSlug,
+    sort,
+  }) => {
     const isMobile = useIsMobile();
+    const { t } = useTranslation('common');
     // Keyset pagination: the catalogue grows to ~1000 rows via the ingest
     // cron, so the gallery pulls a page at a time instead of the whole table.
     const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
@@ -47,7 +62,14 @@ const PresetGrid = memo<Props>(
     }
 
     if (items.length === 0) {
-      return <Empty description="Пресеты не найдены" style={{ paddingBlock: 64 }} />;
+      return (
+        <Empty description={t('preset.empty')} style={{ paddingBlock: 64 }}>
+          {/* Without this the user is stuck staring at an empty grid with no
+              hint that a filter (possibly set on a previous visit, via the
+              URL) is what is hiding everything. */}
+          {hasFilters && <Button onClick={onResetFilters}>{t('preset.resetFilters')}</Button>}
+        </Empty>
+      );
     }
 
     return (
@@ -76,7 +98,7 @@ const PresetGrid = memo<Props>(
         {hasNextPage && (
           <div style={{ display: 'flex', justifyContent: 'center', paddingBlock: 16 }}>
             <Button loading={isFetchingNextPage} onClick={() => fetchNextPage()}>
-              Показать ещё
+              {t('preset.loadMore')}
             </Button>
           </div>
         )}

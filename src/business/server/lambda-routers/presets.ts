@@ -1,4 +1,5 @@
-import { and, count, desc, eq, ilike, isNotNull, type SQL, sql } from 'drizzle-orm';
+import { and, count, desc, eq, isNotNull, type SQL, sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
 import { presets } from '@/database/schemas';
@@ -134,6 +135,39 @@ const decodeCursor = (raw: string): Cursor | null => {
 const ingestedAtMs = sql`(extract(epoch from date_trunc('milliseconds', coalesce(${presets.ingestedAt}, 'epoch'::timestamptz))) * 1000)::bigint`;
 const popularityRank = sql`coalesce(${presets.popularity}, -1)`;
 
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalisation applied to both sides of the search comparison.
+ *
+ * `lower()` folds case (Cyrillic included) and `translate()` folds «ё» onto
+ * «е» — the one accent distinction that matters in Russian, so "ёлка" is found
+ * by a search for "елка".
+ *
+ * MUST stay textually identical to the indexed expressions in migration
+ * `0109_presets_search_trgm.sql`; if the two drift, postgres quietly stops
+ * using the trigram indexes and every search seq-scans.
+ */
+const searchable = (column: AnyPgColumn): SQL => sql`translate(lower(${column}), 'ё', 'е')`;
+
+const SEARCH_COLUMNS = [
+  presets.title,
+  presets.description,
+  presets.category,
+  presets.authorName,
+  // Deliberately NOT prompt_template: ingested prompts are multi-KB English
+  // blobs, so including them turns almost any query into a match.
+] as const;
+
+/** Same normalisation as `searchable`, plus LIKE metacharacter escaping. */
+const searchNeedle = (q: string): string =>
+  `%${q
+    .toLowerCase()
+    .replaceAll('ё', 'е')
+    .replaceAll(/[\\%_]/g, String.raw`\$&`)}%`;
+
 const sortKeyOf = (sort: PresetSort, row: ListRow): number => {
   switch (sort) {
     case 'popular': {
@@ -246,7 +280,17 @@ export const presetsRouter = router({
         if (input.recommendedModelId)
           conditions.push(eq(presets.recommendedModelId, input.recommendedModelId));
         if (input.category) conditions.push(eq(presets.category, input.category));
-        if (input.q) conditions.push(ilike(presets.title, `%${input.q}%`));
+        if (input.q) {
+          const needle = searchNeedle(input.q);
+          // A NULL column yields NULL, which drops out of the OR — exactly the
+          // "no match" semantics we want for rows without a description/author.
+          const matches = SEARCH_COLUMNS.map(
+            // Backslash is postgres' default LIKE escape character, which is
+            // what `searchNeedle` escapes with — no ESCAPE clause needed.
+            (column) => sql`${searchable(column)} like ${needle}`,
+          );
+          conditions.push(sql`(${sql.join(matches, sql` or `)})`);
+        }
 
         const cursor = input.cursor ? decodeCursor(input.cursor) : null;
         if (cursor) conditions.push(keysetOf(input.sort, cursor));
