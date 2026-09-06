@@ -8,7 +8,7 @@
  */
 import { Client } from 'pg';
 
-import type { PresetInsert } from './types';
+import type { Modality, PresetInsert } from './types';
 
 export const createClient = (connectionString?: string): Client => {
   const url = connectionString ?? process.env.DATABASE_URL;
