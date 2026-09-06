@@ -8,6 +8,7 @@ import FlowSidebar from '@/features/Generators/FlowSidebar';
 import { decideGenerateReadiness } from '@/features/Generators/presetImageGate';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
 import { useVideoGenerate } from '@/features/Generators/useVideoGenerate';
+import { useFetchAiVideoConfig } from '@/hooks/useFetchAiVideoConfig';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useVideoStore } from '@/store/video';
 import { videoGenerationConfigSelectors } from '@/store/video/slices/generationConfig/selectors';
@@ -23,6 +24,12 @@ import VideoWorkspaceMobile from './VideoWorkspaceMobile';
 const VideoPage = memo(() => {
   const isMobile = useIsMobile();
   const { t } = useTranslation('common');
+
+  // Initialise the generation config (remembered model + its defaults) once,
+  // at page level. It used to run only inside the legacy ConfigPanel, i.e. on
+  // the first click of ⚙ — which then overwrote the model, params_lock,
+  // prompt and photo of an already selected style.
+  useFetchAiVideoConfig();
 
   const preset = useVideoStore(presetSelectors.currentPreset);
   const clearPreset = useVideoStore((s) => s.clearPreset);

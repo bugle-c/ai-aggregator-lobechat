@@ -51,7 +51,8 @@ const AspectRatioItem = memo(() => {
   return <AspectRatioSelect options={options} value={value} onChange={(v) => setValue(v as any)} />;
 });
 
-const ResolutionItem = memo(() => {
+/** Exported: reused by the flow sidebar's inline «Дополнительные настройки». */
+export const ResolutionItem = memo(() => {
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('resolution');
 
   const options = useMemo(() => {
@@ -87,7 +88,7 @@ const DurationItem = memo(() => {
   );
 });
 
-const SeedItem = memo(() => {
+export const SeedItem = memo(() => {
   const { t } = useTranslation('video');
   const { value, setValue } = useVideoGenerationConfigParam('seed');
 
@@ -123,7 +124,7 @@ interface SwitchItemProps {
   paramName: 'cameraFixed' | 'generateAudio';
 }
 
-const SwitchItem = memo<SwitchItemProps>(({ label, paramName }) => {
+export const SwitchItem = memo<SwitchItemProps>(({ label, paramName }) => {
   const { value, setValue } = useVideoGenerationConfigParam(paramName);
 
   return (

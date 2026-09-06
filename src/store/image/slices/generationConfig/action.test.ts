@@ -544,5 +544,28 @@ describe('GenerationConfigAction', () => {
       expect(result.current.isInit).toBe(true);
       expect(result.current.imageNum).toBe(4);
     });
+
+    it('should keep the model of an already selected style instead of the remembered one', () => {
+      const { result } = renderHook(() => useImageStore());
+
+      useImageStore.setState({
+        currentPreset: { slug: 'neon-portrait' } as any,
+        isInit: false,
+        model: 'preset-model',
+        parameters: { prompt: 'from the style' } as any,
+        provider: 'preset-provider',
+      });
+
+      act(() => {
+        result.current.initializeImageConfig(true, 'flux/schnell', 'fal');
+      });
+
+      expect(result.current.isInit).toBe(true);
+      expect(result.current.model).toBe('preset-model');
+      expect(result.current.provider).toBe('preset-provider');
+      expect(result.current.parameters).toEqual({ prompt: 'from the style' });
+
+      useImageStore.setState({ currentPreset: null });
+    });
   });
 });

@@ -6,6 +6,7 @@ import { memo } from 'react';
 import FlowSidebar from '@/features/Generators/FlowSidebar';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
 import { useImageGenerate } from '@/features/Generators/useImageGenerate';
+import { useFetchAiImageConfig } from '@/hooks/useFetchAiImageConfig';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/slices/generationConfig/selectors';
@@ -19,6 +20,10 @@ import ImageWorkspaceMobile from './ImageWorkspaceMobile';
 
 const ImagePage = memo(() => {
   const isMobile = useIsMobile();
+
+  // Page-level config init — see video/index.tsx: running it lazily inside
+  // the ⚙ panel reset the selected style's model and parameters.
+  useFetchAiImageConfig();
 
   const preset = useImageStore(presetSelectors.currentPreset);
   const clearPreset = useImageStore((s) => s.clearPreset);

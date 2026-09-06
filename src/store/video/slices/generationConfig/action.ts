@@ -59,8 +59,15 @@ export const createGenerationConfigSlice: StateCreator<
   [['zustand/devtools', never]],
   [],
   GenerationConfigAction
-> = (set) => ({
+> = (set, get) => ({
   initializeVideoConfig: (isLogin, lastSelectedVideoModel, lastSelectedVideoProvider) => {
+    // A style selected before init (deep link, an early click) already set
+    // the model and its params_lock; the remembered model must not replace it.
+    if (get().currentPreset) {
+      set({ isInit: true }, false, 'initializeVideoConfig/presetSelected');
+      return;
+    }
+
     if (isLogin && lastSelectedVideoModel && lastSelectedVideoProvider) {
       try {
         const { defaultValues, parametersSchema } = getVideoModelAndDefaults(
@@ -102,7 +109,6 @@ export const createGenerationConfigSlice: StateCreator<
       defaultValues = resolved.defaultValues;
       parametersSchema = resolved.parametersSchema;
     } catch (err) {
-       
       console.warn(
         '[setModelAndProviderOnSelect] schema resolve failed for',
         `${provider}/${model}`,

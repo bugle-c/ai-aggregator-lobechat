@@ -95,12 +95,7 @@ export class GenerationConfigActionImpl {
   setWidth = (width: number): void => {
     this.#set(
       (state) => {
-        const {
-          parameters,
-          isAspectRatioLocked,
-          activeAspectRatio,
-          parametersSchema,
-        } = state;
+        const { parameters, isAspectRatioLocked, activeAspectRatio, parametersSchema } = state;
 
         const newParams = { ...parameters, width };
         if (isAspectRatioLocked && activeAspectRatio) {
@@ -126,12 +121,7 @@ export class GenerationConfigActionImpl {
   setHeight = (height: number): void => {
     this.#set(
       (state) => {
-        const {
-          parameters,
-          isAspectRatioLocked,
-          activeAspectRatio,
-          parametersSchema,
-        } = state;
+        const { parameters, isAspectRatioLocked, activeAspectRatio, parametersSchema } = state;
         const newParams = { ...parameters, height };
 
         if (isAspectRatioLocked && activeAspectRatio) {
@@ -157,12 +147,7 @@ export class GenerationConfigActionImpl {
   toggleAspectRatioLock = (): void => {
     this.#set(
       (state) => {
-        const {
-          isAspectRatioLocked,
-          activeAspectRatio,
-          parameters,
-          parametersSchema,
-        } = state;
+        const { isAspectRatioLocked, activeAspectRatio, parameters, parametersSchema } = state;
         const newLockState = !isAspectRatioLocked;
 
         // If transitioning from unlocked to locked and there's an active aspect ratio, adjust dimensions immediately
@@ -268,7 +253,6 @@ export class GenerationConfigActionImpl {
     try {
       resolved = prepareModelConfigState(model, provider);
     } catch (err) {
-       
       console.warn(
         '[setModelAndProviderOnSelect] schema resolve failed for',
         `${provider}/${model}`,
@@ -344,8 +328,19 @@ export class GenerationConfigActionImpl {
     lastSelectedImageModel?: string,
     lastSelectedImageProvider?: string,
   ): void => {
-    const { _initializeDefaultImageConfig } = this.#get();
+    const { _initializeDefaultImageConfig, currentPreset } = this.#get();
     const { defaultImageNum } = settingsSelectors.currentImageSettings(useUserStore.getState());
+
+    // A style selected before init (deep link, an early click) already set
+    // the model and its params_lock; the remembered model must not replace it.
+    if (currentPreset) {
+      this.#set(
+        { imageNum: defaultImageNum, isInit: true },
+        false,
+        'initializeImageConfig/presetSelected',
+      );
+      return;
+    }
 
     if (isLogin && lastSelectedImageModel && lastSelectedImageProvider) {
       try {

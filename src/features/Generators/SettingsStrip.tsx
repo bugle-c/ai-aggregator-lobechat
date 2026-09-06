@@ -19,9 +19,36 @@ const truncateChipLabel = (label: string): string =>
 const useStyles = createStyles(({ css, token }) => ({
   root: css`
     display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-inline-size: 0;
+  `,
+  row: css`
+    display: flex;
     gap: 8px;
     align-items: center;
     min-inline-size: 0;
+  `,
+  /** The inline «Дополнительные настройки» panel under the chip row. */
+  advanced: css`
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+
+    padding: 12px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: 12px;
+
+    background: ${token.colorFillQuaternary};
+  `,
+  advancedLabel: css`
+    font-size: 12px;
+    font-weight: 500;
+    color: ${token.colorTextSecondary};
+  `,
+  gearOpen: css`
+    color: ${token.colorPrimary} !important;
+    background: ${token.colorPrimaryBg} !important;
   `,
   /**
    * Left group scrolls (hidden scrollbar, right-edge fade) so on a 360px
@@ -176,54 +203,82 @@ export const SettingsChip = memo<ChipProps>(
 
 SettingsChip.displayName = 'SettingsChip';
 
+/** One labelled row inside the advanced panel. */
+export const AdvancedItem = memo<{ children: ReactNode; label: string }>(({ children, label }) => {
+  const { styles } = useStyles();
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className={styles.advancedLabel}>{label}</span>
+      {children}
+    </div>
+  );
+});
+
+AdvancedItem.displayName = 'SettingsAdvancedItem';
+
 interface StripProps {
+  /**
+   * The model's remaining knobs (seed, resolution, steps, references…) that
+   * have no chip of their own. Rendered inline under the chip row, toggled by
+   * ⚙ — no drawer, so it can never cover the prompt or the CTA. Omit it when
+   * the model has nothing extra and the gear disappears.
+   */
+  advanced?: ReactNode;
   children: ReactNode;
   cost: { credits: number | null; sufficient: boolean };
-  /** Opens the full `ConfigPanel` drawer (seed, steps, cfg, references…). */
-  onOpenAdvanced: () => void;
 }
 
 /**
  * The settings row above the prompt input:
- * `[Model ▾][3:4 ▾][5 s ▾] … [≈ 12 cr][⚙]`.
+ * `[Model ▾][3:4 ▾][5 s ▾] … [≈ 12 cr][⚙]`, plus the collapsible
+ * «Дополнительные настройки» panel right under it.
  *
  * Presentational — the modality bindings (`FlowSidebarControls`) decide
  * which chips exist and wire them to the stores. Two groups: the chips
  * scroll, the cost and the gear stay put.
  */
-const SettingsStrip = memo<StripProps>(({ children, cost, onOpenAdvanced }) => {
+const SettingsStrip = memo<StripProps>(({ advanced, children, cost }) => {
   const { styles, cx } = useStyles();
   const { t } = useTranslation('common');
   const navigate = useNavigate();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const insufficient = cost.credits !== null && !cost.sufficient;
+  const showAdvanced = !!advanced && advancedOpen;
 
   return (
     <div className={styles.root}>
-      <div className={styles.scroller}>{children}</div>
-      <div className={styles.fixed}>
-        {cost.credits !== null &&
-          (insufficient ? (
-            <Tooltip title={t('preset.insufficientCredits')}>
-              <button
-                className={cx(styles.cost, styles.costInsufficient)}
-                style={{ background: 'transparent', border: 0 }}
-                type="button"
-                onClick={() => navigate('/settings/plans')}
-              >
-                {t('preset.credits', { count: cost.credits })}
-              </button>
-            </Tooltip>
-          ) : (
-            <span className={styles.cost}>{t('preset.credits', { count: cost.credits })}</span>
-          ))}
-        <ActionIcon
-          aria-label={t('preset.settings.more')}
-          icon={Settings2}
-          size="small"
-          title={t('preset.settings.more')}
-          onClick={onOpenAdvanced}
-        />
+      <div className={styles.row}>
+        <div className={styles.scroller}>{children}</div>
+        <div className={styles.fixed}>
+          {cost.credits !== null &&
+            (insufficient ? (
+              <Tooltip title={t('preset.insufficientCredits')}>
+                <button
+                  className={cx(styles.cost, styles.costInsufficient)}
+                  style={{ background: 'transparent', border: 0 }}
+                  type="button"
+                  onClick={() => navigate('/settings/plans')}
+                >
+                  {t('preset.credits', { count: cost.credits })}
+                </button>
+              </Tooltip>
+            ) : (
+              <span className={styles.cost}>{t('preset.credits', { count: cost.credits })}</span>
+            ))}
+          {advanced && (
+            <ActionIcon
+              aria-expanded={advancedOpen}
+              aria-label={t('preset.settings.more')}
+              className={cx(advancedOpen && styles.gearOpen)}
+              icon={Settings2}
+              size="small"
+              title={t('preset.settings.more')}
+              onClick={() => setAdvancedOpen((v) => !v)}
+            />
+          )}
+        </div>
       </div>
+      {showAdvanced && <div className={styles.advanced}>{advanced}</div>}
     </div>
   );
 });
