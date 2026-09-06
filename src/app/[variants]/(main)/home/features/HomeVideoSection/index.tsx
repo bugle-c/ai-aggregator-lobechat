@@ -209,7 +209,12 @@ const HomeVideoSection = memo(() => {
                 type="button"
                 onClick={() => goPreset(p)}
               >
-                <PresetMP4Player ariaHidden fallbackLabel={p.title} previewUrl={p.previewUrl} />
+                <PresetMP4Player
+                  ariaHidden
+                  fallbackLabel={p.title}
+                  posterUrl={p.posterUrl ?? undefined}
+                  previewUrl={p.previewUrl}
+                />
                 <div className={styles.featuredLabel}>{p.title}</div>
               </button>
             ))}

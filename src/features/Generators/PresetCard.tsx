@@ -236,6 +236,9 @@ const PresetCard = memo<Props>(({ isActive, mediaAspectRatio, onClick, onZoom, p
     >
       <PresetMP4Player
         ariaHidden
+        // Desktop plays on hover — that is a deliberate "show me this one".
+        // Touch has no hover, so there the most-visible card plays instead.
+        autoplayInView={isMobile}
         fallbackLabel={preset.title}
         posterUrl={preset.posterUrl ?? undefined}
         previewUrl={preset.previewUrl}
