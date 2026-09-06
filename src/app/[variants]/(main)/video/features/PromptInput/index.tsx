@@ -17,6 +17,7 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 import { useVideoStore } from '@/store/video';
 import { createVideoSelectors } from '@/store/video/selectors';
 import { useVideoGenerationConfigParam } from '@/store/video/slices/generationConfig/hooks';
+import { presetSelectors } from '@/store/video/slices/preset/selectors';
 
 import PromptTitle from './Title';
 
@@ -53,6 +54,9 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const { value, setValue } = useVideoGenerationConfigParam('prompt');
   const isCreating = useVideoStore(createVideoSelectors.isCreating);
   const isLogin = useUserStore(authSelectors.isLogin);
+  // A selected style is a ready prompt: the textarea becomes optional and
+  // shrinks so the settings strip and the CTA stay on a phone screen.
+  const hasTemplate = useVideoStore((s) => !!presetSelectors.currentPreset(s)?.promptTemplate);
   const generate = useVideoGenerate();
 
   // Read prompt from query parameter
@@ -75,7 +79,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      if (!isCreating && value.trim()) {
+      if (!isCreating && (value.trim() || hasTemplate)) {
         void generate(value);
       }
     }
@@ -90,10 +94,14 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
           styles={{ body: { padding: 8 } }}
         >
           <TextArea
-            autoSize={{ maxRows: 6, minRows: 3 }}
-            placeholder={t('config.prompt.placeholder')}
+            autoSize={{ maxRows: 6, minRows: hasTemplate ? 2 : 3 }}
             value={value}
             variant={'borderless'}
+            placeholder={
+              hasTemplate
+                ? t('preset.promptOptional', { ns: 'common' })
+                : t('config.prompt.placeholder')
+            }
             style={{
               borderRadius: 0,
               padding: 0,
