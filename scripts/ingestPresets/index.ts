@@ -21,7 +21,6 @@ import dotenvExpand from 'dotenv-expand';
 
 import { sendAlert } from '../../src/server/services/alerts';
 import { Classifier, type ClassifyResult, formatStats } from './classify';
-import { deriveAttribution, deriveCategory, deriveTitle, LICENSE, slugFor } from './derive';
 import {
   deriveAttribution,
   deriveCategory,
