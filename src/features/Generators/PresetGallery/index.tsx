@@ -2,18 +2,12 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
-import { Input } from 'antd';
-import { Search } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
-import { useIsMobile } from '@/hooks/useIsMobile';
 import type { PresetListItem, PresetModality, PresetSort } from '@/types/preset';
 
-import CategoryChips from './CategoryChips';
-import ModelFilter from './ModelFilter';
 import PresetGrid from './PresetGrid';
-import SortSwitcher from './SortSwitcher';
+import Toolbar from './Toolbar';
 
 /** Search is a leading-wildcard scan over four columns — don't fire per keystroke. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -27,16 +21,21 @@ interface Props {
   modelId: string | undefined;
   onCategoryChange: (slug: string | undefined) => void;
   onModelChange: (modelId: string | undefined) => void;
+  /** Hover / first-touch on a card — warm what selecting it will need. */
+  onPresetPrefetch?: (preset: PresetListItem) => void;
   onPresetSelect: (preset: PresetListItem) => void;
   onSearchChange: (q: string | undefined) => void;
   q: string | undefined;
   selectedSlug: string | null;
 }
 
+/**
+ * State orchestrator for the gallery: owns the live search text and its
+ * debounce, the sort preference and the filter reset. Layout lives in
+ * `Toolbar` (sticky browse controls) and `PresetGrid` (masonry + paging).
+ */
 const PresetGallery = memo<Props>((props) => {
   const { onCategoryChange, onModelChange, onSearchChange, q } = props;
-  const { t } = useTranslation('common');
-  const isMobile = useIsMobile();
 
   // The input is driven locally so typing stays instant; the debounced push is
   // what reaches the URL and the query. `q` is only read for the initial value
@@ -53,6 +52,20 @@ const PresetGallery = memo<Props>((props) => {
     { wait: SEARCH_DEBOUNCE_MS },
   );
 
+  const handleTextChange = useCallback(
+    (value: string) => {
+      setText(value);
+      if (value === '') {
+        // Clearing should be immediate, not 300ms later.
+        cancelSearch();
+        onSearchChange(undefined);
+      } else {
+        pushSearch(value);
+      }
+    },
+    [cancelSearch, onSearchChange, pushSearch],
+  );
+
   const hasFilters = !!props.category || !!props.modelId || !!q;
 
   const resetFilters = useCallback(() => {
@@ -67,36 +80,17 @@ const PresetGallery = memo<Props>((props) => {
 
   return (
     <Flexbox flex={1} gap={8} style={{ overflowY: 'auto' }}>
-      {/* Explicit rows rather than one wrapping row: on a phone the wrap
-          points are what decide whether the sort switcher lands next to the
-          search box or under it, and that should not be luck. */}
-      <Flexbox gap={8} paddingBlock={8} paddingInline={16}>
-        <Flexbox horizontal align="center" gap={8}>
-          <Input
-            allowClear
-            placeholder={t('preset.searchPlaceholder')}
-            prefix={<Search size={14} />}
-            size="large"
-            style={{ flex: 1, minWidth: 0 }}
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value);
-              pushSearch(e.target.value);
-            }}
-          />
-          <ModelFilter
-            modality={props.modality}
-            selected={props.modelId}
-            onSelect={props.onModelChange}
-          />
-        </Flexbox>
-        <SortSwitcher block={isMobile} value={sort} onChange={setSort} />
-        <CategoryChips
-          modality={props.modality}
-          selected={props.category}
-          onSelect={props.onCategoryChange}
-        />
-      </Flexbox>
+      <Toolbar
+        category={props.category}
+        modality={props.modality}
+        modelId={props.modelId}
+        sort={sort}
+        text={text}
+        onCategoryChange={props.onCategoryChange}
+        onModelChange={props.onModelChange}
+        onSortChange={setSort}
+        onTextChange={handleTextChange}
+      />
       <PresetGrid
         category={props.category}
         hasFilters={hasFilters}
@@ -105,6 +99,7 @@ const PresetGallery = memo<Props>((props) => {
         recommendedModelId={props.modelId}
         selectedSlug={props.selectedSlug}
         sort={sort}
+        onPrefetch={props.onPresetPrefetch}
         onResetFilters={resetFilters}
         onSelect={props.onPresetSelect}
       />

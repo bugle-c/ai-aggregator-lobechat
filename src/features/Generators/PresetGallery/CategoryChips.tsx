@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { lambdaQuery } from '@/libs/trpc/client';
 import type { PresetModality } from '@/types/preset';
 
-import { ALL_CATEGORIES_KEY, categoryLabel } from '../PRESET_CATEGORIES';
+import { ALL_CATEGORIES_KEY, categoryLabel, compareCategories } from '../PRESET_CATEGORIES';
 
 interface Props {
   modality: PresetModality;
@@ -96,7 +96,9 @@ const CategoryChips = memo<Props>(({ modality, onSelect, selected }) => {
   const { data } = lambdaQuery.presets.facets.useQuery({ modality }, { staleTime: 5 * 60 * 1000 });
 
   const chips = useMemo(() => {
-    const categories = data?.categories ?? [];
+    // Fixed editorial order, not by count: counts move with every nightly
+    // ingest and a strip that reshuffles is one the user cannot learn.
+    const categories = [...(data?.categories ?? [])].sort(compareCategories);
     const total = categories.reduce((sum, f) => sum + f.count, 0);
     return [
       { count: total, key: ALL_CATEGORIES_KEY, label: t('preset.allCategories') },

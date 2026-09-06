@@ -46,10 +46,6 @@ export class CreateImageActionImpl {
       throw new TypeError('parameters is not initialized');
     }
 
-    if (!parameters.prompt) {
-      throw new TypeError('prompt is empty');
-    }
-
     // If a preset is active, wrap the user's prompt through its template
     // so the model receives the curated style + user-typed subject.
     // Without this the preset is cosmetic — same output as a freestyle
@@ -60,6 +56,13 @@ export class CreateImageActionImpl {
       : parameters.prompt;
     const finalParameters = { ...parameters, prompt: finalPrompt };
 
+    // Checked *after* the template: a preset is a ready prompt, so an empty
+    // input with a style selected is a valid one-tap run. Only a run with
+    // nothing at all to send is rejected.
+    if (!finalPrompt) {
+      throw new TypeError('prompt is empty');
+    }
+
     // Track the final topic ID to use for image creation
     let finalTopicId = activeGenerationTopicId;
 
@@ -69,7 +72,7 @@ export class CreateImageActionImpl {
 
     if (!generationTopicId) {
       isNewTopic = true;
-      const prompts = [parameters.prompt];
+      const prompts = [finalPrompt];
       const newGenerationTopicId = await createGenerationTopic(prompts);
       finalTopicId = newGenerationTopicId;
 

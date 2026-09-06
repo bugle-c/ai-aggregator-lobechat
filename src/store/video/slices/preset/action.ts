@@ -35,9 +35,11 @@ export const createPresetSlice: StateCreator<
   selectPreset: (preset) => {
     set({ currentPreset: preset }, false, `selectPreset/${preset.slug}`);
 
-    // A preset is prompt + params, not a model lock. We surface
-    // recommendedModelId as a hint elsewhere but don't change the
-    // user's model selection here.
+    // This action stays a pure prompt + params write. Switching to
+    // `recommendedModelId` (with its toast, «Вернуть» undo and tier
+    // upsell) is UI-layer work — see `usePresetModelSwitch`, which also
+    // re-runs this action after a switch because changing the model
+    // resets the parameters to that model's defaults.
     // `params_lock` uses storage-side names (aspect_ratio, duration_sec);
     // the runtime schema uses camelCase (aspectRatio, duration). Translate
     // through the shared whitelist instead of spreading raw keys.

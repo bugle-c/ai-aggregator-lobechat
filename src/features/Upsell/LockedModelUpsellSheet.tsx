@@ -10,6 +10,8 @@ import { useTrackUpsell } from './useTrackUpsell';
 const { Text, Title } = Typography;
 
 interface Props {
+  /** Third button under the upgrade CTAs — see `UpsellModal.fallbackAction`. */
+  fallbackAction?: { label: string; onClick: () => void };
   modelDescription?: string;
   modelId: string;
   onClose: () => void;
@@ -25,7 +27,15 @@ interface Props {
  * upgrade CTA, secondary "compare plans" link.
  */
 const LockedModelUpsellSheet = memo<Props>(
-  ({ modelDescription, modelId, onClose, open, requiredPlanName, requiredPlanPriceRub }) => {
+  ({
+    fallbackAction,
+    modelDescription,
+    modelId,
+    onClose,
+    open,
+    requiredPlanName,
+    requiredPlanPriceRub,
+  }) => {
     const navigate = useNavigate();
     const { click, impression } = useTrackUpsell();
 
@@ -72,6 +82,11 @@ const LockedModelUpsellSheet = memo<Props>(
           <Button block type="default" onClick={goToPlans}>
             Сравнить тарифы
           </Button>
+          {fallbackAction && (
+            <Button block size="large" type="text" onClick={fallbackAction.onClick}>
+              {fallbackAction.label}
+            </Button>
+          )}
         </Flexbox>
       </Drawer>
     );

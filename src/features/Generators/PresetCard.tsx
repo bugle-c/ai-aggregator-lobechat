@@ -1,30 +1,39 @@
 'use client';
 
 import { createStyles } from 'antd-style';
-import { ZoomIn } from 'lucide-react';
-import { memo } from 'react';
+import { Maximize2, Play } from 'lucide-react';
+import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import type { PresetBadge, PresetListItem } from '@/types/preset';
 
 import { categoryLabel } from './PRESET_CATEGORIES';
-import { cardMediaAspectRatio } from './presetAspect';
+import { tileAspectRatio } from './presetAspect';
 import PresetMP4Player from './PresetMP4Player';
 
 interface Props {
   isActive?: boolean;
   /**
-   * Overrides the per-modality default from `cardMediaAspectRatio`. The home
-   * page keeps its video thumbnails portrait even though the gallery grid
-   * shows video presets in 16:9.
+   * Overrides the tile's own aspect (`tileAspectRatio`). The home-page rows
+   * pass one ratio per row so five thumbnails stay flush; the gallery
+   * masonry leaves this unset and gets each preset's real shape.
    */
   mediaAspectRatio?: string;
   onClick: (preset: PresetListItem) => void;
   /**
+   * Fired on the first hover / touch / focus, before a click can happen —
+   * the place to warm whatever the selection path will need (lock state,
+   * the full preset row) so the tap itself feels instant.
+   */
+  onPrefetch?: (preset: PresetListItem) => void;
+  /**
    * Opens the details view for this preset. The modal itself lives one level
    * up (one instance for the whole list, not one per card — at ~1000 rows
    * a per-card modal meant ~1000 mounted antd dialogs). Omit to hide the
-   * zoom affordance entirely.
+   * zoom affordance entirely. Desktop only: on touch the details live on the
+   * creation screen («Подробнее» in `PresetThumbCard`), a second 28px target
+   * on a 170px tile was a mis-tap magnet.
    */
   onZoom?: (preset: PresetListItem) => void;
   preset: PresetListItem;
@@ -53,39 +62,16 @@ const BADGE_COLORS: Record<PresetBadge, string> = {
 };
 
 /**
- * Shown for any category we have no tailored hint for — the ingest cron can
- * introduce categories this map has never heard of, and a blank hint area
- * looked like a rendering bug.
- */
-const GENERIC_HINT = 'Опишите, что показать — стиль возьмётся из пресета.';
-
-/**
- * Category-keyed usage hint. Shown on hover overlay so the user
- * understands what to put in the prompt for this preset to "click".
- * Falls back to GENERIC_HINT if a new category appears.
- */
-const CATEGORY_HINTS: Record<string, string> = {
-  action: 'Кратко опишите героя/действие — стиль кадра уже зашит в пресет.',
-  ambient: 'Опишите сцену или настроение — атмосфера применится сама.',
-  anime: 'Опишите персонажа, эмоцию или сюжет.',
-  artistic: 'Назовите тему — будет в выбранном арт-стиле.',
-  camera: 'Кратко опишите главного героя/объект кадра.',
-  character: 'Опишите внешность и эмоцию героя.',
-  effects: 'Назовите объект — спецэффект применится поверх.',
-  landscape: 'Опишите место, эпоху или время суток.',
-  portrait: 'Загрузите ваше фото в стиле этого пресета.',
-  product: 'Загрузите фото продукта или опишите его в одном предложении.',
-  realistic: 'Опишите сцену; чем конкретнее детали — тем точнее результат.',
-};
-
-/**
- * "1,2 тыс." rather than "1200" — the number is a texture cue on a 140px
+ * "1,2 тыс." rather than "1200" — the number is a texture cue on a 170px
  * card, not a figure anyone reads digit by digit.
  */
 const compactCount = new Intl.NumberFormat('ru-RU', {
   maximumFractionDigits: 1,
   notation: 'compact',
 });
+
+const isVideoPreview = (preset: PresetListItem): boolean =>
+  preset.modality === 'video' || /\.(?:mp4|webm|mov)$/.test(preset.previewUrl.split('?')[0]);
 
 const useStyles = createStyles(({ css, token }) => ({
   card: css`
@@ -95,7 +81,7 @@ const useStyles = createStyles(({ css, token }) => ({
     display: flex;
     flex-direction: column;
 
-    width: 100%;
+    inline-size: 100%;
     margin: 0;
     padding: 0;
     border: 1px solid ${token.colorBorderSecondary};
@@ -114,50 +100,229 @@ const useStyles = createStyles(({ css, token }) => ({
       transform: translateY(-2px);
     }
 
-    &:hover .preset-hover-overlay {
+    &:focus-visible {
+      outline: 2px solid ${token.colorPrimary};
+      outline-offset: 2px;
+    }
+
+    /* Keyboard users get the same text layer a mouse hover shows. */
+    &:hover .preset-hover-overlay,
+    &:focus-visible .preset-hover-overlay,
+    &:has(.preset-zoom-btn:focus-visible) .preset-hover-overlay {
       opacity: 1;
     }
 
-    &:hover .preset-zoom-btn {
+    &:hover .preset-zoom-btn,
+    &:focus-visible .preset-zoom-btn,
+    &:has(.preset-zoom-btn:focus-visible) .preset-zoom-btn {
       pointer-events: auto;
       opacity: 1;
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: border-color 0.18s ease;
+
+      &:hover {
+        transform: none;
+      }
+    }
+  `,
+  cardMobile: css`
+    border-radius: 10px;
+
+    &:hover {
+      transform: none;
+    }
+
+    &:active {
+      transform: scale(0.98);
+      transition-duration: 80ms;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      &:active {
+        transform: none;
+      }
+    }
+  `,
+  active: css`
+    border-color: ${token.colorPrimary};
+    border-width: 2px;
   `,
   /**
-   * The media box. Every card in a grid shares one aspect ratio (see
-   * `cardMediaAspectRatio`) and the preview is cover-cropped into it, so
-   * rows stay flush and the captions below them line up.
+   * The media box at the preset's real (clamped) aspect. The tertiary fill
+   * behind the poster is the skeleton: the box already has its final size
+   * before any byte of media arrives, so CLS is zero by construction.
    */
   media: css`
     position: relative;
     overflow: hidden;
-    width: 100%;
+    inline-size: 100%;
     background: ${token.colorFillTertiary};
   `,
+  badges: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 2;
+    inset-block-start: 8px;
+    inset-inline-start: 8px;
+
+    display: flex;
+    gap: 4px;
+  `,
+  badge: css`
+    padding-block: 2px;
+    padding-inline: 6px;
+    border-radius: 6px;
+
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+  `,
   /**
-   * Always visible, below the media, in the page's own text colour.
-   *
-   * The title used to be the only permanent text and it sat in a gradient
-   * over the preview; the Russian description and the category hint lived
-   * exclusively in a `:hover` overlay, which touch devices never trigger.
-   * Since legacy titles are English, a phone user saw an English word on a
-   * picture and nothing else. Sized to stay legible on a ~140px-wide card
-   * (two columns on a small phone).
+   * "This one moves." Decorative — the card's label already says what it
+   * is — and hidden while the preview actually plays, when the motion
+   * itself is the cue.
+   */
+  playBadge: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 2;
+    inset-block-start: 8px;
+    inset-inline-end: 8px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    inline-size: 24px;
+    block-size: 24px;
+    border-radius: 50%;
+
+    color: #fff;
+
+    background: rgb(0 0 0 / 55%);
+    backdrop-filter: blur(4px);
+
+    transition: opacity 0.18s ease;
+  `,
+  playBadgeMobile: css`
+    inline-size: 28px;
+    block-size: 28px;
+  `,
+  /**
+   * Desktop text layer: everything the mobile caption says, over the
+   * bottom of the preview, on hover and on focus. Hidden outright where
+   * there is no hover, so it can never be the only carrier of information.
+   */
+  hoverOverlay: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 3;
+    inset: 0;
+
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    justify-content: flex-end;
+
+    padding: 12px;
+
+    opacity: 0;
+    background: linear-gradient(180deg, rgb(0 0 0 / 0%) 45%, rgb(0 0 0 / 80%) 100%);
+
+    transition: opacity 0.18s ease;
+
+    @media (hover: none) {
+      display: none;
+    }
+  `,
+  overlayTitle: css`
+    overflow: hidden;
+
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #fff;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  `,
+  overlayLine: css`
+    overflow: hidden;
+
+    font-size: 11px;
+    line-height: 1.3;
+    color: rgb(255 255 255 / 90%);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  overlayFooter: css`
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    justify-content: space-between;
+  `,
+  /**
+   * «Подробнее» — bottom-right of the hover layer. Hidden and inert until
+   * the layer shows; without `pointer-events: none` the transparent hit
+   * area still swallowed clicks meant for the card.
+   */
+  zoomBtn: css`
+    pointer-events: none;
+    cursor: pointer;
+
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+
+    inline-size: 32px;
+    block-size: 32px;
+    border: none;
+    border-radius: 8px;
+
+    color: #fff;
+
+    opacity: 0;
+    background: rgb(255 255 255 / 18%);
+
+    transition:
+      opacity 0.18s ease,
+      background 0.18s ease;
+
+    &:hover {
+      background: rgb(255 255 255 / 32%);
+    }
+
+    &:focus-visible {
+      outline: 2px solid #fff;
+      outline-offset: 1px;
+    }
+  `,
+  /**
+   * Mobile caption, under the media, in the page's own text colour. Exactly
+   * `MOBILE_CAPTION_HEIGHT` (40px) tall — the masonry adds that constant to
+   * each tile without measuring — so both lines are single-line ellipsised.
    */
   caption: css`
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
+    justify-content: center;
 
-    padding-block: 8px;
-    padding-inline: 10px;
+    block-size: 40px;
+    padding-inline: 8px;
   `,
   captionTitle: css`
     overflow: hidden;
 
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
-    line-height: 1.25;
+    line-height: 15px;
     color: ${token.colorText};
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -166,220 +331,126 @@ const useStyles = createStyles(({ css, token }) => ({
     overflow: hidden;
 
     font-size: 11px;
-    line-height: 1.3;
+    line-height: 14px;
     color: ${token.colorTextTertiary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
-  /** Author handle + popularity. Full credit lives in the zoom modal. */
-  captionMeta: css`
-    overflow: hidden;
-
-    font-size: 11px;
-    line-height: 1.3;
-    color: ${token.colorTextQuaternary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  active: css`
-    border-color: ${token.colorPrimary};
-    border-width: 2px;
-  `,
-  /**
-   * Desktop-only enrichment: the same facts as the caption plus the usage
-   * hint, larger, over the preview. Hidden entirely where there is no
-   * hover, so it can never be the only carrier of information.
-   */
-  hoverOverlay: css`
-    pointer-events: none;
-
-    position: absolute;
-    inset: 0;
-
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    justify-content: flex-end;
-
-    padding: 12px;
-
-    opacity: 0;
-    background: linear-gradient(180deg, rgb(0 0 0 / 0%) 0%, rgb(0 0 0 / 80%) 60%);
-
-    transition: opacity 0.18s ease;
-
-    @media (hover: none) {
-      display: none;
-    }
-  `,
-  title: css`
-    font-size: 13px;
-    font-weight: 700;
-    line-height: 1.2;
-    color: #fff;
-    text-shadow: 0 1px 2px rgb(0 0 0 / 60%);
-    text-transform: uppercase;
-  `,
-  description: css`
-    font-size: 11px;
-    line-height: 1.3;
-    color: rgb(255 255 255 / 90%);
-  `,
-  hint: css`
-    margin-block-start: 2px;
-    font-size: 11px;
-    line-height: 1.3;
-    color: rgb(255 255 255 / 75%);
-  `,
-  zoomBtn: css`
-    /* Hidden until hover. Without pointer-events:none the fully
-       transparent 28×28 hit area still swallowed taps on touch devices,
-       opening the zoom modal instead of applying the preset. */
-    pointer-events: none;
-    cursor: pointer;
-
-    position: absolute;
-    z-index: 3;
-    inset-block-start: 8px;
-    inset-inline-end: 8px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    border: none;
-    border-radius: 6px;
-
-    color: #fff;
-
-    opacity: 0;
-    background: rgb(0 0 0 / 55%);
-    backdrop-filter: blur(4px);
-
-    transition:
-      opacity 0.18s ease,
-      background 0.18s ease;
-
-    &:hover {
-      background: rgb(0 0 0 / 80%);
-    }
-  `,
-  /**
-   * Touch devices have no hover, so the details entry point must be
-   * permanently visible — semi-transparent so it stays unobtrusive over
-   * the preview.
-   */
-  zoomBtnTouch: css`
-    pointer-events: auto;
-    opacity: 0.75;
-  `,
 }));
 
-const PresetCard = memo<Props>(({ isActive, mediaAspectRatio, onClick, onZoom, preset }) => {
-  const { styles, cx } = useStyles();
-  const hint = CATEGORY_HINTS[preset.category] ?? GENERIC_HINT;
-  const isMobile = useIsMobile();
+const PresetCard = memo<Props>(
+  ({ isActive, mediaAspectRatio, onClick, onPrefetch, onZoom, preset }) => {
+    const { styles, cx } = useStyles();
+    const { t } = useTranslation('common');
+    const isMobile = useIsMobile();
+    const [playing, setPlaying] = useState(false);
 
-  // Ingested rows often have no description; the Russian category label is
-  // still more use than a blank line, and it is never English.
-  const subtitle = preset.description || categoryLabel(preset.category);
+    // Ingested rows often have no description; the Russian category label is
+    // still more use than a blank line, and it is never English.
+    const subtitle = preset.description || categoryLabel(preset.category);
+    const likes = preset.popularity === null ? null : `♥ ${compactCount.format(preset.popularity)}`;
+    const badges = isMobile ? preset.badges.slice(0, 1) : preset.badges;
+    const showPlayBadge = isVideoPreview(preset) && !playing;
 
-  return (
-    <button
-      aria-label={preset.title}
-      className={cx(styles.card, isActive && styles.active)}
-      type="button"
-      onClick={() => onClick(preset)}
-    >
-      <div
-        className={styles.media}
-        style={{ aspectRatio: mediaAspectRatio ?? cardMediaAspectRatio(preset.modality) }}
+    const prefetch = onPrefetch ? () => onPrefetch(preset) : undefined;
+
+    const zoom = (e: { preventDefault: () => void; stopPropagation: () => void }) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onZoom?.(preset);
+    };
+
+    return (
+      <button
+        aria-label={preset.title}
+        className={cx(styles.card, isMobile && styles.cardMobile, isActive && styles.active)}
+        type="button"
+        onClick={() => onClick(preset)}
+        onFocus={prefetch}
+        onPointerEnter={prefetch}
+        onTouchStart={prefetch}
       >
-        <PresetMP4Player
-          ariaHidden
-          // Desktop plays on hover — that is a deliberate "show me this one".
-          // Touch has no hover, so there the most-visible card plays instead.
-          autoplayInView={isMobile}
-          fallbackLabel={preset.title}
-          posterUrl={preset.posterUrl ?? undefined}
-          previewUrl={preset.previewUrl}
-        />
+        <div
+          className={styles.media}
+          style={{ aspectRatio: mediaAspectRatio ?? tileAspectRatio(preset) }}
+        >
+          <PresetMP4Player
+            ariaHidden
+            // Desktop plays on hover — that is a deliberate "show me this one".
+            // Touch has no hover, so there the most-visible card plays instead.
+            autoplayInView={isMobile}
+            fallbackLabel={preset.title}
+            posterUrl={preset.posterUrl ?? undefined}
+            previewUrl={preset.previewUrl}
+            onPlayingChange={setPlaying}
+          />
 
-        {onZoom && (
-          <span
-            aria-label="Подробнее о стиле"
-            className={cx(styles.zoomBtn, isMobile && styles.zoomBtnTouch, 'preset-zoom-btn')}
-            role="button"
-            tabIndex={0}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onZoom(preset);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                e.stopPropagation();
-                onZoom(preset);
-              }
-            }}
-          >
-            <ZoomIn size={16} />
-          </span>
-        )}
+          {badges.length > 0 && (
+            <div className={styles.badges}>
+              {badges.map((b) => (
+                <span
+                  className={styles.badge}
+                  key={b}
+                  style={{
+                    background: BADGE_COLORS[b],
+                    color: b === 'top_choice' ? '#000' : undefined,
+                  }}
+                >
+                  {BADGE_LABELS[b]}
+                </span>
+              ))}
+            </div>
+          )}
 
-        {preset.badges.length > 0 && (
-          <div
-            style={{
-              display: 'flex',
-              gap: 4,
-              insetBlockStart: 8,
-              insetInlineStart: 8,
-              pointerEvents: 'none',
-              position: 'absolute',
-            }}
-          >
-            {preset.badges.map((b) => (
-              <span
-                key={b}
-                style={{
-                  background: BADGE_COLORS[b],
-                  borderRadius: 6,
-                  color: b === 'top_choice' ? '#000' : '#fff',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  padding: '2px 6px',
-                }}
-              >
-                {BADGE_LABELS[b]}
-              </span>
-            ))}
-          </div>
-        )}
+          {showPlayBadge && (
+            <span aria-hidden className={cx(styles.playBadge, isMobile && styles.playBadgeMobile)}>
+              <Play fill="currentColor" size={12} strokeWidth={0} />
+            </span>
+          )}
 
-        <div className={cx(styles.hoverOverlay, 'preset-hover-overlay')}>
-          <div className={styles.title}>{preset.title}</div>
-          {preset.description && <div className={styles.description}>{preset.description}</div>}
-          {hint && <div className={styles.hint}>{hint}</div>}
+          {!isMobile && (
+            <div className={cx(styles.hoverOverlay, 'preset-hover-overlay')}>
+              <div className={styles.overlayTitle}>{preset.title}</div>
+              <div className={styles.overlayLine}>{subtitle}</div>
+              <div className={styles.overlayFooter}>
+                <span className={styles.overlayLine}>
+                  {preset.authorName}
+                  {preset.authorName && likes && ' · '}
+                  {likes}
+                </span>
+                {onZoom && (
+                  <span
+                    aria-label={t('preset.details')}
+                    className={cx(styles.zoomBtn, 'preset-zoom-btn')}
+                    role="button"
+                    tabIndex={0}
+                    title={t('preset.details')}
+                    onClick={zoom}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') zoom(e);
+                    }}
+                  >
+                    <Maximize2 size={14} />
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-      </div>
 
-      <div className={styles.caption}>
-        <div className={styles.captionTitle}>{preset.title}</div>
-        <div className={styles.captionSub}>{subtitle}</div>
-        {(preset.authorName || preset.popularity !== null) && (
-          <div className={styles.captionMeta}>
-            {preset.authorName}
-            {preset.authorName && preset.popularity !== null && ' · '}
-            {preset.popularity !== null && `♥ ${compactCount.format(preset.popularity)}`}
+        {isMobile && (
+          <div className={styles.caption}>
+            <div className={styles.captionTitle}>{preset.title}</div>
+            <div className={styles.captionSub}>
+              {subtitle}
+              {likes && ` · ${likes}`}
+            </div>
           </div>
         )}
-      </div>
-    </button>
-  );
-});
+      </button>
+    );
+  },
+);
 
 PresetCard.displayName = 'PresetCard';
 

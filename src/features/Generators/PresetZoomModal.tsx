@@ -1,7 +1,8 @@
 'use client';
 
-import { Image, Modal } from 'antd';
+import { Button, Image, Modal } from 'antd';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { PresetListItem } from '@/types/preset';
 
@@ -26,6 +27,7 @@ const isVideoUrl = (url: string): boolean => {
  * its built-in zoom/rotate. Footer shows description + Apply button.
  */
 const PresetZoomModal = memo<Props>(({ onApply, onClose, open, preset }) => {
+  const { t } = useTranslation('common');
   const isVideo = isVideoUrl(preset.previewUrl);
 
   return (
@@ -75,26 +77,17 @@ const PresetZoomModal = memo<Props>(({ onApply, onClose, open, preset }) => {
             </div>
           )}
           <PresetAttribution preset={preset} />
-          <button
-            type="button"
-            style={{
-              alignSelf: 'flex-end',
-              background: 'var(--lobe-chat-color-primary, #1677ff)',
-              border: 'none',
-              borderRadius: 6,
-              color: '#fff',
-              cursor: 'pointer',
-              fontSize: 14,
-              fontWeight: 600,
-              padding: '8px 16px',
-            }}
+          <Button
+            size="large"
+            style={{ alignSelf: 'flex-end' }}
+            type="primary"
             onClick={() => {
               onApply();
               onClose();
             }}
           >
-            Применить пресет
-          </button>
+            {t('preset.useStyle')}
+          </Button>
         </div>
       </div>
     </Modal>

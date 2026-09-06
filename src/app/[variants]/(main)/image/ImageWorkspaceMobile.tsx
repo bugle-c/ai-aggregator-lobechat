@@ -1,13 +1,10 @@
 'use client';
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { Drawer } from 'antd';
 import { ArrowLeft } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 
-import ConfigPanel from '@/app/[variants]/(main)/image/_layout/ConfigPanel';
 import MobileFlowFAB from '@/features/Generators/MobileFlowFAB';
-import MobileFlowSheet from '@/features/Generators/MobileFlowSheet';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import MobileGlobalHeader from '@/features/MobileGlobalHeader';
 
@@ -17,23 +14,18 @@ import MobileFlowContent from './features/MobileFlowContent';
 /**
  * Mobile layout for `/image`.
  *
- * Two visual modes driven by `?view`:
+ * Two modes driven by `?view`:
  *   1. Default — preset gallery + FAB. User browses styles.
- *   2. `?view=create` — full-screen creation page (preset preview +
- *      prompt + chips + Generate). Mirrors higgsfield's
- *      gallery → /flow/<modality>/prompt navigation.
+ *   2. `?view=create` — full-screen creation page (style card + prompt +
+ *      settings strip + Generate).
  *
- * When user taps a preset in the gallery, FlowMainArea calls
- * `setView('create')` which navigates to the creation page.
- * Back-arrow at the top returns to the gallery.
+ * Tapping a gallery tile (FlowMainArea) and the FAB both go to `?view=create`
+ * — one creation screen, with a URL and a back arrow, instead of the old
+ * bottom sheet that had neither.
  */
 const ImageWorkspaceMobile = memo(() => {
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-
   const url = useFlowUrlState('presets');
 
-  // CREATION PAGE — full-screen, replaces gallery
   if (url.view === 'create') {
     return (
       <>
@@ -49,6 +41,7 @@ const ImageWorkspaceMobile = memo(() => {
           style={{
             background: 'var(--ant-color-bg-container)',
             borderBlockEnd: '1px solid var(--ant-color-border-secondary)',
+            flex: '0 0 auto',
             height: 56,
             position: 'sticky',
             top: 0,
@@ -63,37 +56,13 @@ const ImageWorkspaceMobile = memo(() => {
           />
           <span style={{ flex: 1, fontSize: 16, fontWeight: 600 }}>Создать изображение</span>
         </Flexbox>
-        <Flexbox
-          flex={1}
-          padding={16}
-          width={'100%'}
-          style={{
-            overflowY: 'auto',
-            paddingBlockEnd: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
-          }}
-        >
-          <MobileFlowContent
-            onAfterGenerate={() => url.setView(undefined)}
-            onOpenSettings={() => setSettingsOpen(true)}
-          />
+        <Flexbox flex={1} padding={16} style={{ overflowY: 'auto' }} width={'100%'}>
+          <MobileFlowContent onAfterGenerate={() => url.setView(undefined)} />
         </Flexbox>
-
-        <Drawer
-          destroyOnHidden={false}
-          open={settingsOpen}
-          placement="right"
-          styles={{ body: { padding: 0 } }}
-          title="Настройки"
-          width={'90vw'}
-          onClose={() => setSettingsOpen(false)}
-        >
-          <ConfigPanel />
-        </Drawer>
       </>
     );
   }
 
-  // GALLERY — default view, with FAB for users who want to skip preset
   return (
     <>
       <MobileGlobalHeader />
@@ -109,26 +78,7 @@ const ImageWorkspaceMobile = memo(() => {
         <FlowMainArea />
       </Flexbox>
 
-      <MobileFlowFAB hidden={sheetOpen} onClick={() => setSheetOpen(true)} />
-
-      <MobileFlowSheet open={sheetOpen} onClose={() => setSheetOpen(false)}>
-        <MobileFlowContent
-          onAfterGenerate={() => setSheetOpen(false)}
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
-      </MobileFlowSheet>
-
-      <Drawer
-        destroyOnHidden={false}
-        open={settingsOpen}
-        placement="right"
-        styles={{ body: { padding: 0 } }}
-        title="Настройки"
-        width={'90vw'}
-        onClose={() => setSettingsOpen(false)}
-      >
-        <ConfigPanel />
-      </Drawer>
+      <MobileFlowFAB onClick={() => url.setView('create')} />
     </>
   );
 });

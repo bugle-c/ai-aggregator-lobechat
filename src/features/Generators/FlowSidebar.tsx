@@ -3,64 +3,60 @@
 import { Flexbox } from '@lobehub/ui';
 import { Button } from 'antd';
 import { memo, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import type { Preset, PresetModality } from '@/types/preset';
+import type { Preset } from '@/types/preset';
 
 import PresetThumbCard from './PresetThumbCard';
 
 interface Props {
-  /** Whatever extra widgets the modality wants — image-upload, settings ⚙, model selector. */
-  controls: ReactNode;
   /**
    * Live credit-cost estimate from useGenerationCostPreview. When provided,
-   * the CTA label becomes "Создать · ~N кр" and the button turns red if
-   * balance is insufficient. Undefined → label stays plain "Создать"
-   * (e.g. on first paint before the quote query resolves).
+   * the CTA label becomes «Сгенерировать · ≈ N кр» and the button turns red
+   * if balance is insufficient. Undefined → plain label (e.g. on first paint
+   * before the quote query resolves).
    */
   creditCost?: number;
   /** Set to false to hint the user lacks balance — recolours the CTA red. */
   creditSufficient?: boolean;
-  generateLabel?: string;
   isGenerating: boolean;
-  modality: PresetModality;
   onClearPreset: () => void;
   onGenerate: () => void;
   preset: Preset | null;
   /** PromptInput component instance — modality-specific so we keep this pluggable. */
   promptInput: ReactNode;
   /**
-   * Composed-prompt preview for the selected preset. Sits directly above the
-   * input it describes, so the user reads what will run before typing into
-   * it. Modality-specific, like `promptInput`.
+   * Composed-prompt preview for the selected preset. Sits directly under
+   * the style card it describes. Modality-specific, like `promptInput`.
    */
   promptPreview?: ReactNode;
+  /** The modality's `SettingsStrip` binding — model / aspect / duration / count / cost / ⚙. */
+  settings: ReactNode;
 }
 
 /**
- * Desktop persistent sidebar (~320px).
- * Layout from top to bottom:
- *   1. PresetThumbCard (selected style or empty placeholder)
- *   2. Modality-specific controls (image upload, model selector, etc.)
- *   3. PresetPromptPreview (what the preset will actually send)
- *   4. PromptInput (textarea + enhance toggle)
- *   5. Generate button with credit cost
+ * Desktop persistent sidebar (~320px). Top to bottom:
+ *   1. PresetThumbCard (selected style, or the empty placeholder)
+ *   2. PresetPromptPreview (what the style will actually send)
+ *   3. SettingsStrip (the knobs, right above the words they apply to)
+ *   4. PromptInput
+ *   5. «Сгенерировать · ≈ N кр»
  */
 const FlowSidebar = memo<Props>(
   ({
-    controls,
     creditCost,
     creditSufficient = true,
-    generateLabel,
     isGenerating,
-    modality,
     onClearPreset,
     onGenerate,
     preset,
     promptInput,
     promptPreview,
+    settings,
   }) => {
-    const label = generateLabel ?? (modality === 'video' ? 'Создать видео' : 'Создать');
+    const { t } = useTranslation('common');
     const insufficient = creditCost !== undefined && !creditSufficient;
+    const label = t('preset.generate');
 
     return (
       <Flexbox
@@ -72,11 +68,12 @@ const FlowSidebar = memo<Props>(
           borderInlineEnd: '1px solid var(--ant-color-border-secondary)',
           inlineSize: 320,
           minInlineSize: 320,
+          overflowY: 'auto',
         }}
       >
         <PresetThumbCard preset={preset} onClear={onClearPreset} />
-        {controls}
         {promptPreview}
+        {settings}
         {promptInput}
         <Button
           block
@@ -87,9 +84,9 @@ const FlowSidebar = memo<Props>(
           type="primary"
           onClick={onGenerate}
         >
-          {creditCost !== undefined
-            ? `${label} · ~${creditCost} кр${insufficient ? ' (не хватает)' : ''}`
-            : label}
+          {creditCost === undefined
+            ? label
+            : `${label} · ${t('preset.credits', { count: creditCost })}`}
         </Button>
       </Flexbox>
     );

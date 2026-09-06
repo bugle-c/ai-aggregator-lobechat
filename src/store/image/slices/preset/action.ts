@@ -33,9 +33,11 @@ export class PresetActionImpl {
   selectPreset = (preset: Preset): void => {
     this.#set({ currentPreset: preset }, false, `selectPreset/${preset.slug}`);
 
-    // We're an aggregator; the user picks the model. A preset is
-    // prompt + curated params, not a model lock. The recommendedModelId
-    // is surfaced as a hint in the UI but never switches the selection.
+    // This action stays a pure prompt + params write. Switching to
+    // `recommendedModelId` (with its toast, «Вернуть» undo and tier
+    // upsell) is UI-layer work — see `usePresetModelSwitch`, which also
+    // re-runs this action after a switch because changing the model
+    // resets the parameters to that model's defaults.
     // `params_lock` uses storage-side names (aspect_ratio, duration_sec);
     // the runtime schema uses camelCase (aspectRatio, duration). Translate
     // through the shared whitelist instead of spreading raw keys.

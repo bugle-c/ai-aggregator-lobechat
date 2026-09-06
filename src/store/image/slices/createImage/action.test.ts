@@ -194,6 +194,47 @@ describe('CreateImageAction', () => {
       ).rejects.toThrow('prompt is empty');
     });
 
+    it('should run a ready preset prompt when the input is empty', async () => {
+      const { result } = renderHook(() => useImageStore());
+
+      act(() => {
+        useImageStore.setState({
+          currentPreset: { promptTemplate: 'cinematic {{user_prompt}} portrait', slug: 'p' } as any,
+          parameters: { prompt: '', width: 1024, height: 1024 },
+          refreshGenerationBatches: vi.fn().mockResolvedValue(undefined),
+        });
+      });
+
+      await act(async () => {
+        await result.current.createImage();
+      });
+
+      // The template is applied before the empty-prompt check, so a
+      // one-tap run with a style and no typing reaches the service.
+      expect(mockImageService.createImage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          params: { prompt: 'cinematic  portrait', width: 1024, height: 1024 },
+        }),
+      );
+    });
+
+    it('should still reject an empty prompt with a preset that has no template', async () => {
+      const { result } = renderHook(() => useImageStore());
+
+      act(() => {
+        useImageStore.setState({
+          currentPreset: { promptTemplate: '', slug: 'p' } as any,
+          parameters: { prompt: '', width: 1024, height: 1024 },
+        });
+      });
+
+      await expect(
+        act(async () => {
+          await result.current.createImage();
+        }),
+      ).rejects.toThrow('prompt is empty');
+    });
+
     it('should handle service error', async () => {
       const error = new Error('Service error');
       mockImageService.createImage.mockRejectedValueOnce(error);

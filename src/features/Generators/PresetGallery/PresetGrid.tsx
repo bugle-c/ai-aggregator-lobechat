@@ -1,7 +1,7 @@
 'use client';
 
 import { useLatest } from 'ahooks';
-import { Button, Empty, Spin } from 'antd';
+import { Button, Empty } from 'antd';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,8 +9,10 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { lambdaQuery } from '@/libs/trpc/client';
 import type { PresetListItem, PresetModality, PresetSort } from '@/types/preset';
 
+import { tileAspectNumber } from '../presetAspect';
 import PresetCard from '../PresetCard';
 import PresetZoomModal from '../PresetZoomModal';
+import MasonryGrid, { MasonryGridSkeleton } from './MasonryGrid';
 
 const PAGE_SIZE = 24;
 
@@ -21,11 +23,25 @@ const PAGE_SIZE = 24;
  */
 const PREFETCH_MARGIN = '600px 0px';
 
+/** Spacing between tiles — tight, so a 4-column desktop reads as one wall. */
+const TILE_GAP = 8;
+
+/**
+ * Height of the caption `PresetCard` renders under the media on mobile.
+ * Fixed and known up front so the masonry can include it in the tile
+ * height without measuring — keep in sync with `PresetCard`'s caption.
+ */
+export const MOBILE_CAPTION_HEIGHT = 40;
+
+const presetKey = (p: PresetListItem) => p.slug;
+
 interface Props {
   category: string | undefined;
   /** True when a category / model / search filter is narrowing the list. */
   hasFilters: boolean;
   modality: PresetModality;
+  /** Warm caches for a preset the user is about to pick (hover / first touch). */
+  onPrefetch?: (preset: PresetListItem) => void;
   onResetFilters: () => void;
   onSelect: (preset: PresetListItem) => void;
   q: string | undefined;
@@ -41,6 +57,7 @@ const PresetGrid = memo<Props>(
     hasFilters,
     modality,
     recommendedModelId,
+    onPrefetch,
     onResetFilters,
     onSelect,
     q,
@@ -91,9 +108,11 @@ const PresetGrid = memo<Props>(
     }, [hasNextPage, pageCount, loadMore]);
 
     if (isLoading) {
+      // Same columns and tile shape the real grid will use, so the page
+      // does not flash an empty area and then jump when the list lands.
       return (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 64 }}>
-          <Spin />
+        <div style={{ paddingInline: 16 }}>
+          <MasonryGridSkeleton columns={isMobile ? 2 : 4} />
         </div>
       );
     }
@@ -111,33 +130,34 @@ const PresetGrid = memo<Props>(
 
     return (
       <>
-        {/* A real grid, not CSS multi-column. Multicol balances column
-            heights, so it fills column 1 top-to-bottom before column 2:
-            with a ranked 1000-row list the first screen showed ranks 1,
-            251, 501 and 751 side by side and the curation order was
-            unreadable. Grid keeps reading order left→right, top→bottom.
-            Mobile is pinned to 2 columns so a card stays ~140px wide and
-            its Russian caption remains legible; desktop auto-fills so wide
-            screens show more of the ranking instead of four huge cards. */}
-        <div
-          style={{
-            display: 'grid',
-            gap: 12,
-            gridTemplateColumns: isMobile
-              ? 'repeat(2, minmax(0, 1fr))'
-              : 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))',
-            paddingInline: 16,
-          }}
-        >
-          {items.map((p) => (
-            <PresetCard
-              isActive={p.slug === selectedSlug}
-              key={p.slug}
-              preset={p}
-              onClick={onSelect}
-              onZoom={setZoomPreset}
-            />
-          ))}
+        {/* JS masonry, not CSS multi-column and not a uniform grid.
+            Multicol fills column 1 top-to-bottom before column 2, so a
+            ranked 1000-row list showed ranks 1, 251, 501 and 751 side by
+            side. A uniform grid kept the ranking readable but cropped
+            every 9:16 and 16:9 preview into one box. The masonry keeps
+            DOM order = rank (left→right placement into the shortest
+            column) and gives each tile its real aspect, computed from
+            `params_lock` rather than measured, so nothing shifts as media
+            loads. Mobile is pinned to 2 columns; desktop picks 2–4 from
+            the container width. */}
+        <div style={{ paddingInline: 16 }}>
+          <MasonryGrid
+            captionHeight={isMobile ? MOBILE_CAPTION_HEIGHT : 0}
+            columns={isMobile ? 2 : undefined}
+            gap={TILE_GAP}
+            getAspect={tileAspectNumber}
+            getKey={presetKey}
+            items={items}
+            renderItem={(p) => (
+              <PresetCard
+                isActive={p.slug === selectedSlug}
+                preset={p}
+                onClick={onSelect}
+                onPrefetch={onPrefetch}
+                onZoom={setZoomPreset}
+              />
+            )}
+          />
         </div>
 
         {/* Auto-fetch trigger. The button below stays as a fallback for
