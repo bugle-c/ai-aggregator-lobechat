@@ -29,7 +29,8 @@ const LOCK_STALE_MS = 5 * 60 * 1000;
 interface GenerationStoreLike {
   currentPreset: Preset | null;
   model?: string;
-  parameters?: { prompt?: unknown } | null;
+  parameters?: { imageUrl?: unknown; prompt?: unknown } | null;
+  parametersSchema?: Record<string, unknown> | null;
   provider?: string;
   selectPreset: (preset: Preset) => void;
   setModelAndProviderOnSelect: (model: string, provider: string) => void;
@@ -149,16 +150,26 @@ export const usePresetModelSwitch = (modality: PresetModality): PresetModelSwitc
           const prevModel = before.model;
           const prevProvider = before.provider;
           const prevPrompt = before.parameters?.prompt;
+          const prevImage = before.parameters?.imageUrl;
 
           const applyOn = (model: string, provider: string) => {
             const s = store.getState();
             s.setModelAndProviderOnSelect(model, provider);
             // Switching resets parameters to the model's defaults: put the
-            // preset's params lock and the user's own words back.
+            // preset's params lock, the user's own words and their reference
+            // photo back (an i2v style is useless without the photo they
+            // may have attached before picking it).
             const current = s.currentPreset;
             if (current) s.selectPreset(current);
             if (typeof prevPrompt === 'string' && prevPrompt)
               s.setParamOnInput('prompt', prevPrompt);
+            if (
+              typeof prevImage === 'string' &&
+              prevImage &&
+              s.parametersSchema &&
+              'imageUrl' in s.parametersSchema
+            )
+              s.setParamOnInput('imageUrl', prevImage);
           };
 
           applyOn(decision.target.modelId, decision.target.providerId);

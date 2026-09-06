@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FrameUpload from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/FrameUpload';
+import { decideGenerateReadiness } from '@/features/Generators/presetImageGate';
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
@@ -59,8 +60,16 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate }) => {
   );
 
   // A preset is a ready prompt: with one selected, an empty input is a
-  // valid one-tap run.
-  const canGenerate = !isGenerating && (promptValue.trim().length > 0 || !!preset?.promptTemplate);
+  // valid one-tap run. An i2v preset additionally needs its photo
+  // (`parameters.imageUrl`) — the CTA says so instead of silently greying.
+  const requiresImage = !!preset?.requiresImage;
+  const readiness = decideGenerateReadiness({
+    imageUrl: parameters?.imageUrl,
+    isGenerating,
+    preset,
+    prompt: promptValue,
+  });
+  const canGenerate = readiness.canGenerate;
   const insufficient = cost.credits !== null && !cost.sufficient;
 
   const handleGenerate = async () => {
@@ -74,12 +83,20 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate }) => {
     <Flexbox gap={12} style={{ minBlockSize: '100%' }}>
       <PresetThumbCard preset={preset} onClear={clearPreset} />
 
-      {(supportsStartFrame || supportsEndFrame) && (
+      {(supportsStartFrame || supportsEndFrame || requiresImage) && (
         <Flexbox horizontal gap={8}>
-          {supportsStartFrame && (
+          {(supportsStartFrame || requiresImage) && (
             <Flexbox flex={1} gap={4}>
-              <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
-                Стартовый кадр
+              <span
+                style={{
+                  color: requiresImage
+                    ? 'var(--ant-color-warning-text)'
+                    : 'var(--ant-color-text-tertiary)',
+                  fontSize: 11,
+                  fontWeight: requiresImage ? 600 : undefined,
+                }}
+              >
+                {requiresImage ? t('preset.requiresImage') : 'Стартовый кадр'}
               </span>
               <FrameUpload paramName="imageUrl" />
             </Flexbox>
@@ -125,9 +142,11 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate }) => {
         >
           {isGenerating
             ? t('preset.generating')
-            : cost.credits === null
-              ? t('preset.generate')
-              : `${t('preset.generate')} · ${t('preset.credits', { count: cost.credits })}`}
+            : readiness.blocker === 'missing-image'
+              ? t('preset.addPhoto')
+              : cost.credits === null
+                ? t('preset.generate')
+                : `${t('preset.generate')} · ${t('preset.credits', { count: cost.credits })}`}
         </Button>
       </div>
     </Flexbox>

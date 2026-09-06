@@ -12,6 +12,7 @@ import { tileAspectNumber } from './presetAspect';
 import PresetAttribution from './PresetAttribution';
 import PresetMP4Player from './PresetMP4Player';
 import PresetZoomModal from './PresetZoomModal';
+import RequiresImageBadge from './RequiresImageBadge';
 
 interface Props {
   onClear: () => void;
@@ -96,6 +97,23 @@ const PresetThumbCard = memo<Props>(({ onClear, preset }) => {
             {t('preset.details')}
           </Button>
         </Flexbox>
+        {preset.requiresImage && (
+          <Flexbox horizontal align="center" gap={6} style={{ minInlineSize: 0 }}>
+            <RequiresImageBadge variant="inline" />
+            <span
+              style={{
+                color: 'var(--ant-color-text-tertiary)',
+                fontSize: 12,
+                minInlineSize: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('preset.requiresImageHint')}
+            </span>
+          </Flexbox>
+        )}
         <Flexbox horizontal align="center" gap={8} justify="space-between">
           <PresetAttribution compact preset={preset} />
           <Button size="middle" type="text" onClick={onClear}>
