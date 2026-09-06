@@ -541,6 +541,11 @@ Spec: `docs/superpowers/specs/2026-09-06-preset-platform-design.md`.
 - **Categories come from the DB** (`presets.facets`), not from a hardcoded list — an ingested category
   must never be unreachable in the UI. `PRESET_CATEGORIES.ts` is now only a label map with a
   capitalize-the-slug fallback.
+- **Build trap — market-backed sitemaps (2026-09-06):** `app/sitemap.tsx` is `force-static`, and the
+  assistants/plugins/models chunk counts came from a live marketplace call at build time (each chunk
+  re-fetching upstream). Market returned \~2900 assistant pages → 311 static-export timeouts → build
+  `EXIT=1`. Now opt-in: `SITEMAP_INCLUDE_MARKET=1` (default 0 pages; bounded 15s + fallback even when on).
+  Also: never start `next build` while another heavy build runs on the host (load \~70 that day).
 - There is **no `featured` column**; home ranking uses `sort:'popular'` (`popularity` = source likes).
   Image presets are hand-made with `popularity NULL`, so home images stay on `curated`.
 - **Ingest is a cron script, not a route** — `scripts/ingestPresets/` (`npx tsx …/index.ts --dry-run`),
