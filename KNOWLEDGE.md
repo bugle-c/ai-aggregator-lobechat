@@ -543,3 +543,17 @@ Spec: `docs/superpowers/specs/2026-09-06-preset-platform-design.md`.
   capitalize-the-slug fallback.
 - There is **no `featured` column**; home ranking uses `sort:'popular'` (`popularity` = source likes).
   Image presets are hand-made with `popularity NULL`, so home images stay on `curated`.
+- **Ingest is a cron script, not a route** — `scripts/ingestPresets/` (`npx tsx …/index.ts --dry-run`),
+  run by system cron on the host. A run pulls hundreds of MB and shells out to ffmpeg; no Next.js
+  `maxDuration` survives that. It reads `.env.local` for DB/S3 and imports only `services/alerts`
+  from the app. See `scripts/ingestPresets/README.md` for flags, the crontab line and failure modes.
+- **Source-format traps found live in Ф4**: `aspectRatio` is NOT normalised upstream (`427:240`,
+  `159:91`, `26:15`, `7:4` are all 16:9), so ratios are snapped to the nearest supported value
+  within 3% instead of whitelist-matched; the `/api/images` endpoint ships **no** `aspectRatio` at
+  all (resolve from `imageWidth`/`imageHeight`); and not every `id` is an X snowflake — community
+  uploads arrive as `community_<uuid>`, for which `/status/<id>` would 404, so attribution (and
+  therefore auto-publish) is impossible.
+- **Failing a quality rule queues, it never deletes** (`active=false`). Failing the _safety_
+  stop-list stores nothing at all. Failing _media_ also stores nothing — `preview_url` is NOT NULL.
+  i2v items are ingested with `requires_image=true` but parked in the queue until Ф5 ships the
+  model-switch UX; Ф5 flips them on with an UPDATE, not a re-ingest.
