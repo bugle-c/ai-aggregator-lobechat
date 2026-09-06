@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import PresetGallery from '@/features/Generators/PresetGallery';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
+import { usePresetDeepLink } from '@/features/Generators/usePresetDeepLink';
 import ResourceExplorer from '@/features/ResourceManager/components/Explorer';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useVideoStore } from '@/store/video';
@@ -32,6 +33,15 @@ const FlowMainArea = memo(() => {
   useFetchGenerationBatches(activeTopicId);
 
   const url = useFlowUrlState('presets');
+
+  // Home-page cards link here as /video?preset=<slug>; resolve that slug
+  // into the actual selected preset.
+  usePresetDeepLink({
+    currentSlug: selectedSlug,
+    modality: 'video',
+    selectPreset,
+    slug: url.preset,
+  });
 
   const setCategory = useResourceManagerStore((s) => s.setCategory);
   useEffect(() => {
