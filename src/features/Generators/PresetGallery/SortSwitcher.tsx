@@ -1,6 +1,7 @@
 'use client';
 
-import { Segmented } from 'antd';
+import { Button, Dropdown, Segmented } from 'antd';
+import { ArrowDownUp, ChevronDown } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,6 +9,12 @@ import type { PresetSort } from '@/types/preset';
 
 interface Props {
   block?: boolean;
+  /**
+   * Render as a single dropdown chip instead of a segmented control. On a
+   * phone the three-way `Segmented` cost a full 40px row; a chip sits in
+   * the same row as the category chips.
+   */
+  compact?: boolean;
   onChange: (sort: PresetSort) => void;
   value: PresetSort;
 }
@@ -18,10 +25,10 @@ interface Props {
  * default and the only ordering a hand-curated catalogue had), «Популярное»
  * (source-side likes, meaningful now that rows are ingested) and «Новое».
  *
- * A `Segmented`, not a dropdown: with three options the whole choice should
- * be visible and one tap away, and it has no hover-only affordance.
+ * Desktop: a `Segmented` — with three options the whole choice should be
+ * visible and one click away. Mobile (`compact`): a dropdown chip.
  */
-const SortSwitcher = memo<Props>(({ block, onChange, value }) => {
+const SortSwitcher = memo<Props>(({ block, compact, onChange, value }) => {
   const { t } = useTranslation('common');
 
   const options = useMemo(
@@ -32,6 +39,32 @@ const SortSwitcher = memo<Props>(({ block, onChange, value }) => {
     ],
     [t],
   );
+
+  if (compact) {
+    const current = options.find((o) => o.value === value) ?? options[0];
+    return (
+      <Dropdown
+        trigger={['click']}
+        menu={{
+          items: options.map((o) => ({ key: o.value, label: o.label })),
+          onClick: ({ key }) => onChange(key as PresetSort),
+          selectedKeys: [value],
+        }}
+      >
+        <Button
+          aria-label={t('preset.sortLabel')}
+          icon={<ArrowDownUp size={14} />}
+          shape="round"
+          // 40px — the same one-handed tap floor as the category chips.
+          size="large"
+          style={{ flex: '0 0 auto' }}
+        >
+          {current.label}
+          <ChevronDown size={14} />
+        </Button>
+      </Dropdown>
+    );
+  }
 
   return (
     <Segmented
