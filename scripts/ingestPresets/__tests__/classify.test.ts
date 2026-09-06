@@ -1,0 +1,185 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import {
+  allowedCategories,
+  buildSystemPrompt,
+  buildUserPrompt,
+  ClassificationSchema,
+  Classifier,
+  MAX_CLASSIFICATIONS_PER_RUN,
+  OPENROUTER_URL,
+  truncatePrompt,
+} from '../classify';
+
+const GOOD = {
+  category: 'ad',
+  requires_image: false,
+  summary_ru: 'Реклама бургера: макро, слоу-мо, студийный свет',
+  title_ru: 'Реклама бургера в стиле кино',
+  unsafe: false,
+};
+
+const jsonResponse = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    headers: { 'Content-Type': 'application/json' },
+    status,
+  });
+
+const completion = (content: unknown, usage = { completion_tokens: 80, prompt_tokens: 600 }) =>
+  jsonResponse({
+    choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(content) } }],
+    usage,
+  });
+
+const mockFetch = (...responses: (Response | Error)[]) => {
+  const fn = vi.fn<typeof fetch>();
+  for (const r of responses) {
+    if (r instanceof Error) fn.mockRejectedValueOnce(r);
+    else fn.mockResolvedValueOnce(r);
+  }
+  return fn;
+};
+
+const classifier = (fetchImpl: typeof fetch, extra: Partial<ConstructorParameters<typeof Classifier>[0]> = {}) =>
+  new Classifier({ apiKey: 'test-key', fetchImpl, retryDelayMs: 0, ...extra });
+
+const input = { aspectRatio: '16:9', modality: 'video' as const, prompt: 'A burger commercial' };
+
+describe('ClassificationSchema', () => {
+  it('accepts a well-formed answer and strips quotes / final period from the title', () => {
+    const parsed = ClassificationSchema.parse({ ...GOOD, title_ru: '«Кошка на белом фоне».' });
+    expect(parsed.title_ru).toBe('Кошка на белом фоне');
+  });
+
+  it('trims an over-long title on a word boundary to 40 chars instead of failing', () => {
+    const parsed = ClassificationSchema.parse({
+      ...GOOD,
+      title_ru: 'Очень длинное название которое явно не помещается в карточку',
+    });
+    expect(parsed.title_ru.length).toBeLessThanOrEqual(40);
+    expect(parsed.title_ru).toBe('Очень длинное название которое явно не');
+  });
+
+  it('rejects a runaway title, a missing field and a non-boolean flag', () => {
+    expect(ClassificationSchema.safeParse({ ...GOOD, title_ru: 'x'.repeat(81) }).success).toBe(false);
+    const { summary_ru: _omit, ...missing } = GOOD;
+    expect(ClassificationSchema.safeParse(missing).success).toBe(false);
+    expect(ClassificationSchema.safeParse({ ...GOOD, unsafe: 'no' }).success).toBe(false);
+  });
+});
+
+describe('prompt building', () => {
+  it('lists only the modality-appropriate slugs plus trends', () => {
+    const video = buildSystemPrompt('video');
+    const image = buildSystemPrompt('image');
+    expect(video).toContain('"cinematic"');
+    expect(video).not.toContain('"portrait"');
+    expect(image).toContain('"portrait"');
+    expect(image).not.toContain('"cinematic"');
+    expect(allowedCategories('image')).toContain('trends');
+    expect(allowedCategories('video')).toContain('trends');
+  });
+
+  it('truncates the prompt to ~1500 chars', () => {
+    const long = 'word '.repeat(1000);
+    expect(truncatePrompt(long).length).toBeLessThanOrEqual(1500 + 6);
+    expect(buildUserPrompt({ ...input, prompt: long })).toContain('[…]');
+    expect(buildUserPrompt(input)).toContain('Aspect ratio: 16:9');
+  });
+});
+
+describe('Classifier', () => {
+  it('returns a validated result and records usage', async () => {
+    const fetchImpl = mockFetch(completion(GOOD, { completion_tokens: 80, cost: 0.0002, prompt_tokens: 600 }));
+    const c = classifier(fetchImpl);
+
+    const result = await c.classify(input);
+    expect(result).toEqual({
+      category: 'ad',
+      ok: true,
+      rawCategory: 'ad',
+      requiresImage: false,
+      summary: GOOD.summary_ru,
+      title: GOOD.title_ru,
+      unsafe: false,
+    });
+    expect(c.stats).toMatchObject({ calls: 1, completionTokens: 80, failed: 0, promptTokens: 600, usd: 0.0002 });
+
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe(OPENROUTER_URL);
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.model).toBe('openai/gpt-5-mini');
+    expect(body.response_format).toEqual({ type: 'json_object' });
+    expect(body.reasoning).toEqual({ effort: 'minimal' });
+    expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer test-key' });
+  });
+
+  it('estimates USD from list prices when the response carries no cost', async () => {
+    const c = classifier(mockFetch(completion(GOOD, { completion_tokens: 1000, prompt_tokens: 1_000_000 })));
+    await c.classify(input);
+    expect(c.stats.usd).toBeCloseTo(0.25 + 0.002, 6);
+  });
+
+  it('keeps the answer but nulls the category when the slug is not ours', async () => {
+    const c = classifier(mockFetch(completion({ ...GOOD, category: 'food' })));
+    const result = await c.classify(input);
+    expect(result.ok && result.category).toBeNull();
+    expect(result.ok && result.rawCategory).toBe('food');
+    expect(result.ok && result.title).toBe(GOOD.title_ru);
+  });
+
+  it('treats a video slug on an image item as unknown', async () => {
+    const c = classifier(mockFetch(completion({ ...GOOD, category: 'cinematic' })));
+    const result = await c.classify({ ...input, modality: 'image' });
+    expect(result.ok && result.category).toBeNull();
+  });
+
+  it('retries exactly once on a transport error, then fails', async () => {
+    const c = classifier(mockFetch(new Error('ECONNRESET'), new Error('ECONNRESET'), completion(GOOD)));
+    const result = await c.classify(input);
+    expect(result.ok).toBe(false);
+    expect(c.stats).toMatchObject({ calls: 2, failed: 1, retries: 1 });
+  });
+
+  it('recovers when the retry succeeds after a schema failure', async () => {
+    const c = classifier(mockFetch(completion({ nope: true }), completion(GOOD)));
+    const result = await c.classify(input);
+    expect(result.ok).toBe(true);
+    expect(c.stats).toMatchObject({ calls: 2, failed: 0, retries: 1 });
+  });
+
+  it('does not retry a 4xx other than 429', async () => {
+    const c = classifier(mockFetch(jsonResponse({ error: { message: 'bad key' } }, 401)));
+    const result = await c.classify(input);
+    expect(result).toEqual({ ok: false, reason: 'http 401: bad key' });
+    expect(c.stats.calls).toBe(1);
+  });
+
+  it('fails cleanly on an empty message (reasoning ate the budget)', async () => {
+    const empty = () =>
+      jsonResponse({
+        choices: [{ finish_reason: 'length', message: { content: null } }],
+        usage: { completion_tokens: 200, prompt_tokens: 50 },
+      });
+    const c = classifier(mockFetch(empty(), empty()));
+    const result = await c.classify(input);
+    expect(result).toEqual({ ok: false, reason: 'empty content (finish=length)' });
+    expect(c.stats.completionTokens).toBe(400);
+  });
+
+  it('stops at the per-run cap without calling fetch', async () => {
+    const fetchImpl = mockFetch(completion(GOOD), completion(GOOD), completion(GOOD));
+    const c = classifier(fetchImpl, { maxCalls: 2 });
+    expect((await c.classify(input)).ok).toBe(true);
+    expect((await c.classify(input)).ok).toBe(true);
+    expect(await c.classify(input)).toEqual({ ok: false, reason: 'cap' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(c.stats.capped).toBe(1);
+    expect(c.callsLeft).toBe(0);
+    expect(MAX_CLASSIFICATIONS_PER_RUN).toBe(60);
+  });
+
+  it('refuses to construct without an API key', () => {
+    expect(() => new Classifier({ apiKey: '' })).toThrow(/OPENROUTER_API_KEY/);
+  });
+});
