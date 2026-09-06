@@ -10,6 +10,15 @@ import type { Modality, SourceItem } from './types';
 
 export const SOURCE_PLATFORM = 'x';
 export const LICENSE = 'source-attribution';
+/**
+ * `license` value marking a row the LLM classifier judged unsafe. There is no
+ * dedicated column (and no migration for one), so the verdict rides on the
+ * license field, which nothing else writes. Every activation path must skip
+ * these rows — `active=false` alone is not durable: the i2v activation script
+ * re-evaluates only the heuristic filters and once flipped such a row back on.
+ * Only a human clears it.
+ */
+export const BLOCKED_LICENSE = 'blocked';
 
 /** Public base for objects uploaded to the `lobe` bucket. */
 export const PUBLIC_MEDIA_BASE = 'https://ask.gptweb.ru/s3/lobe';

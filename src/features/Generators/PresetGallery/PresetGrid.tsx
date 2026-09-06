@@ -2,7 +2,16 @@
 
 import { useLatest } from 'ahooks';
 import { Button, Empty } from 'antd';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { createStyles } from 'antd-style';
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -35,6 +44,51 @@ export const MOBILE_CAPTION_HEIGHT = 40;
 
 const presetKey = (p: PresetListItem) => p.slug;
 
+const noop = () => () => {};
+
+/**
+ * Whether the sentinel can page at all. Read through `useSyncExternalStore`
+ * so the server (and hydration) assume "yes" and a browser without the API
+ * corrects it in its first client render, without a set-state-in-effect.
+ */
+const useHasIntersectionObserver = (): boolean =>
+  useSyncExternalStore(
+    noop,
+    () => typeof IntersectionObserver !== 'undefined',
+    () => true,
+  );
+
+const useStyles = createStyles(({ css }) => ({
+  /**
+   * The «Загрузить ещё» row. With the sentinel doing the paging this is a
+   * keyboard / no-observer / retry fallback, and while it sat painted under
+   * the grid every appended page pushed it down the viewport — the one
+   * layout shift the gallery had (CLS 0.04 per page, measured). So while
+   * auto-paging works it is taken out of flow and clipped to a pixel, the
+   * usual visually-hidden treatment: still in the tab order, still read by
+   * assistive tech, and it snaps back into flow the moment it is focused.
+   */
+  loadMore: css`
+    display: flex;
+    justify-content: center;
+    padding-block: 16px;
+
+    &[data-auto='true']:not(:focus-within) {
+      position: absolute;
+
+      overflow: hidden;
+
+      inline-size: 1px;
+      block-size: 1px;
+      margin: -1px;
+
+      white-space: nowrap;
+
+      clip-path: inset(50%);
+    }
+  `,
+}));
+
 interface Props {
   category: string | undefined;
   /** True when a category / model / search filter is narrowing the list. */
@@ -66,48 +120,80 @@ const PresetGrid = memo<Props>(
   }) => {
     const isMobile = useIsMobile();
     const { t } = useTranslation('common');
+    const { styles } = useStyles();
     // Keyset pagination: the catalogue grows to ~1000 rows via the ingest
     // cron, so the gallery pulls a page at a time instead of the whole table.
-    const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
-      lambdaQuery.presets.list.useInfiniteQuery(
-        { category, limit: PAGE_SIZE, modality, q, recommendedModelId, sort },
-        {
-          getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-          staleTime: 5 * 60 * 1000,
-        },
-      );
+    const {
+      data,
+      fetchNextPage,
+      hasNextPage,
+      isFetchNextPageError,
+      isFetchingNextPage,
+      isLoading,
+    } = lambdaQuery.presets.list.useInfiniteQuery(
+      { category, limit: PAGE_SIZE, modality, q, recommendedModelId, sort },
+      {
+        getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+        staleTime: 5 * 60 * 1000,
+      },
+    );
 
     const items = useMemo(() => data?.pages.flatMap((p) => p.items) ?? [], [data]);
+
+    // A page landing mid-scroll used to render its 24 cards in one ~130ms
+    // task. Deferring the list lets React time-slice that render behind the
+    // scroll instead of blocking it; the tiles' places are reserved by the
+    // masonry either way, so nothing visible waits on this.
+    const deferredItems = useDeferredValue(items);
+
+    // Without IntersectionObserver the sentinel never fires, and after a
+    // failed page fetch the user needs a visible retry — both bring the
+    // button back into flow.
+    const hasObserver = useHasIntersectionObserver();
+    const autoPaging = hasObserver && !isFetchNextPageError;
 
     // One modal for the whole list. It used to be one per card, so a fully
     // scrolled 1000-row gallery mounted 1000 antd dialogs.
     const [zoomPreset, setZoomPreset] = useState<PresetListItem | null>(null);
 
-    const sentinelRef = useRef<HTMLDivElement | null>(null);
     const pageCount = data?.pages.length ?? 0;
     const loadMore = useLatest(() => {
       if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
     });
 
-    useEffect(() => {
-      const el = sentinelRef.current;
-      if (!el || !hasNextPage) return;
+    // The observer lives on a callback ref rather than in an effect: the
+    // sentinel is not in the DOM on every render (the skeleton branches
+    // above, including the deferred-list frame), and an effect keyed on
+    // page state ran with a null ref there and never got another chance.
+    // React re-invokes a callback ref whenever its identity changes, so a
+    // dependency change or a late mount both (re)attach the observer.
+    // `pageCount` is a dependency on purpose: an IntersectionObserver only
+    // fires on a *change* in intersection, so if the sentinel is still on
+    // screen after a page lands it would never fire again. Re-creating the
+    // observer re-reports the current state and the scroll keeps going.
+    const sentinelObserverRef = useRef<IntersectionObserver | null>(null);
+    const sentinelRef = useCallback(
+      (el: HTMLDivElement | null) => {
+        sentinelObserverRef.current?.disconnect();
+        sentinelObserverRef.current = null;
+        if (!el || !hasNextPage || typeof IntersectionObserver === 'undefined') return;
 
-      const io = new IntersectionObserver(
-        (entries) => {
-          if (entries.some((e) => e.isIntersecting)) loadMore.current();
-        },
-        { rootMargin: PREFETCH_MARGIN },
-      );
-      io.observe(el);
-      return () => io.disconnect();
-      // `pageCount` is a dependency on purpose: an IntersectionObserver only
-      // fires on a *change* in intersection, so if the sentinel is still on
-      // screen after a page lands it would never fire again. Re-creating the
-      // observer re-reports the current state and the scroll keeps going.
-    }, [hasNextPage, pageCount, loadMore]);
+        const io = new IntersectionObserver(
+          (entries) => {
+            if (entries.some((e) => e.isIntersecting)) loadMore.current();
+          },
+          { rootMargin: PREFETCH_MARGIN },
+        );
+        io.observe(el);
+        sentinelObserverRef.current = io;
+      },
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- pageCount re-arms on purpose, see above
+      [hasNextPage, pageCount, loadMore],
+    );
 
-    if (isLoading) {
+    // The second clause covers the one frame in which a freshly loaded list
+    // is already known but its deferred render has not caught up yet.
+    if (isLoading || (items.length > 0 && deferredItems.length === 0)) {
       // Same columns and tile shape the real grid will use, so the page
       // does not flash an empty area and then jump when the list lands.
       return (
@@ -147,7 +233,7 @@ const PresetGrid = memo<Props>(
             gap={TILE_GAP}
             getAspect={tileAspectNumber}
             getKey={presetKey}
-            items={items}
+            items={deferredItems}
             renderItem={(p) => (
               <PresetCard
                 isActive={p.slug === selectedSlug}
@@ -160,14 +246,20 @@ const PresetGrid = memo<Props>(
           />
         </div>
 
-        {/* Auto-fetch trigger. The button below stays as a fallback for
-            environments where the observer never fires (no IO support, a
-            zero-height scroll container) and as a keyboard-reachable
+        {/* Auto-fetch trigger. 1px tall and `flex-shrink: 0`: the gallery
+            scroller is a column flexbox whose content overflows, so an
+            empty 1px item is shrunk to 0 — and a zero-height target at the
+            very edge of the scrollport never reports intersecting (verified:
+            paging stopped once the button below left the flow). Unpainted,
+            so the appended page moving it down is not a layout shift. The
+            button stays as a fallback for environments where the observer
+            never fires (no IO support, a zero-height scroll container), as
+            the retry after a failed page, and as a keyboard-reachable
             control — an observer alone is invisible to a11y tooling. */}
-        <div aria-hidden ref={sentinelRef} style={{ height: 1 }} />
+        <div aria-hidden ref={sentinelRef} style={{ blockSize: 1, flexShrink: 0 }} />
 
         {hasNextPage && (
-          <div style={{ display: 'flex', justifyContent: 'center', paddingBlock: 16 }}>
+          <div className={styles.loadMore} data-auto={autoPaging ? 'true' : 'false'}>
             <Button loading={isFetchingNextPage} onClick={() => loadMore.current()}>
               {t('preset.loadMore')}
             </Button>

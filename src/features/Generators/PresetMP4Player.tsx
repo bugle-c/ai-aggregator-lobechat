@@ -4,7 +4,12 @@ import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } 
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 
-import { MAX_CONCURRENT_DESKTOP, MAX_CONCURRENT_MOBILE, previewPlayback } from './previewPlayback';
+import {
+  MAX_CONCURRENT_DESKTOP,
+  MAX_CONCURRENT_MOBILE,
+  previewPlayback,
+  subscribeScrollActivity,
+} from './previewPlayback';
 
 interface Props {
   /** Treats the component as decorative inside a clickable parent. */
@@ -99,6 +104,13 @@ const isImageUrl = (url: string): boolean =>
  * and is explicitly paused and detached from its source when the grant is
  * revoked, so scrolling past a card really does stop its decoder.
  *
+ * Hover, focus and visibility are only *reported* here; the coordinator
+ * turns a hover into intent after a steady rest, withholds grants while the
+ * page scrolls and keeps a playing card sticky, so a cursor sweeping over
+ * tiles mid-scroll mounts nothing. The `<video>` is layered over the poster
+ * in the same absolutely-positioned box, so mounting and unmounting it can
+ * never move layout.
+ *
  * `playsinline` + `muted` is required for autoplay on iOS Safari. On video
  * error (e.g. a 404 while preview MP4s are still uploading) the card falls
  * back to an indigo gradient placeholder with the preset title so it never
@@ -147,6 +159,7 @@ const PresetMP4Player = memo<Props>(
       const id = previewPlayback.register(setPlaying);
       previewPlayback.update(id, { autoplayInView });
       playbackIdRef.current = id;
+      const unsubscribeScroll = subscribeScrollActivity();
 
       const io = new IntersectionObserver(
         (entries) => {
@@ -164,14 +177,15 @@ const PresetMP4Player = memo<Props>(
         // screen. `unregister` revokes the grant, which is what flips
         // `playing` back to false.
         io.disconnect();
+        unsubscribeScroll();
         playbackIdRef.current = null;
         previewPlayback.unregister(id);
       };
     }, [autoplayInView, errored, isImage, reducedMotion]);
 
-    const setHovered = useCallback((hovered: boolean) => {
+    const report = useCallback((patch: { focused?: boolean; hovered?: boolean }) => {
       const id = playbackIdRef.current;
-      if (id !== null) previewPlayback.update(id, { hovered });
+      if (id !== null) previewPlayback.update(id, patch);
     }, []);
 
     /**
@@ -222,10 +236,10 @@ const PresetMP4Player = memo<Props>(
         className={className}
         ref={wrapperRef}
         style={{ blockSize: '100%', inlineSize: '100%', position: 'relative' }}
-        onBlur={() => setHovered(false)}
-        onFocus={() => setHovered(true)}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
+        onBlur={() => report({ focused: false })}
+        onFocus={() => report({ focused: true })}
+        onMouseEnter={() => report({ hovered: true })}
+        onMouseLeave={() => report({ hovered: false })}
       >
         {hasPoster ? (
           <img

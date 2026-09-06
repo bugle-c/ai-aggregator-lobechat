@@ -1,6 +1,6 @@
 'use client';
 
-import { createStyles } from 'antd-style';
+import { createStyles, keyframes } from 'antd-style';
 import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 
 import {
@@ -24,30 +24,54 @@ interface Props<T> {
   renderItem: (item: T, index: number) => ReactNode;
 }
 
-const useStyles = createStyles(({ css, token }) => ({
-  container: css`
-    position: relative;
+const fadeIn = keyframes`
+  from {
+    opacity: 0;
+  }
 
-    /* The focus ring of an absolutely positioned tile must not be clipped. */
-    overflow: visible;
+  to {
+    opacity: 1;
+  }
+`;
 
-    inline-size: 100%;
-  `,
-  item: css`
-    position: absolute;
-    inset-block-start: 0;
-    inset-inline-start: 0;
-  `,
-  skeletonGrid: css`
-    display: grid;
-    gap: 8px;
-  `,
-  skeletonBox: css`
-    aspect-ratio: 3 / 4;
-    border-radius: 12px;
-    background: ${token.colorFillTertiary};
-  `,
-}));
+const useStyles = createStyles(({ css, token }) => {
+  return {
+    container: css`
+      position: relative;
+
+      /* The focus ring of an absolutely positioned tile must not be clipped. */
+      overflow: visible;
+
+      inline-size: 100%;
+    `,
+    /**
+     * Tiles are placed by transform, never by flow, so an appended page
+     * cannot push anything that is already on screen; the new ones simply
+     * fade in where the layout already reserved their place. Opacity is
+     * compositor-only, so 24 tiles fading at once costs no layout or paint.
+     */
+    item: css`
+      position: absolute;
+      inset-block-start: 0;
+      inset-inline-start: 0;
+
+      animation: ${fadeIn} 180ms ease-out both;
+
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
+      }
+    `,
+    skeletonGrid: css`
+      display: grid;
+      gap: 8px;
+    `,
+    skeletonBox: css`
+      aspect-ratio: 3 / 4;
+      border-radius: 12px;
+      background: ${token.colorFillTertiary};
+    `,
+  };
+});
 
 /** How many placeholder boxes the pre-measure frame shows. */
 const SKELETON_COUNT = 8;

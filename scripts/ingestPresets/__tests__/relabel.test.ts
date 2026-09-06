@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ClassifyResult } from '../classify';
+import { BLOCKED_LICENSE, LICENSE } from '../derive';
 import { formatRelabelTable, planRelabel, runRelabel } from '../relabel';
 import type { Queryable, StoredPreset } from '../upsert';
 
@@ -9,6 +10,7 @@ const row = (overrides: Partial<StoredPreset> = {}): StoredPreset => ({
   category: 'trends',
   description: null,
   id: 1,
+  license: LICENSE,
   modality: 'video',
   params_lock: { aspect_ratio: '16:9' },
   prompt_template: 'A cinematic burger commercial with slow-motion sesame seeds',
@@ -55,6 +57,7 @@ describe('planRelabel', () => {
       active: true,
       category: 'ad',
       description: 'Реклама бургера',
+      license: LICENSE,
       requiresImage: false,
       title: 'Реклама бургера в стиле кино',
     });
@@ -89,10 +92,38 @@ describe('planRelabel', () => {
     expect(change.after.active).toBe(false);
   });
 
-  it('parks unsafe rows and flags them', () => {
+  it('parks unsafe rows, stamps license=blocked and flags them', () => {
     const change = planRelabel(row(), ok({ unsafe: true }))!;
     expect(change.after.active).toBe(false);
-    expect(change.flags).toEqual(['unsafe', 'unsafe→off']);
+    expect(change.after.license).toBe(BLOCKED_LICENSE);
+    expect(change.flags).toEqual(['unsafe', 'unsafe→off', 'blocked+']);
+    expect(change.changed).toBe(true);
+  });
+
+  it('marks a change when the verdict is the only thing that differs', () => {
+    const already = row({
+      active: false,
+      category: 'ad',
+      description: 'Реклама бургера',
+      title: 'Реклама бургера в стиле кино',
+    });
+    const change = planRelabel(already, ok({ unsafe: true }))!;
+    expect(change.after.license).toBe(BLOCKED_LICENSE);
+    expect(change.changed).toBe(true);
+    expect(change.flags).toEqual(['unsafe', 'blocked+']);
+  });
+
+  it('keeps a blocked row blocked and parked even when the model now says safe', () => {
+    const blocked = row({ active: false, license: BLOCKED_LICENSE });
+    const change = planRelabel(blocked, ok({ unsafe: false }))!;
+    expect(change.after.license).toBe(BLOCKED_LICENSE);
+    expect(change.after.active).toBe(false);
+    expect(change.flags).toEqual(['blocked']);
+
+    // A blocked row that somehow got re-activated by hand is parked again.
+    const revived = planRelabel(row({ active: true, license: BLOCKED_LICENSE }), ok())!;
+    expect(revived.after.active).toBe(false);
+    expect(revived.flags).toEqual(['blocked', 'blocked→off']);
   });
 
   it('keeps the stored category when the LLM slug is unknown', () => {
@@ -144,7 +175,24 @@ describe('runRelabel', () => {
       'ad',
       true,
       false,
+      LICENSE,
       2,
+    ]);
+  });
+
+  it('--apply writes license=blocked for an unsafe verdict', async () => {
+    const { client, query } = mockDb([row()]);
+    await runRelabel(client, mockClassifier(ok({ unsafe: true })), { apply: true, limit: 5 });
+    const [sql, params] = writes(query)[0]!;
+    expect(sql).toMatch(/license = \$6/);
+    expect(params).toEqual([
+      'Реклама бургера в стиле кино',
+      'Реклама бургера',
+      'ad',
+      false,
+      false,
+      BLOCKED_LICENSE,
+      1,
     ]);
   });
 
@@ -185,9 +233,12 @@ describe('runRelabel', () => {
 
   it('renders a before→after table', () => {
     const table = formatRelabelTable({
-      changes: [planRelabel(row(), ok({ requiresImage: true }))!],
+      changes: [
+        planRelabel(row(), ok({ requiresImage: true }))!,
+        planRelabel(row({ id: 2, slug: 'trend-2' }), ok({ unsafe: true }))!,
+      ],
       failed: [{ reason: 'cap', slug: 'trend-9' }],
-      scanned: 2,
+      scanned: 3,
       written: 0,
     });
     expect(table).toContain('«Портрет: макро» → «Реклама бургера в стиле кино»');
@@ -195,6 +246,10 @@ describe('runRelabel', () => {
     expect(table).toContain('-→Y');
     expect(table).toContain('Y→-');
     expect(table).toContain('i2v→off');
+    expect(table).toContain('| blk   | flags');
+    // i2v row: not blocked; unsafe row: blocked column flips and the flag shows
+    expect(table).toMatch(/trend-1 .*\| -→- {3}\| i2v→off/);
+    expect(table).toMatch(/trend-2 .*\| -→Y {3}\| unsafe,unsafe→off,blocked\+/);
     expect(table).toContain('trend-9                    | FAILED: cap');
   });
 });

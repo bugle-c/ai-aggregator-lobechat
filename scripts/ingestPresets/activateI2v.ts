@@ -8,6 +8,8 @@
  * attribution, and only rows that would `publish` today are flipped on. The
  * per-run author cap applies as in a normal run, so one author cannot flood
  * the gallery. Image (i2i) rows are left alone — no image-side gate exists.
+ * Rows the LLM classifier flagged unsafe carry `license = 'blocked'` and are
+ * never activated, whatever the heuristic filters say about them.
  *
  *   npx tsx scripts/ingestPresets/activateI2v.ts           # dry run (default)
  *   npx tsx scripts/ingestPresets/activateI2v.ts --apply   # write
@@ -20,10 +22,13 @@ import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 import type { Client } from 'pg';
 
-import { recommendedModelFor } from './derive';
+import { BLOCKED_LICENSE, recommendedModelFor } from './derive';
 import { evaluateBatch } from './filters';
 import type { Modality, SourceItem } from './types';
 import { createClient } from './upsert';
+
+/** Reason reported for rows kept back by the LLM verdict rather than a filter. */
+export const BLOCKED_REASON = 'blocked-by-llm';
 
 const ROOT = path.join(__dirname, '../..');
 
@@ -40,6 +45,8 @@ export interface QueuedRow {
   author_url: string | null;
   external_id: string;
   id: string;
+  /** `BLOCKED_LICENSE` when the LLM classifier flagged the row unsafe. */
+  license: string | null;
   modality: Modality;
   params_lock: Record<string, unknown> | null;
   popularity: number | null;
@@ -89,7 +96,16 @@ export interface ActivationPlan {
 export const planActivation = (rows: QueuedRow[]): ActivationPlan => {
   const plan: ActivationPlan = { activate: [], keep: [] };
   const modality = 'video';
-  const batch = rows.filter((row) => row.modality === modality);
+  const videoRows = rows.filter((row) => row.modality === modality);
+
+  // The LLM verdict is not one of the filters, so it is checked first and the
+  // row never reaches them — it must not even count towards the author cap.
+  const batch = videoRows.filter((row) => {
+    if (row.license !== BLOCKED_LICENSE) return true;
+    plan.keep.push({ id: row.id, reasons: [BLOCKED_REASON], slug: row.slug });
+    return false;
+  });
+
   const results = evaluateBatch(batch.map(rowToSourceItem), { known: new Set(), modality });
 
   results.forEach(({ evaluation }, index) => {
@@ -125,7 +141,7 @@ export const formatPlan = (plan: ActivationPlan, apply: boolean): string => {
 const loadQueuedI2vRows = async (client: Client): Promise<QueuedRow[]> => {
   const { rows } = await client.query<QueuedRow>(
     `SELECT id::text AS id, slug, modality, title, prompt_template, params_lock, popularity,
-            preview_url, external_id, author_name, author_url, recommended_model_id
+            preview_url, external_id, author_name, author_url, recommended_model_id, license
        FROM presets
       WHERE requires_image = TRUE AND active = FALSE AND external_id IS NOT NULL
         AND modality = 'video'
@@ -138,11 +154,14 @@ const applyPlan = async (client: Client, plan: ActivationPlan): Promise<void> =>
   if (plan.activate.length === 0) return;
   await client.query('BEGIN');
   try {
+    // `license IS DISTINCT FROM` repeats the plan's check at write time, so a
+    // row blocked between the SELECT and the UPDATE stays off.
     await client.query(
       `UPDATE presets
           SET active = TRUE, recommended_model_id = $1, updated_at = NOW()
-        WHERE id = ANY($2::bigint[]) AND active = FALSE AND modality = 'video'`,
-      [recommendedModelFor('video', true), plan.activate.map((r) => r.id)],
+        WHERE id = ANY($2::bigint[]) AND active = FALSE AND modality = 'video'
+          AND license IS DISTINCT FROM $3`,
+      [recommendedModelFor('video', true), plan.activate.map((r) => r.id), BLOCKED_LICENSE],
     );
     await client.query('COMMIT');
   } catch (error) {

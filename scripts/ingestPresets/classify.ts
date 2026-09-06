@@ -12,6 +12,8 @@
  *   - the caller never constructs a classifier unless there is work to do;
  *   - a hard cap of `MAX_CLASSIFICATIONS_PER_RUN` calls per process;
  *   - at most ONE retry per item, 20 s timeout per attempt;
+ *   - at most ONE follow-up per item to shorten an over-long title (counted
+ *     against the same cap; on failure the title is trimmed as before);
  *   - token usage and USD are accumulated and printed in the run summary.
  *
  * Any failure (transport, non-2xx, bad JSON, schema mismatch, cap reached)
@@ -33,6 +35,10 @@ export const REQUEST_TIMEOUT_MS = 20_000;
 export const MAX_ATTEMPTS = 2; // one call + one retry, never more
 export const PROMPT_CHAR_LIMIT = 1500;
 export const MAX_SUMMARY_LENGTH = 90;
+/** What the shortening follow-up is asked for — under the card limit, so a small overshoot still fits. */
+export const SHORT_TITLE_TARGET = 35;
+/** The follow-up answers with ~10 tokens of JSON; this only guards against a runaway. */
+const SHORTEN_MAX_TOKENS = 80;
 
 /**
  * gpt-5-mini is a reasoning model: with the default effort ~200 reasoning
@@ -135,13 +141,16 @@ const DANGLING_TAIL = new Set([
   'через',
 ]);
 
-/** Strip a wrapping quote pair / final period, fit to the card, drop a dangling tail. */
-export const tidyTitle = (raw: string, max = MAX_TITLE_LENGTH): string => {
-  let clean = raw.trim().replace(/[.\s]+$/, '');
+/** Strip a wrapping quote pair / final period — the title as the model meant it, untrimmed. */
+export const cleanTitle = (raw: string): string => {
+  const clean = raw.trim().replace(/[.\s]+$/, '');
   // Only a pair that wraps the whole title — a quoted name inside («Пепел дня») stays balanced.
-  if (/^[«"']/.test(clean) && /[»"']$/.test(clean)) clean = clean.slice(1, -1);
+  return /^[«"']/.test(clean) && /[»"']$/.test(clean) ? clean.slice(1, -1) : clean;
+};
 
-  let title = trimLabel(clean, max);
+/** `cleanTitle`, then fit to the card and drop a dangling tail. */
+export const tidyTitle = (raw: string, max = MAX_TITLE_LENGTH): string => {
+  let title = trimLabel(cleanTitle(raw), max);
 
   for (;;) {
     const words = title.split(' ');
@@ -215,6 +224,8 @@ export interface ClassifierStats {
   failed: number;
   promptTokens: number;
   retries: number;
+  /** Follow-up calls made to shorten an over-long title. */
+  shortened: number;
   usd: number;
 }
 
@@ -225,11 +236,13 @@ export const emptyStats = (): ClassifierStats => ({
   failed: 0,
   promptTokens: 0,
   retries: 0,
+  shortened: 0,
   usd: 0,
 });
 
 export const formatStats = (stats: ClassifierStats): string =>
-  `llm: calls=${stats.calls} retries=${stats.retries} failed=${stats.failed} capped=${stats.capped} ` +
+  `llm: calls=${stats.calls} retries=${stats.retries} shortened=${stats.shortened} ` +
+  `failed=${stats.failed} capped=${stats.capped} ` +
   `tokens=${stats.promptTokens}in/${stats.completionTokens}out usd=$${stats.usd.toFixed(4)}` +
   (stats.calls > 0 ? ` (~$${(stats.usd / stats.calls).toFixed(5)}/item)` : '');
 
@@ -283,6 +296,28 @@ export const buildUserPrompt = (input: ClassifyInput): string =>
     truncatePrompt(input.prompt),
     '"""',
   ].join('\n');
+
+/**
+ * Follow-up for a title the model overshot. Trimming those mid-phrase gave
+ * «Финал гонки на закате на пустынной»; asking the same model to say it
+ * shorter costs ~$0.0001 and keeps the phrase whole.
+ */
+export const buildShortenSystemPrompt = (): string =>
+  [
+    'You shorten Russian titles for preset cards in an AI generator.',
+    `Rewrite the given title to at most ${SHORT_TITLE_TARGET} characters — HARD MAXIMUM ${SHORT_TITLE_TARGET}, count them.`,
+    'Keep a complete noun phrase that still says WHAT is shown: drop the style / genre part or a',
+    'trailing qualifier first, never cut a phrase mid-way, never answer with a bare style word.',
+    'Normal sentence capitalisation, no quotes, no final period.',
+    'Answer with ONE JSON object and nothing else: {"title_ru": string}',
+  ].join('\n');
+
+export const buildShortenUserPrompt = (title: string, summary?: string): string =>
+  [`Title: ${title}`, summary ? `What it shows: ${summary}` : ''].filter(Boolean).join('\n');
+
+const ShortTitleSchema = z.object({
+  title_ru: z.string().trim().min(1).max(MAX_TITLE_LENGTH * 2),
+});
 
 // --- classifier -------------------------------------------------------------
 
@@ -362,7 +397,14 @@ export class Classifier {
       this.stats.calls += 1;
 
       const outcome = await this.attempt(input);
-      if (outcome.ok) return outcome;
+      if (outcome.ok) {
+        const { overlongTitle, ...result } = outcome;
+        if (overlongTitle === undefined) return result;
+        // One cheap follow-up instead of a mid-phrase trim; the trimmed title
+        // in `result` is already the fallback if it does not work out.
+        const shortened = await this.shortenTitle(overlongTitle, result.summary);
+        return shortened === null ? result : { ...result, title: shortened };
+      }
 
       lastReason = outcome.reason;
       if (!outcome.retryable) break;
@@ -372,18 +414,47 @@ export class Classifier {
     return { ok: false, reason: lastReason };
   }
 
-  private async attempt(
-    input: ClassifyInput,
-  ): Promise<ClassifyOk | { ok: false; reason: string; retryable: boolean }> {
+  /**
+   * Ask the model to restate an over-long title within `SHORT_TITLE_TARGET`.
+   * Single attempt, counted against the per-run cap (skipped, not failed,
+   * when the cap is spent). Returns `null` on any failure so the caller
+   * keeps the trimmed title.
+   */
+  private async shortenTitle(title: string, summary: string): Promise<string | null> {
+    if (this.stats.calls >= this.maxCalls) return null;
+    this.stats.calls += 1;
+    this.stats.shortened += 1;
+
+    const response = await this.post({
+      max_tokens: SHORTEN_MAX_TOKENS,
+      messages: [
+        { content: buildShortenSystemPrompt(), role: 'system' },
+        { content: buildShortenUserPrompt(title, summary), role: 'user' },
+      ],
+    });
+    if (!response.ok) return null;
+
+    const parsed = ShortTitleSchema.safeParse(response.json);
+    if (!parsed.success) return null;
+
+    // Still over? Trim as before — but from the shorter phrase, which
+    // almost always has a clean word boundary inside the limit.
+    const tidy = tidyTitle(parsed.data.title_ru);
+    return tidy.length > 0 ? tidy : null;
+  }
+
+  /** One OpenRouter chat call with the model, JSON mode and usage accounting shared by every request. */
+  private async post(body: {
+    max_tokens: number;
+    messages: { content: string; role: 'system' | 'user' }[];
+  }): Promise<
+    { json: unknown; ok: true } | { ok: false; reason: string; retryable: boolean; status?: number }
+  > {
     let response: Response;
     try {
       response = await this.fetchImpl(OPENROUTER_URL, {
         body: JSON.stringify({
-          max_tokens: MAX_TOKENS,
-          messages: [
-            { content: buildSystemPrompt(input.modality), role: 'system' },
-            { content: buildUserPrompt(input), role: 'user' },
-          ],
+          ...body,
           model: this.model,
           reasoning: { effort: 'minimal' },
           response_format: { type: 'json_object' },
@@ -430,13 +501,29 @@ export class Classifier {
       };
     }
 
-    let parsed: unknown;
     try {
-      parsed = JSON.parse(content);
+      return { json: JSON.parse(content), ok: true };
     } catch {
       return { ok: false, reason: 'content is not JSON', retryable: true };
     }
+  }
 
+  private async attempt(
+    input: ClassifyInput,
+  ): Promise<
+    | (ClassifyOk & { overlongTitle?: string })
+    | { ok: false; reason: string; retryable: boolean }
+  > {
+    const response = await this.post({
+      max_tokens: MAX_TOKENS,
+      messages: [
+        { content: buildSystemPrompt(input.modality), role: 'system' },
+        { content: buildUserPrompt(input), role: 'user' },
+      ],
+    });
+    if (!response.ok) return response;
+
+    const parsed = response.json;
     const result = ClassificationSchema.safeParse(parsed);
     if (!result.success) {
       const issues = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
@@ -448,9 +535,16 @@ export class Classifier {
       ? value.category
       : null;
 
+    // The schema has already trimmed `title_ru` to the card; the untrimmed
+    // phrase is what the follow-up needs, so read it off the raw answer.
+    const raw = (parsed as { title_ru?: unknown }).title_ru;
+    const spoken = typeof raw === 'string' ? cleanTitle(raw) : '';
+    const overlongTitle = spoken.length > MAX_TITLE_LENGTH ? spoken : undefined;
+
     return {
       category,
       ok: true,
+      overlongTitle,
       rawCategory: value.category,
       requiresImage: value.requires_image,
       summary: value.summary_ru,

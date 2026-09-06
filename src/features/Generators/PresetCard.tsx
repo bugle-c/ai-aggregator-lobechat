@@ -160,6 +160,13 @@ const useStyles = createStyles(({ css, token }) => ({
     overflow: hidden;
     inline-size: 100%;
     background: ${token.colorFillTertiary};
+
+    /* Off-screen tiles skip style, layout and paint of the poster/video
+       subtree until they come near the viewport; the box already clips
+       (overflow: hidden) and sizes itself from aspect-ratio, so the
+       containment this implies changes nothing visible. It keeps the
+       cost of a freshly appended page from landing in one frame. */
+    content-visibility: auto;
   `,
   badges: css`
     pointer-events: none;

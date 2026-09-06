@@ -22,6 +22,7 @@ import dotenvExpand from 'dotenv-expand';
 import { sendAlert } from '../../src/server/services/alerts';
 import { Classifier, type ClassifyResult, formatStats } from './classify';
 import {
+  BLOCKED_LICENSE,
   deriveAttribution,
   deriveCategory,
   deriveTitle,
@@ -406,6 +407,10 @@ const relabel = async (options: Options): Promise<void> => {
         options.apply ? 'relabel complete' : 'RELABEL DRY RUN — nothing written',
         `scanned: ${outcome.scanned}`,
         `relabelled: ${outcome.changes.length} (changed: ${outcome.changes.filter((c) => c.changed).length})`,
+        // Rows the model flagged unsafe — parked and stamped `license=blocked`,
+        // which the activation script refuses. Newly blocked ones in brackets.
+        `blocked: ${outcome.changes.filter((c) => c.after.license === BLOCKED_LICENSE).length} ` +
+          `(new: ${outcome.changes.filter((c) => c.flags.includes('blocked+')).length})`,
         `written: ${outcome.written}`,
         `failed: ${outcome.failed.length}`,
         formatStats(classifier.stats),

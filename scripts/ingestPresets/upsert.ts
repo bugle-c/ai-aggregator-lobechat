@@ -102,6 +102,8 @@ export interface StoredPreset {
   category: string;
   description: string | null;
   id: number;
+  /** `BLOCKED_LICENSE` once the LLM flagged the row; the attribution license otherwise. */
+  license: string | null;
   modality: Modality;
   params_lock: Record<string, string> | null;
   prompt_template: string;
@@ -123,7 +125,7 @@ export const loadIngestedPresets = async (
 ): Promise<StoredPreset[]> => {
   const { rows } = await client.query<StoredPreset>(
     `SELECT id, slug, modality, category, title, description, prompt_template,
-            params_lock, requires_image, active
+            params_lock, requires_image, active, license
        FROM presets
       WHERE external_id IS NOT NULL
         AND ($2::timestamptz IS NULL OR ingested_at >= $2::timestamptz)
@@ -138,6 +140,8 @@ export interface PresetLabelUpdate {
   active: boolean;
   category: string;
   description: string | null;
+  /** Written verbatim — `BLOCKED_LICENSE` for an unsafe verdict, the stored value otherwise. */
+  license: string | null;
   requiresImage: boolean;
   title: string;
 }
@@ -150,8 +154,16 @@ export const updatePresetLabels = async (
   await client.query(
     `UPDATE presets
         SET title = $1, description = $2, category = $3, requires_image = $4, active = $5,
-            updated_at = NOW()
-      WHERE id = $6`,
-    [update.title, update.description, update.category, update.requiresImage, update.active, id],
+            license = $6, updated_at = NOW()
+      WHERE id = $7`,
+    [
+      update.title,
+      update.description,
+      update.category,
+      update.requiresImage,
+      update.active,
+      update.license,
+      id,
+    ],
   );
 };

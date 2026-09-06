@@ -8,11 +8,14 @@
  *   - `requires_image` = stored OR regex OR llm — never flips back to false;
  *   - a row that *becomes* i2v while `active` is parked (`active=false`) —
  *     Ф5 re-activates i2v rows with its own script;
- *   - a row the model flags as unsafe is parked as well;
+ *   - a row the model flags as unsafe is parked as well AND stamped
+ *     `license = BLOCKED_LICENSE`, which every activation path refuses; a row
+ *     already stamped stays blocked and parked whatever the model says now;
  *   - a failed classification leaves the row untouched;
  *   - DRY-RUN BY DEFAULT — nothing is written unless `apply` is set.
  */
 import type { Classifier } from './classify';
+import { BLOCKED_LICENSE } from './derive';
 import { detectRequiresImage } from './filters';
 import {
   loadIngestedPresets,
@@ -71,6 +74,19 @@ export const planRelabel = (
     }
   }
 
+  // The unsafe verdict is sticky: once blocked, a later "safe" answer from the
+  // model does not unblock the row — that is a human decision.
+  const wasBlocked = row.license === BLOCKED_LICENSE;
+  const blocked = wasBlocked || llm.unsafe;
+  const license = blocked ? BLOCKED_LICENSE : row.license;
+  if (blocked) {
+    flags.push(wasBlocked ? 'blocked' : 'blocked+');
+    if (active) {
+      active = false;
+      flags.push('blocked→off');
+    }
+  }
+
   const category = llm.category ?? row.category;
   if (llm.category === null) flags.push(`cat?${llm.rawCategory}`);
 
@@ -78,6 +94,7 @@ export const planRelabel = (
     active,
     category,
     description: llm.summary,
+    license,
     requiresImage,
     title: llm.title,
   };
@@ -87,7 +104,8 @@ export const planRelabel = (
     after.description !== row.description ||
     after.category !== row.category ||
     after.requiresImage !== row.requires_image ||
-    after.active !== row.active;
+    after.active !== row.active ||
+    after.license !== row.license;
 
   return { after, before: row, changed, flags };
 };
@@ -143,16 +161,19 @@ export const formatRelabelTable = (outcome: RelabelOutcome): string => {
   const lines: string[] = [];
   const header =
     `${pad('slug', 26)} | ${pad('title: before → after', 84)} | ${pad('category', 22)} | ` +
-    `${pad('i2v', 5)} | ${pad('act', 5)} | flags`;
+    `${pad('i2v', 5)} | ${pad('act', 5)} | ${pad('blk', 5)} | flags`;
   lines.push(header, '-'.repeat(header.length));
 
   for (const { after, before, changed, flags } of outcome.changes) {
+    const blockedBefore = before.license === BLOCKED_LICENSE;
+    const blockedAfter = after.license === BLOCKED_LICENSE;
     lines.push(
       `${pad(cut(before.slug, 26), 26)} | ` +
         `${pad(cut(`«${before.title}» → «${after.title}»`, 84), 84)} | ` +
         `${pad(cut(`${before.category} → ${after.category}`, 22), 22)} | ` +
         `${pad(`${flag(before.requires_image)}→${flag(after.requiresImage)}`, 5)} | ` +
         `${pad(`${flag(before.active)}→${flag(after.active)}`, 5)} | ` +
+        `${pad(`${flag(blockedBefore)}→${flag(blockedAfter)}`, 5)} | ` +
         `${[...flags, changed ? '' : 'unchanged'].filter(Boolean).join(',')}`,
     );
     lines.push(`${pad('', 26)} |   ${cut(after.description ?? '', 82)}`);
