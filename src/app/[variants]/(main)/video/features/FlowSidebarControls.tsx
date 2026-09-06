@@ -1,54 +1,162 @@
 'use client';
 
-import { Block, Flexbox } from '@lobehub/ui';
+import { Segmented, SliderWithInput } from '@lobehub/ui';
 import { Drawer } from 'antd';
-import { Settings } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import AspectRatioSelect from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/AspectRatioSelect';
 import ConfigPanel from '@/app/[variants]/(main)/video/_layout/ConfigPanel';
+import VideoModelItem from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/ModelSelect/VideoModelItem';
+import ModelSettingsChip from '@/features/Generators/ModelSettingsChip';
+import SettingsStrip, { SettingsChip } from '@/features/Generators/SettingsStrip';
+import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { useAiInfraStore } from '@/store/aiInfra';
+import { aiProviderSelectors } from '@/store/aiInfra/slices/aiProvider/selectors';
+import { useUserStore } from '@/store/user';
+import { uiModeSelectors } from '@/store/user/slices/uiMode/selectors';
 import { useVideoStore } from '@/store/video';
 import { videoGenerationConfigSelectors } from '@/store/video/selectors';
+import { useVideoGenerationConfigParam } from '@/store/video/slices/generationConfig/hooks';
+import { presetSelectors } from '@/store/video/slices/preset/selectors';
+
+/** A duration range with more steps than this gets a slider instead of buttons. */
+const MAX_SEGMENTED_STEPS = 6;
+
+const DEFAULT_DURATION = 5;
+
+/** Duration chip body: the model's `min…max` by `step` as buttons when few, else a slider. */
+const DurationPicker = memo<{ close: () => void }>(({ close }) => {
+  const { t } = useTranslation('common');
+  const { value, setValue, min, max, step, enumValues } = useVideoGenerationConfigParam('duration');
+
+  const options = useMemo(() => {
+    if (enumValues && enumValues.length > 0) return enumValues.map(Number);
+    if (typeof min !== 'number' || typeof max !== 'number') return null;
+    const s = step && step > 0 ? step : 1;
+    if ((max - min) / s + 1 > MAX_SEGMENTED_STEPS) return null;
+    const out: number[] = [];
+    for (let v = min; v <= max; v += s) out.push(v);
+    return out;
+  }, [enumValues, max, min, step]);
+
+  if (options) {
+    return (
+      <Segmented
+        block
+        style={{ minInlineSize: 200 }}
+        value={value ?? min}
+        variant="filled"
+        options={options.map((v) => ({
+          label: t('preset.settings.durationUnit', { count: v }),
+          value: v,
+        }))}
+        onChange={(v) => {
+          setValue(Number(v) as any);
+          close();
+        }}
+      />
+    );
+  }
+
+  return (
+    <div style={{ minInlineSize: 240 }}>
+      <SliderWithInput
+        max={max}
+        min={min}
+        step={step ?? 1}
+        value={value ?? min}
+        onChange={(v) => setValue(v as any)}
+      />
+    </div>
+  );
+});
+
+DurationPicker.displayName = 'VideoDurationPicker';
 
 /**
- * Compact controls for the desktop FlowSidebar (video).
- * Mirror of image/FlowSidebarControls — reuses the existing video
- * ConfigPanel (model select, FrameUpload for img2vid, aspect ratio,
- * duration, seed, ...) inside a right-side drawer.
+ * Video binding of the `SettingsStrip`:
+ * `[Model ▾][16:9 ▾][5 s ▾] … [≈ 40 cr][⚙]`, plus the drawer with the full
+ * `ConfigPanel` (frames, resolution, seed, audio…) the gear opens.
  */
-const prettify = (modelId: string | undefined): string => {
-  if (!modelId) return 'Не выбрано';
-  const parts = modelId.split('/');
-  const core = parts.length >= 2 ? parts[1] : parts[0];
-  return core
-    .split('-')
-    .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : w))
-    .join(' ');
-};
-
 const FlowSidebarControls = memo(() => {
-  const [open, setOpen] = useState(false);
-  const model = useVideoStore(videoGenerationConfigSelectors.model);
+  const { t } = useTranslation('common');
+  const isMobile = useIsMobile();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  const preset = useVideoStore(presetSelectors.currentPreset);
+  const [model, provider] = useVideoStore((s) => [
+    videoGenerationConfigSelectors.model(s),
+    videoGenerationConfigSelectors.provider(s),
+  ]);
+  const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
+  const supportsAspectRatio = useVideoStore(
+    videoGenerationConfigSelectors.isSupportedParam('aspectRatio'),
+  );
+  const supportsDuration = useVideoStore(
+    videoGenerationConfigSelectors.isSupportedParam('duration'),
+  );
+  const aspect = useVideoGenerationConfigParam('aspectRatio');
+  const duration = useVideoGenerationConfigParam('duration');
+
+  const uiMode = useUserStore(uiModeSelectors.current);
+  const providers = useAiInfraStore(aiProviderSelectors.enabledVideoModelListByMode(uiMode));
+
+  const durationSeconds = Number(duration.value ?? DEFAULT_DURATION) || DEFAULT_DURATION;
+  const cost = useGenerationCostPreview({ durationSeconds, kind: 'video', model });
+
+  const aspectItems = useMemo(
+    () => (aspect.enumValues ?? []).map((v) => ({ value: v })),
+    [aspect.enumValues],
+  );
 
   return (
     <>
-      <Block clickable padding={10} variant="filled" onClick={() => setOpen(true)}>
-        <Flexbox horizontal align="center" gap={8} justify="space-between">
-          <Flexbox>
-            <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>Модель</span>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{prettify(model)}</span>
-          </Flexbox>
-          <Settings size={18} style={{ color: 'var(--ant-color-text-secondary)' }} />
-        </Flexbox>
-      </Block>
+      <SettingsStrip cost={cost} onOpenAdvanced={() => setAdvancedOpen(true)}>
+        <ModelSettingsChip
+          currentModel={model}
+          currentProvider={provider}
+          providers={providers}
+          recommendedModelId={preset?.recommendedModelId}
+          renderModel={(m, providerId) => (
+            <VideoModelItem {...m} providerId={providerId} showPopover={false} />
+          )}
+          onPick={setModelAndProviderOnSelect}
+        />
+        {supportsAspectRatio && aspectItems.length > 0 && (
+          <SettingsChip
+            ariaLabel={t('preset.settings.aspect')}
+            label={aspect.value ?? aspectItems[0].value}
+            content={(close) => (
+              <AspectRatioSelect
+                options={aspectItems}
+                value={aspect.value}
+                onChange={(v) => {
+                  aspect.setValue(v as any);
+                  close();
+                }}
+              />
+            )}
+          />
+        )}
+        {supportsDuration && (
+          <SettingsChip
+            ariaLabel={t('preset.settings.duration')}
+            content={(close) => <DurationPicker close={close} />}
+            label={t('preset.settings.durationUnit', { count: durationSeconds })}
+          />
+        )}
+      </SettingsStrip>
 
       <Drawer
         destroyOnHidden={false}
-        open={open}
+        open={advancedOpen}
         placement="right"
         styles={{ body: { padding: 0 } }}
-        title="Настройки генерации"
-        width={360}
-        onClose={() => setOpen(false)}
+        title={t('preset.settings.more')}
+        width={isMobile ? '90vw' : 360}
+        onClose={() => setAdvancedOpen(false)}
       >
         <ConfigPanel />
       </Drawer>

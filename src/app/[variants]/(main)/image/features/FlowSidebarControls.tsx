@@ -1,57 +1,106 @@
 'use client';
 
-import { Block, Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
-import { Settings } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import ConfigPanel from '@/app/[variants]/(main)/image/_layout/ConfigPanel';
+import AspectRatioSelect from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/AspectRatioSelect';
+import ImageNum from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ImageNum';
+import ImageModelItem from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/ModelSelect/ImageModelItem';
+import ModelSettingsChip from '@/features/Generators/ModelSettingsChip';
+import SettingsStrip, { SettingsChip } from '@/features/Generators/SettingsStrip';
+import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { useAiInfraStore } from '@/store/aiInfra';
+import { aiProviderSelectors } from '@/store/aiInfra/slices/aiProvider/selectors';
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
+import { useDimensionControl } from '@/store/image/slices/generationConfig/hooks';
+import { presetSelectors } from '@/store/image/slices/preset/selectors';
+import { useUserStore } from '@/store/user';
+import { uiModeSelectors } from '@/store/user/slices/uiMode/selectors';
 
 /**
- * Compact controls for the desktop FlowSidebar:
- *   ┌─────────────────────────────────────┐
- *   │ Модель: Flux Pro                  ⚙ │  ← clickable row → opens drawer
- *   └─────────────────────────────────────┘
- *
- * The drawer reuses the existing ConfigPanel (model select, image
- * upload, dimensions, steps, seed, cfg, ...) — no duplication.
+ * Image binding of the `SettingsStrip`:
+ * `[Model ▾][3:4 ▾][1 pcs ▾] … [≈ 12 cr][⚙]`, plus the drawer with the full
+ * `ConfigPanel` the gear opens. Used above the prompt input by the desktop
+ * `FlowSidebar` and the mobile `MobileFlowContent`.
  */
-const prettify = (modelId: string | undefined): string => {
-  if (!modelId) return 'Не выбрано';
-  const parts = modelId.split('/');
-  const core = parts.length >= 2 ? parts[1] : parts[0];
-  return core
-    .split('-')
-    .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : w))
-    .join(' ');
-};
-
 const FlowSidebarControls = memo(() => {
-  const [open, setOpen] = useState(false);
-  const model = useImageStore(imageGenerationConfigSelectors.model);
+  const { t } = useTranslation('common');
+  const isMobile = useIsMobile();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  const preset = useImageStore(presetSelectors.currentPreset);
+  const [model, provider] = useImageStore((s) => [
+    imageGenerationConfigSelectors.model(s),
+    imageGenerationConfigSelectors.provider(s),
+  ]);
+  const setModelAndProviderOnSelect = useImageStore((s) => s.setModelAndProviderOnSelect);
+  const imageNum = useImageStore(imageGenerationConfigSelectors.imageNum);
+  const supportsAspectRatio = useImageStore(
+    imageGenerationConfigSelectors.isSupportedParam('aspectRatio'),
+  );
+  // Goes through the dimension controller rather than a raw param write so
+  // width/height follow the ratio the same way they do in ConfigPanel.
+  const { aspectRatio, options: aspectOptions, setAspectRatio } = useDimensionControl();
+
+  const uiMode = useUserStore(uiModeSelectors.current);
+  const providers = useAiInfraStore(aiProviderSelectors.enabledImageModelListByMode(uiMode));
+
+  const cost = useGenerationCostPreview({ images: imageNum, kind: 'image', model });
+
+  const aspectItems = useMemo(() => aspectOptions.map((v) => ({ value: v })), [aspectOptions]);
 
   return (
     <>
-      <Block clickable padding={10} variant="filled" onClick={() => setOpen(true)}>
-        <Flexbox horizontal align="center" gap={8} justify="space-between">
-          <Flexbox>
-            <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>Модель</span>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{prettify(model)}</span>
-          </Flexbox>
-          <Settings size={18} style={{ color: 'var(--ant-color-text-secondary)' }} />
-        </Flexbox>
-      </Block>
+      <SettingsStrip cost={cost} onOpenAdvanced={() => setAdvancedOpen(true)}>
+        <ModelSettingsChip
+          currentModel={model}
+          currentProvider={provider}
+          providers={providers}
+          recommendedModelId={preset?.recommendedModelId}
+          renderModel={(m, providerId) => (
+            <ImageModelItem {...m} providerId={providerId} showPopover={false} />
+          )}
+          onPick={setModelAndProviderOnSelect}
+        />
+        {supportsAspectRatio && (
+          <SettingsChip
+            ariaLabel={t('preset.settings.aspect')}
+            label={aspectRatio}
+            content={(close) => (
+              <AspectRatioSelect
+                options={aspectItems}
+                value={aspectRatio}
+                onChange={(v) => {
+                  setAspectRatio(v);
+                  close();
+                }}
+              />
+            )}
+          />
+        )}
+        <SettingsChip
+          ariaLabel={t('preset.settings.count')}
+          label={t('preset.settings.countUnit', { count: imageNum })}
+          content={() => (
+            <div style={{ minInlineSize: 240 }}>
+              <ImageNum />
+            </div>
+          )}
+        />
+      </SettingsStrip>
 
       <Drawer
         destroyOnHidden={false}
-        open={open}
+        open={advancedOpen}
         placement="right"
         styles={{ body: { padding: 0 } }}
-        title="Настройки генерации"
-        width={360}
-        onClose={() => setOpen(false)}
+        title={t('preset.settings.more')}
+        width={isMobile ? '90vw' : 360}
+        onClose={() => setAdvancedOpen(false)}
       >
         <ConfigPanel />
       </Drawer>
