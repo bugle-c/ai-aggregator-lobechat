@@ -10,6 +10,17 @@ import type { Preset } from '@/types/preset';
 import { createPresetSlice, initialPresetState } from './action';
 
 const fakePreset: Preset = {
+  authorAvatar: null,
+  authorName: null,
+  authorUrl: null,
+  externalId: null,
+  ingestedAt: null,
+  license: null,
+  popularity: null,
+  posterUrl: null,
+  requiresImage: false,
+  sourcePlatform: null,
+  sourceUrl: null,
   badges: ['new'],
   category: 'camera',
   description: null,
@@ -42,11 +53,15 @@ describe('video preset slice', () => {
     expect(store.getState().currentPreset?.slug).toBe('crash-zoom-in');
   });
 
-  it('selectPreset routes paramsLock entries through setParamOnInput', () => {
+  it('selectPreset maps paramsLock storage keys to runtime param keys', () => {
     const { setParamOnInput, store } = buildIsolatedStore();
     store.getState().selectPreset(fakePreset);
-    expect(setParamOnInput).toHaveBeenCalledWith('aspect_ratio', '16:9');
-    expect(setParamOnInput).toHaveBeenCalledWith('duration_sec', 5);
+    // Storage names are aspect_ratio/duration_sec; the video generation
+    // schema declares aspectRatio/duration.
+    expect(setParamOnInput).toHaveBeenCalledWith('aspectRatio', '16:9');
+    expect(setParamOnInput).toHaveBeenCalledWith('duration', 5);
+    expect(setParamOnInput).not.toHaveBeenCalledWith('aspect_ratio', '16:9');
+    expect(setParamOnInput).not.toHaveBeenCalledWith('duration_sec', 5);
   });
 
   it('clearPreset nulls currentPreset', () => {

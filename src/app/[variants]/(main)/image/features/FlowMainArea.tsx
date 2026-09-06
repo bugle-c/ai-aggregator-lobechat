@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import PresetGallery from '@/features/Generators/PresetGallery';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
+import { usePresetDeepLink } from '@/features/Generators/usePresetDeepLink';
 import ResourceExplorer from '@/features/ResourceManager/components/Explorer';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useImageStore } from '@/store/image';
@@ -43,6 +44,15 @@ const FlowMainArea = memo(() => {
   // Gallery is the primary surface — see history in previous commits
   // for why the previous "feed-when-has-generations" default was wrong.
   const url = useFlowUrlState('presets');
+
+  // Home-page cards link here as /image?preset=<slug>; resolve that slug
+  // into the actual selected preset.
+  usePresetDeepLink({
+    currentSlug: selectedSlug,
+    modality: 'image',
+    selectPreset,
+    slug: url.preset,
+  });
 
   // Prime the resource-manager store to "images" so the embedded
   // <ResourceExplorer/> below shows the user's image gallery, not

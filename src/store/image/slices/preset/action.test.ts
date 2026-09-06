@@ -6,6 +6,17 @@ import { type Preset } from '@/types/preset';
 import { createPresetSlice, initialPresetState, type PresetAction } from './action';
 
 const fakePreset: Preset = {
+  authorAvatar: null,
+  authorName: null,
+  authorUrl: null,
+  externalId: null,
+  ingestedAt: null,
+  license: null,
+  popularity: null,
+  posterUrl: null,
+  requiresImage: false,
+  sourcePlatform: null,
+  sourceUrl: null,
   id: 1,
   slug: 'test',
   modality: 'image',
@@ -58,11 +69,24 @@ describe('image preset slice', () => {
     expect(s.model).toBeNull();
   });
 
-  it('selectPreset routes paramsLock entries through setParamOnInput', () => {
+  it('selectPreset maps paramsLock storage keys to runtime param keys', () => {
     const store = buildStore();
     const setParamOnInput = store.getState().setParamOnInput as ReturnType<typeof vi.fn>;
     store.getState().selectPreset(fakePreset);
-    expect(setParamOnInput).toHaveBeenCalledWith('aspect_ratio', '3:4');
+    // `aspect_ratio` is the storage name; the generation schema declares
+    // `aspectRatio`. Passing the raw key silently dropped the value.
+    expect(setParamOnInput).toHaveBeenCalledWith('aspectRatio', '3:4');
+    expect(setParamOnInput).not.toHaveBeenCalledWith('aspect_ratio', '3:4');
+  });
+
+  it('selectPreset ignores params_lock keys that are not generation params', () => {
+    const store = buildStore();
+    const setParamOnInput = store.getState().setParamOnInput as ReturnType<typeof vi.fn>;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    store.getState().selectPreset({ ...fakePreset, paramsLock: { nonsense_key: 42 } });
+    expect(setParamOnInput).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('clearPreset nulls currentPreset', () => {

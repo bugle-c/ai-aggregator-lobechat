@@ -6,7 +6,9 @@ import { memo } from 'react';
 
 import type { Preset } from '@/types/preset';
 
+import PresetAttribution from './PresetAttribution';
 import PresetMP4Player from './PresetMP4Player';
+import { prettifyModelId } from './prettifyModelId';
 
 interface Props {
   onClear: () => void;
@@ -38,16 +40,23 @@ const PresetThumbCard = memo<Props>(({ onClear, preset }) => {
   return (
     <Block padding={0} style={{ overflow: 'hidden', position: 'relative' }} variant="filled">
       <div style={{ aspectRatio: '4 / 3' }}>
-        <PresetMP4Player fallbackLabel={preset.title} previewUrl={preset.previewUrl} />
+        <PresetMP4Player
+          fallbackLabel={preset.title}
+          posterUrl={preset.posterUrl ?? undefined}
+          previewUrl={preset.previewUrl}
+        />
       </div>
       <Flexbox horizontal align="center" justify="space-between" padding={8}>
-        <Flexbox>
+        <Flexbox gap={2}>
           <span style={{ fontSize: 13, fontWeight: 600 }}>{preset.title}</span>
           {preset.recommendedModelId && (
             <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 11 }}>
-              Рекомендуется: {preset.recommendedModelId}
+              {/* Raw ids like `bytedance/seedance-2.0-fast/text-to-video`
+                  are meaningless to users — show the readable label. */}
+              Рекомендуется: {prettifyModelId(preset.recommendedModelId)}
             </span>
           )}
+          <PresetAttribution compact preset={preset} />
         </Flexbox>
         <button
           aria-label="Снять стиль"

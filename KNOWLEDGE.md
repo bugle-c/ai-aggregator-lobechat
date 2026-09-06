@@ -307,7 +307,7 @@ Bot mirror (`gptwebrubot/src/models.ts`) has a `local` category with the same th
 ### Presets (75 across 11 categories)
 
 - Migrations `0098_presets.sql` … `0103_user_billing_admin_grant_flag.sql` — preset table + seed + `model_id` rename to recommendation (not hard-bound) + `is_admin_granted` boolean on `user_billing`.
-- `params_lock` JSON: `{ aspect_ratio, prompt_prefix, style, ... }` — same `aspect_ratio` field both drives generation params and the masonry card height (`PresetCard.cardAspectRatio()` regex `^(\d+)\s*[:×x/]\s*(\d+)$` → CSS `${m1} / ${m2}`).
+- `params_lock` JSON: `{ aspect_ratio, duration_sec, ... }` — stored in snake_case, but the runtime schemas (`model-bank/standard-parameters`) declare `aspectRatio`/`duration`. `selectPreset` must therefore translate keys through `features/Generators/normalizePresetParams.ts` (whitelist + alias map); before that helper existed the raw keys were spread into `setParamOnInput` and every curated value was silently dropped. The same `aspect_ratio` field is also read verbatim for the masonry card height (`PresetCard.cardAspectRatio()` regex `^(\d+)\s*[:×x/]\s*(\d+)$` → CSS `${m1} / ${m2}`).
 - Thumbnails: WebP, \~10-60KB each, generated via sharp inside `lobehub` container (Brevo-style: external host can't write to RustFS path).
 - **RustFS gotcha**: never `mkdir -p /data/lobe/presets/` directly on the host filesystem — bare dirs confuse RustFS metadata so subsequent S3 PUTs return AccessDenied. Always go through S3 API.
 - `migrations/__drizzle_migrations` SHA256 must match the file hash. If container crashes re-running an applied migration, manually `INSERT` the row with computed hash + `when=<epoch_ms>`.

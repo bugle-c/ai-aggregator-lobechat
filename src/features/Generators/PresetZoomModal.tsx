@@ -5,6 +5,8 @@ import { memo } from 'react';
 
 import type { Preset } from '@/types/preset';
 
+import PresetAttribution from './PresetAttribution';
+
 interface Props {
   onApply: () => void;
   onClose: () => void;
@@ -62,6 +64,7 @@ const PresetZoomModal = memo<Props>(({ onApply, onClose, open, preset }) => {
               {preset.description}
             </div>
           )}
+          <PresetAttribution preset={preset} />
           <button
             type="button"
             style={{

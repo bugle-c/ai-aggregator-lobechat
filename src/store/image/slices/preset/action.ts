@@ -1,3 +1,4 @@
+import { normalizePresetParams } from '@/features/Generators/normalizePresetParams';
 import { type StoreSetter } from '@/store/types';
 import { type Preset } from '@/types/preset';
 
@@ -35,9 +36,11 @@ export class PresetActionImpl {
     // We're an aggregator; the user picks the model. A preset is
     // prompt + curated params, not a model lock. The recommendedModelId
     // is surfaced as a hint in the UI but never switches the selection.
+    // `params_lock` uses storage-side names (aspect_ratio, duration_sec);
+    // the runtime schema uses camelCase (aspectRatio, duration). Translate
+    // through the shared whitelist instead of spreading raw keys.
     const { setParamOnInput } = this.#get();
-    for (const [key, value] of Object.entries(preset.paramsLock)) {
-      if (value === undefined) continue;
+    for (const { key, value } of normalizePresetParams(preset.paramsLock)) {
       setParamOnInput(key as any, value as any);
     }
   };
