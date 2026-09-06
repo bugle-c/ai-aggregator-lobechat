@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Dropdown, Segmented } from 'antd';
-import { ArrowDownUp, ChevronDown } from 'lucide-react';
+import { ArrowUpDown } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,9 +10,11 @@ import type { PresetSort } from '@/types/preset';
 interface Props {
   block?: boolean;
   /**
-   * Render as a single dropdown chip instead of a segmented control. On a
-   * phone the three-way `Segmented` cost a full 40px row; a chip sits in
-   * the same row as the category chips.
+   * Render as a single icon-only dropdown chip instead of a segmented
+   * control. On a phone the three-way `Segmented` cost a full 40px row, and
+   * a labelled chip («Подборка» + chevron) still ate ~110px of the row it
+   * shares with the category chips, leaving them 146px on a 390px screen.
+   * The current sort is carried by the accessible name instead.
    */
   compact?: boolean;
   onChange: (sort: PresetSort) => void;
@@ -26,7 +28,8 @@ interface Props {
  * (source-side likes, meaningful now that rows are ingested) and «Новое».
  *
  * Desktop: a `Segmented` — with three options the whole choice should be
- * visible and one click away. Mobile (`compact`): a dropdown chip.
+ * visible and one click away. Mobile (`compact`): an icon-only dropdown chip
+ * whose `aria-label` and `title` name the current sort.
  */
 const SortSwitcher = memo<Props>(({ block, compact, onChange, value }) => {
   const { t } = useTranslation('common');
@@ -42,6 +45,7 @@ const SortSwitcher = memo<Props>(({ block, compact, onChange, value }) => {
 
   if (compact) {
     const current = options.find((o) => o.value === value) ?? options[0];
+    const label = `${t('preset.sortLabel')}: ${current.label}`;
     return (
       <Dropdown
         trigger={['click']}
@@ -52,16 +56,22 @@ const SortSwitcher = memo<Props>(({ block, compact, onChange, value }) => {
         }}
       >
         <Button
-          aria-label={t('preset.sortLabel')}
-          icon={<ArrowDownUp size={14} />}
-          shape="round"
-          // 40px — the same one-handed tap floor as the category chips.
+          aria-label={label}
+          icon={<ArrowUpDown size={16} />}
+          shape="circle"
+          // 40px — the same one-handed tap floor as the category chips,
+          // pinned so antd's icon-only padding cannot widen it: every pixel
+          // here comes straight out of the chips scroller next to it.
           size="large"
-          style={{ flex: '0 0 auto' }}
-        >
-          {current.label}
-          <ChevronDown size={14} />
-        </Button>
+          title={label}
+          style={{
+            blockSize: 40,
+            flex: '0 0 auto',
+            inlineSize: 40,
+            minInlineSize: 40,
+            paddingInline: 0,
+          }}
+        />
       </Dropdown>
     );
   }
