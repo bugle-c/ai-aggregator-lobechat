@@ -10,6 +10,60 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_050_000,
     description:
+      "GPT-5.6 Terra — OpenAI's flagship successor to GPT-5.5, best for hard reasoning and long multi-step tasks. 1M-token context.",
+    displayName: 'GPT-5.6 Terra',
+    enabled: true,
+    id: 'gpt-5.6-terra',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-08-05',
+    settings: {
+      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 400_000,
+    description:
+      'GPT-5.6 Luna — fast, affordable general-purpose sibling to Terra. Best default for daily chat and light coding.',
+    displayName: 'GPT-5.6 Luna',
+    enabled: true,
+    id: 'gpt-5.6-luna',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-08-05',
+    settings: {
+      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_050_000,
+    description:
       "GPT-5.5 — OpenAI's newest flagship: sharper reasoning and longer context than GPT-5.4. Best for the most complex multi-step tasks.",
     displayName: 'GPT-5.5',
     enabled: true,

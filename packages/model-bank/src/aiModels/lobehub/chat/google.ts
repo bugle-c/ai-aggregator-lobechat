@@ -72,6 +72,86 @@ export const googleChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
+      'Gemini 3.7 Flash — latest Gemini Flash. Same speed and pricing as 3.6, refined tool use and multimodal grounding.',
+    displayName: 'Gemini 3.7 Flash',
+    enabled: true,
+    id: 'gemini-3.7-flash',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-08-28',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'Gemini 3.6 Flash — successor to 3.5 Flash: cheaper and faster, same 1M-token context, better tool-use quality.',
+    displayName: 'Gemini 3.6 Flash',
+    enabled: true,
+    id: 'gemini-3.6-flash',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-07-18',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'Gemini 3.5 Flash-Lite — cheapest Gemini for high-volume assistant workloads. Same 1M-token context, no reasoning-mode toggle.',
+    displayName: 'Gemini 3.5 Flash-Lite',
+    enabled: true,
+    id: 'gemini-3.5-flash-lite',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-07-18',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
       'Gemini 3.5 Flash — fast and affordable Gemini for everyday chat and agent tasks. 1M-token context, multimodal input.',
     displayName: 'Gemini 3.5 Flash',
     enabled: true,

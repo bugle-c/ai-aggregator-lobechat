@@ -11,6 +11,35 @@ export const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
+      'Kimi K3 — Moonshot flagship: next-gen reasoning and agent performance beyond K2.6, native multimodal with thinking/non-thinking modes.',
+    displayName: 'Kimi K3',
+    enabled: true,
+    id: 'kimi-k3',
+    maxOutput: 32_768,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-08-20',
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
       'Kimi K2.6 — successor to K2.5: improved reasoning and tool use, native multimodal (vision + text), thinking/non-thinking modes. 262K context.',
     displayName: 'Kimi K2.6',
     enabled: true,

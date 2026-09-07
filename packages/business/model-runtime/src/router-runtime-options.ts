@@ -27,6 +27,9 @@ interface LobehubRouterRuntimeOptions {
 const OPENROUTER_MODEL_MAP: Record<string, string> = {
   // Anthropic — dot-style versions; legacy date-suffixed catalogue ids fold
   // into the closest active OpenRouter release.
+  'claude-opus-5': 'anthropic/claude-opus-5',
+  'claude-sonnet-5': 'anthropic/claude-sonnet-5',
+  'claude-fable-5.1': 'anthropic/claude-fable-5.1',
   'claude-sonnet-4-6': 'anthropic/claude-sonnet-4.6',
   'claude-sonnet-4-5-20250929': 'anthropic/claude-sonnet-4.5',
   'claude-sonnet-4-20250514': 'anthropic/claude-sonnet-4',
@@ -39,6 +42,8 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'claude-haiku-4-5-20251001': 'anthropic/claude-haiku-4.5',
   'claude-3-5-haiku-20241022': 'anthropic/claude-3.5-haiku',
   // OpenAI — already correct
+  'gpt-5.6-terra': 'openai/gpt-5.6-terra',
+  'gpt-5.6-luna': 'openai/gpt-5.6-luna',
   'gpt-5.5': 'openai/gpt-5.5',
   'gpt-5.4': 'openai/gpt-5.4',
   'gpt-5.4-mini': 'openai/gpt-5.4-mini',
@@ -58,6 +63,9 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'o3': 'openai/o3',
   'o4-mini': 'openai/o4-mini',
   // Google
+  'gemini-3.7-flash': 'google/gemini-3.7-flash',
+  'gemini-3.6-flash': 'google/gemini-3.6-flash',
+  'gemini-3.5-flash-lite': 'google/gemini-3.5-flash-lite',
   'gemini-3.5-flash': 'google/gemini-3.5-flash',
   'gemini-3.1-pro-preview': 'google/gemini-3.1-pro-preview',
   // OpenRouter only ships `gemini-3.1-pro-preview` — alias the older catalog
@@ -75,15 +83,19 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'deepseek-v4-pro': 'deepseek/deepseek-v4-pro',
   'deepseek-v4-flash': 'deepseek/deepseek-v4-flash',
   // xAI
+  'grok-4.5': 'x-ai/grok-4.5',
   'grok-4-20': 'x-ai/grok-4.20',
   'grok-4': 'x-ai/grok-4',
   // Moonshot
+  'kimi-k3': 'moonshotai/kimi-k3',
   'kimi-k2.6': 'moonshotai/kimi-k2.6',
   'kimi-k2.5': 'moonshotai/kimi-k2.5',
   'kimi-k2-0711-preview': 'moonshotai/kimi-k2-0711-preview',
   // Alibaba Qwen
   'qwen3.6-max-preview': 'qwen/qwen3.6-max-preview',
   // Zhipu GLM
+  'glm-5.3': 'z-ai/glm-5.3',
+  'glm-5.3-flash': 'z-ai/glm-5.3-flash',
   'glm-5.2': 'z-ai/glm-5.2',
   // MiniMax — lowercase, dot-style
   'MiniMax-M3': 'minimax/minimax-m3',
