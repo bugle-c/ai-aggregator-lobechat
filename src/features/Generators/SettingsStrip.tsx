@@ -77,10 +77,31 @@ const useStyles = createStyles(({ css, token }) => ({
 
     background: ${token.colorFillQuaternary};
   `,
+  advancedHead: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    align-items: baseline;
+    justify-content: space-between;
+  `,
   advancedLabel: css`
     font-size: 12px;
     font-weight: 500;
     color: ${token.colorTextSecondary};
+  `,
+  /** «🔒 Задаёт стиль» — why a knob is read-only under the selected style. */
+  lockReason: css`
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+
+    font-size: 11px;
+    line-height: 1.3;
+    color: ${token.colorTextTertiary};
+  `,
+  lockedBody: css`
+    pointer-events: none;
+    opacity: 0.45;
   `,
   /**
    * The Popover's click target. antd `Popover(Tooltip(Button))` attaches the
@@ -216,13 +237,36 @@ export const SettingsChip = memo<ChipProps>(
 
 SettingsChip.displayName = 'SettingsChip';
 
+interface AdvancedItemProps {
+  children: ReactNode;
+  label?: string;
+  /**
+   * Why the control is read-only right now (e.g. «Задаёт стиль»). A locked
+   * knob stays visible in its usual place — greyed out, with a lock and this
+   * one-line reason — instead of disappearing.
+   */
+  lock?: string;
+}
+
 /** One labelled row inside the advanced panel. */
-export const AdvancedItem = memo<{ children: ReactNode; label: string }>(({ children, label }) => {
-  const { styles } = useStyles();
+export const AdvancedItem = memo<AdvancedItemProps>(({ children, label, lock }) => {
+  const { styles, cx } = useStyles();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span className={styles.advancedLabel}>{label}</span>
-      {children}
+      {(label || lock) && (
+        <div className={styles.advancedHead}>
+          {label && <span className={styles.advancedLabel}>{label}</span>}
+          {lock && (
+            <span className={styles.lockReason}>
+              <Lock size={12} />
+              {lock}
+            </span>
+          )}
+        </div>
+      )}
+      <div aria-disabled={lock ? true : undefined} className={cx(lock && styles.lockedBody)}>
+        {children}
+      </div>
     </div>
   );
 });

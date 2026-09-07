@@ -2,7 +2,7 @@
 
 import { Segmented, SliderWithInput } from '@lobehub/ui';
 import { Image as ImageIcon } from 'lucide-react';
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AspectRatioSelect from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/AspectRatioSelect';
@@ -15,7 +15,9 @@ import FrameUpload from '@/app/[variants]/(main)/video/_layout/ConfigPanel/compo
 import VideoModelItem from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/ModelSelect/VideoModelItem';
 import ModelSettingsChip from '@/features/Generators/ModelSettingsChip';
 import { hasReferenceImage } from '@/features/Generators/presetImageGate';
+import { presetLockedKeys, styleLockFor } from '@/features/Generators/presetLocks';
 import SettingsStrip, { AdvancedItem, SettingsChip } from '@/features/Generators/SettingsStrip';
+import { switchModelKeepingStyle } from '@/features/Generators/switchModelKeepingStyle';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
 import Image from '@/libs/next/Image';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -83,8 +85,8 @@ DurationPicker.displayName = 'VideoDurationPicker';
 
 /**
  * «Фото» chip body: the ConfigPanel's own start-frame uploader, so the photo
- * lands in `parameters.imageUrl` exactly as if it came from ⚙. Closes itself
- * once a photo arrives — the chip then shows the thumbnail.
+ * lands in `parameters.imageUrl` exactly as if it came from the panel.
+ * Closes itself once a photo arrives — the chip then shows the thumbnail.
  */
 const PhotoPicker = memo<{ close: () => void }>(({ close }) => {
   const { value } = useVideoGenerationConfigParam('imageUrl');
@@ -125,68 +127,71 @@ const PhotoThumb = memo<{ src: string }>(({ src }) => (
 
 PhotoThumb.displayName = 'VideoPhotoThumb';
 
+type Knob = 'cameraFixed' | 'endImageUrl' | 'generateAudio' | 'imageUrl' | 'resolution' | 'seed';
+
 interface AdvancedProps {
-  showEndFrame: boolean;
-  showResolution: boolean;
-  showSeed: boolean;
-  showStartFrame: boolean;
-  showSwitches: { cameraFixed: boolean; generateAudio: boolean };
+  /** Per-knob lock reason under the selected style; `undefined` = free. */
+  locks: Partial<Record<Knob, string>>;
+  /** Which knobs the current model has at all. */
+  show: Record<Knob, boolean>;
 }
 
 /**
  * The knobs without a chip of their own, rendered inline under the strip:
- * frames (when the «Фото» chip is not already showing the start frame),
- * resolution, seed, audio, fixed camera. Model / aspect / duration stay in
- * the chips — nothing is duplicated.
+ * frames (the start frame only when the «Фото» chip is not already showing
+ * it), resolution, seed, audio, fixed camera. The set depends on the model
+ * only — a style never removes a knob, it locks it with a reason.
  */
-const VideoAdvanced = memo<AdvancedProps>(
-  ({ showEndFrame, showResolution, showSeed, showStartFrame, showSwitches }) => {
-    const { t } = useTranslation('video');
-    const startFrameLabel = showEndFrame
-      ? t('config.imageUrl.label')
-      : t('config.referenceImage.label');
+const VideoAdvanced = memo<AdvancedProps>(({ locks, show }) => {
+  const { t } = useTranslation('video');
+  const startFrameLabel = show.endImageUrl
+    ? t('config.imageUrl.label')
+    : t('config.referenceImage.label');
 
-    return (
-      <>
-        {showStartFrame && (
-          <AdvancedItem label={startFrameLabel}>
-            <FrameUpload paramName="imageUrl" />
-          </AdvancedItem>
-        )}
-        {showEndFrame && (
-          <AdvancedItem label={t('config.endImageUrl.label')}>
-            <FrameUpload paramName="endImageUrl" />
-          </AdvancedItem>
-        )}
-        {showResolution && (
-          <AdvancedItem label={t('config.resolution.label')}>
-            <ResolutionItem />
-          </AdvancedItem>
-        )}
-        {showSeed && (
-          <AdvancedItem label={t('config.seed.label')}>
-            <SeedItem />
-          </AdvancedItem>
-        )}
-        {showSwitches.generateAudio && (
+  return (
+    <>
+      {show.imageUrl && (
+        <AdvancedItem label={startFrameLabel} lock={locks.imageUrl}>
+          <FrameUpload paramName="imageUrl" />
+        </AdvancedItem>
+      )}
+      {show.endImageUrl && (
+        <AdvancedItem label={t('config.endImageUrl.label')} lock={locks.endImageUrl}>
+          <FrameUpload paramName="endImageUrl" />
+        </AdvancedItem>
+      )}
+      {show.resolution && (
+        <AdvancedItem label={t('config.resolution.label')} lock={locks.resolution}>
+          <ResolutionItem />
+        </AdvancedItem>
+      )}
+      {show.seed && (
+        <AdvancedItem label={t('config.seed.label')} lock={locks.seed}>
+          <SeedItem />
+        </AdvancedItem>
+      )}
+      {show.generateAudio && (
+        <AdvancedItem lock={locks.generateAudio}>
           <SwitchItem label={t('config.generateAudio.label')} paramName="generateAudio" />
-        )}
-        {showSwitches.cameraFixed && (
+        </AdvancedItem>
+      )}
+      {show.cameraFixed && (
+        <AdvancedItem lock={locks.cameraFixed}>
           <SwitchItem label={t('config.cameraFixed.label')} paramName="cameraFixed" />
-        )}
-      </>
-    );
-  },
-);
+        </AdvancedItem>
+      )}
+    </>
+  );
+});
 
 VideoAdvanced.displayName = 'VideoAdvancedSettings';
 
 /**
  * Video binding of the `SettingsStrip`:
- * `[Model ▾][Фото ▾][16:9 ▾][5 s ▾] … [≈ 40 cr][⚙]`, with the rest of the
- * model's knobs in the inline panel ⚙ toggles. The «Фото» chip appears for
- * an i2v style (warning dot until a photo is attached) and whenever a photo
- * is attached on a model that takes one.
+ * `[Model ▾][Фото ▾][16:9 ▾][5 s ▾]` + cost / «Ещё настройки ▾» with the
+ * rest of the model's knobs inline. The «Фото» chip appears for an i2v
+ * style (warning dot until a photo is attached) and whenever a photo is
+ * attached on a model that takes one.
  */
 const FlowSidebarControls = memo(() => {
   const { t } = useTranslation('common');
@@ -196,29 +201,15 @@ const FlowSidebarControls = memo(() => {
     videoGenerationConfigSelectors.model(s),
     videoGenerationConfigSelectors.provider(s),
   ]);
-  const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
-  const supportsAspectRatio = useVideoStore(
-    videoGenerationConfigSelectors.isSupportedParam('aspectRatio'),
-  );
-  const supportsDuration = useVideoStore(
-    videoGenerationConfigSelectors.isSupportedParam('duration'),
-  );
-  const supportsImageUrl = useVideoStore(
-    videoGenerationConfigSelectors.isSupportedParam('imageUrl'),
-  );
-  const supportsEndImageUrl = useVideoStore(
-    videoGenerationConfigSelectors.isSupportedParam('endImageUrl'),
-  );
-  const supportsResolution = useVideoStore(
-    videoGenerationConfigSelectors.isSupportedParam('resolution'),
-  );
-  const supportsSeed = useVideoStore(videoGenerationConfigSelectors.isSupportedParam('seed'));
-  const supportsGenerateAudio = useVideoStore(
-    videoGenerationConfigSelectors.isSupportedParam('generateAudio'),
-  );
-  const supportsCameraFixed = useVideoStore(
-    videoGenerationConfigSelectors.isSupportedParam('cameraFixed'),
-  );
+  const isSupported = videoGenerationConfigSelectors.isSupportedParam;
+  const supportsAspectRatio = useVideoStore(isSupported('aspectRatio'));
+  const supportsDuration = useVideoStore(isSupported('duration'));
+  const supportsImageUrl = useVideoStore(isSupported('imageUrl'));
+  const supportsEndImageUrl = useVideoStore(isSupported('endImageUrl'));
+  const supportsResolution = useVideoStore(isSupported('resolution'));
+  const supportsSeed = useVideoStore(isSupported('seed'));
+  const supportsGenerateAudio = useVideoStore(isSupported('generateAudio'));
+  const supportsCameraFixed = useVideoStore(isSupported('cameraFixed'));
   const aspect = useVideoGenerationConfigParam('aspectRatio');
   const duration = useVideoGenerationConfigParam('duration');
   const imageUrl = useVideoStore((s) => videoGenerationConfigSelectors.parameters(s)?.imageUrl);
@@ -237,36 +228,43 @@ const FlowSidebarControls = memo(() => {
     [aspect.enumValues],
   );
 
-  // With a style selected only the knobs the style leaves open remain: an
-  // i2v style asks for its photo through the «Фото» chip, everything else
-  // is text-to-video — start/end frame uploaders would only confuse.
-  const showStartFrame = supportsImageUrl && !showPhotoChip && !preset;
-  const showEndFrame = supportsEndImageUrl && !preset;
-  const hasAdvanced =
-    showStartFrame ||
-    showEndFrame ||
-    supportsResolution ||
-    supportsSeed ||
-    supportsGenerateAudio ||
-    supportsCameraFixed;
+  // Picking a model resets its params — keep the style, prompt and photo.
+  const pickModel = useCallback(
+    (modelId: string, providerId: string) =>
+      switchModelKeepingStyle(useVideoStore.getState, modelId, providerId),
+    [],
+  );
+
+  const lockedKeys = useMemo(() => presetLockedKeys(preset), [preset]);
+  const lockReason = (key: string): string | undefined => {
+    const lock = styleLockFor(preset, key, lockedKeys);
+    if (lock === 'value') return t('preset.settings.lockedByStyle');
+    if (lock === 'unused') return t('preset.settings.unusedByStyle');
+    return undefined;
+  };
+
+  const show: Record<Knob, boolean> = {
+    cameraFixed: supportsCameraFixed,
+    endImageUrl: supportsEndImageUrl,
+    generateAudio: supportsGenerateAudio,
+    imageUrl: supportsImageUrl && !showPhotoChip,
+    resolution: supportsResolution,
+    seed: supportsSeed,
+  };
+  const hasAdvanced = Object.values(show).some(Boolean);
+  const locks: Partial<Record<Knob, string>> = {
+    cameraFixed: lockReason('cameraFixed'),
+    endImageUrl: lockReason('endImageUrl'),
+    generateAudio: lockReason('generateAudio'),
+    imageUrl: lockReason('imageUrl'),
+    resolution: lockReason('resolution'),
+    seed: lockReason('seed'),
+  };
 
   return (
     <SettingsStrip
+      advanced={hasAdvanced ? <VideoAdvanced locks={locks} show={show} /> : undefined}
       cost={cost}
-      advanced={
-        hasAdvanced ? (
-          <VideoAdvanced
-            showEndFrame={showEndFrame}
-            showResolution={supportsResolution}
-            showSeed={supportsSeed}
-            showStartFrame={showStartFrame}
-            showSwitches={{
-              cameraFixed: supportsCameraFixed,
-              generateAudio: supportsGenerateAudio,
-            }}
-          />
-        ) : undefined
-      }
     >
       <ModelSettingsChip
         currentModel={model}
@@ -276,7 +274,7 @@ const FlowSidebarControls = memo(() => {
         renderModel={(m, providerId) => (
           <VideoModelItem {...m} providerId={providerId} showPopover={false} />
         )}
-        onPick={setModelAndProviderOnSelect}
+        onPick={pickModel}
       />
       {showPhotoChip && (
         <SettingsChip

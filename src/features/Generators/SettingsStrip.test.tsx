@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
-import SettingsStrip, { SettingsChip } from './SettingsStrip';
+import SettingsStrip, { AdvancedItem, SettingsChip } from './SettingsStrip';
 
 vi.mock('@/hooks/useIsMobile', () => ({ useIsMobile: () => false }));
 
@@ -59,5 +59,27 @@ describe('SettingsStrip', () => {
     renderStrip(undefined);
     expect(screen.queryByRole('button', { expanded: false })).toBeNull();
     expect(screen.getByText('chip-a')).toBeTruthy();
+  });
+});
+
+describe('AdvancedItem', () => {
+  it('keeps a locked knob visible, greyed out, with the reason next to the label', () => {
+    render(
+      <AdvancedItem label="Сид" lock="Задаёт стиль">
+        <input aria-label="seed" />
+      </AdvancedItem>,
+    );
+    expect(screen.getByText('Сид')).toBeTruthy();
+    expect(screen.getByText('Задаёт стиль')).toBeTruthy();
+    expect(screen.getByLabelText('seed').closest('[aria-disabled="true"]')).toBeTruthy();
+  });
+
+  it('renders a free knob without any lock chrome', () => {
+    render(
+      <AdvancedItem label="Сид">
+        <input aria-label="seed" />
+      </AdvancedItem>,
+    );
+    expect(screen.getByLabelText('seed').closest('[aria-disabled="true"]')).toBeNull();
   });
 });

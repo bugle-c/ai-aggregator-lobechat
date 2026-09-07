@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AspectRatioSelect from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/AspectRatioSelect';
@@ -16,7 +16,9 @@ import SeedNumberInput from '@/app/[variants]/(main)/image/_layout/ConfigPanel/c
 import SizeSelect from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/SizeSelect';
 import StepsSliderInput from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/StepsSliderInput';
 import ModelSettingsChip from '@/features/Generators/ModelSettingsChip';
+import { presetLockedKeys, styleLockFor } from '@/features/Generators/presetLocks';
 import SettingsStrip, { AdvancedItem, SettingsChip } from '@/features/Generators/SettingsStrip';
+import { switchModelKeepingStyle } from '@/features/Generators/switchModelKeepingStyle';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/slices/aiProvider/selectors';
@@ -27,92 +29,93 @@ import { presetSelectors } from '@/store/image/slices/preset/selectors';
 import { useUserStore } from '@/store/user';
 import { uiModeSelectors } from '@/store/user/slices/uiMode/selectors';
 
+type Knob =
+  | 'cfg'
+  | 'dimensions'
+  | 'imageUrl'
+  | 'imageUrls'
+  | 'quality'
+  | 'resolution'
+  | 'seed'
+  | 'size'
+  | 'steps';
+
 interface AdvancedProps {
-  showCfg: boolean;
-  showDimensions: boolean;
-  showImageUrl: boolean;
-  showImageUrls: boolean;
-  showQuality: boolean;
-  showResolution: boolean;
-  showSeed: boolean;
-  showSize: boolean;
-  showSteps: boolean;
+  /** Per-knob lock reason under the selected style; `undefined` = free. */
+  locks: Partial<Record<Knob, string>>;
+  /** «Точный размер, px» — from the common namespace, hence passed in. */
+  pixelSizeLabel: string;
+  /** Which knobs the current model has at all. */
+  show: Record<Knob, boolean>;
 }
 
 /**
  * The knobs without a chip of their own, rendered inline under the strip:
  * references, size / quality / resolution, exact width + height, steps, cfg,
- * seed. Model / aspect / count stay in the chips.
+ * seed. The set depends on the model only — a style never removes a knob,
+ * it locks it with a reason.
  */
-const ImageAdvanced = memo<AdvancedProps>(
-  ({
-    showCfg,
-    showDimensions,
-    showImageUrl,
-    showImageUrls,
-    showQuality,
-    showResolution,
-    showSeed,
-    showSize,
-    showSteps,
-  }) => {
-    const { t } = useTranslation('image');
+const ImageAdvanced = memo<AdvancedProps>(({ locks, pixelSizeLabel, show }) => {
+  const { t } = useTranslation('image');
 
-    return (
-      <>
-        {showImageUrl && (
-          <AdvancedItem label={t('config.imageUrl.label')}>
-            <ImageUrl />
-          </AdvancedItem>
-        )}
-        {showImageUrls && (
-          <AdvancedItem label={t('config.imageUrls.label')}>
-            <ImageUrlsUpload />
-          </AdvancedItem>
-        )}
-        {showSize && (
-          <AdvancedItem label={t('config.size.label')}>
-            <SizeSelect />
-          </AdvancedItem>
-        )}
-        {showQuality && (
-          <AdvancedItem label={t('config.quality.label')}>
-            <QualitySelect />
-          </AdvancedItem>
-        )}
-        {showResolution && (
-          <AdvancedItem label={t('config.resolution.label')}>
-            <ResolutionSelect />
-          </AdvancedItem>
-        )}
-        {showDimensions && <DimensionControlGroup hideAspectRatio />}
-        {showSteps && (
-          <AdvancedItem label={t('config.steps.label')}>
-            <StepsSliderInput />
-          </AdvancedItem>
-        )}
-        {showCfg && (
-          <AdvancedItem label={t('config.cfg.label')}>
-            <CfgSliderInput />
-          </AdvancedItem>
-        )}
-        {showSeed && (
-          <AdvancedItem label={t('config.seed.label')}>
-            <SeedNumberInput />
-          </AdvancedItem>
-        )}
-      </>
-    );
-  },
-);
+  return (
+    <>
+      {show.imageUrl && (
+        <AdvancedItem label={t('config.imageUrl.label')} lock={locks.imageUrl}>
+          <ImageUrl />
+        </AdvancedItem>
+      )}
+      {show.imageUrls && (
+        <AdvancedItem label={t('config.imageUrls.label')} lock={locks.imageUrls}>
+          <ImageUrlsUpload />
+        </AdvancedItem>
+      )}
+      {show.size && (
+        <AdvancedItem label={t('config.size.label')} lock={locks.size}>
+          <SizeSelect />
+        </AdvancedItem>
+      )}
+      {show.quality && (
+        <AdvancedItem label={t('config.quality.label')} lock={locks.quality}>
+          <QualitySelect />
+        </AdvancedItem>
+      )}
+      {show.resolution && (
+        <AdvancedItem label={t('config.resolution.label')} lock={locks.resolution}>
+          <ResolutionSelect />
+        </AdvancedItem>
+      )}
+      {show.dimensions && (
+        <AdvancedItem label={pixelSizeLabel} lock={locks.dimensions}>
+          <DimensionControlGroup hideAspectRatio />
+        </AdvancedItem>
+      )}
+      {show.steps && (
+        <AdvancedItem label={t('config.steps.label')} lock={locks.steps}>
+          <StepsSliderInput />
+        </AdvancedItem>
+      )}
+      {show.cfg && (
+        <AdvancedItem label={t('config.cfg.label')} lock={locks.cfg}>
+          <CfgSliderInput />
+        </AdvancedItem>
+      )}
+      {show.seed && (
+        <AdvancedItem label={t('config.seed.label')} lock={locks.seed}>
+          <SeedNumberInput />
+        </AdvancedItem>
+      )}
+    </>
+  );
+});
 
 ImageAdvanced.displayName = 'ImageAdvancedSettings';
 
 /**
  * Image binding of the `SettingsStrip`:
- * `[Model ▾][3:4 ▾][1 pcs ▾] … [≈ 12 cr][⚙]`, with the rest of the model's
- * knobs in the inline panel ⚙ toggles. Used above the prompt input by the
- * desktop `FlowSidebar` and the mobile `MobileFlowContent`.
+ * `[Model ▾][3:4 ▾][1 pcs ▾]` + cost / «Ещё настройки ▾» with the rest of
+ * the model's knobs inline. Used above the prompt input by the desktop
+ * `FlowSidebar` and the mobile `MobileFlowContent`.
  */
 const FlowSidebarControls = memo(() => {
   const { t } = useTranslation('common');
@@ -122,7 +125,6 @@ const FlowSidebarControls = memo(() => {
     imageGenerationConfigSelectors.model(s),
     imageGenerationConfigSelectors.provider(s),
   ]);
-  const setModelAndProviderOnSelect = useImageStore((s) => s.setModelAndProviderOnSelect);
   const imageNum = useImageStore(imageGenerationConfigSelectors.imageNum);
   const isSupported = imageGenerationConfigSelectors.isSupportedParam;
   const supportsAspectRatio = useImageStore(isSupported('aspectRatio'));
@@ -150,22 +152,44 @@ const FlowSidebarControls = memo(() => {
 
   const aspectItems = useMemo(() => aspectOptions.map((v) => ({ value: v })), [aspectOptions]);
 
-  // With a style selected only the knobs the style leaves open remain:
-  // references and exact pixel dimensions are the style's business.
-  const showImageUrl = supportsImageUrl && !preset;
-  const showImageUrls = supportsImageUrls && !preset;
-  const showDimensions = showDimensionControl && !preset;
+  // Picking a model resets its params — keep the style, prompt and reference.
+  const pickModel = useCallback(
+    (modelId: string, providerId: string) =>
+      switchModelKeepingStyle(useImageStore.getState, modelId, providerId),
+    [],
+  );
 
-  const hasAdvanced =
-    showImageUrl ||
-    showImageUrls ||
-    supportsSize ||
-    supportsQuality ||
-    supportsResolution ||
-    showDimensions ||
-    supportsSteps ||
-    supportsCfg ||
-    supportsSeed;
+  const lockedKeys = useMemo(() => presetLockedKeys(preset), [preset]);
+  const lockReason = (key: string): string | undefined => {
+    const lock = styleLockFor(preset, key, lockedKeys);
+    if (lock === 'value') return t('preset.settings.lockedByStyle');
+    if (lock === 'unused') return t('preset.settings.unusedByStyle');
+    return undefined;
+  };
+
+  const show: Record<Knob, boolean> = {
+    cfg: supportsCfg,
+    dimensions: showDimensionControl,
+    imageUrl: supportsImageUrl,
+    imageUrls: supportsImageUrls,
+    quality: supportsQuality,
+    resolution: supportsResolution,
+    seed: supportsSeed,
+    size: supportsSize,
+    steps: supportsSteps,
+  };
+  const hasAdvanced = Object.values(show).some(Boolean);
+  const locks: Partial<Record<Knob, string>> = {
+    cfg: lockReason('cfg'),
+    dimensions: lockReason('width'),
+    imageUrl: lockReason('imageUrl'),
+    imageUrls: lockReason('imageUrls'),
+    quality: lockReason('quality'),
+    resolution: lockReason('resolution'),
+    seed: lockReason('seed'),
+    size: lockReason('size'),
+    steps: lockReason('steps'),
+  };
 
   return (
     <SettingsStrip
@@ -173,15 +197,9 @@ const FlowSidebarControls = memo(() => {
       advanced={
         hasAdvanced ? (
           <ImageAdvanced
-            showCfg={supportsCfg}
-            showDimensions={showDimensions}
-            showImageUrl={showImageUrl}
-            showImageUrls={showImageUrls}
-            showQuality={supportsQuality}
-            showResolution={supportsResolution}
-            showSeed={supportsSeed}
-            showSize={supportsSize}
-            showSteps={supportsSteps}
+            locks={locks}
+            pixelSizeLabel={t('preset.settings.pixelSize')}
+            show={show}
           />
         ) : undefined
       }
@@ -194,7 +212,7 @@ const FlowSidebarControls = memo(() => {
         renderModel={(m, providerId) => (
           <ImageModelItem {...m} providerId={providerId} showPopover={false} />
         )}
-        onPick={setModelAndProviderOnSelect}
+        onPick={pickModel}
       />
       {supportsAspectRatio && (
         <SettingsChip
