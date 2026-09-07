@@ -28,14 +28,18 @@ const enabledAiProviderListByMode = (uiMode: 'light' | 'pro') => (s: AIProviderS
   return uiMode === 'light' ? all.filter((p) => p.id === LOBEHUB_PROVIDER_ID) : all;
 };
 
-const enabledImageModelListByMode = (uiMode: 'light' | 'pro') => (s: AIProviderStoreState) => {
-  const all = enabledImageModelList(s);
-  return uiMode === 'light' ? all.filter((p) => p.id === LOBEHUB_PROVIDER_ID) : all;
+const enabledImageModelListByMode = (_uiMode: 'light' | 'pro') => (s: AIProviderStoreState) => {
+  // Image/video selectors deliberately ignore uiMode. Free (Light) users
+  // still generate pictures and clips — the credit balance + tier gate
+  // handles pay-wall control, not the UI-mode filter. Previously we cut
+  // everything but the lobehub umbrella, which hid Flux, Sora, Kling,
+  // Veo etc from Light users even though those models are exactly what
+  // free-tier promo demos rely on.
+  return enabledImageModelList(s);
 };
 
-const enabledVideoModelListByMode = (uiMode: 'light' | 'pro') => (s: AIProviderStoreState) => {
-  const all = enabledVideoModelList(s);
-  return uiMode === 'light' ? all.filter((p) => p.id === LOBEHUB_PROVIDER_ID) : all;
+const enabledVideoModelListByMode = (_uiMode: 'light' | 'pro') => (s: AIProviderStoreState) => {
+  return enabledVideoModelList(s);
 };
 
 const enabledChatModelListByMode = (uiMode: 'light' | 'pro') => (s: AIProviderStoreState) => {
