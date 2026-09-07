@@ -228,6 +228,8 @@ curl -X POST http://localhost:3210/api/billing/webhook \
 
 ### Credit economics
 
+- **Intro offer MAGIC48 (2026-09-07):** first payment within 48h of the earned-magic claim → `promo_codes.token_amount` (500, was 1000) bonus credits into the expiring `bonus_balance` pool, 7-day TTL (`intro-offer.ts`, `nextBonusState`: live remainder kept + extended, expired remainder replaced). Banner reads amount/days from `getIntroOfferState`. Amount is changed in the DB, not in code.
+
 - `CREDIT_VALUE_RUB = 0.15` ₽ per credit → 1 credit ≈ $0.0015 at `USD_TO_RUB = 100`
 - Break-even credits = `price_rub / CREDIT_VALUE_RUB`. Limits set at 70-80% of break-even for margin:
   - Basic: break-even 3266, limit 2500 → \~25% gross margin cap

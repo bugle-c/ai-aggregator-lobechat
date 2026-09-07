@@ -4,25 +4,71 @@ import { billingPayments, promoCodes, promoRedemptions, userBilling } from '@/da
 import { type LobeChatDatabase } from '@/database/type';
 
 /**
- * 48h intro offer: a user who claimed the earned-magic bonus gets +1000
+ * 48h intro offer: a user who claimed the earned-magic bonus gets bonus
  * credits on top of their FIRST successful payment, if that payment lands
- * within 48h of the claim. The grant is a programmatic redemption of the
- * MAGIC48 promo code (see docs/superpowers/plans/sql/magic48-promo.sql) —
- * the UNIQUE (promo_id, user_id) constraint on promo_redemptions makes the
- * grant idempotent per user.
+ * within 48h of the claim. The amount is the MAGIC48 promo row's
+ * `token_amount` (500 since 2026-09-07, was 1000). The credits go to the
+ * expiring `bonus_balance` pool and burn after `INTRO_OFFER_BONUS_DAYS` —
+ * the same pool and rules as the magic-images bonus (`activeBonusFor`).
+ * The grant is a programmatic redemption of the promo code (see
+ * docs/superpowers/plans/sql/magic48-promo.sql) — UNIQUE (promo_id, user_id)
+ * on promo_redemptions makes it idempotent per user.
  */
 export const INTRO_OFFER_PROMO_CODE = 'MAGIC48';
 export const INTRO_OFFER_WINDOW_MS = 48 * 60 * 60 * 1000;
+/** How long the granted bonus credits live. Owner decision 2026-09-07. */
+export const INTRO_OFFER_BONUS_DAYS = 7;
+const BONUS_TTL_MS = INTRO_OFFER_BONUS_DAYS * 86_400_000;
 
 export interface IntroOfferState {
+  /** Bonus credits the offer grants; present iff eligible. */
+  bonusCredits?: number;
+  /** Days the bonus credits live after the grant; present iff eligible. */
+  bonusDays?: number;
   eligible: boolean;
   /** ISO timestamp of the offer deadline; present iff eligible. */
   expiresAt?: string;
 }
 
+export interface BonusRow {
+  bonusBalance: number | null;
+  bonusBalanceExpiresAt: Date | null;
+}
+
+/**
+ * The bonus pool after adding `amount` at `now`. The pool has a single
+ * expiry (same rule `grantMagicImagesBonus` follows): a live remainder is
+ * kept and its life extended to the new expiry; an expired remainder must
+ * not be revived by the new grant, so it is replaced.
+ */
+export const nextBonusState = (
+  row: BonusRow | null | undefined,
+  amount: number,
+  now: Date = new Date(),
+): { bonusBalance: number; bonusBalanceExpiresAt: Date } => {
+  const live =
+    !!row?.bonusBalance &&
+    row.bonusBalance > 0 &&
+    !!row.bonusBalanceExpiresAt &&
+    row.bonusBalanceExpiresAt.getTime() > now.getTime();
+  return {
+    bonusBalance: (live ? row.bonusBalance! : 0) + amount,
+    bonusBalanceExpiresAt: new Date(now.getTime() + BONUS_TTL_MS),
+  };
+};
+
+const loadActivePromo = async (db: LobeChatDatabase) => {
+  const [promo] = await db
+    .select()
+    .from(promoCodes)
+    .where(and(eq(promoCodes.code, INTRO_OFFER_PROMO_CODE), eq(promoCodes.isActive, true)))
+    .limit(1);
+  return promo;
+};
+
 /**
  * Pre-payment eligibility for the UI banner: the magic bonus was claimed
- * within the last 48h and the user has never paid.
+ * within the last 48h, the user has never paid, and the promo row is live.
  */
 export async function getIntroOfferState(
   db: LobeChatDatabase,
@@ -46,7 +92,16 @@ export async function getIntroOfferState(
     .where(and(eq(billingPayments.userId, userId), eq(billingPayments.status, 'succeeded')));
   if ((payments?.value ?? 0) > 0) return { eligible: false };
 
-  return { eligible: true, expiresAt: new Date(expiresAtMs).toISOString() };
+  // The banner must not promise what the grant would skip.
+  const promo = await loadActivePromo(db);
+  if (!promo?.tokenAmount || promo.usedCount >= promo.maxUses) return { eligible: false };
+
+  return {
+    bonusCredits: promo.tokenAmount,
+    bonusDays: INTRO_OFFER_BONUS_DAYS,
+    eligible: true,
+    expiresAt: new Date(expiresAtMs).toISOString(),
+  };
 }
 
 /**
@@ -75,11 +130,7 @@ export async function maybeGrantIntroOffer(db: LobeChatDatabase, userId: string)
     if ((payments?.value ?? 0) !== 1) return;
 
     await db.transaction(async (tx) => {
-      const [promo] = await tx
-        .select()
-        .from(promoCodes)
-        .where(and(eq(promoCodes.code, INTRO_OFFER_PROMO_CODE), eq(promoCodes.isActive, true)))
-        .limit(1);
+      const promo = await loadActivePromo(tx as unknown as LobeChatDatabase);
 
       // Promo row not seeded / disabled / exhausted / misconfigured — skip quietly.
       if (!promo || !promo.tokenAmount || promo.usedCount >= promo.maxUses) return;
@@ -98,16 +149,29 @@ export async function maybeGrantIntroOffer(db: LobeChatDatabase, userId: string)
         .set({ usedCount: sql`${promoCodes.usedCount} + 1` })
         .where(eq(promoCodes.id, promo.id));
 
+      // Expiring bonus pool, not the permanent token balance.
+      const [row] = await tx
+        .select({
+          bonusBalance: userBilling.bonusBalance,
+          bonusBalanceExpiresAt: userBilling.bonusBalanceExpiresAt,
+        })
+        .from(userBilling)
+        .where(eq(userBilling.userId, userId))
+        .for('update')
+        .limit(1);
+      const next = nextBonusState(row, promo.tokenAmount);
+
       await tx
         .update(userBilling)
         .set({
-          tokenBalance: sql`${userBilling.tokenBalance} + ${promo.tokenAmount}`,
+          bonusBalance: next.bonusBalance,
+          bonusBalanceExpiresAt: next.bonusBalanceExpiresAt,
           updatedAt: new Date(),
         })
         .where(eq(userBilling.userId, userId));
 
       console.info(
-        `[billing] Intro offer granted: user=${userId} +${promo.tokenAmount} credits (${INTRO_OFFER_PROMO_CODE})`,
+        `[billing] Intro offer granted: user=${userId} +${promo.tokenAmount} bonus credits for ${INTRO_OFFER_BONUS_DAYS}d (${INTRO_OFFER_PROMO_CODE})`,
       );
     });
   } catch (error) {
