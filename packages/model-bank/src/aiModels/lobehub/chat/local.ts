@@ -1,48 +1,8 @@
 import { type AIChatModelCard } from '../../../types/aiModel';
 
-// Local models served by Ollama on the same Hetzner host (/opt/ollama,
-// http://ollama:11434/v1 inside the lobe-network bridge). Exposed under
-// the `lobehub` provider umbrella so they sit alongside the cloud models
-// in the picker instead of cluttering the sidebar with a second provider.
-//
-// Routing for these IDs is handled by
-// `packages/business/model-runtime/src/router-runtime-options.ts` — when the
-// requested `model` is one of the IDs below the router returns an
-// OpenAI-compatible runtime pointed at the Ollama endpoint instead of
-// OpenRouter.
-//
-// Pricing here (zero rates) is for UI display only — actual billing reads
-// from Supabase `ai_aggregator.model_rates` rows. As of 2026-05-24,
-// Gemma 4 E4B has a non-zero per-token rate (~2-3x cheaper than
-// gpt-5-nano, the cheapest cloud option) so usage is rate-limited via
-// the credit system. tier_override='cheap' keeps it available to free
-// users; the heavyweight 26B still needs basic+ plans.
-//
-// `· local` suffix in displayName is the UI hint that this runs on our
-// own CPU. Until we add a proper tag pill this is the cheapest place to
-// surface the fact.
-export const localChatModels: AIChatModelCard[] = [
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'Наша базовая модель на собственном сервере. Самая дешёвая в каталоге — в 2-3 раза дешевле gpt-5-nano. Подходит для коротких ответов и простых задач. Дефолт для всех тарифов.',
-    displayName: 'WebGPT Mini',
-    enabled: true,
-    id: 'gemma4:e4b',
-    maxOutput: 8192,
-    pricing: {
-      // UI-display rates — actual billing uses Supabase model_rates.
-      // Keep in sync with the Supabase row (gemma4:e4b, ollama).
-      units: [
-        { name: 'textInput', rate: 0.04, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-05-11',
-    type: 'chat',
-  },
-];
+// Local Ollama models retired 2026-09-07 (gemma4:e4b "WebGPT Mini",
+// Qwen3-Coder 30B, Gemma 4 26B). CPU inference was too slow to recommend;
+// DeepSeek V4 Flash (via OpenRouter, with markupOverride=2.0 in
+// ai_aggregator.model_rates) replaces WebGPT Mini as the cheap default.
+// Empty export kept so consumers that spread it still compile.
+export const localChatModels: AIChatModelCard[] = [];

@@ -1,14 +1,15 @@
 import type { ModelProviderCard } from '@/types/llm';
 
-// Rebranded 2026-05-11: this provider runs on our own Hetzner server (CPU
-// inference, see /opt/ollama). Keep `id: 'ollama'` for SDK + MODEL_LIST
-// parsing; only the user-facing name/description/URLs change.
+// Local Ollama models retired 2026-09-07 (see aiModels/lobehub/chat/local.ts
+// for context). Kept as an empty disabled provider so the SDK id and the
+// modelProviders/index.ts import graph don't break; nothing is exposed in
+// the UI.
 const Ollama: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'gemma4:e4b',
   defaultShowBrowserRequest: false,
-  description:
-    'Локальные модели WebGPT на нашем сервере. Без задержек cloud-провайдеров и без зависимости от сторонних API. WebGPT Mini — самая дешёвая модель в каталоге.',
+  description: 'Локальные модели WebGPT (не используются с 2026-09-07).',
+  disableBrowserRequest: true,
+  enabled: false,
   id: 'ollama',
   modelList: { showModelFetcher: false },
   modelsUrl: 'https://gptweb.ru',

@@ -128,74 +128,18 @@ const isOpenAIDirectImage = (model: string) =>
 const isGoogleDirectImage = (model: string) =>
   model.startsWith('imagen-') || model.endsWith(':image');
 
-// Local models served by Ollama on the same host (see /opt/ollama). Routed
-// here as a separate branch so we don't hit OpenRouter for them. Ollama is
-// OpenAI-compatible — same `apiType: 'openai'`, only the baseURL changes.
-// Reachable as `http://ollama:11434/v1` from the lobe container because
-// `network-service` is attached to the `ollama_default` bridge (see
-// /opt/lobechat/docker-compose.yml).
-const LOCAL_OLLAMA_MODELS = new Set(['gemma4:e4b']);
-const isLocalOllamaModel = (model: string) => LOCAL_OLLAMA_MODELS.has(model);
+// Local Ollama models retired 2026-09-07 — CPU inference was too slow to
+// recommend. DeepSeek V4 Flash (via OpenRouter, with markupOverride=2.0)
+// replaces WebGPT Mini as the cheap default. The Ollama-branch of the
+// router is gone.
 
 // Wavespeed IDs always have a `/` and are not handled by the rules above.
-// Local Ollama IDs also contain slashes (`hf.co/...`) so we must filter them
-// out before falling through to wavespeed.
-const isWavespeedModel = (model: string) =>
-  model.includes('/') && !isFalModel(model) && !isLocalOllamaModel(model);
+const isWavespeedModel = (model: string) => model.includes('/') && !isFalModel(model);
 
 export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
   id: 'lobehub',
 
   routers: async (_options, { model }) => {
-    // Local Ollama models — route to our own server before any other rule.
-    // They look like `<slug>:<tag>` or `hf.co/<repo>:<quant>`, so they can
-    // otherwise collide with wavespeed's slashed-id heuristic.
-    if (model && isLocalOllamaModel(model)) {
-      return [
-        {
-          apiType: 'openai' as const,
-          // Ollama ignores the auth header, but openai SDK requires a
-          // non-empty apiKey. Sending a literal `ollama` is the convention.
-          options: {
-            apiKey: 'ollama',
-            baseURL: 'http://ollama:11434/v1',
-          },
-          // Two hardenings before forwarding to Ollama:
-          // 1. `reasoning_effort: 'none'` — the only knob the OpenAI-compat
-          //    surface of Ollama honours to suppress Gemma 4 thinking-mode.
-          //    `think: false` is silently ignored, system prompts don't help.
-          //    Without this, raw `<|channel>thought ... <channel|>` tokens
-          //    leak into the visible reply. Tested directly against
-          //    /v1/chat/completions on 2026-05-11.
-          // 2. Pinned WebGPT system prompt — Gemma 4's training corpus
-          //    includes LobeChat content, so when free-running it sometimes
-          //    signs off as "Lobe" or "Совет от Lobe:". This prompt is
-          //    prepended to (not replacing) whatever the user's agent
-          //    system role is, so per-session customisation still works.
-          transformPayload: (p: any) => {
-            const PINNED_SYSTEM = [
-              'Ты — WebGPT, AI-ассистент сервиса gptweb.ru.',
-              'Никогда не называй себя Lobe, LobeChat или LobeHub — это устаревшие названия движка, на котором ты НЕ работаешь.',
-              'Никогда не подписывайся «Совет от Lobe» или подобным.',
-              'Отвечай напрямую и кратко. Не выводи свои размышления, не используй теги <|channel|>, <|thought|>, <|message|>, <|return|>, не показывай служебные токены.',
-            ].join(' ');
-
-            const messages = Array.isArray(p.messages) ? [...p.messages] : [];
-            if (messages.length > 0 && messages[0]?.role === 'system') {
-              const existing = typeof messages[0].content === 'string' ? messages[0].content : '';
-              messages[0] = {
-                ...messages[0],
-                content: existing ? `${PINNED_SYSTEM}\n\n${existing}` : PINNED_SYSTEM,
-              };
-            } else {
-              messages.unshift({ content: PINNED_SYSTEM, role: 'system' });
-            }
-            return { ...p, messages, reasoning_effort: 'none' };
-          },
-        },
-      ];
-    }
-
     // Image models — route to the actual upstream that hosts them.
     if (model) {
       if (isOpenAIDirectImage(model)) {

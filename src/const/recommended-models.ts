@@ -26,16 +26,10 @@ const RECOMMENDED_BY_PLAN: Record<string, RecommendedModel[]> = {
       order: 2,
     },
     {
-      creditCost: 0,
-      description: 'Локальная — бесплатная, но медленнее',
-      modelId: 'gemma4:e4b',
-      order: 3,
-    },
-    {
       creditCost: 1,
       description: 'Хорош для длинных текстов',
       modelId: 'gemini-2.5-flash',
-      order: 4,
+      order: 3,
     },
   ],
   basic: [
@@ -83,12 +77,6 @@ const RECOMMENDED_BY_PLAN: Record<string, RecommendedModel[]> = {
       modelId: 'deepseek-reasoner',
       order: 3,
     },
-    {
-      creditCost: 0,
-      description: 'Локальная — бесплатная, но медленнее',
-      modelId: 'gemma4:e4b',
-      order: 4,
-    },
   ],
   pro_max: [
     {
@@ -108,12 +96,6 @@ const RECOMMENDED_BY_PLAN: Record<string, RecommendedModel[]> = {
       description: 'Универсал',
       modelId: 'claude-sonnet-4-6',
       order: 3,
-    },
-    {
-      creditCost: 0,
-      description: 'Локальная — бесплатная, но медленнее',
-      modelId: 'gemma4:e4b',
-      order: 4,
     },
   ],
 };

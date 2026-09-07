@@ -63,13 +63,13 @@ export class UIModeActionImpl {
         const activeAgentId = agentStoreState.activeAgentId;
 
         if (currentProvider && currentProvider !== 'lobehub' && activeAgentId) {
-          // Reset to the global default (gpt-5-mini) on Light switch. We
-          // tried local gemma4:e4b here for zero provider cost, but on our
-          // CPU-only box it takes 5–10 min per answer — unusable. gpt-5-mini
-          // (cloud via the `lobehub` gateway) is fast and the cheapest cloud
-          // option; matches DEFAULT_MODEL in @lobechat/const/settings/llm.
+          // Reset to the wow-price default on Light switch. DeepSeek V4 Flash
+          // has markupOverride=2.0 in model_rates, so the Free credit grant
+          // stretches ~5x further than on gpt-5-mini. The old local Ollama
+          // fallback (gemma4:e4b) was retired 2026-09-07 — CPU inference on
+          // our host was 5-10 min per answer, unusable.
           await agentStoreState.updateAgentConfigById(activeAgentId, {
-            model: 'gpt-5-mini',
+            model: 'deepseek-v4-flash',
             provider: 'lobehub',
           });
           modelWasReset = true;
