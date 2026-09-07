@@ -27,7 +27,7 @@ const item = (overrides: Partial<SourceItem> = {}): SourceItem => ({
 });
 
 const evaluate = (source: SourceItem, known = new Set<string>()) =>
-  evaluateItem(source, { authorPublishCount: new Map(), known, modality: 'video' });
+  evaluateItem(source, { authorCap: 2, authorPublishCount: new Map(), known, modality: 'video' });
 
 describe('findUnsafeTerm', () => {
   it('matches stop-list terms case-insensitively', () => {

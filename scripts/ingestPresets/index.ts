@@ -54,6 +54,8 @@ const loadEnv = () => {
 export interface Options {
   /** `--relabel` writes only with this; ingest ignores it. */
   apply: boolean;
+  /** `--author-cap=N`: publishable items per author this run (default 2). */
+  authorCap?: number;
   /**
    * `--backfill`: one-off archive pull — do not stop at the first page of
    * already-known items, keep walking older pages until `--limit` new items
@@ -95,6 +97,10 @@ export const parseArgs = (argv: string[]): Options => {
       options.apply = true;
     } else if (arg === '--backfill') {
       options.backfill = true;
+    } else if (arg.startsWith('--author-cap=')) {
+      const value = Number.parseInt(arg.slice('--author-cap='.length), 10);
+      if (!Number.isInteger(value) || value <= 0) throw new Error(`bad --author-cap: ${arg}`);
+      options.authorCap = value;
     } else if (arg.startsWith('--llm-cap=')) {
       const value = Number.parseInt(arg.slice('--llm-cap='.length), 10);
       if (!Number.isInteger(value) || value <= 0) throw new Error(`bad --llm-cap: ${arg}`);
@@ -298,7 +304,11 @@ const run = async (options: Options): Promise<RunReport> => {
         `[ingest] ${modality}: ${discovery.fresh.length} new item(s) over ${discovery.pagesFetched} page(s), stopped=${discovery.stoppedBecause}`,
       );
 
-      const evaluated = evaluateBatch(discovery.fresh, { known, modality });
+      const evaluated = evaluateBatch(discovery.fresh, {
+        authorCap: options.authorCap,
+        known,
+        modality,
+      });
 
       for (const { evaluation: heuristicEvaluation, item } of evaluated) {
         if (heuristicEvaluation.verdict === 'skip') {
@@ -441,7 +451,7 @@ const relabel = async (options: Options): Promise<void> => {
 
 const USAGE =
   'usage: tsx scripts/ingestPresets/index.ts [--dry-run] [--limit=N] [--max-pages=N] ' +
-  '[--modality=video|image|both] [--no-llm] [--backfill] [--llm-cap=N] | --relabel[=N] [--since=<iso>] [--apply]';
+  '[--modality=video|image|both] [--no-llm] [--backfill] [--llm-cap=N] [--author-cap=N] | --relabel[=N] [--since=<iso>] [--apply]';
 
 const main = async () => {
   loadEnv();
