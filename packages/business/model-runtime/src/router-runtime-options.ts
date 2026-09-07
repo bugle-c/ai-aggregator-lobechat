@@ -82,10 +82,11 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'deepseek-reasoner': 'deepseek/deepseek-v3.2-speciale',
   'deepseek-v4-pro': 'deepseek/deepseek-v4-pro',
   'deepseek-v4-flash': 'deepseek/deepseek-v4-flash',
-  // xAI
+  // xAI. `grok-4` was removed from OpenRouter — fall back to 4.20 so legacy
+  // chats saved with the old id keep working instead of 400-ing.
   'grok-4.5': 'x-ai/grok-4.5',
   'grok-4-20': 'x-ai/grok-4.20',
-  'grok-4': 'x-ai/grok-4',
+  'grok-4': 'x-ai/grok-4.20',
   // Moonshot
   'kimi-k3': 'moonshotai/kimi-k3',
   'kimi-k2.6': 'moonshotai/kimi-k2.6',

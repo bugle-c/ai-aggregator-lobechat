@@ -7,10 +7,11 @@ import { type AIVideoModelCard } from '../../types/aiModel';
 import { wavespeedVideoModels } from '../wavespeed';
 
 /**
- * Pull `enabled` upstream wavespeed video entries (Sora 2, Sora 2 Pro, Veo
- * 3.1 Fast/Pro, Kling 2.6/3.0 Pro, Seedance 2.0 Fast, Hailuo, Wan 2.7,
- * Runway Gen-4 Turbo, Aleph) so the WebGPT (lobehub) provider exposes the
- * same set the admin rate catalogue prices.
+ * Pull `enabled` upstream wavespeed video entries (Veo 3.1 Fast/Pro,
+ * Kling 2.6/3.0 Pro, Seedance 2.0 Fast, Hailuo, Wan 2.7, Runway Gen-4 Turbo,
+ * Aleph) so the WebGPT (lobehub) provider exposes the same set the admin
+ * rate catalogue prices. Sora 2 / Sora 2 Pro removed 2026-09-07 — OpenAI
+ * withdrew the model from the wavespeed catalog.
  */
 const wavespeedVideoEntries: AIVideoModelCard[] = wavespeedVideoModels.filter((m) => m.enabled);
 

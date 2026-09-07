@@ -485,36 +485,6 @@ export const wavespeedImageModels: AIImageModelCard[] = [
 
 export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
-    description: 'OpenAI Sora 2 — 720p cinematic text-to-video with native audio.',
-    displayName: 'Sora 2',
-    enabled: true,
-    id: 'openai/sora-2/text-to-video',
-    pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
-    },
-    type: 'video',
-  },
-  {
-    description: 'OpenAI Sora 2 Pro 720p — premium cinematic generation.',
-    displayName: 'Sora 2 Pro 720p',
-    enabled: true,
-    id: 'openai/sora-2-pro/720p/text-to-video',
-    pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.3, strategy: 'fixed', unit: 'second' }],
-    },
-    type: 'video',
-  },
-  {
-    description: 'OpenAI Sora 2 Pro 1080p — highest quality cinematic generation.',
-    displayName: 'Sora 2 Pro 1080p',
-    enabled: true,
-    id: 'openai/sora-2-pro/1080p/text-to-video',
-    pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.5, strategy: 'fixed', unit: 'second' }],
-    },
-    type: 'video',
-  },
-  {
     description: 'Google Veo 3.1 Fast — 1080p with native audio, cheapest quality tier.',
     displayName: 'Veo 3.1 Fast',
     enabled: true,
@@ -714,20 +684,6 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     type: 'video',
   },
   {
-    description: 'Sora 2 — animate a reference image with native audio.',
-    displayName: 'Sora 2 (I2V)',
-    // Auto-routed: a reference image attached to the matching `/text-to-video`
-    // card transparently routes here at the wavespeed runtime layer. See
-    // providers/wavespeed/utils/pairedEndpoint.ts. Hidden from the picker so
-    // the user only sees one card per family.
-    enabled: false,
-    id: 'openai/sora-2/image-to-video',
-    pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
-    },
-    type: 'video',
-  },
-  {
     description: 'Wan 2.7 — image-to-video with edit support.',
     displayName: 'Wan 2.7 (I2V)',
     // Auto-routed: a reference image attached to the matching `/text-to-video`
@@ -828,16 +784,6 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     id: 'bytedance/seedance-v1.5-pro-fast/image-to-video',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.025, strategy: 'fixed', unit: 'second' }],
-    },
-    type: 'video',
-  },
-  {
-    description: 'OpenAI Sora 2 Pro — image-to-video variant of the premium Sora tier.',
-    displayName: 'Sora 2 Pro (I2V)',
-    enabled: true,
-    id: 'openai/sora-2-pro/image-to-video',
-    pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.12, strategy: 'fixed', unit: 'second' }],
     },
     type: 'video',
   },
