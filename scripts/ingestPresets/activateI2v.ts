@@ -1,18 +1,21 @@
 /**
- * One-off (Ф5): activate the image-to-video presets that the pre-Ф5 ingest
- * parked in the queue under `requires-image-pending-f5`.
+ * Activate the reference-image presets the ingest parked in the queue before
+ * the matching flow had its «Добавьте фото» gate: image-to-video rows (Ф5,
+ * `requires-image-pending-f5`) and image-to-image rows (Ф5b,
+ * `requires-image-i2i-pending`).
  *
- * Queue reasons are not stored, so "its only reason was the Ф5 hold" is
- * re-derived: every queued `requires_image` *video* row is run through the
- * current `filters.ts` on its stored prompt / aspect / popularity /
- * attribution, and only rows that would `publish` today are flipped on. The
- * per-run author cap applies as in a normal run, so one author cannot flood
- * the gallery. Image (i2i) rows are left alone — no image-side gate exists.
- * Rows the LLM classifier flagged unsafe carry `license = 'blocked'` and are
- * never activated, whatever the heuristic filters say about them.
+ * Queue reasons are not stored, so "its only reason was the hold" is
+ * re-derived: every queued `requires_image` row of the chosen modality is run
+ * through the current `filters.ts` on its stored prompt / aspect / popularity
+ * / attribution, and only rows that would `publish` today are flipped on.
+ * The per-run author cap applies as in a normal run, so one author cannot
+ * flood the gallery. Rows the LLM classifier flagged unsafe carry
+ * `license = 'blocked'` and are never activated, whatever the heuristic
+ * filters say about them.
  *
- *   npx tsx scripts/ingestPresets/activateI2v.ts           # dry run (default)
- *   npx tsx scripts/ingestPresets/activateI2v.ts --apply   # write
+ *   npx tsx scripts/ingestPresets/activateI2v.ts                    # dry run, video
+ *   npx tsx scripts/ingestPresets/activateI2v.ts --modality=image   # dry run, image
+ *   npx tsx scripts/ingestPresets/activateI2v.ts --apply            # write
  *
  * Idempotent: activated rows leave the `active = FALSE` selection.
  */
@@ -88,19 +91,18 @@ export interface ActivationPlan {
 }
 
 /**
- * Which queued video rows pass every rule today; the rest stay queued with
- * their reasons. Image (i2i) rows are ignored on purpose: the image flow has
- * no reference-image gate, and the stored `requires_image` flag — not a
- * re-detection — is what says the prompt needs one (see `filters.ts`).
+ * Which queued rows of `modality` pass every rule today; the rest stay
+ * queued with their reasons. Rows of the other modality are ignored. The
+ * stored `requires_image` flag — not a re-detection — is what says the
+ * prompt needs a reference (see `filters.ts`).
  */
-export const planActivation = (rows: QueuedRow[]): ActivationPlan => {
+export const planActivation = (rows: QueuedRow[], modality: Modality = 'video'): ActivationPlan => {
   const plan: ActivationPlan = { activate: [], keep: [] };
-  const modality = 'video';
-  const videoRows = rows.filter((row) => row.modality === modality);
+  const sameModality = rows.filter((row) => row.modality === modality);
 
   // The LLM verdict is not one of the filters, so it is checked first and the
   // row never reaches them — it must not even count towards the author cap.
-  const batch = videoRows.filter((row) => {
+  const batch = sameModality.filter((row) => {
     if (row.license !== BLOCKED_LICENSE) return true;
     plan.keep.push({ id: row.id, reasons: [BLOCKED_REASON], slug: row.slug });
     return false;
@@ -138,19 +140,20 @@ export const formatPlan = (plan: ActivationPlan, apply: boolean): string => {
 
 // --- db part ------------------------------------------------------------------
 
-const loadQueuedI2vRows = async (client: Client): Promise<QueuedRow[]> => {
+const loadQueuedRows = async (client: Client, modality: Modality): Promise<QueuedRow[]> => {
   const { rows } = await client.query<QueuedRow>(
     `SELECT id::text AS id, slug, modality, title, prompt_template, params_lock, popularity,
             preview_url, external_id, author_name, author_url, recommended_model_id, license
        FROM presets
       WHERE requires_image = TRUE AND active = FALSE AND external_id IS NOT NULL
-        AND modality = 'video'
+        AND modality = $1
       ORDER BY id`,
+    [modality],
   );
   return rows;
 };
 
-const applyPlan = async (client: Client, plan: ActivationPlan): Promise<void> => {
+const applyPlan = async (client: Client, plan: ActivationPlan, modality: Modality): Promise<void> => {
   if (plan.activate.length === 0) return;
   await client.query('BEGIN');
   try {
@@ -159,9 +162,14 @@ const applyPlan = async (client: Client, plan: ActivationPlan): Promise<void> =>
     await client.query(
       `UPDATE presets
           SET active = TRUE, recommended_model_id = $1, updated_at = NOW()
-        WHERE id = ANY($2::bigint[]) AND active = FALSE AND modality = 'video'
+        WHERE id = ANY($2::bigint[]) AND active = FALSE AND modality = $4
           AND license IS DISTINCT FROM $3`,
-      [recommendedModelFor('video', true), plan.activate.map((r) => r.id), BLOCKED_LICENSE],
+      [
+        recommendedModelFor(modality, true),
+        plan.activate.map((r) => r.id),
+        BLOCKED_LICENSE,
+        modality,
+      ],
     );
     await client.query('COMMIT');
   } catch (error) {
@@ -170,26 +178,40 @@ const applyPlan = async (client: Client, plan: ActivationPlan): Promise<void> =>
   }
 };
 
+const USAGE = 'usage: tsx scripts/ingestPresets/activateI2v.ts [--apply] [--modality=video|image]';
+
+export const parseArgs = (args: string[]): { apply: boolean; modality: Modality } => {
+  let modality: Modality = 'video';
+  let apply = false;
+  for (const arg of args) {
+    if (arg === '--apply') apply = true;
+    else if (arg === '--modality=video' || arg === '--modality=image')
+      modality = arg.slice('--modality='.length) as Modality;
+    else throw new Error(`unknown flag: ${arg}\n${USAGE}`);
+  }
+  return { apply, modality };
+};
+
 const main = async () => {
   loadEnv();
 
-  const args = process.argv.slice(2);
-  const unknown = args.filter((arg) => arg !== '--apply');
-  if (unknown.length > 0) {
-    console.error(`unknown flag(s): ${unknown.join(' ')}`);
-    console.error('usage: tsx scripts/ingestPresets/activateI2v.ts [--apply]');
+  let parsed: { apply: boolean; modality: Modality };
+  try {
+    parsed = parseArgs(process.argv.slice(2));
+  } catch (error) {
+    console.error((error as Error).message);
     process.exit(2);
   }
-  const apply = args.includes('--apply');
+  const { apply, modality } = parsed;
 
   const client = createClient();
   await client.connect();
   try {
-    const rows = await loadQueuedI2vRows(client);
-    console.log(`[activateI2v] queued i2v rows: ${rows.length}`);
+    const rows = await loadQueuedRows(client, modality);
+    console.log(`[activateI2v] queued ${modality} rows needing a reference: ${rows.length}`);
 
-    const plan = planActivation(rows);
-    if (apply) await applyPlan(client, plan);
+    const plan = planActivation(rows, modality);
+    if (apply) await applyPlan(client, plan, modality);
 
     console.log(formatPlan(plan, apply));
   } finally {

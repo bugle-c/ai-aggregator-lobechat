@@ -1,7 +1,10 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { t } from 'i18next';
 
 import { markUserValidAction } from '@/business/client/markUserValidAction';
+import { message } from '@/components/AntdStaticMethods';
 import { applyPresetTemplate } from '@/features/Generators/applyPresetTemplate';
+import { decidePresetImageGate } from '@/features/Generators/presetImageGate';
 import { imageService } from '@/services/image';
 import { type StoreSetter } from '@/store/types';
 
@@ -61,6 +64,20 @@ export class CreateImageActionImpl {
     // nothing at all to send is rejected.
     if (!finalPrompt) {
       throw new TypeError('prompt is empty');
+    }
+
+    // Validate: an image-to-image style needs its reference. The CTAs
+    // already refuse; this is the one place every entry point passes.
+    if (
+      decidePresetImageGate({
+        imageUrl: parameters.imageUrl,
+        imageUrls: parameters.imageUrls,
+        preset,
+      }).kind === 'missing'
+    ) {
+      message.warning({ content: t('preset.addPhoto', { ns: 'common' }), duration: 3 });
+      this.#set({ isCreating: false }, false, 'createImage/endCreateImage');
+      return;
     }
 
     // Track the final topic ID to use for image creation

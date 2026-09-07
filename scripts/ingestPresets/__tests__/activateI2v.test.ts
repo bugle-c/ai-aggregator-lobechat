@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BLOCKED_REASON,
   formatPlan,
+  parseArgs,
   planActivation,
   type QueuedRow,
   rowToSourceItem,
@@ -137,5 +138,21 @@ describe('formatPlan', () => {
     const text = formatPlan(planActivation([row()]), true);
     expect(text).toContain('activated: 1');
     expect(text).not.toContain('DRY RUN');
+  });
+});
+
+describe('planActivation — image (i2i) rows since Ф5b', () => {
+  it('activates image rows only when asked for the image modality', () => {
+    const imageRow = row({ id: '77', modality: 'image', slug: 'trend-77' } as any);
+    expect(planActivation([imageRow]).activate).toEqual([]);
+    const plan = planActivation([imageRow], 'image');
+    expect(plan.activate.map((r) => r.slug)).toEqual(['trend-77']);
+    expect(plan.activate[0].modality).toBe('image');
+  });
+
+  it('parses --modality=image and rejects unknown flags', () => {
+    expect(parseArgs(['--modality=image', '--apply'])).toEqual({ apply: true, modality: 'image' });
+    expect(parseArgs([])).toEqual({ apply: false, modality: 'video' });
+    expect(() => parseArgs(['--nope'])).toThrow(/unknown flag/);
   });
 });
