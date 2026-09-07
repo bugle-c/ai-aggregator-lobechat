@@ -8,7 +8,13 @@ import { type DiscoverAssistantItem } from '@/types/discover';
  * would fail with a "provide your own Google API key" prompt. `gpt-5-mini` is
  * the platform DEFAULT_MODEL and is served through our keys.
  */
-const SERVED_MODEL = 'gpt-5-mini';
+// Default for all curated WebGPT agents. DeepSeek V4 Flash chosen 2026-09-07
+// as the "wow-price hero" — provider cost ~$0.20/1M output, with an explicit
+// markupOverride=2.0 in ai_aggregator.model_rates it charges the user roughly
+// 5x less than the previous gpt-5-mini default. Result: Free-tier grant lasts
+// ~800 answers instead of ~10. Curated agents inherit this via the `model`
+// field on each config so no per-user default has to be tweaked.
+const SERVED_MODEL = 'deepseek-v4-flash';
 const SERVED_PROVIDER = 'lobehub';
 
 /**

@@ -15,6 +15,7 @@ const TOKENS_RATE: RateView = {
   outputPer1M: 25,
   perUnit: null,
   markup: 3,
+  markupOverride: null,
   tierOverride: null,
   isActive: true,
 };
@@ -27,6 +28,7 @@ const IMAGE_RATE: RateView = {
   outputPer1M: null,
   perUnit: 0.04,
   markup: 3,
+  markupOverride: null,
   tierOverride: null,
   isActive: true,
 };
@@ -39,6 +41,7 @@ const VIDEO_RATE: RateView = {
   outputPer1M: null,
   perUnit: 0.05,
   markup: 3,
+  markupOverride: null,
   tierOverride: null,
   isActive: true,
 };

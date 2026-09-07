@@ -15,20 +15,20 @@ const RECOMMENDED_BY_PLAN: Record<string, RecommendedModel[]> = {
   free: [
     {
       creditCost: 1,
-      description: 'Самый быстрый — подходит для большинства задач',
-      modelId: 'gpt-5-mini',
+      description: 'Быстрая и умная — минимальная наценка',
+      modelId: 'deepseek-v4-flash',
       order: 1,
+    },
+    {
+      creditCost: 1,
+      description: 'Универсал GPT — быстрый',
+      modelId: 'gpt-5-mini',
+      order: 2,
     },
     {
       creditCost: 0,
       description: 'Локальная — бесплатная, но медленнее',
       modelId: 'gemma4:e4b',
-      order: 2,
-    },
-    {
-      creditCost: 1,
-      description: 'Умный и дешёвый',
-      modelId: 'deepseek-chat',
       order: 3,
     },
     {
@@ -41,14 +41,14 @@ const RECOMMENDED_BY_PLAN: Record<string, RecommendedModel[]> = {
   basic: [
     {
       creditCost: 1,
-      description: 'Самый быстрый — для большинства задач',
-      modelId: 'gpt-5-mini',
+      description: 'Быстрая и умная — минимальная наценка',
+      modelId: 'deepseek-v4-flash',
       order: 1,
     },
     {
-      creditCost: 0,
-      description: 'Локальная — бесплатная, но медленнее',
-      modelId: 'gemma4:e4b',
+      creditCost: 1,
+      description: 'Универсал GPT — быстрый',
+      modelId: 'gpt-5-mini',
       order: 2,
     },
     {

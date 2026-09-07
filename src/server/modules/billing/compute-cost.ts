@@ -73,6 +73,13 @@ export function classifyTierFromRate(rate: RateView): ModelTier {
 }
 
 export function getTierMultiplierForRate(rate: RateView): number {
+  // Per-model markupOverride wins over the tier-derived multiplier. Used to
+  // expose "wow-price" hero models (e.g. DeepSeek V4 Flash at ×2 in the Free
+  // tier) without shoving them into a lower tier bucket that would also
+  // change their plan-visibility gate.
+  if (rate.markupOverride !== null && rate.markupOverride > 0) {
+    return rate.markupOverride;
+  }
   return TIER_MARKUP_MULTIPLIER[classifyTierFromRate(rate)];
 }
 

@@ -12,6 +12,7 @@ const makeTokenRate = (tierOverride: 'cheap' | 'mid' | 'high' | 'premium') => ({
   inputPer1M: 0,
   isActive: true,
   markup: 3,
+  markupOverride: null,
   modelId: `${tierOverride}-model`,
   outputPer1M: 0,
   perUnit: null,

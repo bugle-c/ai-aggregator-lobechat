@@ -15,6 +15,14 @@ export interface RateView {
   inputPer1M: number | null; // null when unit=image|second
   isActive: boolean;
   markup: number;
+  /**
+   * Per-model explicit markup that REPLACES the tier-derived multiplier when
+   * set (e.g. 2.0 = 100% margin regardless of the model's cheap/mid/high tier).
+   * Used to expose a "wow-price" hero model — e.g. DeepSeek V4 Flash for the
+   * Free tier — without moving it into a lower tier bucket that would also
+   * change the plan-visibility gate. NULL = fall through to tier logic.
+   */
+  markupOverride: number | null;
   modelId: string;
   outputPer1M: number | null;
   perUnit: number | null; // null when unit=tokens
@@ -27,6 +35,7 @@ interface RawRateRow {
   input_per_1m: string | null;
   is_active: boolean;
   markup: string;
+  markup_override: string | null;
   model_id: string;
   output_per_1m: string | null;
   per_unit: string | null;
@@ -37,7 +46,7 @@ interface RawRateRow {
 
 const CACHE_TTL_MS = 60_000;
 const SELECT =
-  'model_id,provider,pricing_unit,input_per_1m,output_per_1m,per_unit,markup,tier_override,is_active';
+  'model_id,provider,pricing_unit,input_per_1m,output_per_1m,per_unit,markup,markup_override,tier_override,is_active';
 
 let cache: { rates: RateView[]; byId: Map<string, RateView>; expiresAt: number } | null = null;
 let inflight: Promise<RateView[]> | null = null;
@@ -59,6 +68,21 @@ function mapRow(row: RawRateRow): RateView {
           return 3;
         })();
 
+  // markup_override: strict — only accept positive finite numbers. Zero and
+  // negatives would silently give the model away for free; treat them like
+  // NULL (fall back to tier logic) and log.
+  let markupOverride: number | null = null;
+  if (row.markup_override !== null && row.markup_override !== undefined) {
+    const parsed = Number(row.markup_override);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      markupOverride = parsed;
+    } else {
+      console.error(
+        `[rates] invalid markup_override for ${row.model_id}: ${row.markup_override} → ignoring, falling back to tier multiplier`,
+      );
+    }
+  }
+
   return {
     modelId: row.model_id,
     provider: row.provider,
@@ -67,6 +91,7 @@ function mapRow(row: RawRateRow): RateView {
     outputPer1M: row.output_per_1m !== null ? Number(row.output_per_1m) : null,
     perUnit: row.per_unit !== null ? Number(row.per_unit) : null,
     markup,
+    markupOverride,
     tierOverride: row.tier_override,
     isActive: row.is_active,
   };

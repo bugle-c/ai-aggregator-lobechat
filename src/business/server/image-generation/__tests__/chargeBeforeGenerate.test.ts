@@ -79,6 +79,7 @@ const baseRate = {
   outputPer1M: null,
   perUnit: 0.04,
   markup: 1.5,
+  markupOverride: null,
   tierOverride: null,
   isActive: true,
 };

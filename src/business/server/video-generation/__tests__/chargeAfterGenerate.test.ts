@@ -58,6 +58,7 @@ const videoRate = {
   outputPer1M: null,
   perUnit: 0.5,
   markup: 1.5,
+  markupOverride: null,
   tierOverride: 'premium' as const,
   isActive: true,
 };
