@@ -247,7 +247,7 @@ export const anthropicChatModels: AIChatModelCard[] = [
     description:
       "Claude Opus 4.6 is Anthropic's most intelligent model for building agents and coding.",
     displayName: 'Claude Opus 4.6',
-    enabled: true,
+    enabled: false,
     id: 'claude-opus-4-6',
     maxOutput: 128_000,
     pricing: {
@@ -276,7 +276,7 @@ export const anthropicChatModels: AIChatModelCard[] = [
     description:
       "Claude Opus 4.5 is Anthropic's flagship model, combining excellent intelligence and scalable performance for the highest-quality reasoning tasks.",
     displayName: 'Claude Opus 4.5',
-    enabled: true,
+    enabled: false,
     id: 'claude-opus-4-5-20251101',
     maxOutput: 64_000,
     pricing: {

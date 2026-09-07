@@ -380,6 +380,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'ChatGPT-4o is a dynamic model updated in real time. It combines strong understanding and generation for large-scale use cases like customer support, education, and technical support.',
     displayName: 'GPT-4o',
+    enabled: false,
     id: 'gpt-4o',
     pricing: {
       units: [
@@ -418,6 +419,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'The latest GPT-4 Turbo adds vision. Visual requests support JSON mode and function calling. It is a cost-effective multimodal model that balances accuracy and efficiency for real-time applications.',
     displayName: 'GPT-4 Turbo',
+    enabled: false,
     id: 'gpt-4-turbo',
     pricing: {
       units: [

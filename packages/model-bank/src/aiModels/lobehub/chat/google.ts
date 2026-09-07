@@ -72,9 +72,35 @@ export const googleChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
-      'Gemini 3.7 Flash — latest Gemini Flash. Same speed and pricing as 3.6, refined tool use and multimodal grounding.',
-    displayName: 'Gemini 3.7 Flash',
+      'Gemini 3.8 Flash — latest Gemini Flash iteration. Same speed and pricing as 3.7, refined agent behavior and tool use.',
+    displayName: 'Gemini 3.8 Flash',
     enabled: true,
+    id: 'gemini-3.8-flash',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-03',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description: 'Gemini 3.7 Flash — Gemini Flash iteration (deprecated in favor of 3.8).',
+    displayName: 'Gemini 3.7 Flash',
+    enabled: false,
     id: 'gemini-3.7-flash',
     maxOutput: 65_536,
     pricing: {
@@ -98,10 +124,9 @@ export const googleChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576,
-    description:
-      'Gemini 3.6 Flash — successor to 3.5 Flash: cheaper and faster, same 1M-token context, better tool-use quality.',
+    description: 'Gemini 3.6 Flash — Gemini Flash iteration (deprecated in favor of 3.8).',
     displayName: 'Gemini 3.6 Flash',
-    enabled: true,
+    enabled: false,
     id: 'gemini-3.6-flash',
     maxOutput: 65_536,
     pricing: {

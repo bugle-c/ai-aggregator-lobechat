@@ -63,6 +63,7 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'o3': 'openai/o3',
   'o4-mini': 'openai/o4-mini',
   // Google
+  'gemini-3.8-flash': 'google/gemini-3.8-flash',
   'gemini-3.7-flash': 'google/gemini-3.7-flash',
   'gemini-3.6-flash': 'google/gemini-3.6-flash',
   'gemini-3.5-flash-lite': 'google/gemini-3.5-flash-lite',

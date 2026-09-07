@@ -71,7 +71,7 @@ export const moonshotChatModels: AIChatModelCard[] = [
     description:
       'Kimi K2.5 is Kimi\'s most versatile model to date, featuring a native multimodal architecture that supports both vision and text inputs, "thinking" and "non-thinking" modes, and both conversational and agent tasks.',
     displayName: 'Kimi K2.5',
-    enabled: true,
+    enabled: false,
     id: 'kimi-k2.5',
     maxOutput: 32_768,
     pricing: {

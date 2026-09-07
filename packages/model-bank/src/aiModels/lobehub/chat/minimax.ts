@@ -31,7 +31,7 @@ export const minimaxChatModels: AIChatModelCard[] = [
     description:
       'MiniMax M2.7 — newest in the M2 family, with refined reasoning and tool use. Optimised for code and agent workloads.',
     displayName: 'MiniMax M2.7',
-    enabled: true,
+    enabled: false,
     id: 'MiniMax-M2.7',
     maxOutput: 131_072,
     pricing: {
@@ -52,7 +52,7 @@ export const minimaxChatModels: AIChatModelCard[] = [
     description:
       'Optimized for code generation and refactoring, delivering peak performance with ultimate value to master complex tasks.',
     displayName: 'MiniMax M2.5',
-    enabled: true,
+    enabled: false,
     id: 'MiniMax-M2.5',
     maxOutput: 131_072,
     pricing: {
