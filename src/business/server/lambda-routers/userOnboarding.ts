@@ -62,7 +62,7 @@ export const userOnboardingRouter = router({
   }),
 
   /**
-   * 48h intro offer (+1000 credits on first payment after the magic claim):
+   * 48h intro offer (MAGIC48 bonus credits, 7-day expiry, on first payment after the magic claim):
    * eligible while magic_bonus_claimed_at is within 48h and the user has no
    * succeeded payments yet.
    */

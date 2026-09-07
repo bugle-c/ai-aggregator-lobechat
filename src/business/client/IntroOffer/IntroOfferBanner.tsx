@@ -12,7 +12,8 @@ const VIEW_GOAL_SESSION_KEY = 'webgpt_intro_offer_viewed';
 
 /**
  * 48h intro-offer banner: a user who claimed the earned-magic bonus and has
- * never paid sees «+1000 кредитов сверху» until the 48h window closes.
+ * never paid sees «+N кредитов сверху на M дней» until the 48h window closes
+ * (N and M come from the server, so the promo row is the single source).
  * Mounted on Plans and inside CreditsExhaustedModal. Copy is intentionally
  * hardcoded Russian — business component, RU-only product surface.
  */
@@ -40,6 +41,8 @@ const IntroOfferBanner = memo(() => {
   if (!eligible) return null;
 
   const expiresAt = new Date(data!.expiresAt!);
+  const credits = data!.bonusCredits ?? 500;
+  const days = data!.bonusDays ?? 7;
   const hoursLeft = Math.max(1, Math.ceil((expiresAt.getTime() - Date.now()) / 3_600_000));
   const deadline = expiresAt.toLocaleString('ru-RU', {
     day: 'numeric',
@@ -50,7 +53,7 @@ const IntroOfferBanner = memo(() => {
 
   return (
     <Alert
-      message={`🎁 Оплатите любой тариф до ${deadline} — получите +1000 кредитов сверху · осталось ${hoursLeft}ч`}
+      message={`🎁 Оплатите любой тариф до ${deadline} — получите +${credits} кредитов сверху на ${days} дней · осталось ${hoursLeft}ч`}
       showIcon={false}
       type="success"
     />

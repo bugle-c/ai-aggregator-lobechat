@@ -116,7 +116,7 @@ export async function fulfillPayment(
     );
   }
 
-  // 48h intro offer — +1000 credits if this is the user's first payment
+  // 48h intro offer — bonus credits (MAGIC48 promo amount, 7-day expiry) if this is the user's first payment
   // within 48h of the earned-magic claim. Best-effort: never breaks fulfill
   // (the helper catches internally, this is belt-and-suspenders).
   try {
