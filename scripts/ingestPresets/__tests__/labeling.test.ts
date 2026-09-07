@@ -54,14 +54,10 @@ describe('mergeLabels', () => {
   });
 
   describe('requires_image precedence (heuristic OR llm)', () => {
-    it('LLM-only detection demotes publish to queue with its own reason', () => {
+    it('LLM-only detection sets the flag and leaves the publish verdict alone (Ф5b: the flow gates)', () => {
       const decision = mergeLabels({ evaluation: publish, heuristic, llm: llmOk({ requiresImage: true }) });
-      expect(decision.evaluation).toEqual({
-        ...publish,
-        reasons: [REQUIRES_IMAGE_LLM_REASON],
-        requiresImage: true,
-        verdict: 'queue',
-      });
+      expect(decision.evaluation).toEqual({ ...publish, requiresImage: true });
+      expect(decision.evaluation.reasons).not.toContain(REQUIRES_IMAGE_LLM_REASON);
     });
 
     it('heuristic detection is never cleared by the LLM', () => {
@@ -75,11 +71,12 @@ describe('mergeLabels', () => {
       expect(decision.evaluation.requiresImage).toBe(true);
     });
 
-    it('LLM detection on an already-queued item adds the reason but keeps queue', () => {
+    it('LLM detection on an already-queued item keeps its reasons and verdict', () => {
       const queued: Evaluation = { reasons: ['low-likes'], requiresImage: false, verdict: 'queue' };
       const decision = mergeLabels({ evaluation: queued, heuristic, llm: llmOk({ requiresImage: true }) });
       expect(decision.evaluation.verdict).toBe('queue');
-      expect(decision.evaluation.reasons).toEqual(['low-likes', REQUIRES_IMAGE_LLM_REASON]);
+      expect(decision.evaluation.reasons).toEqual(['low-likes']);
+      expect(decision.evaluation.requiresImage).toBe(true);
     });
   });
 

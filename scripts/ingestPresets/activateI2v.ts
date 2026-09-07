@@ -56,8 +56,14 @@ export interface QueuedRow {
   preview_url: string;
   prompt_template: string;
   recommended_model_id: string;
+  requires_image: boolean;
   slug: string;
   title: string;
+}
+
+export interface PlanOptions {
+  /** Publishable rows per author in this activation run (default 2, as in ingest). */
+  authorCap?: number;
 }
 
 const handleFromUrl = (url: string | null): string | undefined => {
@@ -96,7 +102,11 @@ export interface ActivationPlan {
  * stored `requires_image` flag — not a re-detection — is what says the
  * prompt needs a reference (see `filters.ts`).
  */
-export const planActivation = (rows: QueuedRow[], modality: Modality = 'video'): ActivationPlan => {
+export const planActivation = (
+  rows: QueuedRow[],
+  modality: Modality = 'video',
+  { authorCap }: PlanOptions = {},
+): ActivationPlan => {
   const plan: ActivationPlan = { activate: [], keep: [] };
   const sameModality = rows.filter((row) => row.modality === modality);
 
@@ -108,7 +118,11 @@ export const planActivation = (rows: QueuedRow[], modality: Modality = 'video'):
     return false;
   });
 
-  const results = evaluateBatch(batch.map(rowToSourceItem), { known: new Set(), modality });
+  const results = evaluateBatch(batch.map(rowToSourceItem), {
+    authorCap,
+    known: new Set(),
+    modality,
+  });
 
   results.forEach(({ evaluation }, index) => {
     const row = batch[index];
@@ -116,7 +130,11 @@ export const planActivation = (rows: QueuedRow[], modality: Modality = 'video'):
       plan.activate.push({
         id: row.id,
         modality,
-        recommendedModelId: recommendedModelFor(modality, true),
+        // A reference-image row is repointed to the paired t2v/t2i card (old
+        // rows may carry an image-to-video id); any other row keeps its own.
+        recommendedModelId: row.requires_image
+          ? recommendedModelFor(modality, true)
+          : row.recommended_model_id,
         slug: row.slug,
       });
     } else {
@@ -140,15 +158,20 @@ export const formatPlan = (plan: ActivationPlan, apply: boolean): string => {
 
 // --- db part ------------------------------------------------------------------
 
-const loadQueuedRows = async (client: Client, modality: Modality): Promise<QueuedRow[]> => {
+const loadQueuedRows = async (
+  client: Client,
+  modality: Modality,
+  all: boolean,
+): Promise<QueuedRow[]> => {
   const { rows } = await client.query<QueuedRow>(
     `SELECT id::text AS id, slug, modality, title, prompt_template, params_lock, popularity,
-            preview_url, external_id, author_name, author_url, recommended_model_id, license
+            preview_url, external_id, author_name, author_url, recommended_model_id, license,
+            requires_image
        FROM presets
-      WHERE requires_image = TRUE AND active = FALSE AND external_id IS NOT NULL
-        AND modality = $1
+      WHERE active = FALSE AND external_id IS NOT NULL AND modality = $1
+        AND ($2::boolean OR requires_image = TRUE)
       ORDER BY id`,
-    [modality],
+    [modality, all],
   );
   return rows;
 };
@@ -161,7 +184,9 @@ const applyPlan = async (client: Client, plan: ActivationPlan, modality: Modalit
     // row blocked between the SELECT and the UPDATE stays off.
     await client.query(
       `UPDATE presets
-          SET active = TRUE, recommended_model_id = $1, updated_at = NOW()
+          SET active = TRUE,
+              recommended_model_id = CASE WHEN requires_image THEN $1 ELSE recommended_model_id END,
+              updated_at = NOW()
         WHERE id = ANY($2::bigint[]) AND active = FALSE AND modality = $4
           AND license IS DISTINCT FROM $3`,
       [
@@ -178,39 +203,55 @@ const applyPlan = async (client: Client, plan: ActivationPlan, modality: Modalit
   }
 };
 
-const USAGE = 'usage: tsx scripts/ingestPresets/activateI2v.ts [--apply] [--modality=video|image]';
+const USAGE =
+  'usage: tsx scripts/ingestPresets/activateI2v.ts [--apply] [--modality=video|image] [--all] [--author-cap=N]';
 
-export const parseArgs = (args: string[]): { apply: boolean; modality: Modality } => {
-  let modality: Modality = 'video';
-  let apply = false;
+export interface Args {
+  /** Re-evaluate every queued row of the modality, not only reference-image ones. */
+  all: boolean;
+  apply: boolean;
+  authorCap?: number;
+  modality: Modality;
+}
+
+export const parseArgs = (args: string[]): Args => {
+  const parsed: Args = { all: false, apply: false, modality: 'video' };
   for (const arg of args) {
-    if (arg === '--apply') apply = true;
+    if (arg === '--apply') parsed.apply = true;
+    else if (arg === '--all') parsed.all = true;
     else if (arg === '--modality=video' || arg === '--modality=image')
-      modality = arg.slice('--modality='.length) as Modality;
-    else throw new Error(`unknown flag: ${arg}\n${USAGE}`);
+      parsed.modality = arg.slice('--modality='.length) as Modality;
+    else if (arg.startsWith('--author-cap=')) {
+      const value = Number.parseInt(arg.slice('--author-cap='.length), 10);
+      if (!Number.isInteger(value) || value <= 0) throw new Error(`bad --author-cap: ${arg}`);
+      parsed.authorCap = value;
+    } else throw new Error(`unknown flag: ${arg}\n${USAGE}`);
   }
-  return { apply, modality };
+  return parsed;
 };
 
 const main = async () => {
   loadEnv();
 
-  let parsed: { apply: boolean; modality: Modality };
+  let parsed: Args;
   try {
     parsed = parseArgs(process.argv.slice(2));
   } catch (error) {
     console.error((error as Error).message);
     process.exit(2);
   }
-  const { apply, modality } = parsed;
+  const { all, apply, authorCap, modality } = parsed;
 
   const client = createClient();
   await client.connect();
   try {
-    const rows = await loadQueuedRows(client, modality);
-    console.log(`[activateI2v] queued ${modality} rows needing a reference: ${rows.length}`);
+    const rows = await loadQueuedRows(client, modality, all);
+    console.log(
+      `[activateI2v] queued ${modality} rows${all ? '' : ' needing a reference'}: ${rows.length}` +
+        (authorCap ? ` (author cap ${authorCap})` : ''),
+    );
 
-    const plan = planActivation(rows, modality);
+    const plan = planActivation(rows, modality, { authorCap });
     if (apply) await applyPlan(client, plan, modality);
 
     console.log(formatPlan(plan, apply));

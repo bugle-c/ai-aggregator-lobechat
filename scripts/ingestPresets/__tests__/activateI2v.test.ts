@@ -26,6 +26,7 @@ const row = (overrides: Partial<QueuedRow> = {}): QueuedRow => ({
   preview_url: 'https://ask.gptweb.ru/s3/lobe/presets/trend-2094046000000000001.mp4',
   prompt_template: PROMPT,
   recommended_model_id: 'bytedance/seedance-2.0-fast/text-to-video',
+  requires_image: true,
   slug: 'trend-2094046000000000001',
   title: 'Портрет: кино',
   ...overrides,
@@ -151,8 +152,35 @@ describe('planActivation — image (i2i) rows since Ф5b', () => {
   });
 
   it('parses --modality=image and rejects unknown flags', () => {
-    expect(parseArgs(['--modality=image', '--apply'])).toEqual({ apply: true, modality: 'image' });
-    expect(parseArgs([])).toEqual({ apply: false, modality: 'video' });
+    expect(parseArgs(['--modality=image', '--apply'])).toEqual({
+      all: false,
+      apply: true,
+      modality: 'image',
+    });
+    expect(parseArgs([])).toEqual({ all: false, apply: false, modality: 'video' });
+    expect(parseArgs(['--all', '--author-cap=8'])).toMatchObject({ all: true, authorCap: 8 });
     expect(() => parseArgs(['--nope'])).toThrow(/unknown flag/);
+  });
+});
+
+describe('planActivation — whole queue (--all)', () => {
+  it('keeps the own model of a row that needs no reference', () => {
+    const plain = row({
+      id: '202',
+      prompt_template: `${PROMPT.replace('Use @image1 as the subject. ', '')} of a lighthouse at dawn`,
+      recommended_model_id: 'kwaivgi/kling-v3.0-pro/text-to-video',
+      requires_image: false,
+      slug: 'trend-plain',
+    } as any);
+    const plan = planActivation([plain]);
+    expect(plan.activate[0]?.recommendedModelId).toBe('kwaivgi/kling-v3.0-pro/text-to-video');
+  });
+
+  it('honours a raised author cap', () => {
+    const rows = ['1', '2', '3', '4'].map((n) =>
+      row({ external_id: `209404600000000000${n}`, id: n, slug: `trend-${n}` }),
+    );
+    expect(planActivation(rows).activate).toHaveLength(2);
+    expect(planActivation(rows, 'video', { authorCap: 8 }).activate).toHaveLength(4);
   });
 });

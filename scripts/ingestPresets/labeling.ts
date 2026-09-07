@@ -15,7 +15,12 @@
 import type { ClassifyResult } from './classify';
 import type { Evaluation } from './types';
 
-/** Reason appended when only the LLM detected the reference-image dependency. */
+/**
+ * Historical queue reason (pre-Ф5/Ф5b): an item whose reference-image need
+ * only the LLM detected used to be parked until the flow had a photo gate.
+ * Both flows gate now, so the flag is stored and nothing is parked; the
+ * constant stays for old rows/logs that mention it.
+ */
 export const REQUIRES_IMAGE_LLM_REASON = 'requires-image-llm';
 
 export interface Labels {
@@ -46,18 +51,13 @@ export const mergeLabels = ({
     return { evaluation, labels: heuristic, source: 'heuristic', unsafe: false };
   }
 
+  // The LLM's verdict widens the reference-image flag (the regex misses
+  // «uploaded photo», «reference still»…); the flow's «Добавьте фото» gate
+  // does the rest, so this no longer changes the publish verdict.
   const requiresImage = evaluation.requiresImage || llm.requiresImage;
-  const addedByLlm = requiresImage && !evaluation.requiresImage;
-
-  const merged: Evaluation = addedByLlm
-    ? {
-        ...evaluation,
-        reasons: [...evaluation.reasons, REQUIRES_IMAGE_LLM_REASON],
-        requiresImage,
-        // i2v presets wait for the Ф5 model-switch UX, whoever detected them.
-        verdict: evaluation.verdict === 'publish' ? 'queue' : evaluation.verdict,
-      }
-    : evaluation;
+  const merged: Evaluation = requiresImage === evaluation.requiresImage
+    ? evaluation
+    : { ...evaluation, requiresImage };
 
   return {
     evaluation: merged,

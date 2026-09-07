@@ -269,6 +269,8 @@ export const resolveAspectRatio = (item: SourceItem): string | null => {
 // --- evaluation -------------------------------------------------------------
 
 export interface EvaluateContext {
+  /** Publishable items per author allowed in this run (`MAX_PER_AUTHOR_PER_RUN` by default). */
+  authorCap: number;
   /** Mutated as items are evaluated: username → publishable items so far. */
   authorPublishCount: Map<string, number>;
   known: Set<string>;
@@ -317,7 +319,7 @@ export const evaluateItem = (item: SourceItem, ctx: EvaluateContext): Evaluation
   if (!mediaUrl) reasons.push('no-media-url');
 
   const authorCount = ctx.authorPublishCount.get(authorKey(item)) ?? 0;
-  if (authorCount >= MAX_PER_AUTHOR_PER_RUN) reasons.push('author-cap');
+  if (authorCount >= ctx.authorCap) reasons.push('author-cap');
 
   const verdict: Verdict = reasons.length === 0 ? 'publish' : 'queue';
   if (verdict === 'publish') ctx.authorPublishCount.set(authorKey(item), authorCount + 1);
@@ -328,9 +330,14 @@ export const evaluateItem = (item: SourceItem, ctx: EvaluateContext): Evaluation
 /** Evaluate a batch in catalogue order, sharing the per-run author budget. */
 export const evaluateBatch = (
   items: SourceItem[],
-  { known, modality }: { known: Set<string>; modality: Modality },
+  {
+    authorCap = MAX_PER_AUTHOR_PER_RUN,
+    known,
+    modality,
+  }: { authorCap?: number; known: Set<string>; modality: Modality },
 ): { evaluation: Evaluation; item: SourceItem }[] => {
   const ctx: EvaluateContext = {
+    authorCap,
     authorPublishCount: new Map(),
     known: new Set(known),
     modality,
