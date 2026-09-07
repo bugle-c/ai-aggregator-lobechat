@@ -11,9 +11,10 @@ import PresetCard from '@/features/Generators/PresetCard';
 import PresetMP4Player from '@/features/Generators/PresetMP4Player';
 import PresetZoomModal from '@/features/Generators/PresetZoomModal';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { lambdaQuery } from '@/libs/trpc/client';
 import { useHomeStore } from '@/store/home';
 import type { PresetListItem } from '@/types/preset';
+
+import { useHomePresets } from '../useHomePresets';
 
 /** Big 16:9 cards in the slider. */
 const FEATURED_COUNT = 4;
@@ -106,12 +107,11 @@ const HomeVideoSection = memo(() => {
   // Server-side limit + ranking: pull exactly the 8 rows this section
   // renders, best-first. `popular` is meaningful here because the video
   // catalogue is ingested and carries source-side like counts.
-  const { data, isLoading } = lambdaQuery.presets.list.useQuery(
-    { limit: FEATURED_COUNT + THUMB_COUNT, modality: 'video', sort: 'popular' },
-    { staleTime: 5 * 60 * 1000 },
-  );
-
-  const all = data?.items ?? [];
+  const { isLoading, items: all } = useHomePresets({
+    limit: FEATURED_COUNT + THUMB_COUNT,
+    modality: 'video',
+    sort: 'popular',
+  });
 
   if (!isLoading && all.length === 0) return null;
   // Featured slider gets the top items; thumbnail row gets the next 4. If

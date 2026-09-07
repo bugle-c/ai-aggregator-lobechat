@@ -267,6 +267,8 @@ export const presetsRouter = router({
         category: z.string().optional(),
         /** Opaque keyset cursor from a previous page's `nextCursor`. */
         cursor: z.string().optional(),
+        /** Only editorially pinned rows (home-page rows ask for these first). */
+        featured: z.boolean().optional(),
         limit: z.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
         modality: modalityEnum,
         q: z.string().min(1).max(80).optional(),
@@ -280,6 +282,7 @@ export const presetsRouter = router({
         if (input.recommendedModelId)
           conditions.push(eq(presets.recommendedModelId, input.recommendedModelId));
         if (input.category) conditions.push(eq(presets.category, input.category));
+        if (input.featured) conditions.push(eq(presets.featured, true));
         if (input.q) {
           const needle = searchNeedle(input.q);
           // A NULL column yields NULL, which drops out of the OR — exactly the

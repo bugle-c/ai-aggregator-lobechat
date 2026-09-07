@@ -31,6 +31,8 @@ export const presets = pgTable(
       .default(sql`ARRAY[]::text[]`),
     sortOrder: integer('sort_order').notNull().default(0),
     active: boolean('active').notNull().default(true),
+    /** Editorial pin for the home rows (0110_presets_featured); set by hand. */
+    featured: boolean('featured').notNull().default(false),
 
     // --- attribution / ingest (0108_presets_attribution) ---
     /** Id of the item in the source catalogue; dedup key for the ingest job. */

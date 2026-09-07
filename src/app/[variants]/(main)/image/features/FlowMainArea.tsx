@@ -112,8 +112,13 @@ const FlowMainArea = memo(() => {
             selectedSlug={selectedSlug}
             onCategoryChange={url.setCategory}
             onModelChange={url.setModel}
-            onPresetPrefetch={(p) => prefetchLock(p.recommendedModelId)}
             onSearchChange={url.setQ}
+            onPresetPrefetch={(p) => {
+              prefetchLock(p.recommendedModelId);
+              // Same react-query entry the click path reads, so the prompt
+              // preview is already there when the card is picked.
+              void hydratePreset(p.slug);
+            }}
             onPresetSelect={(p) => {
               url.setPreset(p.slug);
               void hydratePreset(p.slug).then((full) => {
