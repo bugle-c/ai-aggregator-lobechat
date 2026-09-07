@@ -63,7 +63,7 @@ describe('SettingsStrip', () => {
 });
 
 describe('AdvancedItem', () => {
-  it('keeps a locked knob visible, greyed out, with the reason next to the label', () => {
+  it('keeps a locked knob visible as one compact row: name + lock + reason, no control', () => {
     render(
       <AdvancedItem label="Сид" lock="Задаёт стиль">
         <input aria-label="seed" />
@@ -71,15 +71,16 @@ describe('AdvancedItem', () => {
     );
     expect(screen.getByText('Сид')).toBeTruthy();
     expect(screen.getByText('Задаёт стиль')).toBeTruthy();
-    expect(screen.getByLabelText('seed').closest('[aria-disabled="true"]')).toBeTruthy();
+    expect(screen.queryByLabelText('seed')).toBeNull();
   });
 
-  it('renders a free knob without any lock chrome', () => {
+  it('renders a free knob with its control and no lock chrome', () => {
     render(
       <AdvancedItem label="Сид">
         <input aria-label="seed" />
       </AdvancedItem>,
     );
-    expect(screen.getByLabelText('seed').closest('[aria-disabled="true"]')).toBeNull();
+    expect(screen.getByLabelText('seed')).toBeTruthy();
+    expect(document.querySelector('[aria-disabled]')).toBeNull();
   });
 });
