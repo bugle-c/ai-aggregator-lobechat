@@ -108,3 +108,26 @@ describe('decideGenerateReadiness', () => {
     ).toEqual({ blocker: 'empty', canGenerate: false });
   });
 });
+
+describe('image-to-image (Ф5b): imageUrls satisfies the gate too', () => {
+  const preset = { promptTemplate: 'restyle @image1', requiresImage: true };
+
+  it('treats a non-empty imageUrls list as an attached reference', () => {
+    expect(hasReferenceImage(['https://x/a.jpg'])).toBe(true);
+    expect(hasReferenceImage([])).toBe(false);
+    expect(hasReferenceImage(['', '  '])).toBe(false);
+    expect(decidePresetImageGate({ imageUrl: '', imageUrls: ['https://x/a.jpg'], preset })).toEqual({
+      kind: 'ready',
+    });
+  });
+
+  it('blocks the run when neither param holds a reference', () => {
+    expect(decidePresetImageGate({ imageUrl: undefined, imageUrls: [], preset })).toEqual({
+      kind: 'missing',
+    });
+    expect(
+      decideGenerateReadiness({ imageUrl: '', imageUrls: [], isGenerating: false, preset, prompt: '' })
+        .blocker,
+    ).toBe('missing-image');
+  });
+});

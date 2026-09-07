@@ -2,8 +2,10 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import FlowSidebar from '@/features/Generators/FlowSidebar';
+import { decideGenerateReadiness } from '@/features/Generators/presetImageGate';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
 import { useImageGenerate } from '@/features/Generators/useImageGenerate';
 import { useFetchAiImageConfig } from '@/hooks/useFetchAiImageConfig';
@@ -42,6 +44,17 @@ const ImagePage = memo(() => {
   // is gone, leaving only this CTA.
   const cost = useGenerationCostPreview({ images: imageNum, kind: 'image', model: currentModel });
 
+  // An i2i style is gated on its reference (`imageUrl` or `imageUrls`); the
+  // other blockers keep the desktop CTA's existing behaviour.
+  const { t } = useTranslation('common');
+  const readiness = decideGenerateReadiness({
+    imageUrl: parameters?.imageUrl,
+    imageUrls: parameters?.imageUrls,
+    isGenerating,
+    preset,
+    prompt: promptValue,
+  });
+
   if (isMobile) return <ImageWorkspaceMobile />;
 
   return (
@@ -49,6 +62,7 @@ const ImagePage = memo(() => {
       <FlowSidebar
         creditCost={cost.credits ?? undefined}
         creditSufficient={cost.sufficient}
+        disabledReason={readiness.blocker === 'missing-image' ? t('preset.addPhoto') : undefined}
         isGenerating={isGenerating}
         preset={preset}
         promptInput={<PromptInput />}

@@ -1,5 +1,5 @@
 /**
- * Reference-image gate for image-to-video presets (spec Ф5).
+ * Reference-image gate for image-to-video (Ф5) and image-to-image (Ф5b) presets.
  *
  * An i2v preset (`requiresImage`) is a prompt written around a photo the
  * user supplies; running it without one wastes credits on a clip about
@@ -18,8 +18,17 @@ export interface GatedPreset {
   requiresImage: boolean;
 }
 
-export const hasReferenceImage = (value: unknown): boolean =>
-  typeof value === 'string' && value.trim().length > 0;
+/**
+ * A reference is attached when the param holds a non-empty url (`imageUrl`,
+ * video start frame / single image reference) or a non-empty list of them
+ * (`imageUrls`, multi-reference image models such as nano-banana).
+ */
+export const hasReferenceImage = (value: unknown): boolean => {
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value))
+    return value.some((v) => typeof v === 'string' && v.trim().length > 0);
+  return false;
+};
 
 export type PresetImageGate =
   /** The preset does not need a photo (or there is no preset). */
@@ -31,10 +40,14 @@ export type PresetImageGate =
 
 export const decidePresetImageGate = (input: {
   imageUrl: unknown;
+  /** Multi-reference param of image models; either param satisfies the gate. */
+  imageUrls?: unknown;
   preset: GatedPreset | null | undefined;
 }): PresetImageGate => {
   if (!input.preset?.requiresImage) return { kind: 'none' };
-  return hasReferenceImage(input.imageUrl) ? { kind: 'ready' } : { kind: 'missing' };
+  return hasReferenceImage(input.imageUrl) || hasReferenceImage(input.imageUrls)
+    ? { kind: 'ready' }
+    : { kind: 'missing' };
 };
 
 export type GenerateBlocker = 'generating' | 'empty' | 'missing-image';
@@ -52,6 +65,7 @@ export interface GenerateReadiness {
  */
 export const decideGenerateReadiness = (input: {
   imageUrl: unknown;
+  imageUrls?: unknown;
   isGenerating: boolean;
   preset: GatedPreset | null | undefined;
   prompt: string;

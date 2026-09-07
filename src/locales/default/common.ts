@@ -463,6 +463,7 @@ export default {
   'preset.settings.photo': 'Photo',
   'preset.settings.photoAttached': 'Photo attached',
   'preset.settings.photoMissing': 'Add a photo for this style',
+  'preset.settings.photoUnsupported': 'This model takes no photo — pick another one',
   'preset.settings.lockedByStyle': 'Set by the style — remove the style to change it',
   'preset.settings.unusedByStyle': 'Not used by this style — it works from text',
   'preset.settings.pixelSize': 'Exact size, px',

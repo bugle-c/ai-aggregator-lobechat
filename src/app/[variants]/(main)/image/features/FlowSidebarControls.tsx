@@ -1,6 +1,7 @@
 'use client';
 
-import { memo, useCallback, useMemo } from 'react';
+import { Image as ImageIcon } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AspectRatioSelect from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/AspectRatioSelect';
@@ -16,10 +17,12 @@ import SeedNumberInput from '@/app/[variants]/(main)/image/_layout/ConfigPanel/c
 import SizeSelect from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/SizeSelect';
 import StepsSliderInput from '@/app/[variants]/(main)/image/_layout/ConfigPanel/components/StepsSliderInput';
 import ModelSettingsChip from '@/features/Generators/ModelSettingsChip';
+import { hasReferenceImage } from '@/features/Generators/presetImageGate';
 import { presetLockedKeys, styleLockFor } from '@/features/Generators/presetLocks';
 import SettingsStrip, { AdvancedItem, SettingsChip } from '@/features/Generators/SettingsStrip';
 import { switchModelKeepingStyle } from '@/features/Generators/switchModelKeepingStyle';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
+import Image from '@/libs/next/Image';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/slices/aiProvider/selectors';
 import { useImageStore } from '@/store/image';
@@ -51,9 +54,9 @@ interface AdvancedProps {
 
 /**
  * The knobs without a chip of their own, rendered inline under the strip:
- * references, size / quality / resolution, exact width + height, steps, cfg,
- * seed. The set depends on the model only — a style never removes a knob,
- * it locks it with a reason.
+ * references (unless the «Фото» chip already shows them), size / quality /
+ * resolution, exact width + height, steps, cfg, seed. The set depends on the
+ * model only — a style never removes a knob, it locks it with a reason.
  */
 const ImageAdvanced = memo<AdvancedProps>(({ locks, pixelSizeLabel, show }) => {
   const { t } = useTranslation('image');
@@ -112,10 +115,71 @@ const ImageAdvanced = memo<AdvancedProps>(({ locks, pixelSizeLabel, show }) => {
 ImageAdvanced.displayName = 'ImageAdvancedSettings';
 
 /**
+ * «Фото» chip body: the model's own reference uploader (multi-image when the
+ * model takes `imageUrls`, single otherwise), so the photo lands in the same
+ * parameter the advanced panel writes. Closes itself once a photo arrives.
+ */
+const PhotoPicker = memo<{
+  close: () => void;
+  hasPhoto: boolean;
+  kind: 'multi' | 'single' | 'unsupported';
+}>(({ close, hasPhoto, kind }) => {
+  const { t } = useTranslation('common');
+  const hadPhotoRef = useRef(hasPhoto);
+
+  useEffect(() => {
+    if (hasPhoto && !hadPhotoRef.current) close();
+    hadPhotoRef.current = hasPhoto;
+  }, [close, hasPhoto]);
+
+  return (
+    <div style={{ minInlineSize: 240 }}>
+      {kind === 'multi' && <ImageUrlsUpload />}
+      {kind === 'single' && <ImageUrl />}
+      {kind === 'unsupported' && (
+        <span style={{ fontSize: 12 }}>{t('preset.settings.photoUnsupported')}</span>
+      )}
+    </div>
+  );
+});
+
+PhotoPicker.displayName = 'ImagePhotoPicker';
+
+/** 16px thumbnail of the attached photo, as the chip's icon. */
+const PhotoThumb = memo<{ src: string }>(({ src }) => (
+  <span
+    aria-hidden
+    style={{
+      blockSize: 16,
+      borderRadius: 4,
+      display: 'inline-block',
+      flex: '0 0 auto',
+      inlineSize: 16,
+      overflow: 'hidden',
+      position: 'relative',
+    }}
+  >
+    <Image fill unoptimized alt="" sizes="16px" src={src} style={{ objectFit: 'cover' }} />
+  </span>
+));
+
+PhotoThumb.displayName = 'ImagePhotoThumb';
+
+const firstReference = (imageUrls: unknown, imageUrl: unknown): string | undefined => {
+  if (Array.isArray(imageUrls)) {
+    const first = imageUrls.find((v) => typeof v === 'string' && v.trim());
+    if (typeof first === 'string') return first;
+  }
+  return typeof imageUrl === 'string' && imageUrl.trim() ? imageUrl : undefined;
+};
+
+/**
  * Image binding of the `SettingsStrip`:
- * `[Model ▾][3:4 ▾][1 pcs ▾]` + cost / «Ещё настройки ▾» with the rest of
- * the model's knobs inline. Used above the prompt input by the desktop
- * `FlowSidebar` and the mobile `MobileFlowContent`.
+ * `[Model ▾][Фото ▾][3:4 ▾][1 pcs ▾]` + cost / «Ещё настройки ▾» with the
+ * rest of the model's knobs inline. The «Фото» chip appears for an i2i style
+ * (warning dot until a reference is attached) and whenever a reference is
+ * attached on a model that takes one. Used above the prompt input by the
+ * desktop `FlowSidebar` and the mobile `MobileFlowContent`.
  */
 const FlowSidebarControls = memo(() => {
   const { t } = useTranslation('common');
@@ -136,6 +200,7 @@ const FlowSidebarControls = memo(() => {
   const supportsSteps = useImageStore(isSupported('steps'));
   const supportsCfg = useImageStore(isSupported('cfg'));
   const supportsSeed = useImageStore(isSupported('seed'));
+  const parameters = useImageStore(imageGenerationConfigSelectors.parameters);
   // Goes through the dimension controller rather than a raw param write so
   // width/height follow the ratio the same way they do in ConfigPanel.
   const {
@@ -151,6 +216,14 @@ const FlowSidebarControls = memo(() => {
   const cost = useGenerationCostPreview({ images: imageNum, kind: 'image', model });
 
   const aspectItems = useMemo(() => aspectOptions.map((v) => ({ value: v })), [aspectOptions]);
+
+  const hasPhoto =
+    hasReferenceImage(parameters?.imageUrls) || hasReferenceImage(parameters?.imageUrl);
+  const photoSrc = firstReference(parameters?.imageUrls, parameters?.imageUrl);
+  const requiresImage = !!preset?.requiresImage;
+  const supportsReference = supportsImageUrls || supportsImageUrl;
+  const showPhotoChip = requiresImage || (supportsReference && hasPhoto);
+  const photoKind = supportsImageUrls ? 'multi' : supportsImageUrl ? 'single' : 'unsupported';
 
   // Picking a model resets its params — keep the style, prompt and reference.
   const pickModel = useCallback(
@@ -170,8 +243,8 @@ const FlowSidebarControls = memo(() => {
   const show: Record<Knob, boolean> = {
     cfg: supportsCfg,
     dimensions: showDimensionControl,
-    imageUrl: supportsImageUrl,
-    imageUrls: supportsImageUrls,
+    imageUrl: supportsImageUrl && !showPhotoChip,
+    imageUrls: supportsImageUrls && !showPhotoChip,
     quality: supportsQuality,
     resolution: supportsResolution,
     seed: supportsSeed,
@@ -214,6 +287,24 @@ const FlowSidebarControls = memo(() => {
         )}
         onPick={pickModel}
       />
+      {showPhotoChip && (
+        <SettingsChip
+          ariaLabel={t('preset.settings.photo')}
+          icon={photoSrc ? <PhotoThumb src={photoSrc} /> : <ImageIcon size={14} />}
+          indicator={requiresImage && !hasPhoto ? 'warning' : undefined}
+          label={t('preset.settings.photo')}
+          content={(close) => (
+            <PhotoPicker close={close} hasPhoto={hasPhoto} kind={photoKind} />
+          )}
+          tooltip={
+            requiresImage && !hasPhoto
+              ? t('preset.settings.photoMissing')
+              : hasPhoto
+                ? t('preset.settings.photoAttached')
+                : undefined
+          }
+        />
+      )}
       {supportsAspectRatio && (
         <SettingsChip
           ariaLabel={t('preset.settings.aspect')}

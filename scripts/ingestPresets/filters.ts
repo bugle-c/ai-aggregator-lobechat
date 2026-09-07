@@ -316,13 +316,6 @@ export const evaluateItem = (item: SourceItem, ctx: EvaluateContext): Evaluation
   const mediaUrl = ctx.modality === 'video' ? item.videoUrl : (item.images?.[0] ?? item.image);
   if (!mediaUrl) reasons.push('no-media-url');
 
-  /**
-   * Ф5 wired the reference-image gate for video only. The image flow has no
-   * «Добавьте фото» gate yet, so an image prompt that says "@image1" would
-   * run with nothing attached — keep those queued until i2i gating exists.
-   */
-  if (requiresImage && ctx.modality === 'image') reasons.push('requires-image-i2i-pending');
-
   const authorCount = ctx.authorPublishCount.get(authorKey(item)) ?? 0;
   if (authorCount >= MAX_PER_AUTHOR_PER_RUN) reasons.push('author-cap');
 

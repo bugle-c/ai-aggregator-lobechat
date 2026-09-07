@@ -395,6 +395,7 @@
   "preset.settings.photo": "Фото",
   "preset.settings.photoAttached": "Фото добавлено",
   "preset.settings.photoMissing": "Добавьте фото для этого стиля",
+  "preset.settings.photoUnsupported": "Эта модель не принимает фото — выберите другую",
   "preset.settings.pixelSize": "Точный размер, px",
   "preset.settings.unusedByStyle": "Стиль работает по тексту — не используется",
   "preset.sort.curated": "Подборка",

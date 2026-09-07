@@ -6,6 +6,7 @@ import { Sparkles } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { decideGenerateReadiness } from '@/features/Generators/presetImageGate';
 import PresetThumbCard from '@/features/Generators/PresetThumbCard';
 import { useFlowUrlState } from '@/features/Generators/useFlowUrlState';
 import { useGenerationCostPreview } from '@/features/Generators/useGenerationCostPreview';
@@ -49,8 +50,16 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate }) => {
   // настройки», same as on desktop — not duplicated above it.
 
   // A preset is a ready prompt: with one selected, an empty input is a
-  // valid one-tap run (`applyPresetTemplate('', tpl)` → `tpl`).
-  const canGenerate = !isGenerating && (promptValue.trim().length > 0 || !!preset?.promptTemplate);
+  // valid one-tap run (`applyPresetTemplate('', tpl)` → `tpl`). An i2i
+  // style additionally needs its reference — the CTA says so.
+  const readiness = decideGenerateReadiness({
+    imageUrl: parameters?.imageUrl,
+    imageUrls: parameters?.imageUrls,
+    isGenerating,
+    preset,
+    prompt: promptValue,
+  });
+  const canGenerate = readiness.canGenerate;
   const insufficient = cost.credits !== null && !cost.sufficient;
 
   const handleGenerate = async () => {
@@ -99,9 +108,11 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate }) => {
         >
           {isGenerating
             ? t('preset.generating')
-            : cost.credits === null
-              ? t('preset.generate')
-              : `${t('preset.generate')} · ${t('preset.credits', { count: cost.credits })}`}
+            : readiness.blocker === 'missing-image'
+              ? t('preset.addPhoto')
+              : cost.credits === null
+                ? t('preset.generate')
+                : `${t('preset.generate')} · ${t('preset.credits', { count: cost.credits })}`}
         </Button>
       </div>
     </Flexbox>

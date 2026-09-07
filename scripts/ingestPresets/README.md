@@ -204,8 +204,10 @@ Two deliberate refinements over a literal reading of the spec:
   the runtime swaps the endpoint itself when `imageUrl` is set
   (`pairedEndpoint.ts`). Rows queued under the pre-Ф5 hold are activated with
   `activateI2v.ts` (below). **Image** prompts that reference an image (i2i)
-  still queue as `requires-image-i2i-pending` — the image flow has no
-  «Добавьте фото» gate yet.
+  publish too since Ф5b: the image flow shows the «Фото» chip and refuses to
+  run without a reference (`imageUrl` / `imageUrls`); `nano-banana-pro`
+  routes to its `/edit` endpoint when references are set. Rows queued under
+  the old `requires-image-i2i-pending` hold: `activateI2v.ts --modality=image`.
 
 - **Not every id is an X post.** The images endpoint also serves the source's
   own community uploads under ids like `community_34e69cb0-4906-…`. A

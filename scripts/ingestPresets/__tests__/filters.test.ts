@@ -171,7 +171,7 @@ describe('evaluateItem', () => {
     expect(result).toMatchObject({ reasons: [], requiresImage: true, verdict: 'publish' });
   });
 
-  it('keeps image (i2i) reference-image prompts queued — no image-side gate yet', () => {
+  it('publishes image (i2i) reference-image prompts — the image flow gates on the photo (Ф5b)', () => {
     const [{ evaluation }] = evaluateBatch(
       [
         item({
@@ -182,11 +182,7 @@ describe('evaluateItem', () => {
       ],
       { known: new Set(), modality: 'image' },
     );
-    expect(evaluation).toMatchObject({
-      reasons: ['requires-image-i2i-pending'],
-      requiresImage: true,
-      verdict: 'queue',
-    });
+    expect(evaluation).toMatchObject({ reasons: [], requiresImage: true, verdict: 'publish' });
   });
 
   it('still queues an i2v item that fails a quality rule', () => {
