@@ -45,45 +45,4 @@ export const localChatModels: AIChatModelCard[] = [
     releasedAt: '2026-05-11',
     type: 'chat',
   },
-  {
-    abilities: {},
-    contextWindowTokens: 32_768,
-    description:
-      'Gemma 4 26B без цензуры (EGA abliteration MoE) на нашем сервере. Используйте для SEO/контент-задач, где cloud-модели отказываются.',
-    displayName: 'Gemma 4 26B Uncensored · local',
-    // Hidden from the picker as of 2026-05-11 — user can still call it by id
-    // (it stays in router-runtime LOCAL_OLLAMA_MODELS), but it's not surfaced
-    // in the UI list. Flip to `enabled: true` to reveal again.
-    enabled: false,
-    id: 'hf.co/TrevorJS/gemma-4-26B-A4B-it-uncensored-GGUF:Q4_K_M',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-05-11',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'Qwen3-Coder 30B (MoE 3B active) на нашем сервере. Coding-модель уровня Sonnet 3.5 на SWE-bench, контекст 32K.',
-    displayName: 'Qwen3-Coder 30B · local',
-    enabled: true,
-    id: 'qwen3-coder:30b-32k',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-05-11',
-    type: 'chat',
-  },
 ];

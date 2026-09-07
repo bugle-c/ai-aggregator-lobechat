@@ -134,11 +134,7 @@ const isGoogleDirectImage = (model: string) =>
 // Reachable as `http://ollama:11434/v1` from the lobe container because
 // `network-service` is attached to the `ollama_default` bridge (see
 // /opt/lobechat/docker-compose.yml).
-const LOCAL_OLLAMA_MODELS = new Set([
-  'gemma4:e4b',
-  'hf.co/TrevorJS/gemma-4-26B-A4B-it-uncensored-GGUF:Q4_K_M',
-  'qwen3-coder:30b-32k',
-]);
+const LOCAL_OLLAMA_MODELS = new Set(['gemma4:e4b']);
 const isLocalOllamaModel = (model: string) => LOCAL_OLLAMA_MODELS.has(model);
 
 // Wavespeed IDs always have a `/` and are not handled by the rules above.
