@@ -87,6 +87,24 @@ export const layoutMasonry = (
   return { columnHeights, height, params, positions };
 };
 
+/**
+ * Indices of the tiles whose box intersects the vertical window `[start, end)`,
+ * in rank order. Columns interleave, so positions are not sorted by `y` and
+ * this is a plain linear filter — ~1000 tiles is a few microseconds, far
+ * cheaper than mounting them.
+ */
+export const visibleIndices = (
+  positions: readonly MasonryPosition[],
+  start: number,
+  end: number,
+): number[] => {
+  const out: number[] = [];
+  for (const [i, p] of positions.entries()) {
+    if (p.y < end && p.y + p.height > start) out.push(i);
+  }
+  return out;
+};
+
 /** Column count from the container width — mirrors the UX spec breakpoints. */
 export const columnsForWidth = (width: number): number => {
   if (width < 800) return 2;

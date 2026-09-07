@@ -9,9 +9,10 @@ import { useTranslation } from 'react-i18next';
 import PresetCard from '@/features/Generators/PresetCard';
 import PresetZoomModal from '@/features/Generators/PresetZoomModal';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { lambdaQuery } from '@/libs/trpc/client';
 import { useHomeStore } from '@/store/home';
 import type { PresetListItem, PresetModality } from '@/types/preset';
+
+import { useHomePresets } from '../useHomePresets';
 
 interface Props {
   /** How many presets to show in the single row. */
@@ -44,12 +45,7 @@ const HomePresetSection = memo<Props>(({ limit = 5, modality }) => {
   // Deliberately NOT `sort: 'popular'` — image presets are hand-curated and
   // carry no source-side popularity, so ranking by it would drop them to id
   // order and throw away the curated `sort_order`.
-  const { data, isLoading } = lambdaQuery.presets.list.useQuery(
-    { limit, modality },
-    { staleTime: 5 * 60 * 1000 },
-  );
-
-  const presets = data?.items ?? [];
+  const { isLoading, items: presets } = useHomePresets({ limit, modality });
 
   // Self-hide when there are genuinely no presets for this modality.
   if (!isLoading && presets.length === 0) return null;

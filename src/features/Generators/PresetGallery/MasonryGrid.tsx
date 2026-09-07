@@ -1,7 +1,7 @@
 'use client';
 
 import { createStyles, keyframes } from 'antd-style';
-import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   columnsForWidth,
@@ -9,6 +9,7 @@ import {
   layoutMasonry,
   type MasonryLayout,
   sameMasonryParams,
+  visibleIndices,
 } from './masonryLayout';
 
 interface Props<T> {
@@ -21,7 +22,21 @@ interface Props<T> {
   getAspect: (item: T) => number;
   getKey: (item: T) => string;
   items: readonly T[];
+  /**
+   * Extra distance above and below the viewport that still gets rendered
+   * when `windowed`, in px. One overscan of lead time hides the mount of a
+   * row during a normal scroll; a fling still outruns it, which is why the
+   * tiles below are posters first.
+   */
+  overscan?: number;
   renderItem: (item: T, index: number) => ReactNode;
+  /**
+   * Render only the tiles near the viewport. Positions are absolute anyway,
+   * so this is a filter over the layout, not a different layout: the
+   * container keeps its full height and nothing moves when tiles mount or
+   * unmount. Off by default — the caller turns it on past a size threshold.
+   */
+  windowed?: boolean;
 }
 
 const fadeIn = keyframes`
@@ -76,6 +91,8 @@ const useStyles = createStyles(({ css, token }) => {
 /** How many placeholder boxes the pre-measure frame shows. */
 const SKELETON_COUNT = 8;
 
+const DEFAULT_OVERSCAN = 1000;
+
 /**
  * Placeholder for the frame before the container is measured (and for the
  * gallery's initial fetch): eight 3:4 boxes in the same columns, so the
@@ -104,6 +121,23 @@ export const MasonryGridSkeleton = ({
   );
 };
 
+/** The nearest ancestor that actually scrolls vertically, else the window. */
+const findScrollHost = (el: HTMLElement): HTMLElement | Window => {
+  let node = el.parentElement;
+  while (node) {
+    const { overflowY } = getComputedStyle(node);
+    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight)
+      return node;
+    node = node.parentElement;
+  }
+  return window;
+};
+
+interface Window_ {
+  end: number;
+  start: number;
+}
+
 /**
  * Masonry that never measures a tile.
  *
@@ -122,16 +156,20 @@ function MasonryGrid<T>({
   getAspect,
   getKey,
   items,
+  overscan = DEFAULT_OVERSCAN,
   renderItem,
+  windowed = false,
 }: Props<T>) {
   const { styles } = useStyles();
   const [width, setWidth] = useState(0);
+  const nodeRef = useRef<HTMLDivElement | null>(null);
 
   // Measured through a callback ref: the width is read the moment the
   // container mounts (before paint, so the first frame is already the real
   // layout when the container has a size) and tracked from then on.
   const observerRef = useRef<ResizeObserver | null>(null);
   const containerRef = useCallback((el: HTMLDivElement | null) => {
+    nodeRef.current = el;
     observerRef.current?.disconnect();
     observerRef.current = null;
     if (!el) return;
@@ -146,6 +184,49 @@ function MasonryGrid<T>({
     ro.observe(el);
     observerRef.current = ro;
   }, []);
+
+  // The visible window in container coordinates, committed with hysteresis:
+  // a new range is stored only once the viewport has moved half an overscan
+  // from the last one, so a scroll re-renders the list a few times per
+  // screen, not once per frame.
+  const [window_, setWindow] = useState<Window_ | null>(null);
+  const windowRef = useRef<Window_ | null>(null);
+
+  useEffect(() => {
+    const el = nodeRef.current;
+    if (!windowed || !el) {
+      windowRef.current = null;
+      return;
+    }
+    const host = findScrollHost(el);
+    let raf = 0;
+
+    const measure = () => {
+      raf = 0;
+      const hostTop = host instanceof Window ? 0 : host.getBoundingClientRect().top;
+      const hostHeight = host instanceof Window ? host.innerHeight : host.clientHeight;
+      const top = el.getBoundingClientRect().top - hostTop;
+      const next = { end: -top + hostHeight + overscan, start: -top - overscan };
+      const prev = windowRef.current;
+      if (prev && Math.abs(prev.start - next.start) < overscan / 2) return;
+      windowRef.current = next;
+      setWindow(next);
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(measure);
+    };
+
+    // First measurement on the next frame (not synchronously inside the
+    // effect); until then every tile renders, which is what happened before.
+    onScroll();
+    host.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      host.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [overscan, windowed]);
 
   const columns = columnsProp ?? columnsForWidth(width);
   const columnWidth = columnWidthFor(width, columns, gap);
@@ -171,6 +252,14 @@ function MasonryGrid<T>({
     return next;
   }, [captionHeight, columnWidth, columns, gap, getAspect, items]);
 
+  const indices = useMemo(
+    () =>
+      windowed && window_
+        ? visibleIndices(layout.positions, window_.start, window_.end)
+        : items.map((_, i) => i),
+    [items, layout.positions, window_, windowed],
+  );
+
   if (width === 0 || columnWidth === 0) {
     return (
       <div className={styles.container} ref={containerRef}>
@@ -186,10 +275,13 @@ function MasonryGrid<T>({
       role="list"
       style={{ blockSize: layout.height }}
     >
-      {items.map((item, i) => {
+      {indices.map((i) => {
+        const item = items[i];
         const pos = layout.positions[i];
         return (
           <div
+            aria-posinset={i + 1}
+            aria-setsize={items.length}
             className={styles.item}
             key={getKey(item)}
             role="listitem"

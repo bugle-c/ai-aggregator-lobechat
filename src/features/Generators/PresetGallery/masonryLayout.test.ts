@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { columnsForWidth, columnWidthFor, layoutMasonry } from './masonryLayout';
+import { columnsForWidth, columnWidthFor, layoutMasonry, visibleIndices } from './masonryLayout';
 
 const params = { captionHeight: 0, columnWidth: 100, columns: 3, gap: 10 };
 
@@ -62,5 +62,28 @@ describe('column helpers', () => {
     expect(columnWidthFor(1056 - 32, 4, 8)).toBe(250);
     expect(columnWidthFor(375 - 24, 2, 8)).toBe(171);
     expect(columnWidthFor(0, 2, 8)).toBe(0);
+  });
+});
+
+describe('visibleIndices', () => {
+  const positions = [
+    { height: 100, x: 0, y: 0 },
+    { height: 300, x: 108, y: 0 },
+    { height: 100, x: 0, y: 108 },
+    { height: 100, x: 0, y: 216 },
+    { height: 100, x: 108, y: 308 },
+  ];
+
+  it('keeps every tile that overlaps the window, in rank order', () => {
+    expect(visibleIndices(positions, 150, 250)).toEqual([1, 2, 3]);
+  });
+
+  it('treats the window as half-open and handles an empty layout', () => {
+    expect(visibleIndices(positions, 100, 108)).toEqual([1]);
+    expect(visibleIndices([], 0, 1000)).toEqual([]);
+  });
+
+  it('returns everything for a window that covers the whole layout', () => {
+    expect(visibleIndices(positions, -1000, 10_000)).toEqual([0, 1, 2, 3, 4]);
   });
 });

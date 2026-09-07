@@ -36,6 +36,14 @@ const PREFETCH_MARGIN = '600px 0px';
 const TILE_GAP = 8;
 
 /**
+ * Above this many loaded tiles the masonry renders only what is near the
+ * viewport (UX spec §7, nice-to-have). Below it every tile stays mounted:
+ * `content-visibility: auto` already skips their paint, and keeping the DOM
+ * stable is worth more than the handful of nodes saved.
+ */
+const WINDOW_THRESHOLD = 200;
+
+/**
  * Height of the caption `PresetCard` renders under the media on mobile.
  * Fixed and known up front so the masonry can include it in the tile
  * height without measuring — keep in sync with `PresetCard`'s caption.
@@ -234,6 +242,7 @@ const PresetGrid = memo<Props>(
             getAspect={tileAspectNumber}
             getKey={presetKey}
             items={deferredItems}
+            windowed={deferredItems.length > WINDOW_THRESHOLD}
             renderItem={(p) => (
               <PresetCard
                 isActive={p.slug === selectedSlug}
