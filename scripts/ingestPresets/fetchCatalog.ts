@@ -113,11 +113,20 @@ export const fetchCatalogPage = async (
 };
 
 export interface DiscoverOptions {
+  /** Injection point for tests; defaults to `fetchCatalogPage`. */
+  fetchPage?: typeof fetchCatalogPage;
   /** External ids already in `presets` — a page made entirely of these stops the walk. */
   known: Set<string>;
   maxNew: number;
   maxPages: number;
   onPage?: (offset: number, page: CatalogPage, fresh: number) => void;
+  /**
+   * `false` = backfill: walk past pages made only of known items and keep
+   * collecting older fresh ones until `maxNew` / `maxPages` / the end of the
+   * feed. The daily cron keeps the default (`true`) — the known page is its
+   * incremental watermark.
+   */
+  stopOnKnownPage?: boolean;
 }
 
 export interface DiscoverResult {
@@ -135,7 +144,7 @@ export interface DiscoverResult {
  */
 export const discoverNewItems = async (
   modality: Modality,
-  { known, maxNew, maxPages, onPage }: DiscoverOptions,
+  { fetchPage = fetchCatalogPage, known, maxNew, maxPages, onPage, stopOnKnownPage = true }: DiscoverOptions,
   fetchOptions?: FetchOptions,
 ): Promise<DiscoverResult> => {
   const fresh: SourceItem[] = [];
@@ -146,7 +155,7 @@ export const discoverNewItems = async (
 
   for (let page = 0; page < maxPages; page += 1) {
     const offset = page * PAGE_SIZE;
-    const result = await fetchCatalogPage(modality, offset, fetchOptions);
+    const result = await fetchPage(modality, offset, fetchOptions);
     pagesFetched += 1;
     seen += result.items.length;
 
@@ -154,7 +163,7 @@ export const discoverNewItems = async (
     for (const item of pageFresh) seenIds.add(item.id);
     onPage?.(offset, result, pageFresh.length);
 
-    if (result.items.length > 0 && pageFresh.length === 0) {
+    if (stopOnKnownPage && result.items.length > 0 && pageFresh.length === 0) {
       stoppedBecause = 'known-page';
       break;
     }

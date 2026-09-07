@@ -270,3 +270,19 @@ behaviour), the label merge (`requires_image` precedence, unsafe → skip) and
 `--relabel` against a mocked `pg` client (dry-run issues no writes). Network,
 ffmpeg and DB paths are exercised by `--dry-run` and by the first supervised
 real run.
+
+## One-off backfill (`--backfill`)
+
+The daily run stops at the first page made only of known items — that page is
+its watermark, so it never reaches the archive. To pull older items once:
+
+```bash
+npx tsx scripts/ingestPresets/index.ts --modality=video --backfill --limit=200 --max-pages=60 --llm-cap=260
+npx tsx scripts/ingestPresets/index.ts --modality=image --backfill --limit=200 --max-pages=60 --llm-cap=260
+```
+
+`--backfill` keeps walking past known pages until `--limit` fresh items are
+collected (or `--max-pages` / the end of the feed); `--llm-cap` lifts the
+per-run classifier budget so the whole batch gets LLM titles (~$0.0004/item).
+All publish filters apply unchanged. Used 2026-09-07 for +200 videos / +200
+images (owner decision: the newest 200 of each, not the whole archive).
