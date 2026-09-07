@@ -360,6 +360,7 @@
   "preset.categories": "Категории",
   "preset.continueOn": "Продолжить на {{model}}",
   "preset.credits": "≈ {{count}} кр",
+  "preset.currentLocked": "{{model}} доступна с тарифа {{plan}}",
   "preset.details": "Подробнее",
   "preset.empty": "Пресеты не найдены",
   "preset.generate": "Сгенерировать",

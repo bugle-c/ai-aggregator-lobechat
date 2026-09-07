@@ -11,6 +11,8 @@ import { useNavigate } from 'react-router-dom';
 
 import { useModelLockState } from '@/features/UIMode';
 import { lambdaQuery } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 import type { EnabledProviderWithModels } from '@/types/index';
 
 import ModelPickerList from './ModelPickerList';
@@ -34,9 +36,8 @@ const LOCK_STALE_MS = 5 * 60 * 1000;
 const useStyles = createStyles(({ css, token }) => ({
   /**
    * Full-width line under the chips (flex-basis 100% + `order` puts it after
-   * every chip in the wrapping row): «Стиль рассчитан на X · Переключить» or
-   * «Рекомендуемая — X, на тарифе Pro Max · Тарифы». The hover tooltip on
-   * the chip alone was invisible on touch and easy to miss with a mouse.
+   * every chip in the wrapping row). The hover tooltip on the chip alone was
+   * invisible on touch and easy to miss with a mouse.
    */
   notice: css`
     display: flex;
@@ -79,13 +80,15 @@ const useStyles = createStyles(({ css, token }) => ({
 /**
  * The model chip of the settings strip, shared by both modalities.
  *
- * Its state is relative to the selected style: no marker when the current
- * model is the recommended one; a warning dot when the user is on another
- * model (pressed «Вернуть», or picked one); a lock when the recommended
- * model is behind a higher plan. Picking a locked row in the list opens the
- * upsell instead of switching. Whenever the model differs from the
- * recommendation, a one-line notice with the way out (switch / plans) is
- * rendered under the chips.
+ * The marker on the chip is about the model that is *selected*:
+ *   🔒 — the selected model itself is behind a higher plan (a generation on
+ *        it will be refused) → «X доступна с тарифа Y · Тарифы»;
+ *   ●  — the selected model is not the one the style recommends →
+ *        «Стиль рассчитан на X · Переключить», or, when the recommended one
+ *        is behind a higher plan, «Рекомендуемая — X, на тарифе Y · Тарифы».
+ * Either way the reason and the way out are a visible line under the chips,
+ * not only a hover tooltip. Picking a locked row in the list opens the
+ * upsell instead of switching.
  */
 const ModelSettingsChip = memo<Props>(
   ({ currentModel, currentProvider, onPick, providers, recommendedModelId, renderModel }) => {
@@ -94,12 +97,15 @@ const ModelSettingsChip = memo<Props>(
     const navigate = useNavigate();
     const utils = lambdaQuery.useUtils();
     const { node: upsellNode, open: openUpsell } = useLockedModelUpsell();
+    // requiredPlanForModel is an authed procedure — never fire it for a visitor.
+    const isLogin = useUserStore(authSelectors.isLogin);
 
     const label = currentModelName(providers, currentModel) || t('preset.settings.model');
 
     const differs = !!recommendedModelId && recommendedModelId !== currentModel;
+    const { data: currentLock } = useModelLockState(isLogin ? currentModel : undefined);
     const { data: recommendedLock } = useModelLockState(
-      differs ? (recommendedModelId ?? undefined) : undefined,
+      isLogin && differs ? (recommendedModelId ?? undefined) : undefined,
     );
     const recommendedTarget = recommendedModelId
       ? findEnabledModel(providers, recommendedModelId)
@@ -109,16 +115,26 @@ const ModelSettingsChip = memo<Props>(
       : '';
 
     let indicator: 'warning' | 'locked' | undefined;
-    let tooltip: string | undefined;
-    if (differs && recommendedLock?.isLocked) {
+    let notice: string | undefined;
+    let action: 'plans' | 'switch' | undefined;
+    if (currentLock?.isLocked) {
       indicator = 'locked';
-      tooltip = t('preset.recommendedLocked', {
+      notice = t('preset.currentLocked', {
+        model: label,
+        plan: currentLock.requiredPlan?.name ?? '',
+      });
+      action = 'plans';
+    } else if (differs && recommendedLock?.isLocked) {
+      indicator = 'warning';
+      notice = t('preset.recommendedLocked', {
         model: recommendedName,
         plan: recommendedLock.requiredPlan?.name ?? '',
       });
+      action = 'plans';
     } else if (differs) {
       indicator = 'warning';
-      tooltip = `${t('preset.styleTunedFor', { model: recommendedName })}. ${t('preset.resultMayDiffer')}`;
+      notice = `${t('preset.styleTunedFor', { model: recommendedName })}. ${t('preset.resultMayDiffer')}`;
+      action = recommendedTarget ? 'switch' : undefined;
     }
 
     const pick = useCallback(
@@ -161,7 +177,7 @@ const ModelSettingsChip = memo<Props>(
           icon={currentModel ? <ModelIcon model={currentModel} size={16} /> : undefined}
           indicator={indicator}
           label={label}
-          tooltip={tooltip}
+          tooltip={notice}
           content={(close) => (
             <ModelPickerList
               currentModel={currentModel}
@@ -172,15 +188,15 @@ const ModelSettingsChip = memo<Props>(
             />
           )}
         />
-        {differs && (
+        {notice && (
           <div className={styles.notice} role="status">
             {indicator === 'locked' ? (
               <Lock className={styles.noticeIcon} size={12} />
             ) : (
               <span aria-hidden className={styles.warnDot} />
             )}
-            <span className={styles.noticeText}>{tooltip}</span>
-            {indicator === 'locked' ? (
+            <span className={styles.noticeText}>{notice}</span>
+            {action === 'plans' && (
               <Button
                 className={styles.noticeAction}
                 size="small"
@@ -189,19 +205,18 @@ const ModelSettingsChip = memo<Props>(
               >
                 {t('preset.plans')}
               </Button>
-            ) : (
-              recommendedTarget && (
-                <Button
-                  className={styles.noticeAction}
-                  size="small"
-                  type="link"
-                  onClick={() =>
-                    void pick(recommendedTarget.modelId, recommendedTarget.providerId, () => {})
-                  }
-                >
-                  {t('preset.switchModel')}
-                </Button>
-              )
+            )}
+            {action === 'switch' && recommendedTarget && (
+              <Button
+                className={styles.noticeAction}
+                size="small"
+                type="link"
+                onClick={() =>
+                  void pick(recommendedTarget.modelId, recommendedTarget.providerId, () => {})
+                }
+              >
+                {t('preset.switchModel')}
+              </Button>
             )}
           </div>
         )}

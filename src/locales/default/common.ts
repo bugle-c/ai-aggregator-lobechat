@@ -468,6 +468,7 @@ export default {
   'preset.settings.pixelSize': 'Exact size, px',
   'preset.switchModel': 'Switch',
   'preset.plans': 'Plans',
+  'preset.currentLocked': '{{model}} requires the {{plan}} plan',
   'preset.sort.curated': 'Curated',
   'preset.sort.new': 'New',
   'preset.sort.popular': 'Popular',
