@@ -54,10 +54,18 @@ const loadEnv = () => {
 export interface Options {
   /** `--relabel` writes only with this; ingest ignores it. */
   apply: boolean;
+  /**
+   * `--backfill`: one-off archive pull — do not stop at the first page of
+   * already-known items, keep walking older pages until `--limit` new items
+   * are collected (or `--max-pages` / the end of the feed).
+   */
+  backfill: boolean;
   dryRun: boolean;
   limit: number;
   /** `--no-llm` → false: pure heuristics, the pre-LLM behaviour. */
   llm: boolean;
+  /** `--llm-cap=N`: classifier calls allowed this run (default 60). */
+  llmCap?: number;
   maxPages: number;
   modalities: Modality[];
   /** `--relabel[=N]`: re-classify N stored rows instead of ingesting. */
@@ -69,6 +77,7 @@ export interface Options {
 export const parseArgs = (argv: string[]): Options => {
   const options: Options = {
     apply: false,
+    backfill: false,
     dryRun: false,
     limit: MAX_NEW_PER_RUN,
     llm: true,
@@ -84,6 +93,12 @@ export const parseArgs = (argv: string[]): Options => {
       options.llm = false;
     } else if (arg === '--apply') {
       options.apply = true;
+    } else if (arg === '--backfill') {
+      options.backfill = true;
+    } else if (arg.startsWith('--llm-cap=')) {
+      const value = Number.parseInt(arg.slice('--llm-cap='.length), 10);
+      if (!Number.isInteger(value) || value <= 0) throw new Error(`bad --llm-cap: ${arg}`);
+      options.llmCap = value;
     } else if (arg === '--relabel') {
       options.relabel = DEFAULT_RELABEL_LIMIT;
     } else if (arg.startsWith('--relabel=')) {
@@ -242,7 +257,9 @@ const run = async (options: Options): Promise<RunReport> => {
   // Constructed up front so a missing key fails before any network work, but
   // it makes no call until an item actually needs a label — a run with
   // nothing new costs nothing.
-  const classifier = options.llm ? Classifier.fromEnv() : null;
+  const classifier = options.llm
+    ? Classifier.fromEnv(options.llmCap ? { maxCalls: options.llmCap } : {})
+    : null;
   if (classifier) report.llm = classifier.stats;
 
   const client = createClient();
@@ -267,6 +284,7 @@ const run = async (options: Options): Promise<RunReport> => {
         known,
         maxNew: budget,
         maxPages: options.maxPages,
+        stopOnKnownPage: !options.backfill,
         onPage: (offset, page, fresh) =>
           console.log(
             `[ingest] ${modality} offset=${offset} items=${page.items.length} fresh=${fresh} hasMore=${page.hasMore}`,
@@ -423,7 +441,7 @@ const relabel = async (options: Options): Promise<void> => {
 
 const USAGE =
   'usage: tsx scripts/ingestPresets/index.ts [--dry-run] [--limit=N] [--max-pages=N] ' +
-  '[--modality=video|image|both] [--no-llm] | --relabel[=N] [--since=<iso>] [--apply]';
+  '[--modality=video|image|both] [--no-llm] [--backfill] [--llm-cap=N] | --relabel[=N] [--since=<iso>] [--apply]';
 
 const main = async () => {
   loadEnv();
