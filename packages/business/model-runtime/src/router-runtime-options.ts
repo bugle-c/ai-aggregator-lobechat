@@ -21,7 +21,7 @@ interface LobehubRouterRuntimeOptions {
 // were also mis-cased — OpenRouter normalises to lowercase `minimax/minimax-m2.5`.
 // DeepSeek `deepseek-chat`/`deepseek-reasoner` are no longer published on
 // OpenRouter; the latest equivalents are `deepseek/deepseek-v3.2` (chat) and
-// `deepseek/deepseek-v3.2-speciale` (reasoning).
+// `deepseek/deepseek-r1` (reasoning; `v3.2-speciale` was retired too — verified 2026-09-09).
 //
 // Verified against `GET https://openrouter.ai/api/v1/models` on 2026-04-30.
 const OPENROUTER_MODEL_MAP: Record<string, string> = {
@@ -80,7 +80,7 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'gemini-2.0-flash-exp-image-generation': 'google/gemini-2.0-flash-exp:free',
   // DeepSeek — `deepseek-chat`/`deepseek-reasoner` are retired on OpenRouter.
   'deepseek-chat': 'deepseek/deepseek-v3.2',
-  'deepseek-reasoner': 'deepseek/deepseek-v3.2-speciale',
+  'deepseek-reasoner': 'deepseek/deepseek-r1',
   'deepseek-v4-pro': 'deepseek/deepseek-v4-pro',
   'deepseek-v4-flash': 'deepseek/deepseek-v4-flash',
   // xAI. `grok-4` was removed from OpenRouter — fall back to 4.20 so legacy
