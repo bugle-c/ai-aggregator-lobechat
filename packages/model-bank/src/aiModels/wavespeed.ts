@@ -118,6 +118,36 @@ export const wavespeedImageModels: AIImageModelCard[] = [
     type: 'image',
   },
   {
+    description:
+      'OpenAI GPT Image 2.5 Sunburst — precision-focused tier of the 2.5 family, spends more time per image for extra fidelity on intricate detail. Up to 4K, 5 quality levels.',
+    displayName: 'GPT Image 2.5 Sunburst',
+    enabled: true,
+    id: 'openai/gpt-image-2.5-sunburst/text-to-image',
+    parameters: {
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.024, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-09-08',
+    type: 'image',
+  },
+  {
+    description:
+      'OpenAI GPT Image 2.5 Flare — fast tier of the 2.5 family, balances speed and quality for high-volume workloads. Up to 4K.',
+    displayName: 'GPT Image 2.5 Flare',
+    enabled: true,
+    id: 'openai/gpt-image-2.5-flare/text-to-image',
+    parameters: {
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.024, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-09-08',
+    type: 'image',
+  },
+  {
     description: 'OpenAI GPT Image 2 — reasoning-enabled image generation with multilingual text.',
     displayName: 'GPT Image 2',
     enabled: true,
@@ -308,6 +338,36 @@ export const wavespeedImageModels: AIImageModelCard[] = [
     },
     pricing: {
       units: [{ name: 'imageGeneration', rate: 0.15, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description: 'GPT Image 2.5 Sunburst — edit reference images at Sunburst fidelity.',
+    displayName: 'GPT Image 2.5 Sunburst Edit',
+    // Auto-routed via pairedEndpoint — hidden from picker.
+    enabled: false,
+    id: 'openai/gpt-image-2.5-sunburst/edit',
+    parameters: {
+      imageUrls: { default: [], maxCount: 16 },
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.039, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description: 'GPT Image 2.5 Flare — edit reference images at Flare speed.',
+    displayName: 'GPT Image 2.5 Flare Edit',
+    // Auto-routed via pairedEndpoint — hidden from picker.
+    enabled: false,
+    id: 'openai/gpt-image-2.5-flare/edit',
+    parameters: {
+      imageUrls: { default: [], maxCount: 16 },
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.039, strategy: 'fixed', unit: 'image' }],
     },
     type: 'image',
   },

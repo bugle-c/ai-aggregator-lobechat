@@ -19,6 +19,8 @@
 const PAIRED_IMAGE_ENDPOINTS: Record<string, string> = {
   'google/nano-banana-2/text-to-image': 'google/nano-banana-2/edit',
   'google/nano-banana-pro/text-to-image': 'google/nano-banana-pro/edit',
+  'openai/gpt-image-2.5-flare/text-to-image': 'openai/gpt-image-2.5-flare/edit',
+  'openai/gpt-image-2.5-sunburst/text-to-image': 'openai/gpt-image-2.5-sunburst/edit',
   'openai/gpt-image-2/text-to-image': 'openai/gpt-image-2/edit',
 };
 
