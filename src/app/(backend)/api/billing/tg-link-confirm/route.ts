@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { userBilling } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { grantTgLinkBonus } from '@/server/modules/billing/grant-tg-link-bonus';
+import { processReferralRewards } from '@/server/modules/referrals/processReferralRewards';
 
 /**
  * POST /api/billing/tg-link-confirm
@@ -95,6 +96,16 @@ export async function POST(req: Request) {
   } catch (e) {
     console.error('[tg-link-confirm] grantTgLinkBonus failed', e);
     // Continue — the link itself is the more important side effect.
+  }
+
+  // 2b) Referral payouts — a reachable bot chat is the anti-fraud gate
+  //     (moved here from the Telegram-login hook on 2026-09-12). Idempotent.
+  try {
+    const r = await processReferralRewards(db, userId);
+    if (r.awardedCount > 0)
+      console.info(`[tg-link-confirm] referral rewards: awarded=${r.awardedCount} referee=${userId}`);
+  } catch (e) {
+    console.error('[tg-link-confirm] processReferralRewards failed', e);
   }
 
   // 3) Best-effort: also write the link to the bot's own sqlite via

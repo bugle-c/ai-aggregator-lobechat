@@ -11,7 +11,7 @@ import {
 } from '@/app/[variants]/(main)/home/features/InputArea/useIntentPrompt';
 import IntentChips from '@/features/Onboarding/IntentChips';
 import { tgLinkHref } from '@/features/TgLinkBonusBanner/startTgLink';
-import { useShouldShow } from '@/features/TgLinkBonusBanner/useShouldShow';
+import { useTgLinkBanner } from '@/features/TgLinkBonusBanner/useShouldShow';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';

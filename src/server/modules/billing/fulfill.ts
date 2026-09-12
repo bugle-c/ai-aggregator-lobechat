@@ -125,7 +125,7 @@ export async function fulfillPayment(
     console.error('[billing] intro offer hook error:', error);
   }
 
-  // (Referral rewards now trigger from the linkTelegramAccount hook;
+  // (Referral rewards trigger from a real bot chat — tg-link-confirm / register-bot-chat;
   //  see src/libs/better-auth/hooks/telegram-link.ts +
   //  src/server/modules/referrals/processReferralRewards.ts.)
 }

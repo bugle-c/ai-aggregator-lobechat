@@ -9,8 +9,14 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 const DISMISS_KEY = 'tg_link_banner_dismissed_until';
 
 /**
- * Returns true iff the user has no TG link AND no claim stamp AND
- * hasn't dismissed within the last 7 days.
+ * Returns true iff the bot cannot reach the user (no `tg_bot_chat_id`) AND
+ * they haven't dismissed within the last 7 days.
+ *
+ * 2026-09-12: no longer hides on `tg_bonus_claimed_at`. Until then the
+ * bonus was also paid on Telegram *login* (no bot chat), so 133/148 "linked"
+ * users were unreachable and, with the stamp set, never saw a prompt to
+ * open the bot. Reachability is the thing we want; the bonus is just the
+ * carrot — see useTgLinkBanner() for which copy to show.
  *
  * Gated on `isLogin` — without this gate the tRPC query 401-loops for
  * anonymous visitors landing from the marketing site, causing a
@@ -29,6 +35,16 @@ const DISMISS_KEY = 'tg_link_banner_dismissed_until';
 const BANNER_TEMPORARILY_DISABLED = false;
 
 export function useShouldShow(): boolean {
+  return useTgLinkBanner().show;
+}
+
+/**
+ * `show` — bot is unreachable for this user, banner not dismissed.
+ * `bonusPending` — the +100 has not been paid yet, so the copy may promise
+ * it; when false the user already got it (typically via the old login
+ * grant) and the banner should only ask them to open the bot.
+ */
+export function useTgLinkBanner(): { bonusPending: boolean; show: boolean } {
   const isLogin = useUserStore(authSelectors.isLogin);
 
   const { data } = lambdaQuery.subscription.getBillingState.useQuery(undefined, {
@@ -46,13 +62,13 @@ export function useShouldShow(): boolean {
     if (Number.isFinite(until) && until > Date.now()) setDismissed(true);
   }, []);
 
-  if (BANNER_TEMPORARILY_DISABLED) return false;
-  if (!isLogin) return false;
-  if (dismissed) return false;
-  if (!data) return false;
-  if (data.tgBotChatId) return false;
-  if (data.tgBonusClaimedAt) return false;
-  return true;
+  const bonusPending = !data?.tgBonusClaimedAt;
+  if (BANNER_TEMPORARILY_DISABLED) return { bonusPending, show: false };
+  if (!isLogin) return { bonusPending, show: false };
+  if (dismissed) return { bonusPending, show: false };
+  if (!data) return { bonusPending, show: false };
+  if (data.tgBotChatId) return { bonusPending, show: false };
+  return { bonusPending, show: true };
 }
 
 /** Persist dismissal for 7 days. */

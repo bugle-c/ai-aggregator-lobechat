@@ -7,7 +7,7 @@ import { memo } from 'react';
 import { MOBILE_TAB_BAR_HEIGHT } from '@/features/MobileTabBar';
 
 import { onTgLinkClick, tgLinkHref } from './startTgLink';
-import { dismissBanner, useShouldShow } from './useShouldShow';
+import { dismissBanner, useTgLinkBanner } from './useShouldShow';
 
 const useStyles = createStyles(({ css }) => ({
   bar: css`
@@ -75,14 +75,16 @@ const useStyles = createStyles(({ css }) => ({
 
 const MobileStickyBar = memo(() => {
   const { styles } = useStyles();
-  const show = useShouldShow();
+  const { show, bonusPending } = useTgLinkBanner();
   if (!show) return null;
 
   return (
     <div className={styles.bar}>
-      <div className={styles.text}>🎁 Привяжи Telegram и получи 100 кредитов</div>
+      <div className={styles.text}>
+        {bonusPending ? '🎁 Привяжи Telegram и получи 100 кредитов' : '🔔 Открой бота — иначе уведомления не дойдут'}
+      </div>
       <a className={styles.cta} href={tgLinkHref()} onClick={onTgLinkClick}>
-        Привязать
+        {bonusPending ? 'Привязать' : 'Открыть'}
       </a>
       <button aria-label="Скрыть" className={styles.dismiss} type="button" onClick={dismissBanner}>
         <X size={16} />

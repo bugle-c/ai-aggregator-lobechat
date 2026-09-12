@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 
 import { userBilling } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import { grantTgLinkBonus } from '@/server/modules/billing/grant-tg-link-bonus';
+import { processReferralRewards } from '@/server/modules/referrals/processReferralRewards';
 
 /**
  * POST /api/billing/register-bot-chat
@@ -24,6 +26,12 @@ import { getServerDB } from '@/database/server';
  * can only ever stamp a chat for the user who actually owns that Telegram
  * id. Unknown tg_user_id (someone who messaged the bot but never signed up
  * on the web) → no-op.
+ *
+ * Since 2026-09-12 this is also where the +100 TG-link bonus and referral
+ * payouts are granted: a real bot update is the only proof the chat is
+ * reachable, and the bonus exists to buy exactly that. Both grants are
+ * idempotent (tg_bonus_claimed_at stamp / referrals.status flip), so a user
+ * who also came through tg-link-confirm is paid once.
  *
  * Auth: same X-Internal-Token shared secret as the other bot↔aggregator
  * internal routes. Idempotent.
@@ -85,5 +93,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'billing_write_failed' }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, linked: true });
+  // Reachability proven → pay the link bonus + unblock referral rewards.
+  // Best-effort: the stamp above is the important side effect.
+  let granted = 0;
+  try {
+    granted = (await grantTgLinkBonus(db, userId)).granted;
+    if (granted > 0) console.info(`[register-bot-chat] +${granted} link bonus → ${userId}`);
+  } catch (e) {
+    console.error('[register-bot-chat] grantTgLinkBonus failed', e);
+  }
+  try {
+    const r = await processReferralRewards(db, userId);
+    if (r.awardedCount > 0)
+      console.info(`[register-bot-chat] referral rewards: awarded=${r.awardedCount} referee=${userId}`);
+  } catch (e) {
+    console.error('[register-bot-chat] processReferralRewards failed', e);
+  }
+
+  return NextResponse.json({ ok: true, linked: true, granted });
 }

@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 import { memo } from 'react';
 
 import { onTgLinkClick, tgLinkHref } from './startTgLink';
-import { dismissBanner, useShouldShow } from './useShouldShow';
+import { dismissBanner, useTgLinkBanner } from './useShouldShow';
 
 const useStyles = createStyles(({ css }) => ({
   card: css`
@@ -72,7 +72,7 @@ const useStyles = createStyles(({ css }) => ({
 
 const PcSidebarCard = memo(() => {
   const { styles } = useStyles();
-  const show = useShouldShow();
+  const { show, bonusPending } = useTgLinkBanner();
   if (!show) return null;
 
   return (
@@ -80,10 +80,19 @@ const PcSidebarCard = memo(() => {
       <button aria-label="Скрыть" className={styles.dismiss} type="button" onClick={dismissBanner}>
         <X size={14} />
       </button>
-      <div className={styles.title}>🎁 +100 кредитов</div>
-      <div>Привяжи Telegram и получи 100 кредитов на 30 дней.</div>
+      {bonusPending ? (
+        <>
+          <div className={styles.title}>🎁 +100 кредитов</div>
+          <div>Привяжи Telegram и получи 100 кредитов на 30 дней.</div>
+        </>
+      ) : (
+        <>
+          <div className={styles.title}>🔔 Подключи бота</div>
+          <div>Открой @gptwebrubot и нажми «Старт» — иначе уведомления о балансе и платежах не дойдут.</div>
+        </>
+      )}
       <a className={styles.cta} href={tgLinkHref()} onClick={onTgLinkClick}>
-        Привязать
+        {bonusPending ? 'Привязать' : 'Открыть бота'}
       </a>
     </div>
   );
