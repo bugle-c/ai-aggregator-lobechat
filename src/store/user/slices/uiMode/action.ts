@@ -69,7 +69,7 @@ export class UIModeActionImpl {
           // fallback (gemma4:e4b) was retired 2026-09-07 — CPU inference on
           // our host was 5-10 min per answer, unusable.
           await agentStoreState.updateAgentConfigById(activeAgentId, {
-            model: 'deepseek-v4-flash',
+            model: 'deepseek-v4.1-flash',
             provider: 'lobehub',
           });
           modelWasReset = true;

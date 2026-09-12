@@ -2,6 +2,44 @@ import type { AIChatModelCard } from '../../../types/aiModel';
 
 export const openaiChatModels: AIChatModelCard[] = [
   {
+    abilities: { functionCall: true, reasoning: true, search: true, vision: true },
+    contextWindowTokens: 1_050_000,
+    description:
+      "GPT-6 Astra — OpenAI's flagship for demanding end-to-end work: advanced analysis, software engineering, deep research and long-horizon agent tasks. 1M-token context.",
+    displayName: 'GPT-6 Astra',
+    enabled: true,
+    id: 'gpt-6-astra',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 50, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-04',
+    settings: { extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'] },
+    type: 'chat',
+  },
+  {
+    abilities: { functionCall: true, reasoning: true, search: true, vision: true },
+    contextWindowTokens: 1_050_000,
+    description:
+      'GPT-5.6 Sol — flagship of the 5.6 series for complex reasoning, coding and agentic workflows; particularly strong at command-line and multi-step coding. 1M-token context.',
+    displayName: 'GPT-5.6 Sol',
+    enabled: true,
+    id: 'gpt-5.6-sol',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-07-09',
+    settings: { extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'] },
+    type: 'chat',
+  },
+  {
     abilities: {
       functionCall: true,
       reasoning: true,

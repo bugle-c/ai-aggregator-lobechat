@@ -16,7 +16,7 @@ const RECOMMENDED_BY_PLAN: Record<string, RecommendedModel[]> = {
     {
       creditCost: 1,
       description: 'Быстрая и умная — минимальная наценка',
-      modelId: 'deepseek-v4-flash',
+      modelId: 'deepseek-v4.1-flash',
       order: 1,
     },
     {
@@ -36,7 +36,7 @@ const RECOMMENDED_BY_PLAN: Record<string, RecommendedModel[]> = {
     {
       creditCost: 1,
       description: 'Быстрая и умная — минимальная наценка',
-      modelId: 'deepseek-v4-flash',
+      modelId: 'deepseek-v4.1-flash',
       order: 1,
     },
     {

@@ -14,7 +14,7 @@ import { type DiscoverAssistantItem } from '@/types/discover';
 // 5x less than the previous gpt-5-mini default. Result: Free-tier grant lasts
 // ~800 answers instead of ~10. Curated agents inherit this via the `model`
 // field on each config so no per-user default has to be tweaked.
-const SERVED_MODEL = 'deepseek-v4-flash';
+const SERVED_MODEL = 'deepseek-v4.1-flash';
 const SERVED_PROVIDER = 'lobehub';
 
 /**

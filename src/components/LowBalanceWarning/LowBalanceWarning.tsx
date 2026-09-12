@@ -16,7 +16,7 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 /** Cheapest cloud option via the `lobehub` gateway. DeepSeek V4 Flash carries
  * markupOverride=2.0 in model_rates so it's the wow-price hero. Replaces the
  * retired local gemma4:e4b (Ollama on CPU was too slow to recommend). */
-const WEBGPT_MINI = { model: 'deepseek-v4-flash', provider: 'lobehub' } as const;
+const WEBGPT_MINI = { model: 'deepseek-v4.1-flash', provider: 'lobehub' } as const;
 
 const LowBalanceWarning = memo(() => {
   const { t } = useTranslation('subscription');

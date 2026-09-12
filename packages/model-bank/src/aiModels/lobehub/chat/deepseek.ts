@@ -2,6 +2,24 @@ import type { AIChatModelCard } from '../../../types/aiModel';
 
 export const deepseekChatModels: AIChatModelCard[] = [
   {
+    abilities: { functionCall: true, reasoning: true, vision: true },
+    contextWindowTokens: 1_048_576,
+    description:
+      "DeepSeek V4.1 Flash — first model on DeepSeek's Causal Encoder-Decoder architecture; markedly smarter than V4 Flash at everyday chat, coding and vision. 1M-token context. Platform default.",
+    displayName: 'DeepSeek V4.1 Flash',
+    enabled: true,
+    id: 'deepseek-v4.1-flash',
+    maxOutput: 384_000,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-10',
+    type: 'chat',
+  },
+  {
     abilities: {
       functionCall: true,
       reasoning: true,
@@ -27,14 +45,14 @@ export const deepseekChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
-      'DeepSeek V4 Flash — the cheapest member of the V4 family, optimised for fast everyday chat. 1M-token context.',
+      'DeepSeek V4 Flash — cheapest member of the V4 family; superseded by V4.1 Flash as the default but still the lowest-cost option. 1M-token context.',
     displayName: 'DeepSeek V4 Flash',
     enabled: true,
     id: 'deepseek-v4-flash',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.07, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.13, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-20',

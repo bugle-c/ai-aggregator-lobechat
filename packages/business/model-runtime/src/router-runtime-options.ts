@@ -42,6 +42,8 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'claude-haiku-4-5-20251001': 'anthropic/claude-haiku-4.5',
   'claude-3-5-haiku-20241022': 'anthropic/claude-3.5-haiku',
   // OpenAI — already correct
+  'gpt-6-astra': 'openai/gpt-6-astra',
+  'gpt-5.6-sol': 'openai/gpt-5.6-sol',
   'gpt-5.6-terra': 'openai/gpt-5.6-terra',
   'gpt-5.6-luna': 'openai/gpt-5.6-luna',
   'gpt-5.5': 'openai/gpt-5.5',
@@ -82,6 +84,7 @@ const OPENROUTER_MODEL_MAP: Record<string, string> = {
   'deepseek-chat': 'deepseek/deepseek-v3.2',
   'deepseek-reasoner': 'deepseek/deepseek-r1',
   'deepseek-v4-pro': 'deepseek/deepseek-v4-pro',
+  'deepseek-v4.1-flash': 'deepseek/deepseek-v4.1-flash',
   'deepseek-v4-flash': 'deepseek/deepseek-v4-flash',
   // xAI. `grok-4` was removed from OpenRouter — fall back to 4.20 so legacy
   // chats saved with the old id keep working instead of 400-ing.
