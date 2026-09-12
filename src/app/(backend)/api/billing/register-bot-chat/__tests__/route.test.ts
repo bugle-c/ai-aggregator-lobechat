@@ -66,6 +66,24 @@ describe('POST /api/billing/register-bot-chat', () => {
     expect(processReferralRewards).not.toHaveBeenCalled();
   });
 
+  it('bot-native account (no telegram accounts row, bot passes its own user id): stamps chat_id, pays nothing', async () => {
+    execute
+      .mockResolvedValueOnce({ rows: [] }) // accounts lookup → none
+      .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }); // users exists
+    const res = await POST(req({ tg_user_id: 77, tg_chat_id: 77, lobechat_user_id: 'bot-u7' }));
+    expect(await res.json()).toEqual({ ok: true, linked: false, reason: 'bot_native', granted: 0 });
+    expect(values).toHaveBeenCalledWith({ planId: 1, tgBotChatId: 77, userId: 'bot-u7' });
+    expect(grantTgLinkBonus).not.toHaveBeenCalled();
+    expect(processReferralRewards).not.toHaveBeenCalled();
+  });
+
+  it('ignores a bot-provided user id that does not exist in users', async () => {
+    execute.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] });
+    const res = await POST(req({ tg_user_id: 78, tg_chat_id: 78, lobechat_user_id: 'ghost' }));
+    expect(await res.json()).toEqual({ ok: true, linked: false, reason: 'no_account' });
+    expect(values).not.toHaveBeenCalled();
+  });
+
   it('still returns linked:true when the bonus grant throws (stamp is the important side effect)', async () => {
     execute.mockResolvedValueOnce({ rows: [{ user_id: 'u1' }] });
     grantTgLinkBonus.mockRejectedValueOnce(new Error('db down'));

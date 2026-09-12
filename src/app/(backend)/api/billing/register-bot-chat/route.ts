@@ -39,6 +39,13 @@ import { processReferralRewards } from '@/server/modules/referrals/processReferr
 export const dynamic = 'force-dynamic';
 
 interface Body {
+  /**
+   * The bot's own mapping for this Telegram user (bot.db). Used only when no
+   * web `accounts` row exists — i.e. a bot-native account created by the bot
+   * itself. Such users get their chat_id stamped (they are reachable by
+   * definition) but NO link bonus: nothing was linked, no web account exists.
+   */
+  lobechat_user_id?: string;
   tg_chat_id: number;
   tg_user_id: number;
 }
@@ -73,10 +80,21 @@ export async function POST(req: Request) {
     WHERE provider_id = 'telegram' AND account_id = ${String(body.tg_user_id)}
     LIMIT 1
   `);
-  const userId = (rows.rows as Array<{ user_id: string }>)[0]?.user_id;
+  let userId = (rows.rows as Array<{ user_id: string }>)[0]?.user_id;
+  // `linked` = a web account was tied to this Telegram id (bonus-eligible).
+  // Bot-native accounts are reachable but were never "linked".
+  let linked = true;
   if (!userId) {
-    // Messaged the bot but isn't a registered web user — nothing to stamp.
-    return NextResponse.json({ ok: true, linked: false, reason: 'no_account' });
+    const botUserId = typeof body.lobechat_user_id === 'string' ? body.lobechat_user_id : '';
+    if (!botUserId) {
+      return NextResponse.json({ ok: true, linked: false, reason: 'no_account' });
+    }
+    const exists = await db.execute(sql`SELECT 1 FROM users WHERE id = ${botUserId} LIMIT 1`);
+    if (exists.rows.length === 0) {
+      return NextResponse.json({ ok: true, linked: false, reason: 'no_account' });
+    }
+    userId = botUserId;
+    linked = false;
   }
 
   // Stamp the real chat id (idempotent upsert). Only overwrites if changed.
@@ -93,6 +111,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'billing_write_failed' }, { status: 500 });
   }
 
+  if (!linked) {
+    // Bot-native account: reachable, now visible to broadcasts/push — but
+    // nothing was linked, so no bonus and no referral gate here.
+    return NextResponse.json({ ok: true, linked: false, reason: 'bot_native', granted: 0 });
+  }
+
   // Reachability proven → pay the link bonus + unblock referral rewards.
   // Best-effort: the stamp above is the important side effect.
   let granted = 0;
@@ -105,7 +129,9 @@ export async function POST(req: Request) {
   try {
     const r = await processReferralRewards(db, userId);
     if (r.awardedCount > 0)
-      console.info(`[register-bot-chat] referral rewards: awarded=${r.awardedCount} referee=${userId}`);
+      console.info(
+        `[register-bot-chat] referral rewards: awarded=${r.awardedCount} referee=${userId}`,
+      );
   } catch (e) {
     console.error('[register-bot-chat] processReferralRewards failed', e);
   }
