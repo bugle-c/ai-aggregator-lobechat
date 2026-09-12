@@ -68,7 +68,11 @@ const WelcomeModal = memo(() => {
     if (!markSeen.isPending) markSeen.mutate();
   }, [markSeen]);
 
-  const showTgBonus = useShouldShow();
+  // Welcome modal advertises the +100: only when the bot can't reach the
+  // user AND the bonus hasn't been paid yet. Already-paid-but-unreachable
+  // users get the quieter "open the bot" card in the sidebar instead.
+  const tgBanner = useTgLinkBanner();
+  const showTgBonus = tgBanner.show && tgBanner.bonusPending;
 
   // Background stamp when skipping for a charged input, so the modal
   // never resurfaces on a later visit.
