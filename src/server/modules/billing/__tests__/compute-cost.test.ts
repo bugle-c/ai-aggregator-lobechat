@@ -73,10 +73,10 @@ describe('computeCostUsdFromRate — tokens', () => {
 });
 
 describe('tier-based billing multipliers', () => {
-  it('uses cheap x10, mid x5, high x4 and premium x2.5 multipliers from tier_override', () => {
-    expect(getTierMultiplierForRate({ ...TOKENS_RATE, tierOverride: 'cheap' })).toBe(10);
-    expect(getTierMultiplierForRate({ ...TOKENS_RATE, tierOverride: 'mid' })).toBe(5);
-    expect(getTierMultiplierForRate({ ...TOKENS_RATE, tierOverride: 'high' })).toBe(4);
+  it('uses cheap x4, mid x4, high x3 and premium x2.5 multipliers from tier_override (2026-09-12)', () => {
+    expect(getTierMultiplierForRate({ ...TOKENS_RATE, tierOverride: 'cheap' })).toBe(4);
+    expect(getTierMultiplierForRate({ ...TOKENS_RATE, tierOverride: 'mid' })).toBe(4);
+    expect(getTierMultiplierForRate({ ...TOKENS_RATE, tierOverride: 'high' })).toBe(3);
     expect(getTierMultiplierForRate({ ...TOKENS_RATE, tierOverride: 'premium' })).toBe(2.5);
   });
 
@@ -137,21 +137,22 @@ describe('computeCostUsdFromRate — providerCostUsd (OpenRouter)', () => {
 describe('computeCostUsdFromRate — image', () => {
   it('multiplies images by per_unit and tier multiplier', () => {
     // 5 × $0.04 × mid multiplier 5 = $1.00
+    // 5 × $0.04 × mid multiplier 4 = $0.80
     const cost = computeCostUsdFromRate(IMAGE_RATE, { kind: 'image', images: 5 });
-    expect(cost).toBeCloseTo(1, 4);
+    expect(cost).toBeCloseTo(0.8, 4);
   });
 
   it('defaults to 1 image if not provided', () => {
     const cost = computeCostUsdFromRate(IMAGE_RATE, { kind: 'image', images: undefined });
-    expect(cost).toBeCloseTo(0.2, 4); // $0.04 × mid multiplier 5 × 1
+    expect(cost).toBeCloseTo(0.16, 4); // $0.04 × mid multiplier 4 × 1
   });
 });
 
 describe('computeCostUsdFromRate — second (video)', () => {
   it('multiplies seconds by per_unit and tier multiplier', () => {
-    // 10 sec × $0.05 × mid multiplier 5 = $2.50
+    // 10 sec × $0.05 × mid multiplier 4 = $2.00
     const cost = computeCostUsdFromRate(VIDEO_RATE, { kind: 'video', videoSeconds: 10 });
-    expect(cost).toBeCloseTo(2.5, 4);
+    expect(cost).toBeCloseTo(2, 4);
   });
 
   it('returns 0 for 0 seconds', () => {
