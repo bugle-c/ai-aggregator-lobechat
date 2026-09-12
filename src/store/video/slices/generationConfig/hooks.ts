@@ -29,8 +29,11 @@ export function useVideoGenerationConfigParam<
     const min = 'min' in paramConfig ? (paramConfig.min as number) : undefined;
     const max = 'max' in paramConfig ? (paramConfig.max as number) : undefined;
     const step = 'step' in paramConfig ? (paramConfig.step as number) : undefined;
+    const maxCount = 'maxCount' in paramConfig ? (paramConfig.maxCount as number) : undefined;
+    const maxTotalSeconds =
+      'maxTotalSeconds' in paramConfig ? (paramConfig.maxTotalSeconds as number) : undefined;
 
-    return { enumValues, max, maxFileSize, min, step };
+    return { enumValues, max, maxCount, maxFileSize, maxTotalSeconds, min, step };
   }, [paramConfig]);
 
   return {

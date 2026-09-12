@@ -235,6 +235,8 @@ SettingsChip.displayName = 'SettingsChip';
 
 interface AdvancedItemProps {
   children: ReactNode;
+  /** One-line explanation under the label (what the knob does / how to reference it). */
+  hint?: string;
   label?: string;
   /**
    * Why the knob is read-only right now (e.g. «Задаёт стиль»). A locked knob
@@ -246,7 +248,7 @@ interface AdvancedItemProps {
 }
 
 /** One labelled row inside the advanced panel. */
-export const AdvancedItem = memo<AdvancedItemProps>(({ children, label, lock }) => {
+export const AdvancedItem = memo<AdvancedItemProps>(({ children, hint, label, lock }) => {
   const { styles } = useStyles();
   if (lock) {
     return (
@@ -267,6 +269,7 @@ export const AdvancedItem = memo<AdvancedItemProps>(({ children, label, lock }) 
         </div>
       )}
       {children}
+      {hint && <span className={styles.lockReason}>{hint}</span>}
     </div>
   );
 });

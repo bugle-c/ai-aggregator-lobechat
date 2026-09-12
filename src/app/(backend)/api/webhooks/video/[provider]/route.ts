@@ -19,6 +19,7 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import { asyncTasks, generationBatches } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import { referenceSecondsFor } from '@/server/modules/billing/compute-cost';
 import { VideoGenerationService } from '@/server/services/generation/video';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
@@ -284,6 +285,9 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
         model: resolvedModel,
         prechargeResult: metadata?.precharge as any,
         provider,
+        referenceSeconds: referenceSecondsFor(
+          (batchConfig ?? {}) as { referenceSeconds?: number; videoUrls?: unknown[] },
+        ),
         resolution: typeof batchConfig?.resolution === 'string' ? batchConfig.resolution : undefined,
         usage: usageWithDuration,
         userId: asyncTask.userId,

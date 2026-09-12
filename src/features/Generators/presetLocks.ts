@@ -16,7 +16,14 @@ import { normalizePresetParams } from './normalizePresetParams';
  */
 export type StyleLock = 'unused' | 'value' | null;
 
-const REFERENCE_INPUTS = new Set(['imageUrl', 'imageUrls']);
+/** Image flow: the style's reference is `imageUrl` / `imageUrls` (i2i). */
+const IMAGE_REFERENCE_INPUTS = new Set(['imageUrl', 'imageUrls']);
+/**
+ * Video flow: a text style takes no START frame; reference images / videos
+ * (`imageUrls` / `videoUrls`, Seedance 2.0 Mini & full) are free extras the
+ * user may add to any style — the prompt still drives the shot.
+ */
+const VIDEO_FRAME_INPUTS = new Set(['imageUrl', 'endImageUrl']);
 const DIMENSION_KEYS = new Set(['height', 'width']);
 
 /** Runtime parameter keys the style pins via `params_lock`. */
@@ -27,12 +34,18 @@ export const styleLockFor = (
   preset: Preset | null | undefined,
   key: string,
   lockedKeys: ReadonlySet<string> = presetLockedKeys(preset),
+  modality: 'image' | 'video' = 'image',
 ): StyleLock => {
   if (!preset) return null;
   if (lockedKeys.has(key)) return 'value';
-  if (REFERENCE_INPUTS.has(key)) return preset.requiresImage ? null : 'unused';
-  // An i2v style works from one start photo; a text style from none.
-  if (key === 'endImageUrl') return 'unused';
+  if (modality === 'video') {
+    // An i2v style works from one start photo; a text style from none. The
+    // end frame is never part of a style.
+    if (key === 'imageUrl') return preset.requiresImage ? null : 'unused';
+    if (VIDEO_FRAME_INPUTS.has(key)) return 'unused';
+  } else if (IMAGE_REFERENCE_INPUTS.has(key)) {
+    return preset.requiresImage ? null : 'unused';
+  }
   if (DIMENSION_KEYS.has(key) && lockedKeys.has('aspectRatio')) return 'value';
   return null;
 };

@@ -84,9 +84,16 @@ export function buildBody(params: CreateVideoPayload['params']): Record<string, 
     seed,
     resolution,
     negativePrompt,
+    imageUrls,
+    videoUrls,
   } = params as Record<string, unknown> & CreateVideoPayload['params'];
 
   const body: Record<string, unknown> = { prompt };
+
+  // Seedance 2.0 Mini / full: style & motion references next to the prompt.
+  // Not a start frame — the model stays on its text-to-video endpoint.
+  if (Array.isArray(imageUrls) && imageUrls.length > 0) body.reference_images = imageUrls;
+  if (Array.isArray(videoUrls) && videoUrls.length > 0) body.reference_videos = videoUrls;
 
   if (imageUrl) body.image = imageUrl;
   if (endImageUrl) body.last_image = endImageUrl;

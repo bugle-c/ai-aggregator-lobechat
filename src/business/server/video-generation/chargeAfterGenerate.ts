@@ -20,6 +20,8 @@ interface ChargeParams {
   model: string;
   prechargeResult?: { amount: number; holdId: string } | Record<string, unknown>;
   provider: string;
+  /** Billable seconds of the reference videos (from the batch config), already clamped. */
+  referenceSeconds?: number;
   /** Requested output resolution (from the batch config) — per-resolution families bill by it. */
   resolution?: string | null;
   // Video: use durationSeconds from provider webhook if available, else fall back
@@ -119,7 +121,7 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
   const credits = await calculateCreditsAsync(params.metadata.modelId, {
     kind: 'video',
     resolution: params.resolution,
-    videoSeconds: seconds,
+    videoSeconds: seconds + (params.referenceSeconds ?? 0),
   });
 
   const diff = heldAmount > 0 ? credits - heldAmount : credits;

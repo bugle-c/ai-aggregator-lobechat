@@ -50,8 +50,27 @@ describe('styleLockFor', () => {
     expect(styleLockFor(preset({ requiresImage: true }), 'imageUrl')).toBeNull();
   });
 
-  it('never needs an end frame under a style', () => {
-    expect(styleLockFor(preset({}), 'endImageUrl')).toBe('unused');
-    expect(styleLockFor(preset({ requiresImage: true }), 'endImageUrl')).toBe('unused');
+  it('never needs an end frame under a video style', () => {
+    expect(styleLockFor(preset({}), 'endImageUrl', undefined, 'video')).toBe('unused');
+    expect(styleLockFor(preset({ requiresImage: true }), 'endImageUrl', undefined, 'video')).toBe(
+      'unused',
+    );
+  });
+});
+
+describe('styleLockFor — video modality', () => {
+  const text = preset({});
+  const i2v = preset({ requiresImage: true });
+
+  it('locks the start frame for a text style and frees it for an i2v style', () => {
+    expect(styleLockFor(text, 'imageUrl', undefined, 'video')).toBe('unused');
+    expect(styleLockFor(i2v, 'imageUrl', undefined, 'video')).toBeNull();
+    expect(styleLockFor(i2v, 'endImageUrl', undefined, 'video')).toBe('unused');
+  });
+
+  it('leaves reference images and videos free under any video style', () => {
+    expect(styleLockFor(text, 'imageUrls', undefined, 'video')).toBeNull();
+    expect(styleLockFor(text, 'videoUrls', undefined, 'video')).toBeNull();
+    expect(styleLockFor(i2v, 'imageUrls', undefined, 'video')).toBeNull();
   });
 });

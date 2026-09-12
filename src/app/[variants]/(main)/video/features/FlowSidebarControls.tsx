@@ -13,6 +13,8 @@ import {
 } from '@/app/[variants]/(main)/video/_layout/ConfigPanel';
 import FrameUpload from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/FrameUpload';
 import VideoModelItem from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/ModelSelect/VideoModelItem';
+import ReferenceImagesUpload from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/ReferenceImagesUpload';
+import ReferenceVideosUpload from '@/app/[variants]/(main)/video/_layout/ConfigPanel/components/ReferenceVideosUpload';
 import ModelSettingsChip from '@/features/Generators/ModelSettingsChip';
 import { hasReferenceImage } from '@/features/Generators/presetImageGate';
 import { presetLockedKeys, styleLockFor } from '@/features/Generators/presetLocks';
@@ -127,7 +129,15 @@ const PhotoThumb = memo<{ src: string }>(({ src }) => (
 
 PhotoThumb.displayName = 'VideoPhotoThumb';
 
-type Knob = 'cameraFixed' | 'endImageUrl' | 'generateAudio' | 'imageUrl' | 'resolution' | 'seed';
+type Knob =
+  | 'cameraFixed'
+  | 'endImageUrl'
+  | 'generateAudio'
+  | 'imageUrl'
+  | 'imageUrls'
+  | 'resolution'
+  | 'seed'
+  | 'videoUrls';
 
 interface AdvancedProps {
   /** Per-knob lock reason under the selected style; `undefined` = free. */
@@ -150,6 +160,20 @@ const VideoAdvanced = memo<AdvancedProps>(({ locks, show }) => {
 
   return (
     <>
+      {show.imageUrls && (
+        <AdvancedItem
+          hint={t('config.referenceImages.hint', { max: '9' })}
+          label={t('config.referenceImages.label')}
+          lock={locks.imageUrls}
+        >
+          <ReferenceImagesUpload />
+        </AdvancedItem>
+      )}
+      {show.videoUrls && (
+        <AdvancedItem label={t('config.referenceVideos.label')} lock={locks.videoUrls}>
+          <ReferenceVideosUpload />
+        </AdvancedItem>
+      )}
       {show.imageUrl && (
         <AdvancedItem label={startFrameLabel} lock={locks.imageUrl}>
           <FrameUpload paramName="imageUrl" />
@@ -210,6 +234,11 @@ const FlowSidebarControls = memo(() => {
   const supportsSeed = useVideoStore(isSupported('seed'));
   const supportsGenerateAudio = useVideoStore(isSupported('generateAudio'));
   const supportsCameraFixed = useVideoStore(isSupported('cameraFixed'));
+  const supportsImageUrls = useVideoStore(isSupported('imageUrls'));
+  const supportsVideoUrls = useVideoStore(isSupported('videoUrls'));
+  const referenceSeconds = useVideoStore(
+    (s) => videoGenerationConfigSelectors.parameters(s)?.referenceSeconds as number | undefined,
+  );
   const aspect = useVideoGenerationConfigParam('aspectRatio');
   const duration = useVideoGenerationConfigParam('duration');
   const imageUrl = useVideoStore((s) => videoGenerationConfigSelectors.parameters(s)?.imageUrl);
@@ -228,6 +257,7 @@ const FlowSidebarControls = memo(() => {
     durationSeconds,
     kind: 'video',
     model,
+    referenceSeconds,
     resolution: resolutionValue,
   });
 
@@ -245,7 +275,7 @@ const FlowSidebarControls = memo(() => {
 
   const lockedKeys = useMemo(() => presetLockedKeys(preset), [preset]);
   const lockReason = (key: string): string | undefined => {
-    const lock = styleLockFor(preset, key, lockedKeys);
+    const lock = styleLockFor(preset, key, lockedKeys, 'video');
     if (lock === 'value') return t('preset.settings.lockedByStyle');
     if (lock === 'unused') return t('preset.settings.unusedByStyle');
     return undefined;
@@ -256,8 +286,10 @@ const FlowSidebarControls = memo(() => {
     endImageUrl: supportsEndImageUrl,
     generateAudio: supportsGenerateAudio,
     imageUrl: supportsImageUrl && !showPhotoChip,
+    imageUrls: supportsImageUrls,
     resolution: supportsResolution,
     seed: supportsSeed,
+    videoUrls: supportsVideoUrls,
   };
   const hasAdvanced = Object.values(show).some(Boolean);
   const locks: Partial<Record<Knob, string>> = {
@@ -265,8 +297,10 @@ const FlowSidebarControls = memo(() => {
     endImageUrl: lockReason('endImageUrl'),
     generateAudio: lockReason('generateAudio'),
     imageUrl: lockReason('imageUrl'),
+    imageUrls: lockReason('imageUrls'),
     resolution: lockReason('resolution'),
     seed: lockReason('seed'),
+    videoUrls: lockReason('videoUrls'),
   };
 
   return (

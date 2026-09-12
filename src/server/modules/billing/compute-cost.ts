@@ -69,6 +69,27 @@ export const RESOLUTION_PRICE_FACTORS: Record<string, Record<string, number>> = 
   'bytedance/seedance-2.0': { '1080p': 2.5, '480p': 0.5, '4k': 5, '720p': 1 },
 };
 
+/** Provider cap on the combined (normalized) reference-video input, seconds. */
+export const MAX_REFERENCE_SECONDS = 15;
+
+/**
+ * Billable seconds contributed by reference videos (Seedance 2.0 Mini / full
+ * bill their normalized input at the output per-second rate). The client
+ * measures the clips when attaching them; the server only clamps. Reference
+ * videos present but no usable measurement → the provider cap, so a missing
+ * or zeroed value can never under-bill.
+ */
+export function referenceSecondsFor(params: {
+  referenceSeconds?: number | null;
+  videoUrls?: readonly unknown[] | null;
+}): number {
+  const hasVideos = Array.isArray(params.videoUrls) && params.videoUrls.length > 0;
+  if (!hasVideos) return 0;
+  const measured = Number(params.referenceSeconds);
+  if (!Number.isFinite(measured) || measured <= 0) return MAX_REFERENCE_SECONDS;
+  return Math.min(MAX_REFERENCE_SECONDS, Math.ceil(measured));
+}
+
 export function videoResolutionFactor(modelId: string, resolution?: string | null): number {
   if (!resolution) return 1;
   const family = Object.keys(RESOLUTION_PRICE_FACTORS).find((prefix) => modelId.startsWith(prefix));

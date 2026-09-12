@@ -47,6 +47,7 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate }) => {
     durationSeconds: duration ?? DEFAULT_DURATION,
     kind: 'video',
     model: currentModel,
+    referenceSeconds: parameters?.referenceSeconds as number | undefined,
     resolution: parameters?.resolution as string | undefined,
   });
 
