@@ -10,10 +10,18 @@ export type { RateView };
 
 export type ModelTier = 'cheap' | 'mid' | 'high' | 'premium';
 
+/**
+ * Business markup on top of provider cost, per tier. Flattened 2026-09-12 by
+ * owner decision after the pricing audit (docs/superpowers/research/
+ * 2026-09-12-pricing-audit.md): the old ladder (cheap ×10 … premium ×2.5)
+ * made the cheap models Free/Basic users actually use the most expensive
+ * ones relative to cost (~2.5× above market per message) and video ~4×
+ * above market; premium stays at ×2.5.
+ */
 export const TIER_MARKUP_MULTIPLIER: Record<ModelTier, number> = {
-  cheap: 10,
-  mid: 5,
-  high: 4,
+  cheap: 4,
+  mid: 4,
+  high: 3,
   premium: 2.5,
 };
 

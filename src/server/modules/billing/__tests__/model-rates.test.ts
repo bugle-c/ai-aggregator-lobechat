@@ -27,9 +27,9 @@ describe('calculateCreditsAsync — tier-based unit economics', () => {
   });
 
   it.each([
-    ['cheap', 10],
-    ['mid', 5],
-    ['high', 4],
+    ['cheap', 4],
+    ['mid', 4],
+    ['high', 3],
     ['premium', 2.5],
   ] as const)(
     'charges %s provider cost with x%s multiplier and Math.ceil credits',
