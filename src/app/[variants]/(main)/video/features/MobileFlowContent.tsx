@@ -47,6 +47,7 @@ const MobileFlowContent = memo<Props>(({ onAfterGenerate }) => {
     durationSeconds: duration ?? DEFAULT_DURATION,
     kind: 'video',
     model: currentModel,
+    resolution: parameters?.resolution as string | undefined,
   });
 
   // A preset is a ready prompt: with one selected, an empty input is a

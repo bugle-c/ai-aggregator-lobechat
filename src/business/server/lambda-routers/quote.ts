@@ -100,11 +100,14 @@ export const quoteRouter = router({
       z.object({
         durationSeconds: z.number().int().min(1).max(60),
         model: z.string().min(1),
+        /** Output resolution — scales the rate for per-resolution families (Seedance 2.0). */
+        resolution: z.string().max(8).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const credits = await calculateCreditsAsync(input.model, {
         kind: 'video',
+        resolution: input.resolution,
         videoSeconds: input.durationSeconds,
       });
       return buildQuote(ctx, input.model, credits);

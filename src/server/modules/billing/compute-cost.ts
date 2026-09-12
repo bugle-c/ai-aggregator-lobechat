@@ -40,9 +40,33 @@ export interface ImageUsage {
 }
 export interface VideoUsage {
   kind: 'video';
+  /**
+   * Requested output resolution ('480p' | '720p' | '1080p' | '4k'). Scales the
+   * per-second rate for families priced per resolution (see
+   * `RESOLUTION_PRICE_FACTORS`); omitted / unknown → the 720p baseline (×1).
+   */
+  resolution?: string | null;
   videoSeconds: number;
 }
 export type Usage = ChatUsage | ImageUsage | VideoUsage;
+
+/**
+ * Per-resolution price factors relative to the 720p rate stored in
+ * `model_rates.per_unit`, keyed by model-id prefix. WaveSpeed prices the whole
+ * Seedance 2.0 family this way (Mini / Fast / full, t2v and i2v alike):
+ * 480p $0.10 · 720p $0.20 · 1080p $0.50 · 4k $1.00 per second for Fast.
+ * Families not listed here are flat per second (factor 1).
+ */
+export const RESOLUTION_PRICE_FACTORS: Record<string, Record<string, number>> = {
+  'bytedance/seedance-2.0': { '1080p': 2.5, '480p': 0.5, '4k': 5, '720p': 1 },
+};
+
+export function videoResolutionFactor(modelId: string, resolution?: string | null): number {
+  if (!resolution) return 1;
+  const family = Object.keys(RESOLUTION_PRICE_FACTORS).find((prefix) => modelId.startsWith(prefix));
+  if (!family) return 1;
+  return RESOLUTION_PRICE_FACTORS[family][resolution.toLowerCase()] ?? 1;
+}
 
 /**
  * Classify a rate from raw provider price (pre-markup). The thresholds are the
@@ -108,7 +132,7 @@ export function computeBaseCostUsdFromRate(rate: RateView, usage: Usage): number
   }
   if (rate.pricingUnit === 'second' && usage.kind === 'video') {
     const perUnit = rate.perUnit ?? 0;
-    return usage.videoSeconds * perUnit;
+    return usage.videoSeconds * perUnit * videoResolutionFactor(rate.modelId, usage.resolution);
   }
   // Mismatch — don't silently mis-charge; return 0 and caller must have rejected earlier.
   return 0;

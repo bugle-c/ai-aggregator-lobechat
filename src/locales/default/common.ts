@@ -459,6 +459,7 @@ export default {
   'preset.settings.duration': 'Duration',
   'preset.settings.durationUnit': '{{count}} s',
   'preset.settings.model': 'Model',
+  'preset.settings.quality': 'Quality',
   'preset.settings.more': 'More settings',
   'preset.settings.photo': 'Photo',
   'preset.settings.photoAttached': 'Photo attached',

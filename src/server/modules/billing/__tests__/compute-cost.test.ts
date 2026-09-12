@@ -5,6 +5,7 @@ import {
   computeCostUsdFromRate,
   getTierMultiplierForRate,
   type RateView,
+  videoResolutionFactor,
 } from '../compute-cost';
 
 const TOKENS_RATE: RateView = {
@@ -163,5 +164,29 @@ describe('computeCostUsdFromRate — pricing_unit/kind mismatch', () => {
   it('returns 0 for video-kind against tokens-rate (should not happen)', () => {
     const cost = computeCostUsdFromRate(TOKENS_RATE, { kind: 'video', videoSeconds: 10 });
     expect(cost).toBe(0);
+  });
+});
+
+describe('video resolution factors (Seedance 2.0 family)', () => {
+  const SEEDANCE_RATE: RateView = { ...VIDEO_RATE, modelId: 'bytedance/seedance-2.0-fast/text-to-video', perUnit: 0.2, tierOverride: 'high' };
+
+  it('scales the 720p per-second rate by resolution', () => {
+    expect(videoResolutionFactor(SEEDANCE_RATE.modelId, '480p')).toBe(0.5);
+    expect(videoResolutionFactor(SEEDANCE_RATE.modelId, '720p')).toBe(1);
+    expect(videoResolutionFactor(SEEDANCE_RATE.modelId, '1080p')).toBe(2.5);
+    expect(videoResolutionFactor(SEEDANCE_RATE.modelId, '4k')).toBe(5);
+    expect(computeBaseCostUsdFromRate(SEEDANCE_RATE, { kind: 'video', resolution: '1080p', videoSeconds: 5 })).toBeCloseTo(2.5);
+  });
+
+  it('falls back to ×1 for an unknown resolution, a missing one, or a flat-priced family', () => {
+    expect(videoResolutionFactor(SEEDANCE_RATE.modelId, '2k')).toBe(1);
+    expect(videoResolutionFactor(SEEDANCE_RATE.modelId, undefined)).toBe(1);
+    expect(videoResolutionFactor('kwaivgi/kling-v3.0-pro/text-to-video', '1080p')).toBe(1);
+    expect(computeBaseCostUsdFromRate(VIDEO_RATE, { kind: 'video', resolution: '1080p', videoSeconds: 10 })).toBeCloseTo(0.5);
+  });
+
+  it('covers every Seedance 2.0 variant, t2v and i2v', () => {
+    for (const id of ['bytedance/seedance-2.0-mini/text-to-video', 'bytedance/seedance-2.0/image-to-video'])
+      expect(videoResolutionFactor(id, '480p')).toBe(0.5);
   });
 });

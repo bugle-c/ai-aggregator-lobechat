@@ -29,6 +29,8 @@ interface VideoInput {
   durationSeconds: number;
   kind: 'video';
   model: string | undefined;
+  /** Output resolution — Seedance 2.0 is priced per resolution. */
+  resolution?: string;
 }
 
 type Input = ImageInput | VideoInput;
@@ -67,7 +69,12 @@ export function useGenerationCostPreview(input: Input): CostPreview {
   const liveKey = JSON.stringify(
     isImage
       ? { kind: 'image', model, images: (input as ImageInput).images ?? 1 }
-      : { kind: 'video', model, durationSeconds: (input as VideoInput).durationSeconds },
+      : {
+          kind: 'video',
+          model,
+          durationSeconds: (input as VideoInput).durationSeconds,
+          resolution: (input as VideoInput).resolution,
+        },
   );
   // quote.* are authed procedures: for anonymous visitors (auth overlay up) the
   // calls just 401 in a loop, so gate them on login.
@@ -75,7 +82,7 @@ export function useGenerationCostPreview(input: Input): CostPreview {
   const debouncedKey = useDebouncedKey(liveKey);
   const debounced = JSON.parse(debouncedKey) as
     | { images: number; kind: 'image'; model: string | undefined }
-    | { durationSeconds: number; kind: 'video'; model: string | undefined };
+    | { durationSeconds: number; kind: 'video'; model: string | undefined; resolution?: string };
 
   const imageQuery = lambdaQuery.quote.imageCost.useQuery(
     {
@@ -94,6 +101,7 @@ export function useGenerationCostPreview(input: Input): CostPreview {
     {
       durationSeconds: debounced.kind === 'video' ? debounced.durationSeconds : 1,
       model: debounced.model ?? '',
+      resolution: debounced.kind === 'video' ? debounced.resolution : undefined,
     },
     {
       enabled:

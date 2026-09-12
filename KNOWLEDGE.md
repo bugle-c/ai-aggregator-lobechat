@@ -228,6 +228,8 @@ curl -X POST http://localhost:3210/api/billing/webhook \
 
 ### Credit economics
 
+- **Video price by resolution (2026-09-12).** `model_rates.per_unit` for the Seedance 2.0 family is the **720p** price; `RESOLUTION_PRICE_FACTORS` (`compute-cost.ts`, prefix `bytedance/seedance-2.0`) scales it ×0.5 / ×1 / ×2.5 / ×5 for 480p / 720p / 1080p / 4k. `resolution` flows quote → precharge (`params.resolution`) → after-charge (`batch.config.resolution` from the webhook route). Other families stay flat per second. Before this the Fast row carried the 1080p price (0.50, auto-sync drift 06-05) with no factor, so 720p was billed 2.5× cost. Rates SQL: `docs/superpowers/plans/sql/seedance-rates-2026-09-12.sql`.
+- **Seedance 2.0 family = one «Качество» switch.** `modelFamilies.ts` groups Mini / Fast / Pro(full); `ModelSettingsChip` renders a `Segmented` next to the model chip when the current model is in a family (switch goes through the same `pick` → lock/upsell, style kept), and a style recommendation inside the same family is not a mismatch. Mini cards added (`…-mini/text-to-video` enabled, `…/image-to-video` paired+hidden); schema now has all 6 aspect ratios + 4k.
 - **Intro offer MAGIC48 (2026-09-07):** first payment within 48h of the earned-magic claim → `promo_codes.token_amount` (500, was 1000) bonus credits into the expiring `bonus_balance` pool, 7-day TTL (`intro-offer.ts`, `nextBonusState`: live remainder kept + extended, expired remainder replaced). Banner reads amount/days from `getIntroOfferState`. Amount is changed in the DB, not in code.
 
 - `CREDIT_VALUE_RUB = 0.15` ₽ per credit → 1 credit ≈ $0.0015 at `USD_TO_RUB = 100`
