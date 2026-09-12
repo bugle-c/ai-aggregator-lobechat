@@ -76,8 +76,11 @@ export async function chargeBeforeGenerate(params: ChargeParams): Promise<Charge
     typeof params.params.duration === 'number' && params.params.duration > 0
       ? params.params.duration
       : MAX_DEFAULT_VIDEO_SECONDS;
+  const requestedResolution =
+    typeof params.params.resolution === 'string' ? params.params.resolution : undefined;
   const maxCredits = await calculateCreditsAsync(params.model, {
     kind: 'video',
+    resolution: requestedResolution,
     videoSeconds: requestedDuration,
   });
 

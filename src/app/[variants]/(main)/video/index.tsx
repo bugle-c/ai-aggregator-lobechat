@@ -46,6 +46,7 @@ const VideoPage = memo(() => {
     durationSeconds,
     kind: 'video',
     model: currentModel,
+    resolution: videoParameters?.resolution as string | undefined,
   });
 
   // An i2v style is gated on its photo (`parameters.imageUrl`); the other

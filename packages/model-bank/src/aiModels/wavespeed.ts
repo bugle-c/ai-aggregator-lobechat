@@ -32,14 +32,17 @@ const klingProParams: VideoModelParamsSchema = {
 // Seedance 2.0 / 2.0 Fast — API ENFORCES aspect_ratio ∈ {16:9, 9:16} even
 // though docs list six. Real 400 captured 2026-05-17. Duration is a free
 // 4..15 slider; resolution selectable.
+// Seedance 2.0 family (Mini / Fast / full) — one schema: WaveSpeed accepts the
+// same six aspect ratios and four resolutions for all three (docs 2026-09-12).
+// Priced per resolution, see `RESOLUTION_PRICE_FACTORS` in billing.
 const seedance20Params: VideoModelParamsSchema = {
-  aspectRatio: { default: '16:9', enum: ['16:9', '9:16'] },
+  aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'] },
   duration: { default: 5, max: 15, min: 4, step: 1 },
   endImageUrl: { default: null, maxFileSize: 30 * 1024 * 1024, requiresImageUrl: true },
   generateAudio: { default: true },
   imageUrl: { default: null, maxFileSize: 30 * 1024 * 1024 },
   prompt: { default: '' },
-  resolution: { default: '720p', enum: ['480p', '720p', '1080p'] },
+  resolution: { default: '720p', enum: ['480p', '720p', '1080p', '4k'] },
   seed: { default: null },
 };
 
@@ -589,6 +592,18 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     type: 'video',
   },
   {
+    description:
+      'ByteDance Seedance 2.0 Mini — the low-cost entry of the family: same prompts, multi-shot, native audio, 480p–4k.',
+    displayName: 'Seedance 2.0 Mini',
+    enabled: true,
+    id: 'bytedance/seedance-2.0-mini/text-to-video',
+    parameters: seedance20Params,
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.12, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
     description: 'ByteDance Seedance 2.0 Fast — cheapest 1080p-with-audio on the market.',
     displayName: 'Seedance 2.0 Fast',
     enabled: true,
@@ -656,6 +671,20 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     parameters: seedance20Params,
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.08, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description: 'Seedance 2.0 Mini — image-to-video, cheap fast tier.',
+    displayName: 'Seedance 2.0 Mini (I2V)',
+    // Auto-routed: a reference image attached to the matching `/text-to-video`
+    // card transparently routes here at the wavespeed runtime layer. See
+    // providers/wavespeed/utils/pairedEndpoint.ts. Hidden from the picker so
+    // the user only sees one card per family.
+    enabled: false,
+    id: 'bytedance/seedance-2.0-mini/image-to-video',
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.12, strategy: 'fixed', unit: 'second' }],
     },
     type: 'video',
   },

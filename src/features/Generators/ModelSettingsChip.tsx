@@ -1,6 +1,7 @@
 'use client';
 
 import { ModelIcon } from '@lobehub/icons';
+import { Segmented } from '@lobehub/ui';
 import { Button } from 'antd';
 import { createStyles } from 'antd-style';
 import { Lock } from 'lucide-react';
@@ -15,6 +16,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 import type { EnabledProviderWithModels } from '@/types/index';
 
+import { familyOf, sameFamily } from './modelFamilies';
 import ModelPickerList from './ModelPickerList';
 import { currentModelName, findEnabledModel } from './presetModelSwitch';
 import { prettifyModelId } from './prettifyModelId';
@@ -75,6 +77,10 @@ const useStyles = createStyles(({ css, token }) => ({
 
     background: ${token.colorWarning};
   `,
+  /** «Mini | Fast | Pro» — the family's quality tiers, one control next to the chip. */
+  quality: css`
+    flex: 0 0 auto;
+  `,
 }));
 
 /**
@@ -102,7 +108,20 @@ const ModelSettingsChip = memo<Props>(
 
     const label = currentModelName(providers, currentModel) || t('preset.settings.model');
 
-    const differs = !!recommendedModelId && recommendedModelId !== currentModel;
+    // A style tuned for one Seedance 2.0 tier is a match for any tier: same
+    // prompt, only the render quality differs — so no «Переключить» nag.
+    const differs =
+      !!recommendedModelId &&
+      recommendedModelId !== currentModel &&
+      !sameFamily(recommendedModelId, currentModel);
+
+    // Quality tiers of the current model's family that the user can pick from.
+    const family = familyOf(currentModel);
+    const tiers = family
+      ? family.variants
+          .map((v) => ({ ...v, target: findEnabledModel(providers, v.modelId) }))
+          .filter((v): v is typeof v & { target: NonNullable<typeof v.target> } => !!v.target)
+      : [];
     const { data: currentLock } = useModelLockState(isLogin ? currentModel : undefined);
     const { data: recommendedLock } = useModelLockState(
       isLogin && differs ? (recommendedModelId ?? undefined) : undefined,
@@ -188,6 +207,21 @@ const ModelSettingsChip = memo<Props>(
             />
           )}
         />
+        {tiers.length > 1 && (
+          <Segmented
+            aria-label={t('preset.settings.quality')}
+            className={styles.quality}
+            options={tiers.map((v) => ({ label: v.label, value: v.modelId }))}
+            size="small"
+            title={t('preset.settings.quality')}
+            value={currentModel}
+            variant="filled"
+            onChange={(value) => {
+              const tier = tiers.find((v) => v.modelId === value);
+              if (tier) void pick(tier.modelId, tier.target.providerId, () => {});
+            }}
+          />
+        )}
         {notice && (
           <div className={styles.notice} role="status">
             {indicator === 'locked' ? (

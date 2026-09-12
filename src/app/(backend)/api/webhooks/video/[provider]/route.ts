@@ -284,6 +284,7 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
         model: resolvedModel,
         prechargeResult: metadata?.precharge as any,
         provider,
+        resolution: typeof batchConfig?.resolution === 'string' ? batchConfig.resolution : undefined,
         usage: usageWithDuration,
         userId: asyncTask.userId,
       });

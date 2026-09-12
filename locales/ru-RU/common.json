@@ -391,6 +391,7 @@
   "preset.settings.durationUnit": "{{count}} с",
   "preset.settings.lockedByStyle": "Задаёт стиль — уберите стиль, чтобы изменить",
   "preset.settings.model": "Модель",
+  "preset.settings.quality": "Качество",
   "preset.settings.more": "Ещё настройки",
   "preset.settings.photo": "Фото",
   "preset.settings.photoAttached": "Фото добавлено",

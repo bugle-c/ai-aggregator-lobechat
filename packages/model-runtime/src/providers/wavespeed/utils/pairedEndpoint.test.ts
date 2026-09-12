@@ -75,6 +75,7 @@ describe('resolveVideoEndpoint', () => {
   const pairs: Array<[string, string]> = [
     ['alibaba/wan-2.7/text-to-video', 'alibaba/wan-2.7/image-to-video'],
     ['bytedance/seedance-2.0-fast/text-to-video', 'bytedance/seedance-2.0-fast/image-to-video'],
+    ['bytedance/seedance-2.0-mini/text-to-video', 'bytedance/seedance-2.0-mini/image-to-video'],
     ['bytedance/seedance-2.0/text-to-video', 'bytedance/seedance-2.0/image-to-video'],
     ['google/veo3.1-fast/text-to-video', 'google/veo3.1-fast/image-to-video'],
     ['google/veo3.1/text-to-video', 'google/veo3.1/image-to-video'],

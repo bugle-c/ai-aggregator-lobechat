@@ -221,7 +221,15 @@ const FlowSidebarControls = memo(() => {
   const providers = useAiInfraStore(aiProviderSelectors.enabledVideoModelListByMode(uiMode));
 
   const durationSeconds = Number(duration.value ?? DEFAULT_DURATION) || DEFAULT_DURATION;
-  const cost = useGenerationCostPreview({ durationSeconds, kind: 'video', model });
+  const resolutionValue = useVideoStore(
+    (s) => videoGenerationConfigSelectors.parameters(s)?.resolution as string | undefined,
+  );
+  const cost = useGenerationCostPreview({
+    durationSeconds,
+    kind: 'video',
+    model,
+    resolution: resolutionValue,
+  });
 
   const aspectItems = useMemo(
     () => (aspect.enumValues ?? []).map((v) => ({ value: v })),
