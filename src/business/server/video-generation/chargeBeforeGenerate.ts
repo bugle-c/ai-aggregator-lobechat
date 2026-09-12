@@ -2,6 +2,7 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { creditHolds, type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
 import { activeBonusFor } from '@/server/modules/billing/active-bonus';
 import { checkUsageLimit } from '@/server/modules/billing/checkUsageLimit';
+import { referenceSecondsFor } from '@/server/modules/billing/compute-cost';
 import { calculateCreditsAsync } from '@/server/modules/billing/model-rates';
 import { isModelAllowedForPlanAsync } from '@/server/modules/billing/model-tiers';
 import type { CreateVideoServicePayload } from '@/server/routers/lambda/video';
@@ -78,10 +79,14 @@ export async function chargeBeforeGenerate(params: ChargeParams): Promise<Charge
       : MAX_DEFAULT_VIDEO_SECONDS;
   const requestedResolution =
     typeof params.params.resolution === 'string' ? params.params.resolution : undefined;
+  // Reference videos are billed at the output rate on top of the output.
+  const referenceSeconds = referenceSecondsFor(
+    params.params as { referenceSeconds?: number; videoUrls?: unknown[] },
+  );
   const maxCredits = await calculateCreditsAsync(params.model, {
     kind: 'video',
     resolution: requestedResolution,
-    videoSeconds: requestedDuration,
+    videoSeconds: requestedDuration + referenceSeconds,
   });
 
   // Atomic precharge: hold + conditional increment with monthly cap guard (C1).

@@ -29,6 +29,8 @@ interface VideoInput {
   durationSeconds: number;
   kind: 'video';
   model: string | undefined;
+  /** Billable seconds of attached reference videos (Seedance 2.0 Mini / full). */
+  referenceSeconds?: number;
   /** Output resolution — Seedance 2.0 is priced per resolution. */
   resolution?: string;
 }
@@ -73,6 +75,7 @@ export function useGenerationCostPreview(input: Input): CostPreview {
           kind: 'video',
           model,
           durationSeconds: (input as VideoInput).durationSeconds,
+          referenceSeconds: (input as VideoInput).referenceSeconds || undefined,
           resolution: (input as VideoInput).resolution,
         },
   );
@@ -82,7 +85,13 @@ export function useGenerationCostPreview(input: Input): CostPreview {
   const debouncedKey = useDebouncedKey(liveKey);
   const debounced = JSON.parse(debouncedKey) as
     | { images: number; kind: 'image'; model: string | undefined }
-    | { durationSeconds: number; kind: 'video'; model: string | undefined; resolution?: string };
+    | {
+        durationSeconds: number;
+        kind: 'video';
+        model: string | undefined;
+        referenceSeconds?: number;
+        resolution?: string;
+      };
 
   const imageQuery = lambdaQuery.quote.imageCost.useQuery(
     {
@@ -101,6 +110,10 @@ export function useGenerationCostPreview(input: Input): CostPreview {
     {
       durationSeconds: debounced.kind === 'video' ? debounced.durationSeconds : 1,
       model: debounced.model ?? '',
+      referenceSeconds:
+        debounced.kind === 'video' && debounced.referenceSeconds
+          ? Math.min(15, Math.ceil(debounced.referenceSeconds))
+          : undefined,
       resolution: debounced.kind === 'video' ? debounced.resolution : undefined,
     },
     {

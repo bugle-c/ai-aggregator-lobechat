@@ -56,11 +56,25 @@ export function resolveImageEndpoint(
   return hasReferenceImage(params) ? swap : model;
 }
 
+/**
+ * Video swaps on a START FRAME only (`imageUrl` / legacy `image`). `imageUrls`
+ * on a video model means reference images (Seedance 2.0 Mini / full take them
+ * on the text-to-video endpoint as `reference_images`), so it must not route
+ * to image-to-video.
+ */
+function hasStartFrame(params: Record<string, unknown> | undefined | null): boolean {
+  if (!params) return false;
+  const single = params.imageUrl;
+  if (typeof single === 'string' && single.length > 0) return true;
+  const legacy = params.image;
+  return typeof legacy === 'string' && legacy.length > 0;
+}
+
 export function resolveVideoEndpoint(
   model: string,
   params: Record<string, unknown> | undefined | null,
 ): string {
   const swap = PAIRED_VIDEO_ENDPOINTS[model];
   if (!swap) return model;
-  return hasReferenceImage(params) ? swap : model;
+  return hasStartFrame(params) ? swap : model;
 }

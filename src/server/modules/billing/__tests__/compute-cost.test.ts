@@ -5,6 +5,7 @@ import {
   computeCostUsdFromRate,
   getTierMultiplierForRate,
   type RateView,
+  referenceSecondsFor,
   videoResolutionFactor,
 } from '../compute-cost';
 
@@ -189,5 +190,22 @@ describe('video resolution factors (Seedance 2.0 family)', () => {
   it('covers every Seedance 2.0 variant, t2v and i2v', () => {
     for (const id of ['bytedance/seedance-2.0-mini/text-to-video', 'bytedance/seedance-2.0/image-to-video'])
       expect(videoResolutionFactor(id, '480p')).toBe(0.5);
+  });
+});
+
+describe('referenceSecondsFor (reference videos billed at the output rate)', () => {
+  it('is 0 without reference videos, whatever the measurement says', () => {
+    expect(referenceSecondsFor({})).toBe(0);
+    expect(referenceSecondsFor({ referenceSeconds: 9, videoUrls: [] })).toBe(0);
+  });
+
+  it('uses the client measurement, rounded up and capped at the provider limit', () => {
+    expect(referenceSecondsFor({ referenceSeconds: 4.2, videoUrls: ['a.mp4'] })).toBe(5);
+    expect(referenceSecondsFor({ referenceSeconds: 40, videoUrls: ['a.mp4'] })).toBe(15);
+  });
+
+  it('falls back to the cap when videos are attached but the measurement is missing or zero', () => {
+    expect(referenceSecondsFor({ videoUrls: ['a.mp4'] })).toBe(15);
+    expect(referenceSecondsFor({ referenceSeconds: 0, videoUrls: ['a.mp4'] })).toBe(15);
   });
 });

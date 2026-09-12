@@ -92,6 +92,21 @@ describe('resolveVideoEndpoint', () => {
     expect(resolveVideoEndpoint(t2v, { prompt: 'hello' })).toBe(t2v);
   });
 
+  it('does not swap on reference images alone (imageUrls = reference_images, not a start frame)', () => {
+    expect(
+      resolveVideoEndpoint('bytedance/seedance-2.0-mini/text-to-video', {
+        imageUrls: ['a.png', 'b.png'],
+        prompt: 'x',
+      }),
+    ).toBe('bytedance/seedance-2.0-mini/text-to-video');
+    expect(
+      resolveVideoEndpoint('bytedance/seedance-2.0-mini/text-to-video', {
+        imageUrl: 'start.png',
+        imageUrls: ['a.png'],
+      }),
+    ).toBe('bytedance/seedance-2.0-mini/image-to-video');
+  });
+
   it('returns unknown video ids unchanged', () => {
     expect(resolveVideoEndpoint('pika/pika-v2.2/text-to-video', { imageUrl: 'ref.png' })).toBe(
       'pika/pika-v2.2/text-to-video',

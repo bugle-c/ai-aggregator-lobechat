@@ -46,6 +46,16 @@ const seedance20Params: VideoModelParamsSchema = {
   seed: { default: null },
 };
 
+// Seedance 2.0 Mini and full 2.0 additionally take reference images (≤ 9)
+// and reference videos (≤ 3, ≤ 15 s combined) next to the prompt; Fast does
+// not (its docs list no reference_* inputs).
+const seedance20RefParams: VideoModelParamsSchema = {
+  ...seedance20Params,
+  imageUrls: { default: [], maxCount: 9, maxFileSize: 30 * 1024 * 1024 },
+  referenceSeconds: { default: 0 },
+  videoUrls: { default: [], maxCount: 3, maxFileSize: 100 * 1024 * 1024, maxTotalSeconds: 15 },
+};
+
 // Google Veo 3.1 / Veo 3.1 Fast — duration enum [4,6,8], fixed 24 FPS,
 // 1080p tier supported. Native audio.
 const veo31Params: VideoModelParamsSchema = {
@@ -597,7 +607,7 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     displayName: 'Seedance 2.0 Mini',
     enabled: true,
     id: 'bytedance/seedance-2.0-mini/text-to-video',
-    parameters: seedance20Params,
+    parameters: seedance20RefParams,
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.12, strategy: 'fixed', unit: 'second' }],
     },
@@ -668,7 +678,7 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     displayName: 'Seedance 2.0',
     enabled: true,
     id: 'bytedance/seedance-2.0/text-to-video',
-    parameters: seedance20Params,
+    parameters: seedance20RefParams,
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.08, strategy: 'fixed', unit: 'second' }],
     },

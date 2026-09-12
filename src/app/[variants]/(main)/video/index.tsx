@@ -46,6 +46,7 @@ const VideoPage = memo(() => {
     durationSeconds,
     kind: 'video',
     model: currentModel,
+    referenceSeconds: videoParameters?.referenceSeconds as number | undefined,
     resolution: videoParameters?.resolution as string | undefined,
   });
 

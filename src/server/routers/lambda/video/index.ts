@@ -54,9 +54,15 @@ const createVideoInputSchema = z.object({
       endImageUrl: z.string().nullable().optional(),
       generateAudio: z.boolean().optional(),
       imageUrl: z.string().nullable().optional(),
+      /** Reference images (Seedance 2.0 Mini / full) — not a start frame. */
+      imageUrls: z.array(z.string()).max(9).optional(),
       prompt: z.string(),
+      /** Client-measured billable seconds of the reference videos; clamped in billing. */
+      referenceSeconds: z.number().min(0).max(60).optional(),
       resolution: z.string().optional(),
       seed: z.number().nullable().optional(),
+      /** Reference videos (Seedance 2.0 Mini / full), ≤ 3, ≤ 15 s combined. */
+      videoUrls: z.array(z.string()).max(3).optional(),
     })
     .passthrough(),
   provider: z.string(),
@@ -96,6 +102,20 @@ export const videoRouter = router({
         }
       } catch (error) {
         console.error('Error converting endImageUrl to key: %O', error);
+      }
+    }
+
+    // Reference arrays: store S3 keys, like the single frames above.
+    for (const field of ['imageUrls', 'videoUrls'] as const) {
+      const urls = params[field];
+      if (!Array.isArray(urls) || urls.length === 0) continue;
+      try {
+        const keys = await Promise.all(
+          urls.map(async (url) => (await fileService.getKeyFromFullUrl(url)) || url),
+        );
+        configForDatabase = { ...configForDatabase, [field]: keys };
+      } catch (error) {
+        console.error(`Error converting ${field} to keys: %O`, error);
       }
     }
 

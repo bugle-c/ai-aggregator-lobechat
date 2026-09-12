@@ -95,6 +95,47 @@ export const VideoModelParamsMetaSchema = z.object({
       type: z.tuple([z.literal('number'), z.literal('null')]).optional(),
     })
     .optional(),
+  /**
+   * Reference images (style / character / composition guidance) for models
+   * that take them next to the prompt — Seedance 2.0 Mini and full 2.0
+   * (`reference_images`, ≤ 9). Unlike `imageUrl` this is NOT a start frame
+   * and does not switch the model to its image-to-video endpoint.
+   */
+  imageUrls: z
+    .object({
+      default: z.array(z.string()),
+      description: z.string().optional(),
+      maxCount: z.number().optional(),
+      maxFileSize: z.number().optional(),
+      type: z.literal('array').optional(),
+    })
+    .optional(),
+  /**
+   * Reference videos (camera / motion guidance), `reference_videos` ≤ 3,
+   * combined length ≤ `maxTotalSeconds`. The provider bills their normalized
+   * duration at the output rate — see `referenceSeconds`.
+   */
+  videoUrls: z
+    .object({
+      default: z.array(z.string()),
+      description: z.string().optional(),
+      maxCount: z.number().optional(),
+      maxFileSize: z.number().optional(),
+      maxTotalSeconds: z.number().optional(),
+      type: z.literal('array').optional(),
+    })
+    .optional(),
+  /**
+   * Billable seconds of the attached reference videos (each clip ≥ 2 s,
+   * combined ≤ 15 s, rounded up) — measured on the client when the clips are
+   * attached, clamped server-side. Not a user-facing knob.
+   */
+  referenceSeconds: z
+    .object({
+      default: z.number().default(0),
+      type: z.literal('number').optional(),
+    })
+    .optional(),
 });
 
 export type VideoModelParamsSchema = z.input<typeof VideoModelParamsMetaSchema>;
@@ -117,7 +158,9 @@ type VideoTypeType<K extends VideoModelParamsKeys> = NonNullable<
   VideoModelParamsOutputSchema[K]
 >['type'];
 type _StandardVideoGenerationParameters<P extends VideoModelParamsKeys = VideoModelParamsKeys> = {
-  [key in P]: VideoTypeMapping<VideoTypeType<key>>;
+  [key in P]: NonNullable<VideoTypeType<key>> extends 'array'
+    ? string[]
+    : VideoTypeMapping<VideoTypeType<key>>;
 };
 
 export type RuntimeVideoGenParams = Pick<_StandardVideoGenerationParameters, 'prompt'> &
