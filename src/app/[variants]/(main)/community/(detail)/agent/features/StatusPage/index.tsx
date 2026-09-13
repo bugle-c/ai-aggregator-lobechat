@@ -1,6 +1,7 @@
 'use client';
 
 import { ExclamationCircleOutlined, FolderOpenOutlined } from '@ant-design/icons';
+import { SUPPORT_TELEGRAM_URL } from '@lobechat/business-const';
 import { Button, FluentEmoji, Text } from '@lobehub/ui';
 import { Result } from 'antd';
 import { memo } from 'react';
@@ -45,7 +46,7 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
                 i18nKey="assistants.status.unpublished.subtitle"
                 ns="discover"
                 components={{
-                  email: <a href="mailto:support@gptweb.ru">support@gptweb.ru</a>,
+                  email: <a href={SUPPORT_TELEGRAM_URL} rel="noreferrer" target="_blank" />,
                 }}
               />
             </Text>
@@ -100,7 +101,7 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
                 i18nKey="assistants.status.support"
                 ns="discover"
                 components={{
-                  email: <a href="mailto:support@gptweb.ru">support@gptweb.ru</a>,
+                  email: <a href={SUPPORT_TELEGRAM_URL} rel="noreferrer" target="_blank" />,
                 }}
               />
             </p>
