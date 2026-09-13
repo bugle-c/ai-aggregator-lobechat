@@ -10,10 +10,11 @@ import { isDesktop } from '@/const/version';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { type Locales } from '@/locales/resources';
-import { parseWgAttr, WG_ATTR_COOKIE } from '@/server/modules/analytics/wgAttr';
+import { WG_ATTR_COOKIE } from '@/server/modules/analytics/wgAttr';
 import { parseBrowserLanguage } from '@/utils/locale';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
+import { buildAttributionPayloads } from './attributionPayloads';
 import { createRouteMatcher } from './createRouteMatcher';
 
 // Create debug logger instances
@@ -186,81 +187,36 @@ export function defineConfig() {
 
     // UTM attribution: capture first + last touch into cookies for user_attribution on signup.
     //
-    // Attribution bridge: if the visitor came through gptweb.ru, the
-    // landing's UtmCaptureClient has set `_gptweb_utms` on .gptweb.ru with
-    // the TRUE first-touch UTMs + referrer + landing path. We prefer that
-    // over what the current request sees (which for /signin is empty,
-    // because users almost never land directly on the signin URL with
-    // UTMs intact).
-    let landingFirstTouch: {
-      utm_source?: string | null;
-      utm_medium?: string | null;
-      utm_campaign?: string | null;
-      utm_content?: string | null;
-      referrer?: string | null;
-      landingPage?: string | null;
-      seenAt?: string;
-      ymClientId?: string | null;
-      gaClientId?: string | null;
-      roistatVisit?: string | null;
-      analyticsIds?: Record<string, string>;
-    } | null = null;
-    const gptwebUtmsRaw = request.cookies.get('_gptweb_utms')?.value;
-    if (gptwebUtmsRaw) {
-      try {
-        landingFirstTouch = JSON.parse(decodeURIComponent(gptwebUtmsRaw));
-      } catch {
-        landingFirstTouch = null;
-      }
+    // Attribution bridge: if the visitor came through gptweb.ru, the landing
+    // has set `wg_attr` (every first page view: path, referrer, Metrika id) and,
+    // when utm_* were present, `_gptweb_utms` — both on .gptweb.ru. The FIRST
+    // touch is built from those (the current request is a later hop whose
+    // referer is our own origin); the LAST touch is always this request. See
+    // buildAttributionPayloads for the precedence rules.
+    const { first, last, hasUtmInUrl } = buildAttributionPayloads({
+      gptwebUtmsRaw: request.cookies.get('_gptweb_utms')?.value,
+      referer: request.headers.get('referer'),
+      requestedPath,
+      searchParams: url.searchParams,
+      wgAttrRaw: request.cookies.get(WG_ATTR_COOKIE)?.value,
+      ymUidRaw: request.cookies.get('_ym_uid')?.value,
+    });
+    const cookieOpts = {
+      path: '/',
+      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
+    };
+    if (!request.cookies.has('utm_attribution_first')) {
+      rewrite.cookies.set('utm_attribution_first', JSON.stringify(first), {
+        ...cookieOpts,
+        maxAge: 60 * 60 * 24 * 365, // 1 year
+      });
     }
-
-    // `wg_attr` (landing/lib/attribution-cookie.ts) is written on EVERY landing
-    // page view, UTM or not, so unlike `_gptweb_utms` it exists for organic
-    // blog readers too. It carries the true first page + full referrer + the
-    // Metrika client id. Highest priority for the first-touch fields.
-    const wgAttr = parseWgAttr(request.cookies.get(WG_ATTR_COOKIE)?.value);
-
-    const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'] as const;
-    const hasUtmInUrl = utmKeys.some((k) => url.searchParams.has(k));
-    const hasFirstCookie = request.cookies.has('utm_attribution_first');
-    const hasFirstTouchData =
-      hasUtmInUrl || (landingFirstTouch && Object.keys(landingFirstTouch).length > 0);
-
-    if (hasFirstTouchData || !hasFirstCookie) {
-      // Compose payload preferring landing-side cookies over current-URL fallback.
-      const payloadObj = {
-        landing_page: wgAttr?.lp ?? landingFirstTouch?.landingPage ?? requestedPath,
-        referrer:
-          wgAttr?.ref ?? landingFirstTouch?.referrer ?? request.headers.get('referer') ?? null,
-        seen_at: wgAttr?.ts ?? landingFirstTouch?.seenAt ?? new Date().toISOString(),
-        utm_campaign:
-          url.searchParams.get('utm_campaign') ?? landingFirstTouch?.utm_campaign ?? null,
-        utm_content: url.searchParams.get('utm_content') ?? landingFirstTouch?.utm_content ?? null,
-        utm_medium: url.searchParams.get('utm_medium') ?? landingFirstTouch?.utm_medium ?? null,
-        utm_source: url.searchParams.get('utm_source') ?? landingFirstTouch?.utm_source ?? null,
-        ym_client_id: wgAttr?.ym ?? landingFirstTouch?.ymClientId ?? null,
-        ga_client_id: landingFirstTouch?.gaClientId ?? null,
-        roistat_visit: landingFirstTouch?.roistatVisit ?? null,
-        analytics_ids: landingFirstTouch?.analyticsIds ?? null,
-      };
-      const payload = JSON.stringify(payloadObj);
-      const cookieOpts = {
-        path: '/',
-        sameSite: 'lax' as const,
-        secure: process.env.NODE_ENV === 'production',
-      };
-      if (!hasFirstCookie) {
-        rewrite.cookies.set('utm_attribution_first', payload, {
-          ...cookieOpts,
-          maxAge: 60 * 60 * 24 * 365, // 1 year
-        });
-      }
-      if (hasUtmInUrl) {
-        rewrite.cookies.set('utm_attribution_last', payload, {
-          ...cookieOpts,
-          maxAge: 60 * 60 * 24 * 30, // 30 days
-        });
-      }
+    if (hasUtmInUrl) {
+      rewrite.cookies.set('utm_attribution_last', JSON.stringify(last), {
+        ...cookieOpts,
+        maxAge: 60 * 60 * 24 * 30, // 30 days
+      });
     }
 
     // Pricing A/B: assign 50/50 once and lock for 180 days. Read by the
