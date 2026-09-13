@@ -443,8 +443,16 @@ export default {
   'warning.topup': 'Пополнить',
   'warning.upgrade': 'Улучшить план',
 
+  // Free daily quota counter under the chat input (EXP-003)
+  'dailyQuota.remaining': 'Осталось сегодня: {{remaining}} из {{quota}}',
+
   // Credits exhausted modal
   'modal.exhausted.title': 'Кредиты закончились',
+  'modal.exhausted.daily.title': 'Лимит на сегодня исчерпан',
+  'modal.exhausted.daily.desc':
+    '{{quota}} бесплатных сообщений в день закончились — новые появятся завтра в 00:00 по Москве.',
+  'modal.exhausted.daily.upgrade': '{{plan}} — {{price}} ₽/мес, без дневного лимита',
+  'modal.exhausted.daily.wait': 'Подождать до завтра',
   'modal.exhausted.desc': 'Ваш план {{plan}}: {{credits}} кредитов/мес',
   'modal.exhausted.resetIn': 'Кредиты обновятся через {{days}} дн.',
   'modal.exhausted.select': 'Выбрать',

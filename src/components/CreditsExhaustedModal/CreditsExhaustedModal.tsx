@@ -8,6 +8,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { reachGoal } from '@/business/client/analytics/ym';
+import { type CreditsExhaustedReason } from '@/business/client/creditsExhausted';
 import IntroOfferBanner from '@/business/client/IntroOffer/IntroOfferBanner';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
@@ -21,8 +22,16 @@ interface CreditsExhaustedModalProps {
    * сохранён — после оплаты вы вернётесь ровно сюда».
    */
   contextNote?: string;
+  /** Free-plan daily message quota the server refused with (EXP-003). */
+  dailyQuota?: number;
   onClose: () => void;
   open: boolean;
+  /**
+   * Why the request was refused (server `reason`). `daily_quota` switches
+   * the copy to «Лимит на сегодня исчерпан» and the CTA row to
+   * upgrade / top-up / wait-until-tomorrow. Defaults to `credits`.
+   */
+  reason?: CreditsExhaustedReason;
   /**
    * In-app path (/agent/... or /home...) YooKassa should return the payer
    * to instead of the default settings pages. Passed through to both
@@ -32,7 +41,7 @@ interface CreditsExhaustedModalProps {
 }
 
 const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
-  ({ open, onClose, contextNote, returnPath }) => {
+  ({ open, onClose, contextNote, dailyQuota = 5, reason = 'credits', returnPath }) => {
     const { t } = useTranslation('subscription');
     const isLogin = useUserStore(authSelectors.isLogin);
     const router = useRouter();
@@ -71,14 +80,30 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
     const planOrder = ['free', 'basic', 'pro', 'pro_max'];
     const currentIdx = planOrder.indexOf(planSlug || 'free');
     const recommendedSlug = planOrder[currentIdx + 1] || 'basic';
-    const recommendedId =
-      upgradePlans.find((p) => p.slug === recommendedSlug)?.id ?? upgradePlans[0]?.id;
+    const recommendedPlan =
+      upgradePlans.find((p) => p.slug === recommendedSlug) ?? upgradePlans[0];
+    const recommendedId = recommendedPlan?.id;
 
     // "X× больше" — visual anchor for how much more value the upgrade gives.
     const formatMultiplier = (planCredits: number): string => {
       if (!creditLimit || creditLimit <= 0) return '';
       const ratio = Math.round(planCredits / creditLimit);
       return ratio > 1 ? `×${ratio} больше` : '';
+    };
+
+    // EXP-003: free daily quota spent — the user is not «out of credits»,
+    // tomorrow refills for free. Lead with the one plan that removes the
+    // daily limit, keep top-up, and offer an honest «wait» exit.
+    const isDaily = reason === 'daily_quota';
+
+    const subscribeTo = (plan: { id: number; slug: string }) => {
+      reachGoal('paywall_click', {
+        kind: 'subscribe',
+        plan: plan.slug,
+        reason,
+        source: 'credits_exhausted',
+      });
+      subscribeMutation.mutate({ planId: plan.id, returnPath });
     };
 
     return (
@@ -90,21 +115,41 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
         title={
           <Flexbox horizontal align="center" gap={8}>
             <Icon icon={Zap} />
-            {t('modal.exhausted.title')}
+            {t(isDaily ? 'modal.exhausted.daily.title' : 'modal.exhausted.title')}
           </Flexbox>
         }
         onCancel={onClose}
       >
         <Flexbox gap={16}>
           {contextNote && <Text type="secondary">{contextNote}</Text>}
-          <Text>{t('modal.exhausted.desc', { credits: creditLimit, plan: planName })}</Text>
-          <Text type="secondary">
-            {t('modal.exhausted.resetIn', { days: daysUntilReset })} · без доступа до сброса
-          </Text>
+          {isDaily ? (
+            <Text>{t('modal.exhausted.daily.desc', { quota: dailyQuota })}</Text>
+          ) : (
+            <>
+              <Text>{t('modal.exhausted.desc', { credits: creditLimit, plan: planName })}</Text>
+              <Text type="secondary">
+                {t('modal.exhausted.resetIn', { days: daysUntilReset })} · без доступа до сброса
+              </Text>
+            </>
+          )}
 
           <IntroOfferBanner />
 
-          <Flexbox horizontal gap={12}>
+          {isDaily && recommendedPlan && (
+            <Button
+              block
+              loading={subscribeMutation.isPending}
+              type="primary"
+              onClick={() => subscribeTo(recommendedPlan)}
+            >
+              {t('modal.exhausted.daily.upgrade', {
+                plan: recommendedPlan.name,
+                price: recommendedPlan.priceRub,
+              })}
+            </Button>
+          )}
+
+          <Flexbox horizontal gap={12} style={isDaily ? { display: 'none' } : undefined}>
             {upgradePlans.map((plan) => {
               const isRecommended = plan.id === recommendedId;
               const multiplier = formatMultiplier(plan.tokenLimit);
@@ -151,14 +196,7 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
                       // returnPath sends the payer back to this exact chat;
                       // the global PaymentReturnHandler picks up `recoveryFor`
                       // there (success modal / hand-off to the plans recovery).
-                      onClick={() => {
-                        reachGoal('paywall_click', {
-                          kind: 'subscribe',
-                          plan: plan.slug,
-                          source: 'credits_exhausted',
-                        });
-                        subscribeMutation.mutate({ planId: plan.id, returnPath });
-                      }}
+                      onClick={() => subscribeTo(plan)}
                     >
                       {isRecommended ? 'Продолжить общение' : t('modal.exhausted.select')}
                     </Button>
@@ -174,11 +212,19 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
               loading={topUpMutation.isPending}
               type="dashed"
               onClick={() => {
-                reachGoal('paywall_click', { kind: 'topup', source: 'credits_exhausted' });
+                reachGoal('paywall_click', { kind: 'topup', reason, source: 'credits_exhausted' });
                 topUpMutation.mutate({ amountRub: cheapestTopup.amountRub, returnPath });
               }}
             >
-              Или разово докупить за {cheapestTopup.amountRub} ₽
+              {isDaily
+                ? t('modal.exhausted.topup', { price: cheapestTopup.amountRub })
+                : `Или разово докупить за ${cheapestTopup.amountRub} ₽`}
+            </Button>
+          )}
+
+          {isDaily && (
+            <Button block type="default" onClick={onClose}>
+              {t('modal.exhausted.daily.wait')}
             </Button>
           )}
 

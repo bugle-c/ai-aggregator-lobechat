@@ -22,6 +22,7 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import WideScreenContainer from '../../WideScreenContainer';
 import { messageStateSelectors, useConversationStore } from '../store';
+import DailyQuotaCounter from './DailyQuotaCounter';
 
 export interface ChatInputProps {
   /**
@@ -195,6 +196,7 @@ const ChatInput = memo<ChatInputProps>(
     const defaultContent = (
       <WideScreenContainer style={skipScrollMarginWithList ? { marginTop: -12 } : undefined}>
         <LowBalanceWarning />
+        <DailyQuotaCounter />
         {sendMessageErrorMsg && (
           <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
             <Alert

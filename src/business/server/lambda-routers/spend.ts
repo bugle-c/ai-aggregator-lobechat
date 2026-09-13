@@ -4,6 +4,13 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { activeBonusFor } from '@/server/modules/billing/active-bonus';
 import {
+  countUserMessagesSince,
+  FREE_DAILY_MESSAGE_QUOTA,
+  FREE_PLAN_SLUG,
+  moscowDayStart,
+  nextMoscowDayStart,
+} from '@/server/modules/billing/daily-quota';
+import {
   getRequiredPlanForModelAsync,
   isModelAllowedForPlanAsync,
 } from '@/server/modules/billing/model-tiers';
@@ -62,10 +69,20 @@ export const spendRouter = router({
         ? sortedPlans[currentIndex + 1]
         : undefined;
 
+    // EXP-003: free plan = N user messages per Moscow day. Drives the
+    // «Осталось сегодня: 3 из 5» counter near the input; null for paid plans.
+    const isFree = plan?.slug === FREE_PLAN_SLUG;
+    const dailyUsed = isFree
+      ? await countUserMessagesSince(ctx.serverDB, ctx.userId, moscowDayStart(now))
+      : null;
+
     return {
       creditBalance: billing.tokenBalance,
       creditLimit,
       creditsUsed: billing.tokensUsedMonth,
+      dailyQuota: isFree ? FREE_DAILY_MESSAGE_QUOTA : null,
+      dailyRemaining: dailyUsed === null ? null : Math.max(0, FREE_DAILY_MESSAGE_QUOTA - dailyUsed),
+      dailyResetAt: isFree ? nextMoscowDayStart(now).toISOString() : null,
       daysUntilReset,
       nextPlanCredits: nextPlan?.tokenLimit ?? null,
       nextPlanName: nextPlan?.name ?? null,
