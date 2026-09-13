@@ -412,16 +412,18 @@ const Plans = memo(() => {
   const totalAvailable = creditLimit + creditBalance;
   const usagePercent = totalAvailable > 0 ? Math.round((creditsUsed / totalAvailable) * 100) : 0;
 
-  // Post-payment success modal, shared by both render branches.
-  const activatedModal = (
+  // Post-payment success modal, shared by both render branches. Mounted
+  // only after a success so its recent-topics fetch doesn't run on every
+  // plans visit.
+  const activatedModal = activatedPlan ? (
     <SubscriptionActivatedModal
+      open
       returnToChat
-      open={!!activatedPlan}
-      planName={activatedPlan?.planName}
-      planSlug={activatedPlan?.planSlug}
+      planName={activatedPlan.planName}
+      planSlug={activatedPlan.planSlug}
       onClose={() => setActivatedPlan(null)}
     />
-  );
+  ) : null;
 
   // Recovery modal lifted out of both render branches so mobile + desktop
   // share one source of truth and behaviour.

@@ -28,7 +28,10 @@ vi.mock('@/features/SubscriptionActivatedModal', () => ({
 
 // Controllable tRPC query: tests set `queryState` and bump `dataUpdatedAt`
 // to simulate successive polls.
-let queryState: { data: any; dataUpdatedAt: number } = { data: undefined, dataUpdatedAt: 0 };
+let queryState: { data: any; dataUpdatedAt: number; errorUpdatedAt?: number } = {
+  data: undefined,
+  dataUpdatedAt: 0,
+};
 const useQuerySpy = vi.fn();
 const invalidateBilling = vi.fn();
 const invalidateSpend = vi.fn();
@@ -173,6 +176,37 @@ describe('PaymentReturnHandler', () => {
     );
     expect(reachGoal).not.toHaveBeenCalled();
     expect(screen.queryByTestId('activated')).toBeNull();
+  });
+
+  it('stops polling after repeated query errors and hands off to the plans page', async () => {
+    queryState = { data: undefined, dataUpdatedAt: 0, errorUpdatedAt: 1 };
+    const view = renderAt('/agent/a1?recoveryFor=pay-1');
+    expect(screen.getByTestId('loc').textContent).toBe('/agent/a1?recoveryFor=pay-1');
+
+    for (let ts = 2; ts <= 7; ts++) {
+      queryState = { data: undefined, dataUpdatedAt: 0, errorUpdatedAt: ts };
+      await act(async () => {
+        view.rerender(
+          <MemoryRouter initialEntries={['/agent/a1?recoveryFor=pay-1']}>
+            <Routes>
+              <Route
+                element={
+                  <>
+                    <PaymentReturnHandler />
+                    <LocationProbe />
+                  </>
+                }
+                path="*"
+              />
+            </Routes>
+          </MemoryRouter>,
+        );
+      });
+    }
+    await waitFor(() =>
+      expect(screen.getByTestId('loc').textContent).toBe('/settings/plans?recoveryFor=pay-1'),
+    );
+    expect(reachGoal).not.toHaveBeenCalled();
   });
 
   it('hands a row that does not belong to the user (null) to the plans page', async () => {

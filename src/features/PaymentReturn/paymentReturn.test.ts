@@ -9,9 +9,15 @@ import {
 } from './paymentReturn';
 
 describe('decidePaymentReturn', () => {
-  it('keeps polling while the row is not loaded', () => {
+  it('keeps polling while the row is not loaded, but not past the budget (query errors)', () => {
     expect(decidePaymentReturn({ attempts: 0, status: undefined })).toEqual({ kind: 'poll' });
-    expect(decidePaymentReturn({ attempts: 99, status: undefined })).toEqual({ kind: 'poll' });
+    expect(decidePaymentReturn({ attempts: MAX_PENDING_ATTEMPTS - 1, status: undefined })).toEqual(
+      { kind: 'poll' },
+    );
+    expect(decidePaymentReturn({ attempts: MAX_PENDING_ATTEMPTS, status: undefined })).toEqual({
+      kind: 'recover',
+      reason: 'timeout',
+    });
   });
 
   it('celebrates on succeeded regardless of attempts', () => {

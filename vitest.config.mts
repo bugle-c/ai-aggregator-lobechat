@@ -44,6 +44,9 @@ export default defineConfig({
       '@/database': resolve(__dirname, './packages/database/src'),
       '@/utils/client/switchLang': resolve(__dirname, './src/utils/client/switchLang'),
       '@/const/locale': resolve(__dirname, './src/const/locale'),
+      // fork-only module living in src/const (the `@/const` alias below
+      // points at packages/const/src)
+      '@/const/recommended-models': resolve(__dirname, './src/const/recommended-models'),
       // TODO: after refactor the errorResponse, we can remove it
       '@/utils/errorResponse': resolve(__dirname, './src/utils/errorResponse'),
       '@/utils/unzipFile': resolve(__dirname, './src/utils/unzipFile'),

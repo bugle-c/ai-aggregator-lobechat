@@ -26,7 +26,9 @@ export type PaymentReturnDecision =
   | { kind: 'recover'; reason: 'canceled' | 'failed' | 'timeout' | 'unknown' };
 
 /**
- * `status === undefined` — the row has not been fetched yet (keep polling).
+ * `status === undefined` — no row yet (not fetched, or every fetch so far
+ * errored). Keep polling within the attempt budget, then hand over: a
+ * 500 on getPaymentStatus must not poll forever.
  * `status === null` — the query resolved but the row does not exist for
  * this user (foreign / bogus id): hand over to the plans page rather than
  * spinning forever.
@@ -36,7 +38,11 @@ export const decidePaymentReturn = (params: {
   status: PaymentStatusLike | null | undefined;
 }): PaymentReturnDecision => {
   const { attempts, status } = params;
-  if (status === undefined) return { kind: 'poll' };
+  if (status === undefined) {
+    return attempts >= MAX_PENDING_ATTEMPTS
+      ? { kind: 'recover', reason: 'timeout' }
+      : { kind: 'poll' };
+  }
   if (status === null) return { kind: 'recover', reason: 'unknown' };
   if (status === 'succeeded') return { kind: 'succeeded' };
   if (status === 'pending') {

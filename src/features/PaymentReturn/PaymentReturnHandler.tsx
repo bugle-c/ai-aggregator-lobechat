@@ -56,21 +56,29 @@ const PaymentReturnHandler = memo(() => {
 
   const active = !!(isLogin && recoveryForId && !isPlansPath(pathname));
 
-  const { data: payment, dataUpdatedAt } = lambdaQuery.subscription.getPaymentStatus.useQuery(
+  const {
+    data: payment,
+    dataUpdatedAt,
+    errorUpdatedAt,
+  } = lambdaQuery.subscription.getPaymentStatus.useQuery(
     { id: recoveryForId || '' },
     {
       enabled: active,
       // YooKassa redirects before our webhook lands — poll a few seconds.
       refetchInterval: active ? POLL_INTERVAL_MS : false,
+      retry: false,
     },
   );
 
   // Count completed fetches (not renders): the row's identity can stay
   // stable between polls, so `payment` alone would never advance the clock.
+  // Errored fetches count too, so a 500 on getPaymentStatus runs out the
+  // same budget instead of polling forever.
+  const lastFetchAt = Math.max(dataUpdatedAt || 0, errorUpdatedAt || 0);
   useEffect(() => {
-    if (!active || !dataUpdatedAt) return;
+    if (!active || !lastFetchAt) return;
     setAttempts((n) => n + 1);
-  }, [active, dataUpdatedAt]);
+  }, [active, lastFetchAt]);
 
   // NOTE: `utils` is intentionally not in the deps — each `utils.x.y` access
   // yields a fresh proxy and would re-fire the effect every render.
@@ -82,6 +90,8 @@ const PaymentReturnHandler = memo(() => {
       attempts,
       status: dataUpdatedAt ? (payment?.status ?? null) : undefined,
     });
+    // A pure-error run reaches here with status undefined and attempts
+    // exhausted → 'timeout' → plans page, same as an abandoned checkout.
     if (decision.kind === 'poll') return;
 
     handledRef.current = recoveryForId;
@@ -103,7 +113,16 @@ const PaymentReturnHandler = memo(() => {
     // `payment_failed` goal — not duplicated here).
     navigate(recoveryPlansPath(recoveryForId), { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, recoveryForId, attempts, dataUpdatedAt, payment, pathname, navigate, setRecoveryForId]);
+  }, [
+    active,
+    recoveryForId,
+    attempts,
+    dataUpdatedAt,
+    payment,
+    pathname,
+    navigate,
+    setRecoveryForId,
+  ]);
 
   if (!activated) return null;
 

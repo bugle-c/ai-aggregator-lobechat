@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { getRecommendedModels } from '@/const/recommended-models';
-import { findEnabledModel, PRESET_MODEL_PROVIDER } from '@/features/Generators/presetModelSwitch';
+import { findEnabledModel } from '@/features/Generators/presetModelSwitch';
 import { prettifyModelId } from '@/features/Generators/prettifyModelId';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useInitRecentTopic } from '@/hooks/useInitRecentTopic';
@@ -64,21 +64,12 @@ const SubscriptionActivatedModal = memo<SubscriptionActivatedModalProps>(
 
     const recommended = useMemo(() => getRecommendedModels(planSlug), [planSlug]);
 
-    // Best recommended model the user can actually pick right now. When the
-    // enabled list has not loaded yet, assume the branding provider (the
-    // recommended ids are all `lobehub` models).
+    // Best recommended model the user can actually pick right now, with the
+    // provider resolved from the enabled list (never assumed). Until that
+    // list has loaded there is no target and the switch CTA stays hidden.
     const target = useMemo(() => {
+      if (enabled.length === 0) return null;
       const sorted = [...recommended].sort((a, b) => a.order - b.order);
-      if (enabled.length === 0) {
-        const first = sorted[0];
-        return first
-          ? {
-              displayName: prettifyModelId(first.modelId),
-              modelId: first.modelId,
-              providerId: PRESET_MODEL_PROVIDER,
-            }
-          : null;
-      }
       for (const m of sorted) {
         const found = findEnabledModel(enabled, m.modelId);
         if (found) return found;
@@ -90,9 +81,11 @@ const SubscriptionActivatedModal = memo<SubscriptionActivatedModalProps>(
       agentId ?? (latestTopic?.type === 'agent' ? latestTopic.agent?.id : null) ?? null;
 
     const backPath = latestTopic
-      ? latestTopic.type === 'group'
-        ? `/group/${latestTopic.group?.id}?topic=${latestTopic.id}`
-        : `/agent/${latestTopic.agent?.id}?topic=${latestTopic.id}`
+      ? latestTopic.type === 'group' && latestTopic.group?.id
+        ? `/group/${latestTopic.group.id}?topic=${latestTopic.id}`
+        : latestTopic.type === 'agent' && latestTopic.agent?.id
+          ? `/agent/${latestTopic.agent.id}?topic=${latestTopic.id}`
+          : '/'
       : '/';
 
     const finish = () => {
