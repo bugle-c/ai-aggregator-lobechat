@@ -10,6 +10,7 @@ import { isDesktop } from '@/const/version';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { type Locales } from '@/locales/resources';
+import { parseWgAttr, WG_ATTR_COOKIE } from '@/server/modules/analytics/wgAttr';
 import { parseBrowserLanguage } from '@/utils/locale';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
@@ -25,6 +26,10 @@ export function defineConfig() {
   const defaultMiddleware = (request: NextRequest) => {
     const url = new URL(request.url);
     logDefault('Processing request: %s %s', request.method, request.url);
+    // Snapshot BEFORE the locale/variant rewrite below mutates `url.pathname`
+    // (`/` → `/ru-RU__0`). The attribution cookie must record what the user
+    // actually requested, not the internal route.
+    const requestedPath = url.pathname + url.search;
 
     // skip all api requests
     if (backendApiEndpoints.some((path) => url.pathname.startsWith(path))) {
@@ -209,6 +214,12 @@ export function defineConfig() {
       }
     }
 
+    // `wg_attr` (landing/lib/attribution-cookie.ts) is written on EVERY landing
+    // page view, UTM or not, so unlike `_gptweb_utms` it exists for organic
+    // blog readers too. It carries the true first page + full referrer + the
+    // Metrika client id. Highest priority for the first-touch fields.
+    const wgAttr = parseWgAttr(request.cookies.get(WG_ATTR_COOKIE)?.value);
+
     const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'] as const;
     const hasUtmInUrl = utmKeys.some((k) => url.searchParams.has(k));
     const hasFirstCookie = request.cookies.has('utm_attribution_first');
@@ -216,17 +227,18 @@ export function defineConfig() {
       hasUtmInUrl || (landingFirstTouch && Object.keys(landingFirstTouch).length > 0);
 
     if (hasFirstTouchData || !hasFirstCookie) {
-      // Compose payload preferring landing-side cookie over current-URL fallback.
+      // Compose payload preferring landing-side cookies over current-URL fallback.
       const payloadObj = {
-        landing_page: landingFirstTouch?.landingPage ?? url.pathname + url.search,
-        referrer: landingFirstTouch?.referrer ?? request.headers.get('referer') ?? null,
-        seen_at: landingFirstTouch?.seenAt ?? new Date().toISOString(),
+        landing_page: wgAttr?.lp ?? landingFirstTouch?.landingPage ?? requestedPath,
+        referrer:
+          wgAttr?.ref ?? landingFirstTouch?.referrer ?? request.headers.get('referer') ?? null,
+        seen_at: wgAttr?.ts ?? landingFirstTouch?.seenAt ?? new Date().toISOString(),
         utm_campaign:
           url.searchParams.get('utm_campaign') ?? landingFirstTouch?.utm_campaign ?? null,
         utm_content: url.searchParams.get('utm_content') ?? landingFirstTouch?.utm_content ?? null,
         utm_medium: url.searchParams.get('utm_medium') ?? landingFirstTouch?.utm_medium ?? null,
         utm_source: url.searchParams.get('utm_source') ?? landingFirstTouch?.utm_source ?? null,
-        ym_client_id: landingFirstTouch?.ymClientId ?? null,
+        ym_client_id: wgAttr?.ym ?? landingFirstTouch?.ymClientId ?? null,
         ga_client_id: landingFirstTouch?.gaClientId ?? null,
         roistat_visit: landingFirstTouch?.roistatVisit ?? null,
         analytics_ids: landingFirstTouch?.analyticsIds ?? null,

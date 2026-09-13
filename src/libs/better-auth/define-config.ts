@@ -254,13 +254,22 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
               // just lose their billing_user / lifecycle bootstrap.
             }
 
-            // Write UTM attribution (non-blocking on error)
+            // Write UTM attribution (non-blocking on error).
+            //
+            // Fires for every better-auth provider (email/password, magic link,
+            // OAuth, Telegram OIDC) because it is a database hook, not a route
+            // hook. Users minted OUTSIDE better-auth (the Telegram bot inserts
+            // `tg_<id>@bot.gptweb.ru` users by raw SQL) never reach this code;
+            // they are backfilled from /api/billing/register-bot-chat.
             try {
-              const { writeAttribution } =
+              const { applyWgAttr, writeAttribution } =
                 await import('@/server/modules/analytics/writeAttribution');
+              const { WG_ATTR_COOKIE, parseWgAttr, readCookieValue } =
+                await import('@/server/modules/analytics/wgAttr');
               const req = ctx?.request;
               const cookieHeader = req?.headers.get('cookie') || '';
-              const parseJSON = (raw: string | undefined) => {
+              const readJsonCookie = (name: string) => {
+                const raw = readCookieValue(cookieHeader, name);
                 if (!raw) return null;
                 try {
                   return JSON.parse(decodeURIComponent(raw));
@@ -268,14 +277,15 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
                   return null;
                 }
               };
-              const readCookie = (name: string) => {
-                const match = cookieHeader.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-                return match ? parseJSON(match[1]) : null;
-              };
+              // The middleware normally folds `wg_attr` into
+              // `utm_attribution_first` already; applying it here again covers
+              // the case where that cookie predates the landing visit (or the
+              // Metrika id arrived after the middleware ran). First touch wins.
+              const wgAttr = parseWgAttr(readCookieValue(cookieHeader, WG_ATTR_COOKIE));
               await writeAttribution(serverDB, {
                 userId: user.id,
-                firstCookie: readCookie('utm_attribution_first'),
-                lastCookie: readCookie('utm_attribution_last'),
+                firstCookie: applyWgAttr(readJsonCookie('utm_attribution_first'), wgAttr),
+                lastCookie: readJsonCookie('utm_attribution_last'),
                 rawReferrer: req?.headers.get('referer') || null,
               });
             } catch (error) {

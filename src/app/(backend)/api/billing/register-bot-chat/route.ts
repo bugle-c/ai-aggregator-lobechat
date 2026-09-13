@@ -89,12 +89,42 @@ export async function POST(req: Request) {
     if (!botUserId) {
       return NextResponse.json({ ok: true, linked: false, reason: 'no_account' });
     }
-    const exists = await db.execute(sql`SELECT 1 FROM users WHERE id = ${botUserId} LIMIT 1`);
-    if (exists.rows.length === 0) {
+    const exists = await db.execute(
+      sql`SELECT created_at FROM users WHERE id = ${botUserId} LIMIT 1`,
+    );
+    const userRow = (exists.rows as Array<{ created_at: string | Date }>)[0];
+    if (!userRow) {
       return NextResponse.json({ ok: true, linked: false, reason: 'no_account' });
     }
     userId = botUserId;
     linked = false;
+
+    // Bot-native accounts are inserted by the bot with raw SQL
+    // (gptwebrubot/src/lobechat/auth.ts), bypassing better-auth, so the
+    // `databaseHooks.user.create.after` attribution hook never fires for them
+    // and they were invisible in user_attribution (~15/month). Backfill here:
+    // this is the first aggregator endpoint such a user touches. Idempotent
+    // (PK + onConflictDoNothing), and never overwrites an existing row.
+    try {
+      const { writeAttribution } = await import('@/server/modules/analytics/writeAttribution');
+      const createdAt = new Date(userRow.created_at);
+      await writeAttribution(db, {
+        firstCookie: {
+          landing_page: null,
+          referrer: null,
+          seen_at: createdAt.toISOString(),
+          utm_campaign: 'bot_native',
+          utm_content: null,
+          utm_medium: 'bot',
+          utm_source: 'telegram',
+        },
+        lastCookie: null,
+        registeredAt: createdAt,
+        userId,
+      });
+    } catch (e) {
+      console.error('[register-bot-chat] attribution backfill failed', e);
+    }
   }
 
   // Stamp the real chat id (idempotent upsert). Only overwrites if changed.
