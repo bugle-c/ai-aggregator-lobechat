@@ -298,6 +298,10 @@ export const googleChatModels: AIChatModelCard[] = [
     contextWindowTokens: 1_048_576 + 65_536,
     description: "Gemini 2.5 Flash is Google's best-value model with full capabilities.",
     displayName: 'Gemini 2.5 Flash',
+    // Recommended for the free plan (src/const/recommended-models.ts). The
+    // recommendation only renders when the model is in the enabled list, so
+    // without this flag free users saw no Gemini at all.
+    enabled: true,
     id: 'gemini-2.5-flash',
     maxOutput: 65_536,
     pricing: {
