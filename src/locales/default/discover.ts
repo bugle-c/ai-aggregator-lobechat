@@ -76,9 +76,9 @@ export default {
   'assistants.status.deprecated.subtitle': 'This Agent is currently unavailable. Possible reasons:',
   'assistants.status.deprecated.title': 'Agent unavailable',
   'assistants.status.support':
-    'For any questions, please copy the link and send it to <email>noreply@gptweb.ru</email> for assistance.',
+    'For any questions, please copy the link and send it to <email>t.me/gptwebrubot</email> for assistance.',
   'assistants.status.unpublished.subtitle':
-    'This Agent is under review. To confirm its status, copy the link and email <email>noreply@gptweb.ru</email>.',
+    'This Agent is under review. To confirm its status, copy the link and email <email>t.me/gptwebrubot</email>.',
   'assistants.status.unpublished.title': 'Agent Under Review',
   'assistants.suggestions': 'Similar Agents',
   'assistants.systemRole': 'Agent Profile',

@@ -100,7 +100,7 @@ export default {
   'header.title': 'Billing',
   'keyMissMatch.button': 'Restore usage and continue conversation',
   'keyMissMatch.description':
-    'Due to an occasional system failure, your current subscription usage is temporarily inactive. Please click the button below to restore usage and continue the conversation. If this happens repeatedly, please contact us via email (noreply@gptweb.ru)',
+    'Due to an occasional system failure, your current subscription usage is temporarily inactive. Please click the button below to restore usage and continue the conversation. If this happens repeatedly, please contact support in Telegram (t.me/gptwebrubot)',
   'keyMissMatch.title': 'Restore Subscription Usage Now',
   'limitation.chat.success.action': 'Continue Chatting',
   'limitation.chat.success.desc':

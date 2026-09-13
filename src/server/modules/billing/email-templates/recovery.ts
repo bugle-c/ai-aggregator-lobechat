@@ -62,7 +62,7 @@ ${planLine}
 </p>
 <p style="color:#666;font-size:14px;">Ссылка персональная, действует 7 дней. Если оплата уже не нужна — просто проигнорируйте письмо.</p>
 <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
-<p style="color:#888;font-size:13px;">— Команда WebGPT · <a href="https://ask.gptweb.ru" style="color:#888;">ask.gptweb.ru</a></p>
+<p style="color:#888;font-size:13px;">— Команда WebGPT · <a href="https://ask.gptweb.ru" style="color:#888;">ask.gptweb.ru</a> · <a href="https://t.me/gptwebrubot?start=support" style="color:#888;">поддержка в Telegram</a></p>
 </body></html>`;
 
   const text = [

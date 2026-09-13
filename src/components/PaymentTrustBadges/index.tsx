@@ -1,5 +1,6 @@
 'use client';
 
+import { SUPPORT_TELEGRAM_URL } from '@lobechat/business-const';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
@@ -33,7 +34,12 @@ const PaymentTrustBadges = memo<PaymentTrustBadgesProps>(({ variant }) => (
         : '✅ Отменить подписку можно в любой момент — в один клик в настройках'}
     </span>
     <span>🏦 Оплата через ЮKassa: СБП, карты Мир/Visa/MC · чек на почту</span>
-    <span>ИП Верстин П.С. · ИНН 333412952925 · поддержка hello@gptweb.ru</span>
+    <span>
+      ИП Верстин П.С. · ИНН 333412952925 ·{' '}
+      <a href={SUPPORT_TELEGRAM_URL} rel="noreferrer" target="_blank">
+        поддержка в Telegram
+      </a>
+    </span>
   </Flexbox>
 ));
 

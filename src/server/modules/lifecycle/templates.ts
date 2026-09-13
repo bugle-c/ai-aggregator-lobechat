@@ -7,6 +7,7 @@
 
 const APP_URL = process.env.APP_URL || 'https://ask.gptweb.ru';
 const PLANS_URL = `${APP_URL}/settings/plans`;
+const SUPPORT_URL = 'https://t.me/gptwebrubot?start=support';
 
 const BASE_STYLE = `
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -54,7 +55,7 @@ export function buildExpiryReminderEmail(input: ExpiryReminderInput): {
       <p>
         <a href="${PLANS_URL}" style="${CTA_STYLE}">Продлить подписку</a>
       </p>
-      <p>Если у вас есть вопросы — просто ответьте на это письмо.</p>
+      <p>Если у вас есть вопросы — напишите в поддержку в Telegram: <a href="${SUPPORT_URL}">@gptwebrubot</a>.</p>
       <div style="${FOOTER_STYLE}">
         WebGPT · ask.gptweb.ru<br />
         Это автоматическое уведомление, отправленное за 3 дня до истечения вашей подписки.
@@ -86,7 +87,7 @@ export function buildSubscriptionConfirmationEmail(input: SubscriptionConfirmati
       <p>Здравствуйте!</p>
       <p>Подписка <strong>${escapeHtml(input.planName)}</strong> активна${dateStr ? ` до <strong>${dateStr}</strong>` : ''}.</p>
       <p>На баланс начислено <strong>${input.creditAmount.toLocaleString('ru-RU')}</strong> кредитов.</p>
-      <p>Спасибо, что выбрали WebGPT! Если возникнут вопросы — просто ответьте на это письмо.</p>
+      <p>Спасибо, что выбрали WebGPT! Если возникнут вопросы — напишите в поддержку в Telegram: <a href="${SUPPORT_URL}">@gptwebrubot</a>.</p>
       <p>
         <a href="${APP_URL}" style="${CTA_STYLE}">Открыть WebGPT</a>
       </p>
@@ -125,7 +126,7 @@ export function buildSubscriptionExpiredEmail(input: SubscriptionExpiredInput): 
       <p>
         <a href="${PLANS_URL}" style="${CTA_STYLE}">Продлить подписку</a>
       </p>
-      <p>Если у вас есть вопросы — просто ответьте на это письмо.</p>
+      <p>Если у вас есть вопросы — напишите в поддержку в Telegram: <a href="${SUPPORT_URL}">@gptwebrubot</a>.</p>
       <div style="${FOOTER_STYLE}">
         WebGPT · ask.gptweb.ru<br />
         Это автоматическое уведомление об окончании вашей подписки.

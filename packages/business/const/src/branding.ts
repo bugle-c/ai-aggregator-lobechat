@@ -9,11 +9,15 @@ export const BRANDING_LOGO_URL = '/logo.png';
 
 export const ORG_NAME = 'WebGPT';
 
+// Support is Telegram-only (gptweb.ru has no MX; hello@/support@ bounce).
+// The deep link opens @gptwebrubot and triggers its /support flow.
+export const SUPPORT_TELEGRAM_URL = 'https://t.me/gptwebrubot?start=support';
+
 export const BRANDING_URL = {
   help: 'https://gptweb.ru',
   privacy: undefined,
   subscription: undefined,
-  support: 'https://t.me/gptwebrubot',
+  support: SUPPORT_TELEGRAM_URL,
   terms: undefined,
 };
 

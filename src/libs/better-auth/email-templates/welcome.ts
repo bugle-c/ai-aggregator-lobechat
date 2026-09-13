@@ -49,7 +49,7 @@ export const getWelcomeEmailTemplate = ({ appUrl = DEFAULT_APP_URL, userName }: 
         <a href="${plansUrl}" style="color:#2563eb;font-weight:700;text-decoration:none;">Посмотреть тарифы →</a>
       </p>
     </div>
-    <p style="text-align:center;color:#9ca3af;font-size:13px;margin:24px 0 0 0;">© 2026 WebGPT · support@gptweb.ru</p>
+    <p style="text-align:center;color:#9ca3af;font-size:13px;margin:24px 0 0 0;">© 2026 WebGPT · <a href="https://t.me/gptwebrubot?start=support" style="color:#9ca3af;">Поддержка в Telegram</a></p>
   </div>
 </body>
 </html>`,
