@@ -1,6 +1,6 @@
 import { and, eq, gte, sql } from 'drizzle-orm';
 
-import { usageLogs } from '@/database/schemas/analytics';
+import { messages } from '@/database/schemas/message';
 import { type LobeChatDatabase } from '@/database/type';
 
 /**
@@ -10,15 +10,25 @@ import { type LobeChatDatabase } from '@/database/type';
  * sells «10 запросов в день» as its free hook. See
  * GPTWEB/tasks/2026-09-13-exp003-daily-quota-plan.md.
  *
- * Counting unit = user messages that reached the model = `usage_logs` rows
- * with `kind='chat'` (one row per charged completion, written by
- * recordTokenUsage). Credits stay the accounting unit for economics; only the
- * *gate* changes. `plans.token_limit` for free (150) remains a monthly safety
- * cap so a runaway day cannot cost more than before.
+ * Counting unit = **user messages** (`messages.role='user'`) per Moscow day.
+ * Not `usage_logs`: that table also gets a `kind='chat'` row for every
+ * topic auto-title (`fetchPresetTaskResult`) and every tool-call follow-up
+ * step, which would silently eat 1–2 of the 5. Credits stay the accounting
+ * unit for economics; only the *gate* changes. `plans.token_limit` for free
+ * (150) remains a monthly safety cap so a runaway day cannot cost more.
  */
 export const FREE_DAILY_MESSAGE_QUOTA = 5;
 
 export const FREE_PLAN_SLUG = 'free';
+
+/**
+ * Request header the client sets on system/preset completions (topic title,
+ * agent meta …). Those must neither count toward nor be blocked by the daily
+ * quota — a title request dying in a paywall error is invisible to the user.
+ * They are still charged credits as before.
+ */
+export const WEBGPT_TASK_HEADER = 'x-webgpt-task';
+export const WEBGPT_TASK_PRESET = 'preset';
 
 /** Europe/Moscow is a fixed UTC+3 — no DST since 2014, so no tz database needed. */
 const MSK_OFFSET_MS = 3 * 60 * 60 * 1000;
@@ -36,20 +46,26 @@ export function nextMoscowDayStart(now: Date = new Date()): Date {
 }
 
 /**
- * Chat messages the user has been charged for since `since`.
- * Served by `usage_logs_user_created_idx (user_id, created_at DESC)` —
- * an index range scan, no seq scan (EXPLAIN in the EXP-003 report).
+ * User messages persisted since `since`. Both the web client
+ * (`aiChat.sendMessageInServer` runs before the streaming fetch) and the
+ * bot (`insertMessage` before `streamChat`) persist the user message BEFORE
+ * the chat route's gate runs, so at gate time the count already includes
+ * the message being answered — `decideUsageLimit` accounts for that.
+ * Tool-call follow-up steps and preset tasks add no user row → count once.
+ *
+ * Plan on live PG: Index Scan on `messages_created_at_idx` + filter
+ * (0.06 ms, 4 buffers) — no seq scan, no migration needed.
  */
-export async function countChatMessagesSince(
+export async function countUserMessagesSince(
   db: LobeChatDatabase,
   userId: string,
   since: Date,
 ): Promise<number> {
   const rows = await db
     .select({ count: sql<number>`count(*)::int` })
-    .from(usageLogs)
+    .from(messages)
     .where(
-      and(eq(usageLogs.userId, userId), eq(usageLogs.kind, 'chat'), gte(usageLogs.createdAt, since)),
+      and(eq(messages.userId, userId), eq(messages.role, 'user'), gte(messages.createdAt, since)),
     );
   return Number(rows[0]?.count ?? 0);
 }

@@ -4,7 +4,7 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { activeBonusFor } from '@/server/modules/billing/active-bonus';
 import {
-  countChatMessagesSince,
+  countUserMessagesSince,
   FREE_DAILY_MESSAGE_QUOTA,
   FREE_PLAN_SLUG,
   moscowDayStart,
@@ -69,11 +69,11 @@ export const spendRouter = router({
         ? sortedPlans[currentIndex + 1]
         : undefined;
 
-    // EXP-003: free plan = N chat messages per Moscow day. Drives the
+    // EXP-003: free plan = N user messages per Moscow day. Drives the
     // «Осталось сегодня: 3 из 5» counter near the input; null for paid plans.
     const isFree = plan?.slug === FREE_PLAN_SLUG;
     const dailyUsed = isFree
-      ? await countChatMessagesSince(ctx.serverDB, ctx.userId, moscowDayStart(now))
+      ? await countUserMessagesSince(ctx.serverDB, ctx.userId, moscowDayStart(now))
       : null;
 
     return {

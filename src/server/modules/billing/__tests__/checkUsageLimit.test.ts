@@ -119,10 +119,10 @@ describe('checkUsageLimit — EXP-003 free daily message quota', () => {
   const freeBilling = { bonusBalance: 0, planId: 1, tokenBalance: 0, tokensUsedMonth: 6 };
   const freePlan = { dailyCreditLimit: null, slug: 'free', tokenLimit: 150 };
 
-  it('counts today\'s chat rows and blocks the 6th message with reason=daily_quota', async () => {
+  it("counts today's user messages (incl. current) and blocks the 6th with reason=daily_quota", async () => {
     getOrResetUserBillingMock.mockResolvedValueOnce(freeBilling);
     getPlanByIdMock.mockResolvedValueOnce(freePlan);
-    const { db, select } = makeCountDb(5);
+    const { db, select } = makeCountDb(6);
 
     const result = await checkUsageLimit(db, 'user-5', 'gpt-5-mini', { kind: 'chat' });
 
@@ -131,14 +131,28 @@ describe('checkUsageLimit — EXP-003 free daily message quota', () => {
     expect(result.message).toContain('Лимит на сегодня исчерпан');
   });
 
-  it('allows the 5th message and reports messages left today', async () => {
+  it('allows the 5th message (5 persisted) and reports 0 left today', async () => {
     getOrResetUserBillingMock.mockResolvedValueOnce(freeBilling);
     getPlanByIdMock.mockResolvedValueOnce(freePlan);
-    const { db } = makeCountDb(4);
+    const { db } = makeCountDb(5);
 
     const result = await checkUsageLimit(db, 'user-6', 'gpt-5-mini');
 
-    expect(result).toMatchObject({ allowed: true, dailyQuota: 5, dailyRemaining: 1 });
+    expect(result).toMatchObject({ allowed: true, dailyQuota: 5, dailyRemaining: 0 });
+  });
+
+  it('preset task (countsTowardQuota=false) skips the count and is never blocked', async () => {
+    getOrResetUserBillingMock.mockResolvedValueOnce(freeBilling);
+    getPlanByIdMock.mockResolvedValueOnce(freePlan);
+    const { db, select } = makeCountDb(99);
+
+    const result = await checkUsageLimit(db, 'user-6b', 'gpt-5-mini', {
+      countsTowardQuota: false,
+      kind: 'chat',
+    });
+
+    expect(select).not.toHaveBeenCalled();
+    expect(result.allowed).toBe(true);
   });
 
   it('does not run the daily count for image/video kinds', async () => {

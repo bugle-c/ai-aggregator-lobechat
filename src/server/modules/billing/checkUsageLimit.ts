@@ -7,7 +7,7 @@ import { BillingService } from '@/server/services/billing';
 import { activeBonusFor } from './active-bonus';
 import { type ModelTier, type Usage } from './compute-cost';
 import {
-  countChatMessagesSince,
+  countUserMessagesSince,
   FREE_DAILY_MESSAGE_QUOTA,
   FREE_PLAN_SLUG,
   moscowDayStart,
@@ -61,9 +61,19 @@ export const USAGE_LIMIT_MESSAGES: Record<UsageLimitReason, string> = {
 export interface UsageLimitInput {
   /** Active (non-expired) bonus pool — MAGIC48 intro, TG-link +100, referral +100. */
   bonus: number;
+  /**
+   * `false` for system/preset completions (topic auto-title, agent meta —
+   * `x-webgpt-task: preset`): they are neither counted nor blocked by the
+   * daily quota. Default `true`.
+   */
+  countsTowardQuota?: boolean;
   /** Monthly allowance of the plan (`plans.token_limit`). */
   creditLimit: number;
-  /** `usage_logs` chat rows since 00:00 MSK. Only consulted for free-plan chat. */
+  /**
+   * User messages persisted today (00:00 MSK), INCLUDING the one being
+   * answered — the client and the bot persist the user message before the
+   * streaming route runs the gate. Only consulted for free-plan chat.
+   */
   dailyUsed?: number;
   kind: UsageKind;
   planSlug: string | undefined;
@@ -77,17 +87,24 @@ export interface UsageLimitInput {
  *
  * 1. Monthly pool `token_limit + token_balance + bonus` is exhausted → refuse.
  *    Free users with no paid pools get `monthly_cap`, everybody else `credits`.
- * 2. Free plan + chat: the **daily quota** gates only the free allowance
- *    (`token_limit`). Credits *beyond* the allowance — top-ups and bonus
- *    pools — are spendable at any time, so a free user who still has such
- *    credits may continue past the 5th message on the existing credit path.
- *    The single `tokens_used_month` counter cannot tell which pool a credit
- *    came from, so "extra credits remaining" is what is left above the
- *    allowance: `totalAvailable - max(tokensUsedMonth, creditLimit)`.
+ * 2. Free plan + chat (unless `countsTowardQuota=false`): the **daily quota**.
+ *    `dailyUsed` already includes the current message, so the 5th message
+ *    (dailyUsed=5) passes and the 6th (dailyUsed=6) is refused.
+ *    **Only purchased credits lift the quota** (owner decision, review
+ *    2026-09-13): bonus pools (TG-link, referral, MAGIC48) reach most
+ *    activated users and would have switched the experiment off for them —
+ *    `bonus_balance` only extends the monthly pool. Spend order assumed for
+ *    the single `tokens_used_month` counter: allowance → top-up → bonus, so
+ *    `purchasedRemaining = token_balance − max(0, tokensUsedMonth − creditLimit)`.
+ *    (Subtracting the bonus, i.e. allowance → bonus → top-up, would let a
+ *    bonus granted AFTER the top-up was spent re-open the bypass, and makes
+ *    "top-up spent, bonus remains" an unreachable state.) Bonus expiry only
+ *    shrinks the monthly pool; it never changes the daily decision.
  * 3. Paid plans and image/video generation never see the daily quota.
  */
 export function decideUsageLimit(input: UsageLimitInput): UsageLimitResult {
   const { bonus, creditLimit, dailyUsed, kind, planSlug, tokenBalance, tokensUsedMonth } = input;
+  const countsTowardQuota = input.countsTowardQuota ?? true;
   const extraCredits = tokenBalance + bonus;
   const totalAvailable = creditLimit + extraCredits;
   const isFree = planSlug === FREE_PLAN_SLUG;
@@ -98,11 +115,13 @@ export function decideUsageLimit(input: UsageLimitInput): UsageLimitResult {
   }
 
   const creditsRemaining = totalAvailable - tokensUsedMonth;
-  if (!isFree || kind !== 'chat') return { allowed: true, creditsRemaining };
+  if (!isFree || kind !== 'chat' || !countsTowardQuota) return { allowed: true, creditsRemaining };
 
-  const dailyRemaining = Math.max(0, FREE_DAILY_MESSAGE_QUOTA - (dailyUsed ?? 0));
-  const extraRemaining = Math.max(0, totalAvailable - Math.max(tokensUsedMonth, creditLimit));
-  if (dailyRemaining <= 0 && extraRemaining <= 0) {
+  const used = dailyUsed ?? 0;
+  const dailyRemaining = Math.max(0, FREE_DAILY_MESSAGE_QUOTA - used);
+  const purchasedRemaining =
+    tokenBalance > 0 ? tokenBalance - Math.max(0, tokensUsedMonth - creditLimit) : 0;
+  if (used > FREE_DAILY_MESSAGE_QUOTA && purchasedRemaining <= 0) {
     return {
       allowed: false,
       creditsRemaining,
@@ -120,24 +139,26 @@ export async function checkUsageLimit(
   db: LobeChatDatabase,
   userId: string,
   modelId?: string,
-  opts: { kind?: UsageKind } = {},
+  opts: { countsTowardQuota?: boolean; kind?: UsageKind } = {},
 ): Promise<UsageLimitResult> {
   try {
     const kind = opts.kind ?? 'chat';
+    const countsTowardQuota = opts.countsTowardQuota ?? true;
     const billingService = new BillingService(db, userId);
     const billing = await billingService.getOrResetUserBilling();
     const plan = await billingService.getPlanById(billing.planId);
     const creditLimit = plan?.tokenLimit || 50;
 
-    // The daily count is only needed for free-plan chat — one indexed
-    // count(*) over usage_logs (user_id, created_at) since 00:00 MSK.
+    // The daily count is only needed for free-plan user chat — one indexed
+    // count(*) over messages (role='user') since 00:00 MSK.
     const dailyUsed =
-      plan?.slug === FREE_PLAN_SLUG && kind === 'chat'
-        ? await countChatMessagesSince(db, userId, moscowDayStart())
+      plan?.slug === FREE_PLAN_SLUG && kind === 'chat' && countsTowardQuota
+        ? await countUserMessagesSince(db, userId, moscowDayStart())
         : undefined;
 
     return decideUsageLimit({
       bonus: activeBonusFor(billing),
+      countsTowardQuota,
       creditLimit,
       dailyUsed,
       kind,

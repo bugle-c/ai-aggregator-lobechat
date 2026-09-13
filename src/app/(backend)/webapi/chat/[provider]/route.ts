@@ -33,7 +33,16 @@ export const POST = checkAuth(
 
       // ============  2a. check usage limit  ============ //
       const { checkUsageLimit } = await import('@/server/modules/billing/checkUsageLimit');
-      const limitResult = await checkUsageLimit(serverDB, userId, data.model, { kind: 'chat' });
+      // Preset/system completions (topic auto-title, agent meta) are marked
+      // by the client — they neither count toward nor are blocked by the
+      // free daily quota (EXP-003); credits are charged as before.
+      const { WEBGPT_TASK_HEADER, WEBGPT_TASK_PRESET } =
+        await import('@/server/modules/billing/daily-quota');
+      const isPresetTask = req.headers.get(WEBGPT_TASK_HEADER) === WEBGPT_TASK_PRESET;
+      const limitResult = await checkUsageLimit(serverDB, userId, data.model, {
+        countsTowardQuota: !isPresetTask,
+        kind: 'chat',
+      });
       if (!limitResult.allowed) {
         // `code` lets the client render the paywall (CreditsExhaustedModal)
         // instead of a generic server-error block — see

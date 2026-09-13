@@ -312,7 +312,7 @@ class ChatService {
   };
 
   getChatCompletion = async (params: Partial<ChatStreamPayload>, options?: FetchOptions) => {
-    const { agentId, signal, responseAnimation, topicId } = options ?? {};
+    const { agentId, signal, responseAnimation, task, topicId } = options ?? {};
 
     const { provider = ModelProvider.OpenAI, ...res } = params;
 
@@ -404,6 +404,9 @@ class ChatService {
         ...traceHeader,
         ...(agentId && { 'x-agent-id': agentId }),
         ...(topicId && { 'x-topic-id': topicId }),
+        // EXP-003: preset tasks bypass the free daily message quota (server
+        // reads WEBGPT_TASK_HEADER in webapi/chat/[provider]/route.ts).
+        ...(task === 'preset' && { 'x-webgpt-task': 'preset' }),
       },
       provider,
     });
@@ -505,6 +508,7 @@ class ChatService {
           onFinish,
           onMessageHandle,
           signal: abortController?.signal,
+          task: 'preset',
           trace: this.mapTrace(trace, TraceTagMap.SystemChain),
         },
       );
