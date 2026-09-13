@@ -6,6 +6,12 @@ import { BillingService } from '@/server/services/billing';
 
 import { activeBonusFor } from './active-bonus';
 import { type ModelTier, type Usage } from './compute-cost';
+import {
+  countChatMessagesSince,
+  FREE_DAILY_MESSAGE_QUOTA,
+  FREE_PLAN_SLUG,
+  moscowDayStart,
+} from './daily-quota';
 import { calculateCreditsAsync } from './model-rates';
 import { type PlanSlug } from './model-tiers';
 
@@ -23,38 +29,122 @@ export const TIER_DAILY_CAPS: Record<PlanSlug, TierCapMap> = {
   pro_max: {},
 };
 
+/**
+ * Why a request was refused. Travels to the client in the chat route error
+ * body (`code: 'credits_exhausted'`, `reason`) so the paywall picks its copy:
+ *   daily_quota — free plan, today's message allowance is spent (refills 00:00 MSK)
+ *   monthly_cap — free plan, the monthly safety cap (`plans.token_limit`) is hit
+ *   credits     — paid plan, or top-up/bonus credits that are now all spent
+ */
+export type UsageLimitReason = 'credits' | 'daily_quota' | 'monthly_cap';
+
+export type UsageKind = 'chat' | 'image' | 'video';
+
 export interface UsageLimitResult {
   allowed: boolean;
   creditsRemaining?: number;
+  /** Free-plan daily quota size — set only when the quota applied to this request. */
+  dailyQuota?: number;
+  /** Free-plan messages left today — set only when the quota applied to this request. */
+  dailyRemaining?: number;
   message?: string;
+  reason?: UsageLimitReason;
+}
+
+export const USAGE_LIMIT_MESSAGES: Record<UsageLimitReason, string> = {
+  credits: 'Кредиты закончились. Пополните баланс или обновите план.',
+  daily_quota: `Лимит на сегодня исчерпан. ${FREE_DAILY_MESSAGE_QUOTA} бесплатных сообщений в день закончились — новые появятся завтра в 00:00 по Москве.`,
+  monthly_cap:
+    'Кредиты закончились. Месячный лимит бесплатного тарифа исчерпан — обновите план или пополните баланс.',
+};
+
+export interface UsageLimitInput {
+  /** Active (non-expired) bonus pool — MAGIC48 intro, TG-link +100, referral +100. */
+  bonus: number;
+  /** Monthly allowance of the plan (`plans.token_limit`). */
+  creditLimit: number;
+  /** `usage_logs` chat rows since 00:00 MSK. Only consulted for free-plan chat. */
+  dailyUsed?: number;
+  kind: UsageKind;
+  planSlug: string | undefined;
+  /** Top-up purchases (`user_billing.token_balance`). */
+  tokenBalance: number;
+  tokensUsedMonth: number;
+}
+
+/**
+ * Pure gate decision. Precedence (EXP-003):
+ *
+ * 1. Monthly pool `token_limit + token_balance + bonus` is exhausted → refuse.
+ *    Free users with no paid pools get `monthly_cap`, everybody else `credits`.
+ * 2. Free plan + chat: the **daily quota** gates only the free allowance
+ *    (`token_limit`). Credits *beyond* the allowance — top-ups and bonus
+ *    pools — are spendable at any time, so a free user who still has such
+ *    credits may continue past the 5th message on the existing credit path.
+ *    The single `tokens_used_month` counter cannot tell which pool a credit
+ *    came from, so "extra credits remaining" is what is left above the
+ *    allowance: `totalAvailable - max(tokensUsedMonth, creditLimit)`.
+ * 3. Paid plans and image/video generation never see the daily quota.
+ */
+export function decideUsageLimit(input: UsageLimitInput): UsageLimitResult {
+  const { bonus, creditLimit, dailyUsed, kind, planSlug, tokenBalance, tokensUsedMonth } = input;
+  const extraCredits = tokenBalance + bonus;
+  const totalAvailable = creditLimit + extraCredits;
+  const isFree = planSlug === FREE_PLAN_SLUG;
+
+  if (tokensUsedMonth >= totalAvailable) {
+    const reason: UsageLimitReason = isFree && extraCredits <= 0 ? 'monthly_cap' : 'credits';
+    return { allowed: false, creditsRemaining: 0, message: USAGE_LIMIT_MESSAGES[reason], reason };
+  }
+
+  const creditsRemaining = totalAvailable - tokensUsedMonth;
+  if (!isFree || kind !== 'chat') return { allowed: true, creditsRemaining };
+
+  const dailyRemaining = Math.max(0, FREE_DAILY_MESSAGE_QUOTA - (dailyUsed ?? 0));
+  const extraRemaining = Math.max(0, totalAvailable - Math.max(tokensUsedMonth, creditLimit));
+  if (dailyRemaining <= 0 && extraRemaining <= 0) {
+    return {
+      allowed: false,
+      creditsRemaining,
+      dailyQuota: FREE_DAILY_MESSAGE_QUOTA,
+      dailyRemaining: 0,
+      message: USAGE_LIMIT_MESSAGES.daily_quota,
+      reason: 'daily_quota',
+    };
+  }
+
+  return { allowed: true, creditsRemaining, dailyQuota: FREE_DAILY_MESSAGE_QUOTA, dailyRemaining };
 }
 
 export async function checkUsageLimit(
   db: LobeChatDatabase,
   userId: string,
   modelId?: string,
+  opts: { kind?: UsageKind } = {},
 ): Promise<UsageLimitResult> {
   try {
+    const kind = opts.kind ?? 'chat';
     const billingService = new BillingService(db, userId);
     const billing = await billingService.getOrResetUserBilling();
     const plan = await billingService.getPlanById(billing.planId);
     const creditLimit = plan?.tokenLimit || 50;
-    const totalAvailable = creditLimit + billing.tokenBalance + activeBonusFor(billing);
 
-    // No daily caps: monthly credits + top-ups are the only spend limiter.
+    // The daily count is only needed for free-plan chat — one indexed
+    // count(*) over usage_logs (user_id, created_at) since 00:00 MSK.
+    const dailyUsed =
+      plan?.slug === FREE_PLAN_SLUG && kind === 'chat'
+        ? await countChatMessagesSince(db, userId, moscowDayStart())
+        : undefined;
 
-    if (billing.tokensUsedMonth >= totalAvailable) {
-      return {
-        allowed: false,
-        creditsRemaining: 0,
-        message: 'Кредиты закончились. Пополните баланс или обновите план.',
-      };
-    }
-
-    return {
-      allowed: true,
-      creditsRemaining: totalAvailable - billing.tokensUsedMonth,
-    };
+    return decideUsageLimit({
+      bonus: activeBonusFor(billing),
+      creditLimit,
+      dailyUsed,
+      kind,
+      planSlug: plan?.slug,
+      tokenBalance: billing.tokenBalance,
+      tokensUsedMonth: billing.tokensUsedMonth,
+    });
   } catch (error) {
     // Fail-closed: a transient PostgreSQL hiccup must NOT let a free user
     // bypass tier-gating and reach Sora 2 Pro at $0.50/sec ($25/request).

@@ -5,7 +5,11 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { reachGoal } from '@/business/client/analytics/ym';
-import { isCreditsExhaustedChatError } from '@/business/client/creditsExhausted';
+import {
+  getCreditsExhaustedDailyQuota,
+  getCreditsExhaustedReason,
+  isCreditsExhaustedChatError,
+} from '@/business/client/creditsExhausted';
 import CreditsExhaustedModal from '@/components/CreditsExhaustedModal';
 import { useTrackUpsell } from '@/features/Upsell/useTrackUpsell';
 import { useChatStore } from '@/store/chat';
@@ -55,6 +59,10 @@ export default function useRenderBusinessChatErrorMessageExtra(
 
   const isPlanLimit = !!error && error.type === 'PlanLimitExceeded';
   const isCreditsExhausted = !isPlanLimit && isCreditsExhaustedChatError(error);
+  // EXP-003: the free plan refuses with reason=daily_quota (5 messages/day,
+  // refills 00:00 MSK) — different copy and CTA row than «credits are gone».
+  const exhaustedReason = getCreditsExhaustedReason(error);
+  const dailyQuota = getCreditsExhaustedDailyQuota(error) ?? 5;
   const body = (error?.body || {}) as {
     currentPlan?: string;
     modelId?: string;
@@ -70,9 +78,9 @@ export default function useRenderBusinessChatErrorMessageExtra(
 
   const [exhaustedOpen, setExhaustedOpen] = useState(false);
   const openExhausted = useCallback(() => {
-    reachGoal('paywall_view', { source: 'credits_exhausted' });
+    reachGoal('paywall_view', { reason: exhaustedReason, source: 'credits_exhausted' });
     setExhaustedOpen(true);
-  }, []);
+  }, [exhaustedReason]);
 
   // Fire impression when the renderer mounts for a plan-limit error.
   // The block stays in the chat lane until the next user message, so
@@ -94,17 +102,25 @@ export default function useRenderBusinessChatErrorMessageExtra(
   }, [isCreditsExhausted, messageId, openExhausted]);
 
   if (isCreditsExhausted) {
+    const isDaily = exhaustedReason === 'daily_quota';
+    const messageKey = isDaily
+      ? 'response.CreditsExhausted.dailyQuota.message'
+      : exhaustedReason === 'monthly_cap'
+        ? 'response.CreditsExhausted.monthlyCap.message'
+        : 'response.CreditsExhausted.message';
     return (
       <Block padding={16} style={{ width: '100%' }} variant={'outlined'}>
         <div style={{ marginBottom: 12, fontSize: 14, lineHeight: 1.5 }}>
-          {t('response.CreditsExhausted.message')}
+          {t(messageKey, { quota: dailyQuota })}
         </div>
         <Button block type="primary" onClick={openExhausted}>
-          {t('response.CreditsExhausted.cta')}
+          {t(isDaily ? 'response.CreditsExhausted.dailyQuota.cta' : 'response.CreditsExhausted.cta')}
         </Button>
         <CreditsExhaustedModal
           contextNote="Ваш диалог сохранён — после оплаты вы вернётесь ровно сюда"
+          dailyQuota={dailyQuota}
           open={exhaustedOpen}
+          reason={exhaustedReason}
           returnPath={paywallReturnPath}
           onClose={() => setExhaustedOpen(false)}
         />

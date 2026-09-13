@@ -69,7 +69,8 @@ export async function chargeBeforeGenerate(params: ChargeParams): Promise<Charge
     throw new Error(`Модель "${params.model}" не доступна на плане "${planSlug}". Обновите план.`);
   }
 
-  const result = await checkUsageLimit(db, params.userId, params.model);
+  // kind='image': the free-plan daily *message* quota (EXP-003) gates chat only.
+  const result = await checkUsageLimit(db, params.userId, params.model, { kind: 'image' });
   if (!result.allowed) {
     console.warn(`[billing] Image generation blocked for user ${params.userId}: ${result.message}`);
     throw new Error(result.message || 'Usage limit exceeded');
