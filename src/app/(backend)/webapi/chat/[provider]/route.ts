@@ -35,7 +35,14 @@ export const POST = checkAuth(
       const { checkUsageLimit } = await import('@/server/modules/billing/checkUsageLimit');
       const limitResult = await checkUsageLimit(serverDB, userId, data.model);
       if (!limitResult.allowed) {
+        // `code` lets the client render the paywall (CreditsExhaustedModal)
+        // instead of a generic server-error block — see
+        // useRenderBusinessChatErrorMessageExtra. The fail-closed branch of
+        // checkUsageLimit (DB hiccup, «Сервис временно недоступен») must
+        // NOT get the code — that is not a paywall moment.
+        const exhausted = !!limitResult.message?.includes('Кредиты закончились');
         return createErrorResponse(ChatErrorType.InternalServerError, {
+          ...(exhausted ? { code: 'credits_exhausted' } : {}),
           error: { message: limitResult.message },
           errorMessage: limitResult.message,
           provider,

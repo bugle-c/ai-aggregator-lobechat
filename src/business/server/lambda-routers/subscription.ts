@@ -25,10 +25,11 @@ export const subscriptionRouter = router({
         planId: z.number(),
         // Contextual paywall: chat path the user was on when credits ran
         // out. Whitelisted to in-app routes so return_url can't be abused
-        // as an open redirect.
+        // as an open redirect; no fragment — `recoveryFor` is appended as
+        // a query param and must not end up behind a `#`.
         returnPath: z
           .string()
-          .regex(/^\/(agent|home)/)
+          .regex(/^\/(agent|home)[^#]*$/)
           .max(200)
           .optional(),
       }),

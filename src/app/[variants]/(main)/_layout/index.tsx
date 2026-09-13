@@ -21,6 +21,7 @@ import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import MobileTabBar from '@/features/MobileTabBar';
 import NavPanel from '@/features/NavPanel';
 import { RetryModal } from '@/features/PaymentRetry';
+import { PaymentReturnHandler } from '@/features/PaymentReturn';
 import { TgLinkBonusGlobal } from '@/features/TgLinkBonusBanner';
 import { useFeedbackModal } from '@/hooks/useFeedbackModal';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -213,6 +214,7 @@ const Layout: FC = () => {
         <RegisterHotkeys />
         <CmdkLazy />
         <RetryModal />
+        <PaymentReturnHandler />
         <TgLinkBonusGlobal />
         {isFeedbackModalOpen && (
           <Suspense fallback={null}>
