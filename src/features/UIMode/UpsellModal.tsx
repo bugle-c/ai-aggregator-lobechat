@@ -1,9 +1,11 @@
 'use client';
 
 import { Button, Flex, Modal, Typography } from 'antd';
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+
+import { reachGoal } from '@/business/client/analytics/ym';
 
 export interface UpsellFallbackAction {
   label: string;
@@ -32,6 +34,11 @@ const UpsellModal = memo<Props>(
     // actually trigger a route change.
     const navigate = useNavigate();
 
+    useEffect(() => {
+      if (open)
+        reachGoal('paywall_view', { model: modelName, plan: requiredPlan, source: 'upsell_modal' });
+    }, [open, modelName, requiredPlan]);
+
     return (
       <Modal
         centered
@@ -51,6 +58,11 @@ const UpsellModal = memo<Props>(
           <Button
             type="primary"
             onClick={() => {
+              reachGoal('paywall_click', {
+                kind: 'subscribe',
+                plan: requiredPlan,
+                source: 'upsell_modal',
+              });
               onClose();
               navigate('/settings/plans');
             }}

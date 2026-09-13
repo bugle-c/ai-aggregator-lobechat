@@ -5,6 +5,8 @@ import { Button, Drawer, Typography } from 'antd';
 import { memo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { reachGoal } from '@/business/client/analytics/ym';
+
 import { useTrackUpsell } from './useTrackUpsell';
 
 const { Text, Title } = Typography;
@@ -45,11 +47,21 @@ const LockedModelUpsellSheet = memo<Props>(
           modelBlocked: modelId,
           planOffered: requiredPlanName,
         });
+        reachGoal('paywall_view', {
+          model: modelId,
+          plan: requiredPlanName,
+          source: 'locked_model',
+        });
       }
     }, [open, modelId, requiredPlanName, impression]);
 
     const goToPlans = () => {
       click('locked_model', { targetPlan: requiredPlanName });
+      reachGoal('paywall_click', {
+        kind: 'subscribe',
+        plan: requiredPlanName,
+        source: 'locked_model',
+      });
       onClose();
       navigate('/settings/plans?utm_source=locked_model');
     };

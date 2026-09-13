@@ -15,10 +15,11 @@ import {
   Typography,
 } from 'antd';
 import { Check } from 'lucide-react';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
+import { reachGoal } from '@/business/client/analytics/ym';
 import IntroOfferBanner from '@/business/client/IntroOffer/IntroOfferBanner';
 import { creditsToHuman } from '@/business/utils/creditsToHuman';
 import PaymentTrustBadges from '@/components/PaymentTrustBadges';
@@ -91,6 +92,11 @@ const Plans = memo(() => {
   const isMobile = useIsMobile();
   const isLogin = useUserStore(authSelectors.isLogin);
 
+  // Metrika funnel: the plans page IS the paywall — one view per mount.
+  useEffect(() => {
+    reachGoal('paywall_view', { source: 'plans_page' });
+  }, []);
+
   // Gate behind auth — these are authedProcedures that throw UNAUTHORIZED
   // for anonymous users. Without `enabled` the page hits an error
   // boundary on deep-link arrivals (e.g. ad CTA → /settings/plans).
@@ -115,6 +121,20 @@ const Plans = memo(() => {
   const [recoveryForId, setRecoveryForId] = useQueryState('recoveryFor');
   const [recoveryPollEnabled, setRecoveryPollEnabled] = useState(false);
   const [retryAttempts, setRetryAttempts] = useState(0);
+  // The effect below can re-run for a few render cycles after a terminal
+  // status while nuqs clears the URL param — a duplicate toast is harmless,
+  // a duplicate Metrika conversion is not. Fire each outcome goal once per
+  // payment id.
+  const trackedPaymentId = useRef<string | null>(null);
+  const trackPaymentOutcome = (
+    paymentId: string,
+    goal: string,
+    params: Record<string, unknown>,
+  ) => {
+    if (trackedPaymentId.current === paymentId) return;
+    trackedPaymentId.current = paymentId;
+    reachGoal(goal, params);
+  };
   const { data: redirectedPayment } = lambdaQuery.subscription.getPaymentStatus.useQuery(
     { id: recoveryForId || '' },
     {
@@ -161,6 +181,7 @@ const Plans = memo(() => {
     if (!redirectedPayment) return;
 
     if (redirectedPayment.status === 'succeeded') {
+      trackPaymentOutcome(redirectedPayment.id, 'payment_success', { kind: 'subscribe' });
       message.success(`Подписка «${redirectedPayment.planName ?? ''}» активирована. Спасибо!`, 4);
       setRecoveryPollEnabled(false);
       setRecoveryForId(null);
@@ -190,6 +211,10 @@ const Plans = memo(() => {
     }
 
     // canceled / failed → recovery flow. Same oscillation guard as above.
+    trackPaymentOutcome(redirectedPayment.id, 'payment_failed', {
+      kind: 'subscribe',
+      status: redirectedPayment.status,
+    });
     setRecoveryPollEnabled(false);
     setRecoveryOpen(true);
     setRecoveryForId(null);
@@ -248,7 +273,7 @@ const Plans = memo(() => {
   const retryRecoveryPayment = () => {
     if (!recoveryAttempt?.planId) return;
     closeRecovery();
-    subscribeMutation.mutate({ planId: recoveryAttempt.planId });
+    startSubscribe(recoveryAttempt.planId);
   };
 
   const handlePromoRedeem = async () => {
@@ -323,15 +348,34 @@ const Plans = memo(() => {
 
   const subscribeMutation = lambdaQuery.subscription.createPayment.useMutation({
     onSuccess: (data) => {
+      reachGoal('checkout_start', { kind: 'subscribe', source: 'plans_page' });
       if (data.paymentUrl) window.location.href = data.paymentUrl;
     },
   });
 
   const topUpMutation = lambdaQuery.topUp.createPayment.useMutation({
     onSuccess: (data) => {
+      reachGoal('checkout_start', { kind: 'topup', source: 'plans_page' });
       if (data.paymentUrl) window.location.href = data.paymentUrl;
     },
   });
+
+  // Single entry points for both desktop cards, the mobile layout and the
+  // recovery-modal retry, so every subscribe/top-up click reaches Metrika.
+  const startSubscribe = (planId: number) => {
+    const plan = plans?.find((p) => p.id === planId);
+    reachGoal('paywall_click', {
+      kind: 'subscribe',
+      plan: plan?.slug ?? planId,
+      source: 'plans_page',
+    });
+    subscribeMutation.mutate({ planId });
+  };
+
+  const startTopUp = (amountRub: number) => {
+    reachGoal('paywall_click', { amountRub, kind: 'topup', source: 'plans_page' });
+    topUpMutation.mutate({ amountRub });
+  };
 
   const isLoading = plansLoading || billingLoading;
 
@@ -467,8 +511,8 @@ const Plans = memo(() => {
             slug: p.slug,
             tokenLimit: p.tokenLimit,
           }))}
-          onSelect={(planId) => subscribeMutation.mutate({ planId })}
-          onTopUp={(amountRub) => topUpMutation.mutate({ amountRub })}
+          onSelect={startSubscribe}
+          onTopUp={startTopUp}
         />
         {isActivePaid && (
           <div style={{ paddingBlock: 8, paddingInline: 16 }}>
@@ -718,7 +762,7 @@ const Plans = memo(() => {
                       block
                       loading={subscribeMutation.isPending}
                       type={isPopular ? 'primary' : 'default'}
-                      onClick={() => subscribeMutation.mutate({ planId: plan.id })}
+                      onClick={() => startSubscribe(plan.id)}
                     >
                       {t('plans.subscribe')}
                     </Button>
@@ -749,7 +793,7 @@ const Plans = memo(() => {
                   <Button
                     block
                     loading={topUpMutation.isPending}
-                    onClick={() => topUpMutation.mutate({ amountRub: pkg.amountRub })}
+                    onClick={() => startTopUp(pkg.amountRub)}
                   >
                     {t('funds.topUp.purchaseNow')}
                   </Button>

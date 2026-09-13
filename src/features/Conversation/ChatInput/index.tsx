@@ -130,7 +130,7 @@ const ChatInput = memo<ChatInputProps>(
     useEffect(() => {
       if (sendMessageErrorMsg && sendMessageErrorMsg.includes('Кредиты закончились')) {
         setShowExhaustedModal(true);
-        reachGoal('paywall_view');
+        reachGoal('paywall_view', { source: 'credits_exhausted' });
       }
     }, [sendMessageErrorMsg]);
 
