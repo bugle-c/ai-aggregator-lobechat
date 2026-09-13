@@ -1,6 +1,8 @@
 import { userAttribution } from '@/database/schemas/analytics';
 import { type LobeChatDatabase } from '@/database/type';
 
+import { type WgAttr } from './wgAttr';
+
 export interface AttributionCookie {
   analytics_ids?: Record<string, string> | null;
   ga_client_id?: string | null;
@@ -19,7 +21,69 @@ export interface ComputeAttributionInput {
   firstCookie: AttributionCookie | null;
   lastCookie: AttributionCookie | null;
   rawReferrer?: string | null;
+  /**
+   * When the row is written later than the account was created (backfill for
+   * users created outside better-auth, e.g. by the Telegram bot) pass the real
+   * creation time so cohorts stay aligned with `users.created_at`.
+   */
+  registeredAt?: Date;
   userId: string;
+}
+
+const parseTime = (iso: string | null | undefined): number | null => {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? null : t;
+};
+
+/**
+ * Merge the landing's `wg_attr` first-touch cookie into the app-side
+ * `utm_attribution_first` cookie. First touch wins: whichever of the two was
+ * captured EARLIER supplies landing page / referrer / seen_at; the other only
+ * fills gaps. The Metrika client id is an identity, not a touch — take it from
+ * whichever cookie has it. UTM fields are never touched here (they come from
+ * the URL / `_gptweb_utms` and are handled by the middleware).
+ *
+ * Why: before `wg_attr` existed the app cookie was written from the already
+ * rewritten request path (`/ru-RU__0`) with an origin-only referer, so for
+ * organic blog visitors it holds nothing usable. `wg_attr` carries the real
+ * first page on gptweb.ru.
+ */
+export function applyWgAttr(
+  cookie: AttributionCookie | null,
+  wg: WgAttr | null,
+): AttributionCookie | null {
+  if (!wg) return cookie;
+
+  if (!cookie) {
+    return {
+      landing_page: wg.lp,
+      referrer: wg.ref,
+      seen_at: wg.ts ?? new Date().toISOString(),
+      utm_campaign: null,
+      utm_content: null,
+      utm_medium: null,
+      utm_source: null,
+      ym_client_id: wg.ym,
+    };
+  }
+
+  const cookieTime = parseTime(cookie.seen_at);
+  const wgTime = parseTime(wg.ts);
+  // Unknown timestamps count as "not earlier" than a known one; two unknowns
+  // let the landing cookie win (it is upstream of the app by construction).
+  const wgIsFirst = cookieTime === null ? true : wgTime === null ? false : wgTime <= cookieTime;
+
+  const pick = (wgValue: string | null, cookieValue: string | null) =>
+    wgIsFirst ? (wgValue ?? cookieValue) : (cookieValue ?? wgValue);
+
+  return {
+    ...cookie,
+    landing_page: pick(wg.lp, cookie.landing_page),
+    referrer: pick(wg.ref, cookie.referrer),
+    seen_at: wgIsFirst && wg.ts ? wg.ts : cookie.seen_at,
+    ym_client_id: cookie.ym_client_id ?? wg.ym ?? null,
+  };
 }
 
 export interface AttributionRow {
@@ -97,7 +161,8 @@ function touchToFields(
       [`${prefix}UtmMedium`]: cookie.utm_medium ?? inferred?.medium ?? null,
       [`${prefix}UtmCampaign`]: cookie.utm_campaign,
       [`${prefix}UtmContent`]: cookie.utm_content,
-      [`${prefix}Referrer`]: cookie.referrer,
+      // '' = captured as a direct visit (see WgAttr.ref) → store as NULL.
+      [`${prefix}Referrer`]: cookie.referrer || null,
       [`${prefix}LandingPage`]: cookie.landing_page,
       [`${prefix}SeenAt`]: new Date(cookie.seen_at),
       [`${prefix}YmClientId`]: cookie.ym_client_id ?? null,
@@ -129,7 +194,7 @@ export function computeAttributionRow(input: ComputeAttributionInput): Attributi
     userId: input.userId,
     ...first,
     ...last,
-    registeredAt: new Date(),
+    registeredAt: input.registeredAt ?? new Date(),
   } as AttributionRow;
 }
 
