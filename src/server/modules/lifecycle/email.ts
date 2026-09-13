@@ -50,6 +50,8 @@ export async function sendLifecycleEmail(params: SendEmailParams): Promise<SendE
   try {
     const res = await fetch(BREVO_API_URL, {
       method: 'POST',
+      // A hung Brevo call must not stall a cron loop that iterates users.
+      signal: AbortSignal.timeout(10_000),
       headers: {
         'api-key': apiKey,
         'content-type': 'application/json',

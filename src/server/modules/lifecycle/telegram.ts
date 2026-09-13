@@ -24,7 +24,15 @@ export function escapeMarkdownV2(s: string): string {
 export interface SendTelegramNoticeResult {
   error?: string;
   ok: boolean;
+  /**
+   * The chat is unreachable for good (`blocked` — user blocked the bot,
+   * `deactivated` — account gone). Retrying is pointless; treat as
+   * "no channel".
+   */
+  permanent?: boolean;
 }
+
+const PERMANENT_ERRORS = new Set(['blocked', 'deactivated']);
 
 export async function sendSubscriptionExpiredTelegram(args: {
   chatId: number;
@@ -56,7 +64,8 @@ export async function sendSubscriptionExpiredTelegram(args: {
     });
     const json = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean };
     if (res.ok && json.ok) return { ok: true };
-    return { ok: false, error: json.error ?? `HTTP ${res.status}` };
+    const error = json.error ?? `HTTP ${res.status}`;
+    return { ok: false, error, permanent: PERMANENT_ERRORS.has(error) };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: msg };

@@ -91,6 +91,10 @@ export async function runExpiryReminders(db: LobeChatDatabase): Promise<ExpiryRe
     }
 
     let delivered = false;
+    // A channel that failed for a transient reason (Brevo 5xx, bot down)
+    // keeps the user unstamped so the next tick retries. A permanently
+    // unreachable chat (blocked / deactivated) is just "no channel".
+    let retryable = false;
     if (hasEmail) {
       const tpl = buildSubscriptionExpiredEmail({
         expiredAt: row.expiredAt,
@@ -101,6 +105,7 @@ export async function runExpiryReminders(db: LobeChatDatabase): Promise<ExpiryRe
         leg.emailSent++;
         delivered = true;
       } else {
+        retryable = true;
         console.error(`[expiry-reminders] T0 email failed for ${row.userId}: ${sent.error}`);
       }
     }
@@ -114,11 +119,13 @@ export async function runExpiryReminders(db: LobeChatDatabase): Promise<ExpiryRe
         leg.tgSent++;
         delivered = true;
       } else {
+        if (!sent.permanent) retryable = true;
         console.error(`[expiry-reminders] T0 telegram failed for ${row.userId}: ${sent.error}`);
       }
     }
 
-    if (delivered) {
+    if (delivered || !retryable) {
+      if (!delivered) leg.skippedNoChannel++;
       await markReminderSent(db, row.userId);
     } else {
       leg.failed++;

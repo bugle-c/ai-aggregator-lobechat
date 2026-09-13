@@ -50,7 +50,7 @@ export function buildExpiryReminderEmail(input: ExpiryReminderInput): {
       <p>Здравствуйте!</p>
       <p>Ваша подписка <strong>${escapeHtml(input.planName)}</strong> на WebGPT истекает
       ${dateStr ? `<strong>${dateStr}</strong>` : 'через 3 дня'}.</p>
-      <p>Чтобы не потерять доступ к Sonnet 4.6, Opus и DeepSeek Reasoner, продлите подписку:</p>
+      <p>Чтобы не потерять доступ к топовым моделям вашего тарифа, продлите подписку:</p>
       <p>
         <a href="${PLANS_URL}" style="${CTA_STYLE}">Продлить подписку</a>
       </p>
@@ -120,7 +120,7 @@ export function buildSubscriptionExpiredEmail(input: SubscriptionExpiredInput): 
       <p>Здравствуйте!</p>
       <p>Тариф <strong>${escapeHtml(input.planName)}</strong> на WebGPT закончился${dateStr ? ` <strong>${dateStr}</strong>` : ''}.
       Аккаунт переведён на бесплатный тариф: ваши чаты и настройки на месте, но
-      Sonnet 4.6, Opus и DeepSeek Reasoner снова закрыты.</p>
+      топовые модели вашего тарифа снова закрыты.</p>
       <p>Продлите подписку — доступ вернётся сразу после оплаты:</p>
       <p>
         <a href="${PLANS_URL}" style="${CTA_STYLE}">Продлить подписку</a>

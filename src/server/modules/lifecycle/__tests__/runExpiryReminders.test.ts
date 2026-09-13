@@ -150,6 +150,30 @@ describe('runExpiryReminders', () => {
     expect(mocks.markReminderSent).toHaveBeenCalledWith(db, 'u-expired');
   });
 
+  it('T0: synthetic email + chat that blocked the bot → stamped as "no channel", not retried', async () => {
+    mocks.listExpired.mockResolvedValue([
+      expiredRow({ email: 'tg_9@bot.gptweb.ru', tgBotChatId: 9 }),
+    ]);
+    mocks.sendTelegram.mockResolvedValue({ ok: false, error: 'blocked', permanent: true } as any);
+
+    const summary = await runExpiryReminders(db);
+
+    expect(summary.expired).toMatchObject({ tgSent: 0, failed: 0, skippedNoChannel: 1 });
+    expect(mocks.markReminderSent).toHaveBeenCalledWith(db, 'u-expired');
+  });
+
+  it('T0: synthetic email + bot transiently down → left unstamped for retry', async () => {
+    mocks.listExpired.mockResolvedValue([
+      expiredRow({ email: 'tg_9@bot.gptweb.ru', tgBotChatId: 9 }),
+    ]);
+    mocks.sendTelegram.mockResolvedValue({ ok: false, error: 'fetch failed' } as any);
+
+    const summary = await runExpiryReminders(db);
+
+    expect(summary.expired).toMatchObject({ failed: 1 });
+    expect(mocks.markReminderSent).not.toHaveBeenCalled();
+  });
+
   it('T0: leaves the user unstamped when every channel failed', async () => {
     mocks.listExpired.mockResolvedValue([expiredRow()]);
     mocks.sendLifecycleEmail.mockResolvedValue({ ok: false, error: 'HTTP 500' } as any);
