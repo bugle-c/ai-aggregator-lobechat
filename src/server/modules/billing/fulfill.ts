@@ -49,7 +49,10 @@ export async function fulfillPayment(
         : new Date();
     const expiresAt = new Date(renewalBase);
     expiresAt.setDate(expiresAt.getDate() + 30);
-    await billingService.updatePlan(payment.planId, expiresAt);
+    // A subscription payment (purchase, upgrade or renewal) starts a new
+    // period: the monthly counter restarts together with the plan change.
+    // Top-ups (below) leave the counter alone.
+    await billingService.updatePlan(payment.planId, expiresAt, { resetMonthlyUsage: true });
 
     // Persist the saved payment method (if YooKassa returned one) so the
     // auto-renew cron can charge the same card on each cycle. Also clear

@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { isExpiringWithinWindow } from '../expiringSubscriptions';
-import { buildExpiryReminderEmail, buildSubscriptionConfirmationEmail } from '../templates';
+import {
+  EXPIRED_BANNER_WINDOW_DAYS,
+  EXPIRED_EMAIL_WINDOW_DAYS,
+  isExpiredNoticeDue,
+  isExpiringWithinWindow,
+  isSyntheticEmail,
+  resolveExpiredPlanNotice,
+} from '../expiringSubscriptions';
+import { escapeMarkdownV2 } from '../telegram';
+import {
+  buildExpiryReminderEmail,
+  buildSubscriptionConfirmationEmail,
+  buildSubscriptionExpiredEmail,
+} from '../templates';
 
 const NOW = new Date('2026-04-25T10:00:00Z');
 const days = (n: number) => new Date(NOW.getTime() + n * 86_400_000);
@@ -93,6 +105,115 @@ describe('isExpiringWithinWindow', () => {
         now: NOW,
       }),
     ).toBe(false);
+  });
+});
+
+describe('isSyntheticEmail', () => {
+  it('flags bot/telegram/wechat addresses and missing emails', () => {
+    expect(isSyntheticEmail('tg_123@bot.gptweb.ru')).toBe(true);
+    expect(isSyntheticEmail('123@telegram.local')).toBe(true);
+    expect(isSyntheticEmail('abc@wechat.lobehub')).toBe(true);
+    expect(isSyntheticEmail(null)).toBe(true);
+    expect(isSyntheticEmail('')).toBe(true);
+  });
+
+  it('accepts a real mailbox', () => {
+    expect(isSyntheticEmail('user@gmail.com')).toBe(false);
+    expect(isSyntheticEmail('telegram-fan@yandex.ru')).toBe(false);
+  });
+});
+
+describe('isExpiredNoticeDue (T0 selection)', () => {
+  const base = {
+    eventCreatedAt: new Date(NOW.getTime() - 2 * 3_600_000),
+    eventType: 'cancelled',
+    now: NOW,
+    planId: 1,
+    reminderSentAt: null,
+  };
+
+  it('is due right after the plan dropped to free', () => {
+    expect(isExpiredNoticeDue(base)).toBe(true);
+  });
+
+  it('is due when only the T-3 reminder was stamped (stamp predates the expiry)', () => {
+    expect(
+      isExpiredNoticeDue({ ...base, reminderSentAt: new Date(NOW.getTime() - 3 * 86_400_000) }),
+    ).toBe(true);
+  });
+
+  it('is NOT due once the T0 notice was stamped (stamp postdates the expiry)', () => {
+    expect(
+      isExpiredNoticeDue({ ...base, reminderSentAt: new Date(NOW.getTime() - 3_600_000) }),
+    ).toBe(false);
+  });
+
+  it('waits for the real expiry when the user only cancelled auto-renew (still paid)', () => {
+    expect(isExpiredNoticeDue({ ...base, planId: 2 })).toBe(false);
+  });
+
+  it('ignores non-expiry latest events', () => {
+    expect(isExpiredNoticeDue({ ...base, eventType: 'created' })).toBe(false);
+    expect(isExpiredNoticeDue({ ...base, eventCreatedAt: null })).toBe(false);
+  });
+
+  it('drops out of the email window after EXPIRED_EMAIL_WINDOW_DAYS', () => {
+    const old = new Date(NOW.getTime() - (EXPIRED_EMAIL_WINDOW_DAYS + 0.5) * 86_400_000);
+    expect(isExpiredNoticeDue({ ...base, eventCreatedAt: old })).toBe(false);
+    expect(
+      isExpiredNoticeDue({ ...base, eventCreatedAt: old, windowDays: EXPIRED_BANNER_WINDOW_DAYS }),
+    ).toBe(true);
+  });
+});
+
+describe('resolveExpiredPlanNotice (banner)', () => {
+  const event = {
+    createdAt: new Date(NOW.getTime() - 5 * 86_400_000),
+    eventType: 'cancelled',
+    id: 'evt-1',
+    planName: 'Pro',
+  };
+
+  it('returns the notice for a free user whose plan lapsed within 14 days', () => {
+    expect(resolveExpiredPlanNotice({ latestEvent: event, now: NOW, planId: 1 })).toEqual({
+      eventId: 'evt-1',
+      expiredAt: event.createdAt,
+      planName: 'Pro',
+    });
+  });
+
+  it('returns null when the user re-subscribed, the event is old, or there is no event', () => {
+    expect(resolveExpiredPlanNotice({ latestEvent: event, now: NOW, planId: 2 })).toBeNull();
+    expect(
+      resolveExpiredPlanNotice({
+        latestEvent: { ...event, createdAt: new Date(NOW.getTime() - 15 * 86_400_000) },
+        now: NOW,
+        planId: 1,
+      }),
+    ).toBeNull();
+    expect(resolveExpiredPlanNotice({ latestEvent: null, now: NOW, planId: 1 })).toBeNull();
+  });
+});
+
+describe('buildSubscriptionExpiredEmail', () => {
+  it('names the plan, the date and links to /settings/plans', () => {
+    const out = buildSubscriptionExpiredEmail({
+      expiredAt: new Date('2026-09-10T10:00:00Z'),
+      planName: 'Pro',
+    });
+    expect(out.subject).toMatch(/закончился/);
+    expect(out.html).toContain('Pro');
+    expect(out.html).toMatch(/10 сентября 2026/);
+    expect(out.html).toMatch(/\/settings\/plans/);
+    expect(out.textBody).toMatch(/Продлить подписку/);
+  });
+});
+
+describe('escapeMarkdownV2', () => {
+  it('escapes every Telegram-reserved character', () => {
+    expect(escapeMarkdownV2('Тариф «Pro+» закончился 10.09! (см. план_1)')).toBe(
+      'Тариф «Pro\\+» закончился 10\\.09\\! \\(см\\. план\\_1\\)',
+    );
   });
 });
 

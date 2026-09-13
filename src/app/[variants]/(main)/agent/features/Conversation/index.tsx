@@ -1,6 +1,7 @@
 import { Flexbox, TooltipGroup } from '@lobehub/ui';
 import React, { memo,Suspense } from 'react';
 
+import ExpiredPlanBanner from '@/business/client/ExpiredPlanBanner/ExpiredPlanBanner';
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useAgentStore } from '@/store/agent';
@@ -34,6 +35,7 @@ const ChatConversation = memo(() => {
           width={'100%'}
         >
           {showHeader && <ChatHeader />}
+          <ExpiredPlanBanner />
           <TooltipGroup>
             <ConversationArea />
           </TooltipGroup>

@@ -1,24 +1,38 @@
 /**
- * Phase 2.3 — Query for users needing the "subscription expires in 3 days"
- * reminder.
+ * Phase 2.3 — Selection logic for subscription-expiry reminders.
  *
- * Selects user_billing rows that:
- *   - have plan_id != 1 (paid plans only — free plan id is hard-coded as 1
- *     in the seed; if that ever moves we filter by `priceRub > 0` in JS),
- *   - have subscription_expires_at within (now + 2 days, now + 3 days],
- *   - have not yet had a reminder sent for this cycle
- *     (expiry_reminder_sent_at IS NULL).
+ * Two legs, both driven by the `/api/cron/expiry-reminders` route:
  *
- * Returned rows include the user's email and plan name for the email body.
+ *   T-3  `listExpiringSubscriptions` — user_billing rows on a paid plan
+ *        (priceRub > 0) whose subscription_expires_at falls in
+ *        (now + 2 days, now + 3 days] and expiry_reminder_sent_at IS NULL.
  *
- * `markReminderSent` flips `expiry_reminder_sent_at = now()` so the next run
- * skips this user. The column is reset to NULL by `BillingService.updatePlan`
- * on every plan change / renewal.
+ *   T0   `listExpiredSubscriptions` — users already dropped to the free
+ *        plan (plan_id = 1) by `expireSubscriptions` whose latest
+ *        `cancelled` event in billing_subscription_events is younger than
+ *        EXPIRED_EMAIL_WINDOW_DAYS and has not been announced yet.
+ *
+ * Idempotency for BOTH legs is the single `expiry_reminder_sent_at`
+ * column: the T-3 leg requires it to be NULL, the T0 leg requires it to
+ * be NULL or OLDER than the expiry event (the T-3 stamp always predates
+ * the expiry, the T0 stamp always postdates it). `updatePlan` clears the
+ * column on every plan change, so the next paid cycle starts clean. No
+ * extra column, no migration.
+ *
+ * The in-app banner (`resolveExpiredPlanNotice`) shares the "latest event
+ * is an expiry, user is on free" rule with a longer window.
  */
-import { and, eq, gt, isNull, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, lt, lte, or, sql } from 'drizzle-orm';
 
-import { billingPlans, userBilling, users } from '@/database/schemas';
+import { billingPlans, billingSubscriptionEvents, userBilling, users } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
+
+/** How long after the expiry the "your plan ended" email is still worth sending. */
+export const EXPIRED_EMAIL_WINDOW_DAYS = 3;
+/** How long after the expiry the in-app "renew" banner stays eligible. */
+export const EXPIRED_BANNER_WINDOW_DAYS = 14;
+
+const FREE_PLAN_ID = 1;
 
 export interface ExpiringSubscriptionRow {
   email: string | null;
@@ -26,6 +40,16 @@ export interface ExpiringSubscriptionRow {
   planName: string;
   planPriceRub: number;
   subscriptionExpiresAt: Date;
+  userId: string;
+}
+
+export interface ExpiredSubscriptionRow {
+  email: string | null;
+  /** When the plan actually ended (createdAt of the `cancelled` event). */
+  expiredAt: Date;
+  planId: number | null;
+  planName: string;
+  tgBotChatId: number | null;
   userId: string;
 }
 
@@ -75,12 +99,84 @@ export async function listExpiringSubscriptions(
     }));
 }
 
-/** Mark a user's reminder as sent so we don't re-send for the same cycle. */
+/**
+ * Fetch users whose paid plan ended within EXPIRED_EMAIL_WINDOW_DAYS and who
+ * have not received the "plan ended" notice for that expiry yet. One row per
+ * user (latest expiry event wins).
+ */
+export async function listExpiredSubscriptions(
+  db: LobeChatDatabase,
+): Promise<ExpiredSubscriptionRow[]> {
+  const rows = await db
+    .select({
+      userId: billingSubscriptionEvents.userId,
+      email: users.email,
+      tgBotChatId: userBilling.tgBotChatId,
+      planId: billingSubscriptionEvents.fromPlanId,
+      planName: billingPlans.name,
+      expiredAt: billingSubscriptionEvents.createdAt,
+    })
+    .from(billingSubscriptionEvents)
+    .innerJoin(userBilling, eq(userBilling.userId, billingSubscriptionEvents.userId))
+    .innerJoin(users, eq(users.id, billingSubscriptionEvents.userId))
+    .leftJoin(billingPlans, eq(billingPlans.id, billingSubscriptionEvents.fromPlanId))
+    .where(
+      and(
+        eq(billingSubscriptionEvents.eventType, 'cancelled'),
+        gt(
+          billingSubscriptionEvents.createdAt,
+          sql.raw(`now() - interval '${EXPIRED_EMAIL_WINDOW_DAYS} days'`),
+        ),
+        // Already dropped to free by expireSubscriptions — a user-initiated
+        // cancel (auto-renew off) also writes `cancelled` while the plan is
+        // still active; that one must wait for the real expiry.
+        eq(userBilling.planId, FREE_PLAN_ID),
+        or(
+          isNull(userBilling.expiryReminderSentAt),
+          lt(userBilling.expiryReminderSentAt, billingSubscriptionEvents.createdAt),
+        ),
+      ),
+    )
+    .orderBy(desc(billingSubscriptionEvents.createdAt));
+
+  const seen = new Set<string>();
+  const result: ExpiredSubscriptionRow[] = [];
+  for (const r of rows) {
+    if (seen.has(r.userId)) continue;
+    seen.add(r.userId);
+    result.push({
+      userId: r.userId,
+      email: r.email,
+      tgBotChatId: r.tgBotChatId,
+      planId: r.planId,
+      planName: r.planName ?? 'WebGPT',
+      expiredAt: r.expiredAt,
+    });
+  }
+  return result;
+}
+
+/**
+ * Stamp `expiry_reminder_sent_at = now()`. Used by both legs: after the T-3
+ * reminder it blocks a second T-3 send; after the T0 notice it postdates the
+ * expiry event and blocks a second T0 send.
+ */
 export async function markReminderSent(db: LobeChatDatabase, userId: string): Promise<void> {
   await db
     .update(userBilling)
     .set({ expiryReminderSentAt: new Date() })
     .where(eq(userBilling.userId, userId));
+}
+
+/**
+ * Addresses we mint ourselves for social sign-ins (Telegram login/bot,
+ * WeChat). Nothing is listening behind them — never send there.
+ */
+const SYNTHETIC_EMAIL_PATTERNS = [/@bot\.gptweb\.ru$/i, /@telegram/i, /@wechat\.lobehub$/i];
+
+export function isSyntheticEmail(email: string | null | undefined): boolean {
+  if (!email) return true;
+  return SYNTHETIC_EMAIL_PATTERNS.some((re) => re.test(email));
 }
 
 /**
@@ -105,4 +201,67 @@ export function isExpiringWithinWindow(args: {
   const twoDays = 2 * 24 * 60 * 60 * 1000;
   const threeDays = 3 * 24 * 60 * 60 * 1000;
   return t > now + twoDays && t <= now + threeDays;
+}
+
+/**
+ * Pure predicate mirroring `listExpiredSubscriptions`: the user is on the
+ * free plan, the latest subscription event is an expiry younger than
+ * `windowDays`, and no notice was stamped after that event.
+ */
+export function isExpiredNoticeDue(args: {
+  eventCreatedAt: Date | null;
+  eventType: string | null;
+  now?: Date;
+  planId: number;
+  reminderSentAt: Date | null;
+  windowDays?: number;
+}): boolean {
+  if (args.planId !== FREE_PLAN_ID) return false;
+  if (args.eventType !== 'cancelled' || !args.eventCreatedAt) return false;
+  const now = (args.now ?? new Date()).getTime();
+  const windowMs = (args.windowDays ?? EXPIRED_EMAIL_WINDOW_DAYS) * 24 * 60 * 60 * 1000;
+  const t = args.eventCreatedAt.getTime();
+  if (t <= now - windowMs || t > now) return false;
+  return !args.reminderSentAt || args.reminderSentAt.getTime() < t;
+}
+
+export interface ExpiredPlanNotice {
+  /** Stable id for client-side dismissal (one dismissal per expiry). */
+  eventId: string;
+  expiredAt: Date;
+  planName: string;
+}
+
+/**
+ * In-app banner rule: latest subscription event is an expiry within
+ * EXPIRED_BANNER_WINDOW_DAYS and the user is on the free plan. Pure — the
+ * router fetches the row, this decides.
+ */
+export function resolveExpiredPlanNotice(args: {
+  latestEvent: {
+    createdAt: Date;
+    eventType: string;
+    id: string;
+    planName: string | null;
+  } | null;
+  now?: Date;
+  planId: number;
+}): ExpiredPlanNotice | null {
+  const { latestEvent, planId } = args;
+  if (!latestEvent) return null;
+  const due = isExpiredNoticeDue({
+    eventCreatedAt: latestEvent.createdAt,
+    eventType: latestEvent.eventType,
+    now: args.now,
+    planId,
+    // Never stamped for the banner — dismissal lives on the client.
+    reminderSentAt: null,
+    windowDays: EXPIRED_BANNER_WINDOW_DAYS,
+  });
+  if (!due) return null;
+  return {
+    eventId: latestEvent.id,
+    expiredAt: latestEvent.createdAt,
+    planName: latestEvent.planName ?? 'WebGPT',
+  };
 }

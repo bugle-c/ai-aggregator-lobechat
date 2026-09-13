@@ -14,6 +14,7 @@ import {
 } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { BillingService } from '@/server/services/billing';
 
 const promoProcedure = authedProcedure.use(serverDatabase);
 
@@ -105,14 +106,11 @@ export const promoRouter = router({
           const plan = planRows[0];
           const expires = new Date(Date.now() + promo.durationDays * 86_400_000);
 
-          await tx
-            .update(userBilling)
-            .set({
-              planId: promo.planId,
-              subscriptionExpiresAt: expires,
-              updatedAt: new Date(),
-            })
-            .where(eq(userBilling.userId, ctx.userId));
+          // Same path as a paid activation: clears the expiry-reminder stamp
+          // and opens a fresh usage period in the one update.
+          await new BillingService(tx as any, ctx.userId).updatePlan(promo.planId, expires, {
+            resetMonthlyUsage: true,
+          });
 
           return {
             expiresAt: expires.toISOString(),

@@ -50,7 +50,7 @@ export function buildExpiryReminderEmail(input: ExpiryReminderInput): {
       <p>Здравствуйте!</p>
       <p>Ваша подписка <strong>${escapeHtml(input.planName)}</strong> на WebGPT истекает
       ${dateStr ? `<strong>${dateStr}</strong>` : 'через 3 дня'}.</p>
-      <p>Чтобы не потерять доступ к Sonnet 4.6, Opus и DeepSeek Reasoner, продлите подписку:</p>
+      <p>Чтобы не потерять доступ к топовым моделям вашего тарифа, продлите подписку:</p>
       <p>
         <a href="${PLANS_URL}" style="${CTA_STYLE}">Продлить подписку</a>
       </p>
@@ -99,6 +99,42 @@ export function buildSubscriptionConfirmationEmail(input: SubscriptionConfirmati
     `Подписка ${input.planName} активирована${dateStr ? ` до ${dateStr}` : ''}.`,
     `На баланс начислено ${input.creditAmount} кредитов.`,
     `Открыть WebGPT: ${APP_URL}`,
+  ].join('\n\n');
+  return { subject, html, textBody };
+}
+
+export interface SubscriptionExpiredInput {
+  expiredAt: Date | string;
+  planName: string;
+}
+
+export function buildSubscriptionExpiredEmail(input: SubscriptionExpiredInput): {
+  subject: string;
+  html: string;
+  textBody: string;
+} {
+  const subject = `Тариф «${input.planName}» закончился — продлить?`;
+  const dateStr = fmtDateRu(input.expiredAt);
+  const html = `
+    <div style="${BASE_STYLE}">
+      <p>Здравствуйте!</p>
+      <p>Тариф <strong>${escapeHtml(input.planName)}</strong> на WebGPT закончился${dateStr ? ` <strong>${dateStr}</strong>` : ''}.
+      Аккаунт переведён на бесплатный тариф: ваши чаты и настройки на месте, но
+      топовые модели вашего тарифа снова закрыты.</p>
+      <p>Продлите подписку — доступ вернётся сразу после оплаты:</p>
+      <p>
+        <a href="${PLANS_URL}" style="${CTA_STYLE}">Продлить подписку</a>
+      </p>
+      <p>Если у вас есть вопросы — просто ответьте на это письмо.</p>
+      <div style="${FOOTER_STYLE}">
+        WebGPT · ask.gptweb.ru<br />
+        Это автоматическое уведомление об окончании вашей подписки.
+      </div>
+    </div>
+  `;
+  const textBody = [
+    `Тариф ${input.planName} на WebGPT закончился${dateStr ? ` ${dateStr}` : ''}. Аккаунт переведён на бесплатный тариф.`,
+    `Продлить подписку: ${PLANS_URL}`,
   ].join('\n\n');
   return { subject, html, textBody };
 }
