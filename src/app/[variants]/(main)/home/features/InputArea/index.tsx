@@ -37,7 +37,7 @@ const leftActionsLight: ActionKeys[] = ['model', 'search', 'fileUpload'];
 
 const InputArea = () => {
   const { t } = useTranslation('home');
-  const { loading, send, inboxAgentId } = useSend();
+  const { loading, send, sendPrompt, inboxAgentId } = useSend();
   // Keep the starter builtin agents (agent / group / write) initialised even
   // though the redundant starter buttons are no longer rendered — the modes are
   // triggered from the home quick-action cards.
@@ -168,14 +168,8 @@ const InputArea = () => {
   const showOnboardingPrompts =
     isLogin && !inputActiveMode && onboarding != null && !onboarding.firstMessageSeen;
 
-  const handlePromptSelect = async (prompt: string) => {
-    // Click on a suggested-prompt card → fire the message immediately.
-    const editor = useChatStore.getState().mainInputEditor;
-    editor?.instance?.setDocument('markdown', prompt);
-    useChatStore.setState({ inputMessage: prompt });
-    editor?.focus();
-    await send();
-  };
+  // Click on a suggested-prompt card → fire the message immediately.
+  const handlePromptSelect = sendPrompt;
 
   const extraActionItems = useMemo(
     () =>

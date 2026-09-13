@@ -77,9 +77,27 @@ export const useSend = () => {
     }
   }, [inboxAgentId, sendMessage, clearChatContextSelections, clearChatUploadFileList, router]);
 
+  /**
+   * One-tap send: charge the main editor with `prompt` and fire it through the
+   * regular `send` path (same as typing + Enter). Shared by the suggested-prompt
+   * cards and the onboarding intent chips. `send` reads `inputMessage` from the
+   * store, so this works even if the editor hasn't mounted yet.
+   */
+  const sendPrompt = useCallback(
+    async (prompt: string) => {
+      const editor = useChatStore.getState().mainInputEditor;
+      editor?.instance?.setDocument('markdown', prompt);
+      useChatStore.setState({ inputMessage: prompt });
+      editor?.focus();
+      await send();
+    },
+    [send],
+  );
+
   return {
     inboxAgentId,
     loading: homeInputLoading,
     send,
+    sendPrompt,
   };
 };

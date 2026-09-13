@@ -22,9 +22,11 @@ const { Title, Paragraph } = Typography;
  * First-login welcome modal — the «Что делаем?» intent screen.
  *
  * Shows a centered modal once per user (gated by `first_login_seen` in
- * user_onboarding). The mark mutation runs in the background so dismissing
- * the modal feels instant; we hide the modal locally as soon as the user
- * clicks anywhere that closes it.
+ * user_onboarding). The only exits are an intent chip (which also sends
+ * the first message) or the TG-bonus CTA — no mask click, close icon or
+ * Esc, so a new user can't dismiss it without picking a path. The mark
+ * mutation runs in the background so closing feels instant; we hide the
+ * modal locally as soon as a chip is tapped.
  *
  * Skipped entirely for blog-intent users who arrived with `?prompt=` —
  * their input is already charged, don't interrupt (we still stamp
@@ -89,7 +91,15 @@ const WelcomeModal = memo(() => {
   if (skipForChargedInput) return null;
 
   return (
-    <Modal centered closable maskClosable open footer={null} width={520} onCancel={handleClose}>
+    <Modal
+      centered
+      open
+      closable={false}
+      footer={null}
+      keyboard={false}
+      maskClosable={false}
+      width={520}
+    >
       <Flexbox align="center" gap={16} paddingBlock={16} paddingInline={8}>
         <Title level={3} style={{ marginBottom: 0, textAlign: 'center' }}>
           {t('welcome.intentTitle')}

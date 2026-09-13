@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 
 import { reachGoal } from '@/business/client/analytics/ym';
 import { useChatStore } from '@/store/chat';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 export const INTENT_PROMPT_STORAGE_KEY = 'webgpt_pending_intent_prompt';
 
@@ -16,8 +18,14 @@ export const INTENT_PROMPT_CONSUMED_KEY = 'webgpt_intent_prompt_consumed';
  * navigate away (sessionStorage survives the OAuth round-trip), then prefill
  * the main chat editor once it exists and the user is on the home surface.
  * One-shot: consumed on successful prefill.
+ *
+ * Injection waits for login: for an anonymous visitor the home editor may
+ * mount before the auth wall, and consuming the prompt there would leave an
+ * empty input (and a skipped welcome modal) after the sign-in redirect.
  */
 export const useIntentPrompt = () => {
+  const isLogin = useUserStore(authSelectors.isLogin);
+
   // Capture phase — run once on mount, even for anonymous visitors.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -30,8 +38,10 @@ export const useIntentPrompt = () => {
     window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
   }, []);
 
-  // Inject phase — poll briefly for the editor (it mounts after hydration).
+  // Inject phase — logged-in users only; poll briefly for the editor (it
+  // mounts after hydration). Re-runs when the user signs in.
   useEffect(() => {
+    if (!isLogin) return;
     const pending = sessionStorage.getItem(INTENT_PROMPT_STORAGE_KEY);
     if (!pending) return;
     let tries = 0;
@@ -47,9 +57,9 @@ export const useIntentPrompt = () => {
         reachGoal('prompt_prefill');
         clearInterval(timer);
       } else if (tries > 40) {
-        clearInterval(timer); // ~10s: editor never mounted (e.g. auth wall) — keep for next visit
+        clearInterval(timer); // ~10s: editor never mounted — keep for next visit
       }
     }, 250);
     return () => clearInterval(timer);
-  }, []);
+  }, [isLogin]);
 };
