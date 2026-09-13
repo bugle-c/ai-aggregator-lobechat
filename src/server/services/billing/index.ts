@@ -8,6 +8,34 @@ import { fetchActivePlans, fetchPlanById, type PlanView } from './plans-source';
 
 export type { PlanView };
 
+const FREE_PLAN_ID = 1;
+/** Paid usage period — same 30 days `fulfillPayment` adds to subscription_expires_at. */
+const PAID_PERIOD_DAYS = 30;
+
+/**
+ * Usage-period boundaries for the lazy reset, from the app clock:
+ *   free (plan_id = 1) — calendar month, 1st 00:00 UTC.
+ *   paid               — 30-day cycle from month_start, which updatePlan sets
+ *                        to now() on every purchase/renewal. A calendar reset
+ *                        for paid plans would hand a Sept-28 payer a second
+ *                        full allowance on Oct 1 (review 2026-09-13, MUST #1).
+ */
+export function usagePeriodBoundaries(now: Date) {
+  const currentMonthStart = new Date(now);
+  currentMonthStart.setUTCDate(1);
+  currentMonthStart.setUTCHours(0, 0, 0, 0);
+  const paidPeriodCutoff = new Date(now.getTime() - PAID_PERIOD_DAYS * 86_400_000);
+  return { currentMonthStart, paidPeriodCutoff };
+}
+
+/** Pure mirror of the conditional UPDATE in getOrResetUserBilling. */
+export function usagePeriodNeedsReset(args: { monthStart: Date; now: Date; planId: number }) {
+  const { currentMonthStart, paidPeriodCutoff } = usagePeriodBoundaries(args.now);
+  return args.planId === FREE_PLAN_ID
+    ? args.monthStart < currentMonthStart
+    : args.monthStart < paidPeriodCutoff;
+}
+
 export class BillingService {
   private userId: string;
   private db: LobeChatDatabase;
@@ -55,25 +83,36 @@ export class BillingService {
 
   getOrResetUserBilling = async (): Promise<UserBillingItem> => {
     // Ensure row exists (idempotent insert, races safe via onConflict).
-    await this.getOrCreateUserBilling();
+    const existing = await this.getOrCreateUserBilling();
 
-    // Lazy monthly reset (H1 race fix):
-    // Two concurrent requests crossing midnight could both read the old
+    // Fast path: nothing to reset — skip the UPDATE round-trip that used to
+    // run on every request. The conditional UPDATE below stays the source
+    // of truth for the race case.
+    const now = new Date();
+    if (!usagePeriodNeedsReset({ monthStart: existing.monthStart, now, planId: existing.planId })) {
+      return existing;
+    }
+
+    // Lazy usage-period reset (H1 race fix):
+    // Two concurrent requests crossing the boundary could both read the old
     // monthStart, both decide "needs reset", and both set tokensUsedMonth=0
     // — wiping a charge that landed in between. Use a *conditional* UPDATE
     // that only fires when the stored monthStart is genuinely older than
-    // the current period boundary, then re-read.
-    const currentMonthStart = new Date();
-    currentMonthStart.setUTCDate(1);
-    currentMonthStart.setUTCHours(0, 0, 0, 0);
+    // the current period boundary (see usagePeriodBoundaries), then re-read.
+    // Both boundaries come from the app clock (not now() in SQL) so they are
+    // consistent with the fast-path check and deterministic under test.
+    const { currentMonthStart, paidPeriodCutoff } = usagePeriodBoundaries(now);
 
     await this.db.execute(sql`
       UPDATE user_billing
       SET tokens_used_month = 0,
-          month_start = ${currentMonthStart},
+          month_start = CASE WHEN plan_id = ${FREE_PLAN_ID} THEN ${currentMonthStart} ELSE ${now} END,
           updated_at = now()
       WHERE user_id = ${this.userId}
-        AND month_start < ${currentMonthStart}
+        AND (
+          (plan_id = ${FREE_PLAN_ID} AND month_start < ${currentMonthStart})
+          OR (plan_id <> ${FREE_PLAN_ID} AND month_start < ${paidPeriodCutoff})
+        )
     `);
 
     const refreshed = await this.getUserBilling();
