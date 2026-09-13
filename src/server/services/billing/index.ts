@@ -86,7 +86,18 @@ export class BillingService {
     return plan?.slug || 'free';
   };
 
-  updatePlan = async (planId: number, expiresAt: Date | null): Promise<void> => {
+  /**
+   * Switch the user's plan. `resetMonthlyUsage` opens a fresh usage period
+   * in the SAME update — a paid subscription (first purchase, upgrade or
+   * renewal) must never inherit the counter accumulated on the previous
+   * plan, otherwise a user who exhausted the free quota pays and is still
+   * "out of credits" until the lazy calendar-month reset fires.
+   */
+  updatePlan = async (
+    planId: number,
+    expiresAt: Date | null,
+    opts: { resetMonthlyUsage?: boolean } = {},
+  ): Promise<void> => {
     await this.db
       .update(userBilling)
       .set({
@@ -96,6 +107,7 @@ export class BillingService {
         // cycle (whether this call is a fresh subscription, a renewal that
         // pushed expiry forward, or a downgrade to free).
         expiryReminderSentAt: null,
+        ...(opts.resetMonthlyUsage ? { tokensUsedMonth: 0, monthStart: new Date() } : {}),
         updatedAt: new Date(),
       })
       .where(eq(userBilling.userId, this.userId));
