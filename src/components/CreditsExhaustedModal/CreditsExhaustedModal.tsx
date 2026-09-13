@@ -46,7 +46,7 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
     const subscribeMutation = lambdaQuery.subscription.createPayment.useMutation({
       onSuccess: (d) => {
         // Payment created, redirecting to checkout.
-        reachGoal('checkout_start', { kind: 'subscribe' });
+        reachGoal('checkout_start', { kind: 'subscribe', source: 'credits_exhausted' });
         if (d.paymentUrl) window.location.href = d.paymentUrl;
       },
     });
@@ -54,7 +54,7 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
     const topUpMutation = lambdaQuery.topUp.createPayment.useMutation({
       onSuccess: (d) => {
         // Payment created, redirecting to checkout.
-        reachGoal('checkout_start', { kind: 'topup' });
+        reachGoal('checkout_start', { kind: 'topup', source: 'credits_exhausted' });
         if (d.paymentUrl) window.location.href = d.paymentUrl;
       },
     });
@@ -152,7 +152,11 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
                       // recoveryFor param is only handled on /settings/plans, so
                       // landing it on /agent/* would strand the recovery flow.
                       onClick={() => {
-                        reachGoal('paywall_click', { kind: 'subscribe' });
+                        reachGoal('paywall_click', {
+                          kind: 'subscribe',
+                          plan: plan.slug,
+                          source: 'credits_exhausted',
+                        });
                         subscribeMutation.mutate({ planId: plan.id });
                       }}
                     >
@@ -170,7 +174,7 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
               loading={topUpMutation.isPending}
               type="dashed"
               onClick={() => {
-                reachGoal('paywall_click', { kind: 'topup' });
+                reachGoal('paywall_click', { kind: 'topup', source: 'credits_exhausted' });
                 topUpMutation.mutate({ amountRub: cheapestTopup.amountRub, returnPath });
               }}
             >

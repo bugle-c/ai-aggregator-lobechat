@@ -9,6 +9,8 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { type FC } from 'react';
 
+import CheckoutRedirect from './CheckoutRedirect';
+
 export const dynamic = 'force-dynamic';
 
 interface Props {
@@ -43,6 +45,8 @@ const BillingStartPage: FC<Props> = async ({ searchParams }) => {
   }
 
   // --- Create payment server-side via the subscription router ---
+  // The redirect to YooKassa is done client-side (CheckoutRedirect) so the
+  // Metrika `checkout_start` goal can be fired first.
   try {
     const { getServerDB } = await import('@/database/core/db-adaptor');
     const { lambdaRouter } = await import('@/server/routers/lambda');
@@ -54,8 +58,8 @@ const BillingStartPage: FC<Props> = async ({ searchParams }) => {
 
     const { paymentUrl } = await caller.subscription.createPayment({ planId });
 
-    if (paymentUrl) redirect(paymentUrl);
-    throw new Error('Payment URL missing');
+    if (!paymentUrl) throw new Error('Payment URL missing');
+    return <CheckoutRedirect paymentUrl={paymentUrl} />;
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Неизвестная ошибка';
 
