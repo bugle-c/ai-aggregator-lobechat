@@ -91,7 +91,10 @@ export const useErrorContent = (error: any) => {
   const { t } = useTranslation('error');
   const providerName = useProviderName(error?.body?.provider || '');
   const businessAlertConfig = useBusinessErrorAlertConfig(error?.type);
-  const { errorType: businessErrorType, hideMessage } = useBusinessErrorContent(error?.type);
+  const { errorType: businessErrorType, hideMessage } = useBusinessErrorContent(
+    error?.type,
+    error,
+  );
 
   return useMemo<AlertProps | undefined>(() => {
     if (!error) return;

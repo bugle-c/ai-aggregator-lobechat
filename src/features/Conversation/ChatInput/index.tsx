@@ -18,18 +18,10 @@ import {
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
 import { useChatStore } from '@/store/chat';
-import { aiChatSelectors } from '@/store/chat/selectors';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import WideScreenContainer from '../../WideScreenContainer';
-import { messageStateSelectors, useConversationStore, useConversationStoreApi } from '../store';
-import {
-  clearDraft,
-  draftStashKey,
-  isCreditsExhaustedError,
-  readDraft,
-  stashDraft,
-} from './draftStash';
+import { messageStateSelectors, useConversationStore } from '../store';
 
 export interface ChatInputProps {
   /**
@@ -123,8 +115,6 @@ const ChatInput = memo<ChatInputProps>(
     );
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
     const setEditor = useConversationStore((s) => s.setEditor);
-    const editor = useConversationStore((s) => s.editor);
-    const conversationStoreApi = useConversationStoreApi();
 
     // Generation state from ConversationStore (bridged from ChatStore)
     const isAIGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
@@ -138,26 +128,11 @@ const ChatInput = memo<ChatInputProps>(
 
     // Show modal when sendMessageError contains credit exhaustion message
     useEffect(() => {
-      if (isCreditsExhaustedError(sendMessageErrorMsg)) {
+      if (sendMessageErrorMsg && sendMessageErrorMsg.includes('Кредиты закончились')) {
         setShowExhaustedModal(true);
         reachGoal('paywall_view', { source: 'credits_exhausted' });
       }
     }, [sendMessageErrorMsg]);
-
-    // Draft preservation: a send that died on the paywall left its text in
-    // sessionStorage (see draftStash.ts). After the YooKassa round-trip the
-    // page reloads into this same conversation — put the draft back into
-    // the (empty) editor once, then forget it.
-    useEffect(() => {
-      if (!editor || !agentId) return;
-      const key = draftStashKey(agentId, topicId);
-      const draft = readDraft(key);
-      if (!draft) return;
-      clearDraft(key);
-      if (conversationStoreApi.getState().inputMessage.trim()) return;
-      editor.setDocument?.('markdown', draft);
-      updateInputMessage(draft);
-    }, [editor, agentId, topicId, conversationStoreApi, updateInputMessage]);
 
     // Contextual paywall: path YooKassa returns the payer to after checkout,
     // so they land back in this exact conversation (topic may be null for a
@@ -204,21 +179,10 @@ const ChatInput = memo<ChatInputProps>(
           xml: ctx.content,
         }));
 
-        // Keep the text until we know the send did not die on the paywall:
-        // the credits-exhausted path redirects to YooKassa and back (page
-        // reload), and the restore effect above refills the editor.
-        const draftKey = agentId ? draftStashKey(agentId, topicId) : null;
-        if (draftKey) stashDraft(draftKey, message);
-
         // Fire and forget - send with captured message
         await sendMessage({ files: currentFileList, message, pageSelections });
-
-        if (draftKey) {
-          const err = aiChatSelectors.isCurrentSendMessageError(useChatStore.getState());
-          if (!isCreditsExhaustedError(err)) clearDraft(draftKey);
-        }
       },
-      [agentId, isAIGenerating, sendMessage, topicId],
+      [isAIGenerating, sendMessage],
     );
 
     const sendButtonProps: SendButtonProps = {

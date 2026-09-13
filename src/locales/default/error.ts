@@ -107,6 +107,9 @@ export default {
     'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
   'response.FreePlanLimit':
     'You are currently a free user and cannot use this feature. Please upgrade to a paid plan to continue using it.',
+  'response.CreditsExhausted.cta': 'Выбрать тариф или пополнить',
+  'response.CreditsExhausted.message':
+    'Кредиты закончились — ответ не был получен. Ваше сообщение сохранено: выберите тариф или пополните баланс и отправьте его ещё раз.',
   'response.PlanLimitExceeded':
     'This model is not available on your current plan. Upgrade your subscription to unlock it.',
   'response.PlanLimitExceeded.cta': 'Upgrade to {{plan}}',
