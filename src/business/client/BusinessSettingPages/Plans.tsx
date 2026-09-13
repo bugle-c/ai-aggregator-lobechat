@@ -23,6 +23,7 @@ import { reachGoal } from '@/business/client/analytics/ym';
 import IntroOfferBanner from '@/business/client/IntroOffer/IntroOfferBanner';
 import { creditsToHuman } from '@/business/utils/creditsToHuman';
 import PaymentTrustBadges from '@/components/PaymentTrustBadges';
+import { SubscriptionActivatedModal } from '@/features/SubscriptionActivatedModal';
 import MobileCancelFlow from '@/features/Upsell/MobileCancelFlow';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useQueryState } from '@/hooks/useQueryParam';
@@ -82,6 +83,14 @@ const Plans = memo(() => {
   });
   const [promoInput, setPromoInput] = useState('');
   const [promoRedeeming, setPromoRedeeming] = useState(false);
+
+  // Post-payment success: replaces the old 4-second toast with the
+  // SubscriptionActivatedModal (what you got + one-click model switch +
+  // a way back into the chat).
+  const [activatedPlan, setActivatedPlan] = useState<{
+    planName: string | null;
+    planSlug: string | null;
+  } | null>(null);
 
   // IMPORTANT: keep all hooks above any early-return.
   // useIsMobile() wraps antd-style useResponsive() which calls useRef
@@ -182,10 +191,16 @@ const Plans = memo(() => {
 
     if (redirectedPayment.status === 'succeeded') {
       trackPaymentOutcome(redirectedPayment.id, 'payment_success', { kind: 'subscribe' });
-      message.success(`Подписка «${redirectedPayment.planName ?? ''}» активирована. Спасибо!`, 4);
+      setActivatedPlan({
+        planName: redirectedPayment.planName ?? null,
+        planSlug: redirectedPayment.planSlug ?? null,
+      });
       setRecoveryPollEnabled(false);
       setRecoveryForId(null);
       void utils.subscription.getBillingState.invalidate();
+      // Credit widget + model-lock (🔒) queries must reflect the new plan
+      // immediately, not after their 5-minute staleTime.
+      void utils.spend.invalidate();
       return;
     }
 
@@ -397,6 +412,17 @@ const Plans = memo(() => {
   const totalAvailable = creditLimit + creditBalance;
   const usagePercent = totalAvailable > 0 ? Math.round((creditsUsed / totalAvailable) * 100) : 0;
 
+  // Post-payment success modal, shared by both render branches.
+  const activatedModal = (
+    <SubscriptionActivatedModal
+      returnToChat
+      open={!!activatedPlan}
+      planName={activatedPlan?.planName}
+      planSlug={activatedPlan?.planSlug}
+      onClose={() => setActivatedPlan(null)}
+    />
+  );
+
   // Recovery modal lifted out of both render branches so mobile + desktop
   // share one source of truth and behaviour.
   const recoveryModal = (
@@ -534,6 +560,7 @@ const Plans = memo(() => {
           }}
         />
         {recoveryModal}
+        {activatedModal}
       </>
     );
   }
@@ -641,6 +668,7 @@ const Plans = memo(() => {
       </Modal>
 
       {recoveryModal}
+      {activatedModal}
 
       <Modal
         cancelText="Передумал"

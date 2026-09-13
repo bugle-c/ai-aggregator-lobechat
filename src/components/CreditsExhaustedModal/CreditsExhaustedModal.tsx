@@ -148,16 +148,16 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
                       block
                       loading={subscribeMutation.isPending}
                       type={isRecommended ? 'primary' : 'default'}
-                      // Subscriptions intentionally do NOT take returnPath: the
-                      // recoveryFor param is only handled on /settings/plans, so
-                      // landing it on /agent/* would strand the recovery flow.
+                      // returnPath sends the payer back to this exact chat;
+                      // the global PaymentReturnHandler picks up `recoveryFor`
+                      // there (success modal / hand-off to the plans recovery).
                       onClick={() => {
                         reachGoal('paywall_click', {
                           kind: 'subscribe',
                           plan: plan.slug,
                           source: 'credits_exhausted',
                         });
-                        subscribeMutation.mutate({ planId: plan.id });
+                        subscribeMutation.mutate({ planId: plan.id, returnPath });
                       }}
                     >
                       {isRecommended ? 'Продолжить общение' : t('modal.exhausted.select')}
