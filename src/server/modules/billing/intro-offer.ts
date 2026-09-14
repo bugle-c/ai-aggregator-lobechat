@@ -105,6 +105,42 @@ export async function getIntroOfferState(
 }
 
 /**
+ * Bonus credits granted FOR A PAYMENT that are still alive — counted as
+ * purchased credits by the free daily-quota bypass (owner decision
+ * 2026-09-14; free bonuses — TG-link, referral, earned-magic — do not).
+ * `bonus_balance` is one pool with one expiry, so the paid part is derived
+ * from the MAGIC48 redemption row (UNIQUE (promo_id, user_id) → one
+ * indexed lookup): `min(activeBonus, promo.token_amount)` while the grant's
+ * own `INTRO_OFFER_BONUS_DAYS` window is open. A later free grant that
+ * extends the pool does not extend the paid part (conservative).
+ */
+export async function paidBonusFor(
+  db: LobeChatDatabase,
+  userId: string,
+  row: BonusRow | null | undefined,
+  now: Date = new Date(),
+): Promise<number> {
+  const live =
+    !!row?.bonusBalance &&
+    row.bonusBalance > 0 &&
+    !!row.bonusBalanceExpiresAt &&
+    row.bonusBalanceExpiresAt.getTime() > now.getTime();
+  if (!live) return 0;
+
+  const [redemption] = await db
+    .select({ redeemedAt: promoRedemptions.redeemedAt, tokenAmount: promoCodes.tokenAmount })
+    .from(promoRedemptions)
+    .innerJoin(promoCodes, eq(promoCodes.id, promoRedemptions.promoId))
+    .where(
+      and(eq(promoRedemptions.userId, userId), eq(promoCodes.code, INTRO_OFFER_PROMO_CODE)),
+    )
+    .limit(1);
+  if (!redemption?.tokenAmount) return 0;
+  if (redemption.redeemedAt.getTime() + BONUS_TTL_MS <= now.getTime()) return 0;
+  return Math.min(row!.bonusBalance!, redemption.tokenAmount);
+}
+
+/**
  * Called from fulfillPayment AFTER the payment row is marked succeeded.
  * Grants the MAGIC48 bonus when this succeeded payment is the user's first
  * and it landed within 48h of the magic-bonus claim. Never throws — the

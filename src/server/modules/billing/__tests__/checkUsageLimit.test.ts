@@ -12,6 +12,12 @@ vi.mock('@/server/services/billing', () => ({
   })),
 }));
 
+// Paid part of the bonus pool (MAGIC48) — its own query; stubbed here.
+const paidBonusForMock = vi.fn(async () => 0);
+vi.mock('../intro-offer', () => ({
+  paidBonusFor: (...args: unknown[]) => paidBonusForMock(...(args as [])),
+}));
+
 // Avoid touching tier-classification / model-rates network paths.
 vi.mock('../model-tiers', () => ({
   classifyModelTierAsync: vi.fn(async () => 'cheap'),
@@ -139,6 +145,24 @@ describe('checkUsageLimit — EXP-003 free daily message quota', () => {
     const result = await checkUsageLimit(db, 'user-6', 'gpt-5-mini');
 
     expect(result).toMatchObject({ allowed: true, dailyQuota: 5, dailyRemaining: 0 });
+  });
+
+  it('MAGIC48 paid bonus is added to the purchased budget (balance 400 + 500, used 541 → allowed)', async () => {
+    getOrResetUserBillingMock.mockResolvedValueOnce({
+      ...freeBilling,
+      bonusBalance: 500,
+      bonusBalanceExpiresAt: new Date(Date.now() + 86_400_000),
+      tokenBalance: 400,
+      tokensUsedMonth: 541,
+    });
+    getPlanByIdMock.mockResolvedValueOnce({ ...freePlan, tokenLimit: 2500 });
+    paidBonusForMock.mockResolvedValueOnce(500);
+    const { db } = makeCountDb(6);
+
+    const result = await checkUsageLimit(db, 'user-6c', 'gpt-5-mini');
+
+    expect(paidBonusForMock).toHaveBeenCalledTimes(1);
+    expect(result.allowed).toBe(true);
   });
 
   it('preset task (countsTowardQuota=false) skips the count and is never blocked', async () => {

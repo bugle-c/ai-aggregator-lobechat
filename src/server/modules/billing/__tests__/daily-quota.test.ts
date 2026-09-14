@@ -111,6 +111,44 @@ describe('decideUsageLimit — EXP-003 free daily quota', () => {
     });
   });
 
+  it('MAGIC48 paid bonus counts as purchased: balance 400 + paidBonus 500, used 541 → allowed', () => {
+    const r = freeChat({
+      bonus: 500,
+      creditLimit: 2500,
+      dailyUsed: 6,
+      paidBonus: 500,
+      tokenBalance: 400,
+      tokensUsedMonth: 541,
+    });
+    expect(r.allowed).toBe(true);
+  });
+
+  it('paid bonus budget spent: balance 400 + paidBonus 500, used 900, 6 today → daily_quota', () => {
+    expect(
+      freeChat({
+        bonus: 500,
+        creditLimit: 2500,
+        dailyUsed: 6,
+        paidBonus: 500,
+        tokenBalance: 400,
+        tokensUsedMonth: 900,
+      }),
+    ).toMatchObject({ allowed: false, reason: 'daily_quota' });
+  });
+
+  it('paid bonus alone (no top-up) also lifts the gate while unspent', () => {
+    expect(freeChat({ bonus: 500, dailyUsed: 6, paidBonus: 500, tokensUsedMonth: 100 })).toMatchObject({
+      allowed: true,
+    });
+  });
+
+  it('TG bonus alone (paidBonus 0) → still gated', () => {
+    expect(freeChat({ bonus: 100, dailyUsed: 6, tokensUsedMonth: 10 })).toMatchObject({
+      allowed: false,
+      reason: 'daily_quota',
+    });
+  });
+
   it('top-up fully spent but bonus remains → blocked (bonus never bypasses)', () => {
     // top-up 50 spent (used 200 > 50); bonus 100 keeps the monthly pool open (300)
     expect(

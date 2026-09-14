@@ -12,6 +12,7 @@ import {
   FREE_PLAN_SLUG,
   moscowDayStart,
 } from './daily-quota';
+import { paidBonusFor } from './intro-offer';
 import { calculateCreditsAsync } from './model-rates';
 import { type PlanSlug } from './model-tiers';
 
@@ -76,6 +77,12 @@ export interface UsageLimitInput {
    */
   dailyUsed?: number;
   kind: UsageKind;
+  /**
+   * Part of `bonus` granted FOR A PAYMENT (MAGIC48 intro offer, still
+   * alive) — counts as purchased for the daily-quota bypass. Free bonuses
+   * (TG-link, referral, earned-magic) are never in here. Default 0.
+   */
+  paidBonus?: number;
   planSlug: string | undefined;
   /** Top-up purchases (`user_billing.token_balance`). */
   tokenBalance: number;
@@ -93,8 +100,11 @@ export interface UsageLimitInput {
  *    **Only purchased credits lift the quota** (owner decision, review
  *    2026-09-13): bonus pools (TG-link, referral, MAGIC48) reach most
  *    activated users and would have switched the experiment off for them —
- *    `bonus_balance` only extends the monthly pool. The bypass budget is the
- *    purchase ALONE: it holds while `tokensUsedMonth < token_balance`. The
+ *    `bonus_balance` only extends the monthly pool — EXCEPT the part granted
+ *    for a payment (MAGIC48 intro offer, `paidBonusFor`), which is treated
+ *    as purchased (owner decision 2026-09-14). The bypass budget is the
+ *    purchase ALONE: it holds while
+ *    `tokensUsedMonth < token_balance + paidBonus`. The
  *    free monthly allowance (`token_limit`, 2500 — sized as a safety cap,
  *    not as spendable-without-limit) is NOT part of the budget, and free
  *    usage made before the purchase simply eats into it (hotfix 2026-09-14:
@@ -109,6 +119,7 @@ export interface UsageLimitInput {
 export function decideUsageLimit(input: UsageLimitInput): UsageLimitResult {
   const { bonus, creditLimit, dailyUsed, kind, planSlug, tokenBalance, tokensUsedMonth } = input;
   const countsTowardQuota = input.countsTowardQuota ?? true;
+  const paidBonus = input.paidBonus ?? 0;
   const extraCredits = tokenBalance + bonus;
   const totalAvailable = creditLimit + extraCredits;
   const isFree = planSlug === FREE_PLAN_SLUG;
@@ -123,7 +134,8 @@ export function decideUsageLimit(input: UsageLimitInput): UsageLimitResult {
 
   const used = dailyUsed ?? 0;
   const dailyRemaining = Math.max(0, FREE_DAILY_MESSAGE_QUOTA - used);
-  const purchasedRemaining = tokenBalance > 0 ? tokenBalance - tokensUsedMonth : 0;
+  const purchased = tokenBalance + paidBonus;
+  const purchasedRemaining = purchased > 0 ? purchased - tokensUsedMonth : 0;
   if (used > FREE_DAILY_MESSAGE_QUOTA && purchasedRemaining <= 0) {
     return {
       allowed: false,
@@ -154,10 +166,12 @@ export async function checkUsageLimit(
 
     // The daily count is only needed for free-plan user chat — one indexed
     // count(*) over messages (role='user') since 00:00 MSK.
-    const dailyUsed =
-      plan?.slug === FREE_PLAN_SLUG && kind === 'chat' && countsTowardQuota
-        ? await countUserMessagesSince(db, userId, moscowDayStart())
-        : undefined;
+    const quotaApplies = plan?.slug === FREE_PLAN_SLUG && kind === 'chat' && countsTowardQuota;
+    const dailyUsed = quotaApplies
+      ? await countUserMessagesSince(db, userId, moscowDayStart())
+      : undefined;
+    // Paid part of the bonus pool (MAGIC48) — one indexed lookup, free chat only.
+    const paidBonus = quotaApplies ? await paidBonusFor(db, userId, billing) : 0;
 
     return decideUsageLimit({
       bonus: activeBonusFor(billing),
@@ -165,6 +179,7 @@ export async function checkUsageLimit(
       creditLimit,
       dailyUsed,
       kind,
+      paidBonus,
       planSlug: plan?.slug,
       tokenBalance: billing.tokenBalance,
       tokensUsedMonth: billing.tokensUsedMonth,
