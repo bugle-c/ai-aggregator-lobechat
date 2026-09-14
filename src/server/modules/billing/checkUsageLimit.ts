@@ -93,13 +93,17 @@ export interface UsageLimitInput {
  *    **Only purchased credits lift the quota** (owner decision, review
  *    2026-09-13): bonus pools (TG-link, referral, MAGIC48) reach most
  *    activated users and would have switched the experiment off for them —
- *    `bonus_balance` only extends the monthly pool. Spend order assumed for
- *    the single `tokens_used_month` counter: allowance → top-up → bonus, so
- *    `purchasedRemaining = token_balance − max(0, tokensUsedMonth − creditLimit)`.
- *    (Subtracting the bonus, i.e. allowance → bonus → top-up, would let a
- *    bonus granted AFTER the top-up was spent re-open the bypass, and makes
- *    "top-up spent, bonus remains" an unreachable state.) Bonus expiry only
- *    shrinks the monthly pool; it never changes the daily decision.
+ *    `bonus_balance` only extends the monthly pool. The bypass budget is the
+ *    purchase ALONE: it holds while `tokensUsedMonth < token_balance`. The
+ *    free monthly allowance (`token_limit`, 2500 — sized as a safety cap,
+ *    not as spendable-without-limit) is NOT part of the budget, and free
+ *    usage made before the purchase simply eats into it (hotfix 2026-09-14:
+ *    `token_balance − max(0, used − creditLimit)` let a 99 ₽ top-up unlock
+ *    allowance + top-up ≈ 2 900 credits with no daily gate). Once the
+ *    counter passes the purchase, 5/day applies again while the monthly
+ *    pool (allowance + top-up + bonus) still governs monthly_cap/credits.
+ *    Bonus expiry only shrinks the monthly pool; it never changes the daily
+ *    decision.
  * 3. Paid plans and image/video generation never see the daily quota.
  */
 export function decideUsageLimit(input: UsageLimitInput): UsageLimitResult {
@@ -119,8 +123,7 @@ export function decideUsageLimit(input: UsageLimitInput): UsageLimitResult {
 
   const used = dailyUsed ?? 0;
   const dailyRemaining = Math.max(0, FREE_DAILY_MESSAGE_QUOTA - used);
-  const purchasedRemaining =
-    tokenBalance > 0 ? tokenBalance - Math.max(0, tokensUsedMonth - creditLimit) : 0;
+  const purchasedRemaining = tokenBalance > 0 ? tokenBalance - tokensUsedMonth : 0;
   if (used > FREE_DAILY_MESSAGE_QUOTA && purchasedRemaining <= 0) {
     return {
       allowed: false,

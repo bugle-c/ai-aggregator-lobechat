@@ -74,21 +74,45 @@ describe('decideUsageLimit — EXP-003 free daily quota', () => {
     expect(r).toMatchObject({ allowed: false, reason: 'daily_quota' });
   });
 
-  it('purchased credits (token_balance=400) lift the daily quota', () => {
-    const r = freeChat({ dailyUsed: 6, tokenBalance: 400, tokensUsedMonth: 7 });
+  it('purchased credits (token_balance=400, used 100) lift the daily quota even at the 6th message', () => {
+    const r = freeChat({ dailyUsed: 6, tokenBalance: 400, tokensUsedMonth: 100 });
     expect(r.allowed).toBe(true);
-    expect(r.creditsRemaining).toBe(543);
+    expect(r.creditsRemaining).toBe(450);
   });
 
-  it('purchased credits still lift the quota while any of them remain (allowance → top-up)', () => {
-    // allowance 150 + top-up 50; used 199 → 1 purchased credit left → allowed
-    expect(freeChat({ dailyUsed: 9, tokenBalance: 50, tokensUsedMonth: 199 })).toMatchObject({
+  it('bypass ends once the counter passes the purchase (used 541 > 400) → daily_quota', () => {
+    // hotfix 2026-09-14: the free allowance is NOT part of the bypass budget
+    const r = freeChat({
+      creditLimit: 2500,
+      dailyUsed: 6,
+      tokenBalance: 400,
+      tokensUsedMonth: 541,
+    });
+    expect(r).toMatchObject({ allowed: false, reason: 'daily_quota' });
+  });
+
+  it('bypass holds while used < token_balance, edge: used == token_balance → gated', () => {
+    expect(freeChat({ dailyUsed: 9, tokenBalance: 50, tokensUsedMonth: 49 })).toMatchObject({
+      allowed: true,
+    });
+    expect(freeChat({ dailyUsed: 9, tokenBalance: 50, tokensUsedMonth: 50 })).toMatchObject({
+      allowed: false,
+      reason: 'daily_quota',
+    });
+  });
+
+  it('no balance, used 100 of 2500 → gated as before', () => {
+    expect(freeChat({ creditLimit: 2500, dailyUsed: 6, tokensUsedMonth: 100 })).toMatchObject({
+      allowed: false,
+      reason: 'daily_quota',
+    });
+    expect(freeChat({ creditLimit: 2500, dailyUsed: 5, tokensUsedMonth: 100 })).toMatchObject({
       allowed: true,
     });
   });
 
   it('top-up fully spent but bonus remains → blocked (bonus never bypasses)', () => {
-    // allowance 150 + top-up 50 spent (used 200); bonus 100 keeps the monthly pool open (300)
+    // top-up 50 spent (used 200 > 50); bonus 100 keeps the monthly pool open (300)
     expect(
       freeChat({ bonus: 100, dailyUsed: 6, tokenBalance: 50, tokensUsedMonth: 200 }),
     ).toMatchObject({ allowed: false, reason: 'daily_quota' });
