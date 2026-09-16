@@ -30,14 +30,17 @@ const klingProParams: VideoModelParamsSchema = {
 };
 
 // Seedance 2.0 / 2.0 Fast — API ENFORCES aspect_ratio ∈ {16:9, 9:16} even
-// though docs list six. Real 400 captured 2026-05-17. Duration is a free
-// 4..15 slider; resolution selectable.
+// though docs list six. Real 400 captured 2026-05-17.
+// Duration: WaveSpeed now REJECTS the old free 4..15 slider with
+// `duration must be one of [8, 6, 4]` — 5 real 400s on 2026-09-16 (prod user
+// burned 5 attempts on slider values 5/15); the docs' "free slider" note
+// from 2026-09-12 is stale. Enum emulated via stride: {4,6,8}.
 // Seedance 2.0 family (Mini / Fast / full) — one schema: WaveSpeed accepts the
 // same six aspect ratios and four resolutions for all three (docs 2026-09-12).
 // Priced per resolution, see `RESOLUTION_PRICE_FACTORS` in billing.
 const seedance20Params: VideoModelParamsSchema = {
   aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'] },
-  duration: { default: 5, max: 15, min: 4, step: 1 },
+  duration: { default: 6, max: 8, min: 4, step: 2 },
   endImageUrl: { default: null, maxFileSize: 30 * 1024 * 1024, requiresImageUrl: true },
   generateAudio: { default: true },
   imageUrl: { default: null, maxFileSize: 30 * 1024 * 1024 },
