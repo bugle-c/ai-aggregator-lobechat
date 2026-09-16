@@ -15,7 +15,8 @@ import type { AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
 // enums there via stride: e.g. {min:5, max:10, step:5} ≡ enum [5, 10].
 //
 // References: real 400s captured 2026-05-17 + Wavespeed docs research
-// (wavespeed.ai/models/<id>) 2026-05-29.
+// (wavespeed.ai/models/<id>) 2026-05-29. Full live re-audit of every video
+// entry (invalid-duration probe) 2026-09-16 — see per-model notes.
 
 // Kling 2.6/3.0 Pro — duration enum [5,10], 1080p-native, audio optional.
 const klingProParams: VideoModelParamsSchema = {
