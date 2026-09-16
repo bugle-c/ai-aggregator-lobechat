@@ -30,17 +30,17 @@ const klingProParams: VideoModelParamsSchema = {
 };
 
 // Seedance 2.0 / 2.0 Fast — API ENFORCES aspect_ratio ∈ {16:9, 9:16} even
-// though docs list six. Real 400 captured 2026-05-17.
-// Duration: WaveSpeed now REJECTS the old free 4..15 slider with
-// `duration must be one of [8, 6, 4]` — 5 real 400s on 2026-09-16 (prod user
-// burned 5 attempts on slider values 5/15); the docs' "free slider" note
-// from 2026-09-12 is stale. Enum emulated via stride: {4,6,8}.
-// Seedance 2.0 family (Mini / Fast / full) — one schema: WaveSpeed accepts the
-// same six aspect ratios and four resolutions for all three (docs 2026-09-12).
-// Priced per resolution, see `RESOLUTION_PRICE_FACTORS` in billing.
+// though docs list six. Real 400 captured 2026-05-17. Duration is a FREE
+// 4..15 range, not an enum: probed 2026-09-16, duration=60 → `must be at
+// most 15, please send a value within range` (an earlier note here claimed
+// enum [4,6,8] — that was a misattributed Veo error, see the stale-params
+// bug fixed in store/video generationConfig). Seedance 2.0 family (Mini /
+// Fast / full) — one schema: WaveSpeed accepts the same six aspect ratios
+// and four resolutions for all three (docs 2026-09-12). Priced per
+// resolution, see `RESOLUTION_PRICE_FACTORS` in billing.
 const seedance20Params: VideoModelParamsSchema = {
   aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'] },
-  duration: { default: 6, max: 8, min: 4, step: 2 },
+  duration: { default: 5, max: 15, min: 4, step: 1 },
   endImageUrl: { default: null, maxFileSize: 30 * 1024 * 1024, requiresImageUrl: true },
   generateAudio: { default: true },
   imageUrl: { default: null, maxFileSize: 30 * 1024 * 1024 },
@@ -82,6 +82,15 @@ const hailuo02ProParams: VideoModelParamsSchema = {
   imageUrl: { default: null, maxFileSize: 30 * 1024 * 1024 },
   prompt: { default: '' },
   resolution: { default: '1080p', enum: ['1080p'] },
+  seed: { default: null },
+};
+
+// Luma Ray 2 / Ray 2 Flash — image-to-video, duration enum [5, 10]
+// (probed 2026-09-16: duration=60 → `must be one of [5, 10]`).
+const lumaRay2Params: VideoModelParamsSchema = {
+  duration: { default: 5, max: 10, min: 5, step: 5 },
+  imageUrl: { default: null, maxFileSize: 30 * 1024 * 1024, requiresImageUrl: true },
+  prompt: { default: '' },
   seed: { default: null },
 };
 
@@ -630,7 +639,9 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
     description: 'MiniMax Hailuo 02 Pro — 1080p, solid quality/price balance.',
     displayName: 'Hailuo 02 Pro',
-    enabled: true,
+    // Removed from WaveSpeed — probed 2026-09-16: `Model not found` on both
+    // /text-to-video and /image-to-video endpoints.
+    enabled: false,
     id: 'minimax/minimax-hailuo-02-pro',
     parameters: hailuo02ProParams,
     pricing: {
@@ -802,7 +813,8 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
     description: 'Runway Gen-4.5 — high-quality cinematic generator.',
     displayName: 'Runway Gen-4.5',
-    enabled: true,
+    // Removed from WaveSpeed — probed 2026-09-16: `Model not found`.
+    enabled: false,
     id: 'runwayml/gen-4.5',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
@@ -814,6 +826,7 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     displayName: 'Luma Ray 2 (I2V)',
     enabled: true,
     id: 'luma/ray-2-i2v',
+    parameters: lumaRay2Params,
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.18, strategy: 'fixed', unit: 'second' }],
     },
@@ -824,15 +837,16 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     displayName: 'Luma Ray 2 Flash (I2V)',
     enabled: true,
     id: 'luma/ray-2-flash-i2v',
+    parameters: lumaRay2Params,
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
     },
     type: 'video',
   },
   {
-    description: 'Pika 2.2 — well-rounded text-to-video model.',
+    // Removed from WaveSpeed — probed 2026-09-16: `Model not found`.
+    enabled: false,
     displayName: 'Pika 2.2',
-    enabled: true,
     id: 'pika/pika-v2.2/text-to-video',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.08, strategy: 'fixed', unit: 'second' }],
@@ -840,9 +854,9 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     type: 'video',
   },
   {
-    description: 'MiniMax Hailuo 02 Standard — cheaper standard quality tier.',
+    // Removed from WaveSpeed — probed 2026-09-16: `Model not found`.
+    enabled: false,
     displayName: 'Hailuo 02 Standard',
-    enabled: true,
     id: 'minimax/minimax-hailuo-02-standard',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.03, strategy: 'fixed', unit: 'second' }],
@@ -854,6 +868,7 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     displayName: 'Veo 3.1 Lite',
     enabled: true,
     id: 'google/veo3.1-lite/text-to-video',
+    parameters: veo31Params,
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.0375, strategy: 'fixed', unit: 'second' }],
     },
@@ -864,6 +879,7 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     displayName: 'Veo 3.1 Lite (I2V)',
     enabled: true,
     id: 'google/veo3.1-lite/image-to-video',
+    parameters: veo31Params,
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.0375, strategy: 'fixed', unit: 'second' }],
     },
@@ -872,7 +888,8 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
     description: 'ByteDance Seedance 1.5 Pro Fast — affordable Seedance for daily generations.',
     displayName: 'Seedance 1.5 Pro Fast',
-    enabled: true,
+    // Removed from WaveSpeed — probed 2026-09-16: `Model not found`.
+    enabled: false,
     id: 'bytedance/seedance-v1.5-pro-fast/text-to-video',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.025, strategy: 'fixed', unit: 'second' }],
@@ -882,7 +899,8 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
     description: 'ByteDance Seedance 1.5 Pro Fast — image-to-video variant.',
     displayName: 'Seedance 1.5 Pro Fast (I2V)',
-    enabled: true,
+    // Removed from WaveSpeed — probed 2026-09-16: `Model not found`.
+    enabled: false,
     id: 'bytedance/seedance-v1.5-pro-fast/image-to-video',
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.025, strategy: 'fixed', unit: 'second' }],

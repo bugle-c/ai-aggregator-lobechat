@@ -118,12 +118,24 @@ export const createGenerationConfigSlice: StateCreator<
     }
 
     set(
-      {
+      (state) => ({
         model,
-        ...(defaultValues ? { parameters: defaultValues } : {}),
+        ...(defaultValues
+          ? { parameters: defaultValues }
+          : {
+              // ALWAYS reset params on model switch. When schema resolve
+              // failed (model without registered `parameters`), the previous
+              // model's values previously PERSISTED here — e.g. stale
+              // duration=15 from a Seedance 4..15 slider was sent to Veo
+              // 3.1 Lite (accepts only 4/6/8) and 400'd after precharge
+              // (prod incident 2026-09-16). Keep ONLY the user's typed
+              // prompt; everything else falls back to provider defaults,
+              // which are always valid for the newly selected model.
+              parameters: { prompt: state.parameters?.prompt },
+            }),
         ...(parametersSchema ? { parametersSchema } : {}),
         provider,
-      },
+      }),
       false,
       `setModelAndProviderOnSelect/${model}/${provider}`,
     );

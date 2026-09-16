@@ -262,7 +262,7 @@ export class GenerationConfigActionImpl {
     }
 
     this.#set(
-      {
+      (state) => ({
         model,
         provider,
         ...(resolved
@@ -272,8 +272,15 @@ export class GenerationConfigActionImpl {
               parameters: resolved.defaultValues,
               parametersSchema: resolved.parametersSchema,
             }
-          : {}),
-      },
+          : {
+              // Same stale-params bug as the video store (fixed 2026-09-16):
+              // a model without a registered `parameters` schema used to
+              // INHERIT the previous model's size/aspect/etc. and 400 at the
+              // provider. Keep only the typed prompt; the rest falls back to
+              // provider defaults.
+              parameters: { prompt: state.parameters?.prompt },
+            }),
+      }),
       false,
       `setModelAndProviderOnSelect/${model}/${provider}`,
     );
