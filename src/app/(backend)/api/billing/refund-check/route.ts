@@ -7,7 +7,7 @@ import { getServerDB } from '@/database/server';
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/internal/refund-check
+ * POST /api/billing/refund-check
  *
  * Called by the bot's /support refund branch. Verifies whether a user's
  * refund claim corresponds to a real payment BEFORE the claim reaches the
