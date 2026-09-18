@@ -129,11 +129,23 @@ export async function POST(req: Request) {
       if (res.ok) {
         const json = (await res.json()) as { items?: YkPayment[] };
         const items = json.items ?? [];
+        // A YooKassa payment bound to ANY billing_payments row is accounted
+        // for; only truly unbound rows can be a lost webhook. (Checking only
+        // THIS user's rows leaked other users' payments into unmatched —
+        // caught in the 2026-09-18 smoke test.)
+        const listedIds = items.map((p) => p.id);
+        const boundToAny = new Set<string>();
+        if (listedIds.length > 0) {
+          const boundRows = await db
+            .select({ ownerId: billingPayments.userId, ykId: billingPayments.yookassaPaymentId })
+            .where(sql`${billingPayments.yookassaPaymentId} = ANY(${listedIds}::text[])`);
+          for (const r of boundRows) boundToAny.add(r.ykId);
+        }
         const boundIds = new Set(our.map((p) => p.yookassaPaymentId).filter(Boolean) as string[]);
         for (const p of items) {
           const value = Number.parseFloat(p.amount?.value ?? '0');
           if (amount != null && Math.round(value) !== amount) continue;
-          if (boundIds.has(p.id)) continue; // already reconciled in our DB
+          if (boundToAny.has(p.id) || boundIds.has(p.id)) continue;
           const meta = p.metadata ?? {};
           const metaUser = meta.user_id ?? meta.userId;
           const metaTg = meta.tg_user_id;
