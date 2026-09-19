@@ -77,6 +77,8 @@ export interface PlanOptions {
   authorCap?: number;
   /** Categories that may publish with the relaxed like threshold (see `relaxForFill`). */
   fill?: ReadonlySet<string>;
+  /** The relaxed threshold for `fill` categories (default `FILL_MIN_LIKES`). */
+  fillMinLikes?: number;
 }
 
 const handleFromUrl = (url: string | null): string | undefined => {
@@ -170,7 +172,7 @@ export const probeMissingAspects = async (rows: QueuedRow[]): Promise<number> =>
 export const planActivation = (
   rows: QueuedRow[],
   modality: Modality = 'video',
-  { authorCap, fill = new Set() }: PlanOptions = {},
+  { authorCap, fill = new Set(), fillMinLikes }: PlanOptions = {},
 ): ActivationPlan => {
   const plan: ActivationPlan = { activate: [], keep: [] };
   const sameModality = rows.filter((row) => row.modality === modality);
@@ -191,7 +193,7 @@ export const planActivation = (
 
   results.forEach(({ evaluation: strict, item }, index) => {
     const row = batch[index];
-    const evaluation = relaxForFill(strict, item, row.category ?? '', fill);
+    const evaluation = relaxForFill(strict, item, row.category ?? '', fill, fillMinLikes);
     if (evaluation.verdict === 'publish') {
       const storedAspect = row.params_lock?.aspect_ratio;
       plan.activate.push({
@@ -271,7 +273,7 @@ const applyPlan = async (client: Client, plan: ActivationPlan, modality: Modalit
 };
 
 const USAGE =
-  'usage: tsx scripts/ingestPresets/activateI2v.ts [--apply] [--modality=video|image] [--all] [--author-cap=N] [--fill=cat,cat]';
+  'usage: tsx scripts/ingestPresets/activateI2v.ts [--apply] [--modality=video|image] [--all] [--author-cap=N] [--fill=cat,cat] [--fill-min-likes=N]';
 
 export interface Args {
   /** Re-evaluate every queued row of the modality, not only reference-image ones. */
@@ -279,6 +281,7 @@ export interface Args {
   apply: boolean;
   authorCap?: number;
   fill: Set<string>;
+  fillMinLikes?: number;
   modality: Modality;
 }
 
@@ -290,6 +293,11 @@ export const parseArgs = (args: string[]): Args => {
     else if (arg === '--modality=video' || arg === '--modality=image')
       parsed.modality = arg.slice('--modality='.length) as Modality;
     else if (arg.startsWith('--fill=')) parsed.fill = parseFill(arg.slice('--fill='.length));
+    else if (arg.startsWith('--fill-min-likes=')) {
+      const value = Number.parseInt(arg.slice('--fill-min-likes='.length), 10);
+      if (!Number.isInteger(value) || value < 0) throw new Error(`bad --fill-min-likes: ${arg}`);
+      parsed.fillMinLikes = value;
+    }
     else if (arg.startsWith('--author-cap=')) {
       const value = Number.parseInt(arg.slice('--author-cap='.length), 10);
       if (!Number.isInteger(value) || value <= 0) throw new Error(`bad --author-cap: ${arg}`);
@@ -309,7 +317,7 @@ const main = async () => {
     console.error((error as Error).message);
     process.exit(2);
   }
-  const { all, apply, authorCap, fill, modality } = parsed;
+  const { all, apply, authorCap, fill, fillMinLikes, modality } = parsed;
 
   const client = createClient();
   await client.connect();
@@ -322,7 +330,7 @@ const main = async () => {
         (authorCap ? ` (author cap ${authorCap})` : ''),
     );
 
-    const plan = planActivation(rows, modality, { authorCap, fill });
+    const plan = planActivation(rows, modality, { authorCap, fill, fillMinLikes });
     if (apply) await applyPlan(client, plan, modality);
 
     console.log(formatPlan(plan, apply));

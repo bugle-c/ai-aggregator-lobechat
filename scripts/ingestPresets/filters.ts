@@ -375,10 +375,11 @@ export const relaxForFill = (
   item: Pick<SourceItem, 'stats'>,
   category: string,
   fill: ReadonlySet<string>,
+  minLikes: number = FILL_MIN_LIKES,
 ): Evaluation => {
   if (evaluation.verdict !== 'queue' || fill.size === 0 || !fill.has(category)) return evaluation;
   if (evaluation.reasons.length !== 1 || evaluation.reasons[0] !== 'low-likes') return evaluation;
-  if ((item.stats?.likes ?? 0) < FILL_MIN_LIKES) return evaluation;
+  if ((item.stats?.likes ?? 0) < minLikes) return evaluation;
   return { ...evaluation, reasons: [], verdict: 'publish' };
 };
 

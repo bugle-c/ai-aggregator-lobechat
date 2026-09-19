@@ -65,6 +65,8 @@ export interface Options {
   dryRun: boolean;
   /** `--fill=a,b`: categories that publish with the relaxed like threshold (see `relaxForFill`). */
   fill: Set<string>;
+  /** `--fill-min-likes=N`: the relaxed threshold (default `FILL_MIN_LIKES`). */
+  fillMinLikes?: number;
   limit: number;
   /** `--no-llm` → false: pure heuristics, the pre-LLM behaviour. */
   llm: boolean;
@@ -102,6 +104,10 @@ export const parseArgs = (argv: string[]): Options => {
       options.backfill = true;
     } else if (arg.startsWith('--fill=')) {
       options.fill = parseFill(arg.slice('--fill='.length));
+    } else if (arg.startsWith('--fill-min-likes=')) {
+      const value = Number.parseInt(arg.slice('--fill-min-likes='.length), 10);
+      if (!Number.isInteger(value) || value < 0) throw new Error(`bad --fill-min-likes: ${arg}`);
+      options.fillMinLikes = value;
     } else if (arg.startsWith('--author-cap=')) {
       const value = Number.parseInt(arg.slice('--author-cap='.length), 10);
       if (!Number.isInteger(value) || value <= 0) throw new Error(`bad --author-cap: ${arg}`);
@@ -345,7 +351,13 @@ const run = async (options: Options): Promise<RunReport> => {
           : null;
         const decision = mergeLabels({ evaluation: heuristicEvaluation, heuristic, llm });
         const { labels } = decision;
-        const evaluation = relaxForFill(decision.evaluation, item, labels.category, options.fill);
+        const evaluation = relaxForFill(
+          decision.evaluation,
+          item,
+          labels.category,
+          options.fill,
+          options.fillMinLikes,
+        );
         if (evaluation !== decision.evaluation) report.filled += 1;
 
         if (decision.unsafe) {
