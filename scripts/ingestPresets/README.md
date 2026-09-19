@@ -286,6 +286,20 @@ collected (or `--max-pages` / the end of the feed); `--llm-cap` lifts the
 per-run classifier budget so the whole batch gets LLM titles (~$0.0004/item).
 All publish filters apply unchanged. Used 2026-09-07 for +200 videos / +200
 images (owner decision: the newest 200 of each, not the whole archive).
+On 2026-09-19 the whole archive was walked (`--limit=1200 --max-pages=90`,
+videos hit `stopped=exhausted` at page 81; images `--limit=800`), so a further
+backfill only finds what the daily run missed.
+
+## Thin categories (`--fill`, `--fill-min-likes`)
+
+`--fill=cat,cat` (ingest and `activateI2v.ts`) publishes a row in one of the
+listed categories when its **only** failing filter is `low-likes` and it has at
+least `--fill-min-likes` likes (default `FILL_MIN_LIKES` = 10). Safety,
+attribution, aspect ratio and latin prompt stay mandatory. Used to bring every
+category to ≥ 10 styles; image `landscape` cannot get there — its queue is all
+`community_…` uploads without a tweet. Note the author cap in `activateI2v` is
+per run, so re-running it activates up to N more rows of the same prolific
+authors — do not loop it.
 
 ## Model of the original (`source_model`)
 
