@@ -31,7 +31,7 @@ import {
   slugFor,
 } from './derive';
 import { discoverNewItems } from './fetchCatalog';
-import { evaluateBatch } from './filters';
+import { evaluateBatch, parseFill, relaxForFill } from './filters';
 import { type Labels, mergeLabels } from './labeling';
 import { assertFfmpegAvailable, MediaUploader, processMedia, s3ConfigFromEnv } from './media';
 import { DEFAULT_RELABEL_LIMIT, formatRelabelTable, runRelabel } from './relabel';
@@ -63,6 +63,8 @@ export interface Options {
    */
   backfill: boolean;
   dryRun: boolean;
+  /** `--fill=a,b`: categories that publish with the relaxed like threshold (see `relaxForFill`). */
+  fill: Set<string>;
   limit: number;
   /** `--no-llm` → false: pure heuristics, the pre-LLM behaviour. */
   llm: boolean;
@@ -81,6 +83,7 @@ export const parseArgs = (argv: string[]): Options => {
     apply: false,
     backfill: false,
     dryRun: false,
+    fill: new Set(),
     limit: MAX_NEW_PER_RUN,
     llm: true,
     maxPages: MAX_PAGES_PER_RUN,
@@ -97,6 +100,8 @@ export const parseArgs = (argv: string[]): Options => {
       options.apply = true;
     } else if (arg === '--backfill') {
       options.backfill = true;
+    } else if (arg.startsWith('--fill=')) {
+      options.fill = parseFill(arg.slice('--fill='.length));
     } else if (arg.startsWith('--author-cap=')) {
       const value = Number.parseInt(arg.slice('--author-cap='.length), 10);
       if (!Number.isInteger(value) || value <= 0) throw new Error(`bad --author-cap: ${arg}`);
@@ -198,6 +203,7 @@ const emptyReport = (): RunReport => ({
   failedMedia: 0,
   fetched: 0,
   new: 0,
+  filled: 0,
   pagesFetched: 0,
   published: 0,
   queued: 0,
@@ -210,6 +216,7 @@ export const formatReport = (report: RunReport, dryRun: boolean): string =>
   [
     dryRun ? 'DRY RUN — nothing downloaded, nothing written' : 'ingest complete',
     `pages: ${report.pagesFetched}`,
+    ...(report.filled ? [`filled (relaxed likes for thin categories): ${report.filled}`] : []),
     `fetched: ${report.fetched}`,
     `new: ${report.new}`,
     `published: ${report.published}`,
@@ -337,7 +344,9 @@ const run = async (options: Options): Promise<RunReport> => {
             })
           : null;
         const decision = mergeLabels({ evaluation: heuristicEvaluation, heuristic, llm });
-        const { evaluation, labels } = decision;
+        const { labels } = decision;
+        const evaluation = relaxForFill(decision.evaluation, item, labels.category, options.fill);
+        if (evaluation !== decision.evaluation) report.filled += 1;
 
         if (decision.unsafe) {
           report.skippedSafety += 1;
@@ -452,7 +461,7 @@ const relabel = async (options: Options): Promise<void> => {
 
 const USAGE =
   'usage: tsx scripts/ingestPresets/index.ts [--dry-run] [--limit=N] [--max-pages=N] ' +
-  '[--modality=video|image|both] [--no-llm] [--backfill] [--llm-cap=N] [--author-cap=N] | --relabel[=N] [--since=<iso>] [--apply]';
+  '[--modality=video|image|both] [--no-llm] [--backfill] [--llm-cap=N] [--author-cap=N] [--fill=cat,cat] | --relabel[=N] [--since=<iso>] [--apply]';
 
 const main = async () => {
   loadEnv();

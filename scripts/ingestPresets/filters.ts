@@ -30,6 +30,21 @@ export const MAX_PER_AUTHOR_PER_RUN = 2;
 export const ASPECT_WHITELIST = ['16:9', '9:16', '1:1', '4:3', '3:4'] as const;
 
 /**
+ * The image flow's dimension control offers the classic photo ratios too
+ * (`PRESET_ASPECT_RATIOS` in model-bank), so image presets may pin them.
+ * Video models do not accept them — the video list stays the strict one.
+ */
+export const IMAGE_ASPECT_WHITELIST = [...ASPECT_WHITELIST, '3:2', '2:3', '4:5'] as const;
+
+/**
+ * «Fill» mode for thin gallery categories (owner: ≥ 10 styles per category):
+ * an item whose ONLY failed rule is `low-likes` publishes when its category is
+ * in the fill set and it still has at least this many likes. Everything else
+ * (safety, attribution, latin prompt, aspect) stays mandatory.
+ */
+export const FILL_MIN_LIKES = 10;
+
+/**
  * The source does NOT normalise `aspectRatio` — real values include
  * `427:240`, `26:15`, `159:91` and `7:4`, all of which are 16:9 footage within
  * a couple of percent. Matching the whitelist literally would drop ~25% of a
@@ -239,7 +254,10 @@ const ratioValue = (label: string): number => {
  * `imageWidth`/`imageHeight` (the images endpoint ships no `aspectRatio` at
  * all). Returns `null` when nothing is within `ASPECT_TOLERANCE`.
  */
-export const resolveAspectRatio = (item: SourceItem): string | null => {
+export const resolveAspectRatio = (
+  item: SourceItem,
+  whitelist: readonly string[] = ASPECT_WHITELIST,
+): string | null => {
   let value: number | null = null;
 
   if (typeof item.aspectRatio === 'string' && item.aspectRatio.includes(':')) {
@@ -255,7 +273,7 @@ export const resolveAspectRatio = (item: SourceItem): string | null => {
 
   let best: string | null = null;
   let bestDelta = Number.POSITIVE_INFINITY;
-  for (const label of ASPECT_WHITELIST) {
+  for (const label of whitelist) {
     const delta = Math.abs(ratioValue(label) - value) / value;
     if (delta < bestDelta) {
       bestDelta = delta;
@@ -305,7 +323,9 @@ export const evaluateItem = (item: SourceItem, ctx: EvaluateContext): Evaluation
   if (prompt.length < MIN_PROMPT_LENGTH) reasons.push('prompt-too-short');
   if (asciiRatio(prompt) < MIN_ASCII_RATIO) reasons.push('non-latin-prompt');
 
-  const aspectRatio = resolveAspectRatio(item) ?? undefined;
+  const aspectRatio =
+    resolveAspectRatio(item, ctx.modality === 'image' ? IMAGE_ASPECT_WHITELIST : ASPECT_WHITELIST) ??
+    undefined;
   if (!aspectRatio) reasons.push('aspect-ratio');
 
   const likes = item.stats?.likes ?? 0;
@@ -344,3 +364,24 @@ export const evaluateBatch = (
   };
   return items.map((item) => ({ evaluation: evaluateItem(item, ctx), item }));
 };
+
+/**
+ * Apply fill mode to an evaluation once the category is known (after the LLM
+ * step): a `queue` verdict whose only reason is `low-likes` becomes `publish`
+ * for a category in `fill` when the item has ≥ `FILL_MIN_LIKES` likes.
+ */
+export const relaxForFill = (
+  evaluation: Evaluation,
+  item: Pick<SourceItem, 'stats'>,
+  category: string,
+  fill: ReadonlySet<string>,
+): Evaluation => {
+  if (evaluation.verdict !== 'queue' || fill.size === 0 || !fill.has(category)) return evaluation;
+  if (evaluation.reasons.length !== 1 || evaluation.reasons[0] !== 'low-likes') return evaluation;
+  if ((item.stats?.likes ?? 0) < FILL_MIN_LIKES) return evaluation;
+  return { ...evaluation, reasons: [], verdict: 'publish' };
+};
+
+/** Parse `--fill=a,b,c` into a set of category slugs. */
+export const parseFill = (value: string | undefined): Set<string> =>
+  new Set((value ?? '').split(',').map((s) => s.trim()).filter(Boolean));
