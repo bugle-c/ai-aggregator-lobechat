@@ -6,8 +6,10 @@ import {
   evaluateBatch,
   evaluateItem,
   findUnsafeTerm,
+  IMAGE_ASPECT_WHITELIST,
   MIN_LIKES,
   MIN_PROMPT_LENGTH,
+  relaxForFill,
   resolveAspectRatio,
 } from '../filters';
 import type { SourceItem } from '../types';
@@ -264,5 +266,43 @@ describe('attribution rule', () => {
     const result = evaluate(item({ id: 'community_34e69cb0-4906-44d1-b52e-a4ff78d5714f' }));
     expect(result.verdict).toBe('queue');
     expect(result.reasons).toContain('no-attribution');
+  });
+});
+
+describe('image aspect whitelist (classic photo ratios)', () => {
+  it('lets image items pin 2:3 / 3:2 / 4:5 while video stays strict', () => {
+    const portrait = item({ aspectRatio: undefined, imageHeight: 1500, imageWidth: 1000 });
+    expect(resolveAspectRatio(portrait, IMAGE_ASPECT_WHITELIST)).toBe('2:3');
+    expect(resolveAspectRatio(portrait)).toBeNull();
+    expect(resolveAspectRatio(item({ aspectRatio: '4:5' }), IMAGE_ASPECT_WHITELIST)).toBe('4:5');
+    const [{ evaluation }] = evaluateBatch(
+      [item({ aspectRatio: '3:2', image: 'https://images.meigen.ai/tweets/1/0.jpg', videoUrl: undefined })],
+      { known: new Set(), modality: 'image' },
+    );
+    expect(evaluation.aspectRatio).toBe('3:2');
+  });
+});
+
+describe('relaxForFill (thin categories)', () => {
+  const queuedLowLikes = {
+    aspectRatio: '16:9',
+    reasons: ['low-likes'],
+    requiresImage: false,
+    verdict: 'queue' as const,
+  };
+  const fill = new Set(['camera', 'ambient']);
+
+  it('publishes a low-likes item of a fill category with ≥ 10 likes', () => {
+    const out = relaxForFill(queuedLowLikes, { stats: { likes: 12 } }, 'camera', fill);
+    expect(out.verdict).toBe('publish');
+    expect(out.reasons).toEqual([]);
+  });
+
+  it('leaves everything else alone', () => {
+    expect(relaxForFill(queuedLowLikes, { stats: { likes: 12 } }, 'cinematic', fill).verdict).toBe('queue');
+    expect(relaxForFill(queuedLowLikes, { stats: { likes: 3 } }, 'camera', fill).verdict).toBe('queue');
+    const twoReasons = { ...queuedLowLikes, reasons: ['low-likes', 'no-attribution'] };
+    expect(relaxForFill(twoReasons, { stats: { likes: 40 } }, 'camera', fill).verdict).toBe('queue');
+    expect(relaxForFill(queuedLowLikes, { stats: { likes: 40 } }, 'camera', new Set()).verdict).toBe('queue');
   });
 });

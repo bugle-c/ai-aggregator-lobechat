@@ -155,9 +155,11 @@ describe('planActivation — image (i2i) rows since Ф5b', () => {
     expect(parseArgs(['--modality=image', '--apply'])).toEqual({
       all: false,
       apply: true,
+      fill: new Set(),
       modality: 'image',
     });
-    expect(parseArgs([])).toEqual({ all: false, apply: false, modality: 'video' });
+    expect(parseArgs([])).toEqual({ all: false, apply: false, fill: new Set(), modality: 'video' });
+    expect(parseArgs(['--fill=camera,ambient']).fill).toEqual(new Set(['camera', 'ambient']));
     expect(parseArgs(['--all', '--author-cap=8'])).toMatchObject({ all: true, authorCap: 8 });
     expect(() => parseArgs(['--nope'])).toThrow(/unknown flag/);
   });

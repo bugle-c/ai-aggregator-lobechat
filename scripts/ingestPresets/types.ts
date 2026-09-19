@@ -97,6 +97,8 @@ export interface PresetInsert {
 export interface RunReport {
   failedMedia: number;
   fetched: number;
+  /** Items published only thanks to `--fill` (relaxed like threshold for thin categories). */
+  filled: number;
   /** Token/cost accounting of the LLM labelling step; absent under `--no-llm`. */
   llm?: ClassifierStats;
   new: number;
