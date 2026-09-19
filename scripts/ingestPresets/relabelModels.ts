@@ -2,16 +2,17 @@
  * One-off: back-fill `source_model` and re-derive `recommended_model_id` for
  * rows ingested before the donor's `model` label was stored (0111).
  *
- *  - images: the donor has a per-id endpoint (`/api/images/<id>` → `data.model`,
- *    slug-style labels such as «nanobanana», «gpt-image», «midjourney»);
- *  - videos: no per-id endpoint — the feed is walked (`/api/videos?offset=N`)
- *    until every stored video id has been seen or `--max-pages` is reached.
+ *  - both modalities: the feed is walked (`/api/<videos|images>?offset=N`) until
+ *    every stored id has been seen or the page cap is reached — the feed labels
+ *    every item;
+ *  - images left over: the per-id endpoint (`/api/images/<id>` → `data.model`),
+ *    which only sometimes carries the label.
  *
  * Dry run by default; `--apply` writes. Rows whose derived model is unchanged
  * still get `source_model` filled. Hand-curated rows (no `external_id`) are
  * never touched.
  *
- *   npx tsx scripts/ingestPresets/relabelModels.ts [--modality=video|image|both] [--max-pages=60] [--apply]
+ *   npx tsx scripts/ingestPresets/relabelModels.ts [--modality=video|image|both] [--max-pages=60] [--image-pages=400] [--apply]
  */
 import path from 'node:path';
 
@@ -110,20 +111,34 @@ const collectImageLabels = async (ids: string[]): Promise<Map<string, string>> =
   return labels;
 };
 
-const collectVideoLabels = async (ids: Set<string>, maxPages: number): Promise<Map<string, string>> => {
+/**
+ * Walk a modality's feed until every wanted id has been seen (or `maxPages`).
+ * The feed labels every item; the per-id endpoint often omits `model`, so
+ * this is the primary source for both modalities.
+ */
+const collectFeedLabels = async (
+  modality: Modality,
+  ids: Set<string>,
+  maxPages: number,
+): Promise<Map<string, string>> => {
   const labels = new Map<string, string>();
   const pending = new Set(ids);
-  for (let page = 0; page < maxPages && pending.size > 0; page += 1) {
-    const result = await fetchCatalogPage('video', page * 20);
+  let page = 0;
+  for (; page < maxPages && pending.size > 0; page += 1) {
+    const result = await fetchCatalogPage(modality, page * 20);
     for (const item of result.items) {
       if (pending.has(item.id) && typeof item.model === 'string' && item.model) {
         labels.set(item.id, item.model);
         pending.delete(item.id);
       }
     }
+    if (page % 25 === 24)
+      console.log(`[relabelModels] ${modality} feed: page ${page + 1}, ${labels.size} labelled, ${pending.size} pending`);
     if (!result.hasMore || result.items.length === 0) break;
   }
-  console.log(`[relabelModels] videos: ${labels.size} labelled, ${pending.size} not seen in the feed`);
+  console.log(
+    `[relabelModels] ${modality} feed: ${page} pages, ${labels.size} labelled, ${pending.size} not seen`,
+  );
   return labels;
 };
 
@@ -163,6 +178,10 @@ const main = async () => {
   const modalities: Modality[] =
     modalityArg === 'video' || modalityArg === 'image' ? [modalityArg] : ['video', 'image'];
   const maxPages = Number(args.find((a) => a.startsWith('--max-pages='))?.slice('--max-pages='.length) ?? 60);
+  // The image feed is ~7 000 items deep and our rows are scattered through it.
+  const imagePages = Number(
+    args.find((a) => a.startsWith('--image-pages='))?.slice('--image-pages='.length) ?? 400,
+  );
 
   const client = createClient();
   await client.connect();
@@ -171,10 +190,17 @@ const main = async () => {
     console.log(`[relabelModels] imported rows: ${rows.length}`);
 
     const labels = new Map<string, string>();
-    const videoIds = new Set(rows.filter((r) => r.modality === 'video').map((r) => r.external_id));
-    if (videoIds.size > 0) for (const [k, v] of await collectVideoLabels(videoIds, maxPages)) labels.set(k, v);
-    const imageIds = rows.filter((r) => r.modality === 'image').map((r) => r.external_id);
-    if (imageIds.length > 0) for (const [k, v] of await collectImageLabels(imageIds)) labels.set(k, v);
+    for (const modality of modalities) {
+      const ids = new Set(rows.filter((r) => r.modality === modality).map((r) => r.external_id));
+      if (ids.size === 0) continue;
+      const pages = modality === 'video' ? maxPages : imagePages;
+      for (const [k, v] of await collectFeedLabels(modality, ids, pages)) labels.set(k, v);
+      if (modality === 'image') {
+        // Leftovers (not on any feed page): try the per-id endpoint.
+        const missing = [...ids].filter((id) => !labels.has(id) && !id.startsWith('community_'));
+        if (missing.length > 0) for (const [k, v] of await collectImageLabels(missing)) labels.set(k, v);
+      }
+    }
 
     const labelCounts = new Map<string, number>();
     for (const v of labels.values()) labelCounts.set(v, (labelCounts.get(v) ?? 0) + 1);
