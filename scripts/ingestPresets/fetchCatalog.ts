@@ -88,7 +88,7 @@ export interface FetchOptions {
 export const fetchCatalogPage = async (
   modality: Modality,
   offset: number,
-  { attempts = 3, timeoutMs = 90_000 }: FetchOptions = {},
+  { attempts = 5, timeoutMs = 90_000 }: FetchOptions = {},
 ): Promise<CatalogPage> => {
   const url = catalogUrl(modality, offset);
   let lastError: unknown;
@@ -99,7 +99,16 @@ export const fetchCatalogPage = async (
         headers: { 'x-no-cache': 'true', 'x-respond-with': 'text' },
         signal: AbortSignal.timeout(timeoutMs),
       });
-      if (!res.ok) throw new Error(`reader proxy responded ${res.status}`);
+      if (!res.ok) {
+        // The reader proxy rate-limits per IP (429 seen with two walkers in
+        // parallel, 2026-09-19). Honour Retry-After, else back off hard —
+        // 5 s was not enough and killed a run on its second page.
+        const retryAfter = Number(res.headers.get('retry-after'));
+        const wait = res.status === 429 ? Math.max(30_000, retryAfter * 1000 || 0) * attempt : 0;
+        lastError = new Error(`reader proxy responded ${res.status}`);
+        if (attempt < attempts) await sleep(wait || attempt * 5000);
+        continue;
+      }
       return parseCatalogPage(await res.text());
     } catch (error) {
       lastError = error;
