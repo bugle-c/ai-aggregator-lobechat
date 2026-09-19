@@ -87,6 +87,8 @@ export interface PresetInsert {
   requiresImage: boolean;
   slug: string;
   sortOrder: number;
+  /** The donor's `model` label for the original (e.g. «GPT Image»); `null` when absent. */
+  sourceModel: string | null;
   sourcePlatform: string;
   sourceUrl: string | null;
   title: string;
