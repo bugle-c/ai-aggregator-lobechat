@@ -286,3 +286,17 @@ collected (or `--max-pages` / the end of the feed); `--llm-cap` lifts the
 per-run classifier budget so the whole batch gets LLM titles (~$0.0004/item).
 All publish filters apply unchanged. Used 2026-09-07 for +200 videos / +200
 images (owner decision: the newest 200 of each, not the whole archive).
+
+## Model of the original (`source_model`)
+
+The donor labels each item with the model that produced it. Since 2026-09-19 the
+ingest stores it in `presets.source_model` and derives `recommended_model_id`
+from it (`derive.mapSourceModel`): GPT Image → GPT Image 2.5 Sunburst, Nano Banana
+→ Nano Banana Pro, Midjourney → Midjourney, Seedance → Seedance 2.0 Fast, Veo →
+Veo 3.1 Fast, Kling → Kling 3.0 Pro, Wan → Wan 2.7; anything else → the modality
+default. Rows ingested earlier are back-filled once with
+
+```bash
+npx tsx scripts/ingestPresets/relabelModels.ts            # dry run
+npx tsx scripts/ingestPresets/relabelModels.ts --apply
+```

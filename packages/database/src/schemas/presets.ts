@@ -33,6 +33,8 @@ export const presets = pgTable(
     active: boolean('active').notNull().default(true),
     /** Editorial pin for the home rows (0110_presets_featured); set by hand. */
     featured: boolean('featured').notNull().default(false),
+    /** The donor's label for the model that made the original (0111); drives `recommended_model_id`. */
+    sourceModel: text('source_model'),
 
     // --- attribution / ingest (0108_presets_attribution) ---
     /** Id of the item in the source catalogue; dedup key for the ingest job. */

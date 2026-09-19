@@ -58,6 +58,8 @@ export interface QueuedRow {
   recommended_model_id: string;
   requires_image: boolean;
   slug: string;
+  /** Donor's model label (0111); `null` for rows ingested before it was stored. */
+  source_model?: string | null;
   title: string;
 }
 
@@ -133,7 +135,7 @@ export const planActivation = (
         // A reference-image row is repointed to the paired t2v/t2i card (old
         // rows may carry an image-to-video id); any other row keeps its own.
         recommendedModelId: row.requires_image
-          ? recommendedModelFor(modality, true)
+          ? recommendedModelFor(modality, true, row.source_model)
           : row.recommended_model_id,
         slug: row.slug,
       });
@@ -166,7 +168,7 @@ const loadQueuedRows = async (
   const { rows } = await client.query<QueuedRow>(
     `SELECT id::text AS id, slug, modality, title, prompt_template, params_lock, popularity,
             preview_url, external_id, author_name, author_url, recommended_model_id, license,
-            requires_image
+            requires_image, source_model
        FROM presets
       WHERE active = FALSE AND external_id IS NOT NULL AND modality = $1
         AND ($2::boolean OR requires_image = TRUE)
@@ -182,20 +184,16 @@ const applyPlan = async (client: Client, plan: ActivationPlan, modality: Modalit
   try {
     // `license IS DISTINCT FROM` repeats the plan's check at write time, so a
     // row blocked between the SELECT and the UPDATE stays off.
-    await client.query(
-      `UPDATE presets
-          SET active = TRUE,
-              recommended_model_id = CASE WHEN requires_image THEN $1 ELSE recommended_model_id END,
-              updated_at = NOW()
-        WHERE id = ANY($2::bigint[]) AND active = FALSE AND modality = $4
-          AND license IS DISTINCT FROM $3`,
-      [
-        recommendedModelFor(modality, true),
-        plan.activate.map((r) => r.id),
-        BLOCKED_LICENSE,
-        modality,
-      ],
-    );
+    // The plan already computed the right model per row (source_model-aware).
+    for (const row of plan.activate) {
+      await client.query(
+        `UPDATE presets
+            SET active = TRUE, recommended_model_id = $1, updated_at = NOW()
+          WHERE id = $2::bigint AND active = FALSE AND modality = $4
+            AND license IS DISTINCT FROM $3`,
+        [row.recommendedModelId, row.id, BLOCKED_LICENSE, modality],
+      );
+    }
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');

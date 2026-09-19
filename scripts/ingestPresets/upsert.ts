@@ -54,13 +54,13 @@ const insertPresetRow = async (client: Client, row: PresetInsert): Promise<boole
        params_lock, preview_url, poster_url, sort_order, active,
        external_id, source_platform, source_url,
        author_name, author_url, author_avatar,
-       popularity, requires_image, ingested_at, license, description
+       popularity, requires_image, ingested_at, license, description, source_model
      ) VALUES (
        $1, $2, $3, $4, $5, $6,
        $7::jsonb, $8, $9, $10, $11,
        $12, $13, $14,
        $15, $16, $17,
-       $18, $19, NOW(), $20, $21
+       $18, $19, NOW(), $20, $21, $22
      )
      ON CONFLICT (external_id) DO NOTHING`,
     [
@@ -85,6 +85,7 @@ const insertPresetRow = async (client: Client, row: PresetInsert): Promise<boole
       row.requiresImage,
       row.license,
       row.description,
+      row.sourceModel,
     ],
   );
 

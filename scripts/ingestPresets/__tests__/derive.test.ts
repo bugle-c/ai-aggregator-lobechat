@@ -9,6 +9,7 @@ import {
   FALLBACK_CATEGORY,
   I2V_RECOMMENDED_MODEL,
   isSourcePostId,
+  mapSourceModel,
   MAX_TITLE_LENGTH,
   posterKeyFor,
   previewKeyFor,
@@ -205,5 +206,34 @@ describe('isSourcePostId', () => {
     const result = deriveAttribution(item({ id: 'community_34e69cb0' }));
     expect(result.sourceUrl).toBeNull();
     expect(result.authorUrl).toBe('https://x.com/jane_doe');
+  });
+});
+
+describe('source-model mapping (donor `model` label → our card)', () => {
+  it('follows the donor family when we sell it', () => {
+    expect(mapSourceModel('image', 'GPT Image')).toBe('openai/gpt-image-2.5-sunburst/text-to-image');
+    expect(mapSourceModel('image', 'Nanobanana Pro')).toBe('google/nano-banana-pro/text-to-image');
+    expect(mapSourceModel('image', 'nanobanana')).toBe('google/nano-banana-pro/text-to-image');
+    expect(mapSourceModel('image', 'Midjourney')).toBe('midjourney/text-to-image');
+    expect(mapSourceModel('video', 'Seedance')).toBe('bytedance/seedance-2.0-fast/text-to-video');
+    expect(mapSourceModel('video', 'Veo 3.1')).toBe('google/veo3.1-fast/text-to-video');
+    expect(mapSourceModel('video', 'kling')).toBe('kwaivgi/kling-v3.0-pro/text-to-video');
+  });
+
+  it('returns null for unknown labels and the default for them', () => {
+    expect(mapSourceModel('image', 'other')).toBeNull();
+    expect(mapSourceModel('video', undefined)).toBeNull();
+    expect(recommendedModelFor('image', false, 'other')).toBe(DEFAULT_MODEL.image);
+    expect(recommendedModelFor('video', true, 'other')).toBe(I2V_RECOMMENDED_MODEL);
+  });
+
+  it('keeps an i2i style on a model that takes references', () => {
+    expect(recommendedModelFor('image', true, 'Midjourney')).toBe(DEFAULT_MODEL.image);
+    expect(recommendedModelFor('image', true, 'GPT Image')).toBe('openai/gpt-image-2.5-sunburst/text-to-image');
+    expect(recommendedModelFor('image', false, 'Midjourney')).toBe('midjourney/text-to-image');
+  });
+
+  it('routes i2v on a mapped family through that family', () => {
+    expect(recommendedModelFor('video', true, 'Kling')).toBe('kwaivgi/kling-v3.0-pro/text-to-video');
   });
 });

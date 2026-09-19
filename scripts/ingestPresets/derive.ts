@@ -46,8 +46,69 @@ export const DEFAULT_MODEL: Record<Modality, string> = {
  */
 export const I2V_RECOMMENDED_MODEL = 'bytedance/seedance-2.0-fast/text-to-video';
 
-export const recommendedModelFor = (modality: Modality, requiresImage: boolean): string =>
-  modality === 'video' && requiresImage ? I2V_RECOMMENDED_MODEL : DEFAULT_MODEL[modality];
+/**
+ * The donor labels every item with the model that made it (`model`: feed
+ * values like «Seedance», «GPT Image», «Nanobanana Pro», «Midjourney»,
+ * «other»; the per-id endpoint uses slugs like «nanobanana»). Matched by
+ * keyword, case-insensitively, to the card we sell for that family. Unknown
+ * / «other» → the modality default. Order matters only where keywords could
+ * overlap (none today).
+ */
+const VIDEO_SOURCE_MODELS: [RegExp, string][] = [
+  [/seedance/i, 'bytedance/seedance-2.0-fast/text-to-video'],
+  [/veo/i, 'google/veo3.1-fast/text-to-video'],
+  [/kling/i, 'kwaivgi/kling-v3.0-pro/text-to-video'],
+  [/\bwan\b/i, 'alibaba/wan-2.7/text-to-video'],
+];
+
+const IMAGE_SOURCE_MODELS: [RegExp, string][] = [
+  [/gpt/i, 'openai/gpt-image-2.5-sunburst/text-to-image'],
+  [/nano ?banana/i, 'google/nano-banana-pro/text-to-image'],
+  [/midjourney|\bmj\b/i, 'midjourney/text-to-image'],
+  [/seedream/i, 'bytedance/seedream-v4.5'],
+  [/flux/i, 'wavespeed-ai/flux-1.1-pro'],
+];
+
+/**
+ * Image models that take reference images on our side (a paired `/edit`
+ * endpoint or native `imageUrls`). An i2i style on any other model would be
+ * un-runnable, so it falls back to the default.
+ */
+const IMAGE_MODELS_WITH_REFERENCES = new Set([
+  'google/nano-banana-pro/text-to-image',
+  'google/nano-banana-2/text-to-image',
+  'openai/gpt-image-2.5-sunburst/text-to-image',
+  'openai/gpt-image-2.5-flare/text-to-image',
+  'openai/gpt-image-2/text-to-image',
+]);
+
+/** Our model id for the donor's `model` label, or `null` when it is unknown. */
+export const mapSourceModel = (
+  modality: Modality,
+  sourceModel: string | null | undefined,
+): string | null => {
+  if (!sourceModel) return null;
+  const table = modality === 'video' ? VIDEO_SOURCE_MODELS : IMAGE_SOURCE_MODELS;
+  return table.find(([re]) => re.test(sourceModel))?.[1] ?? null;
+};
+
+/**
+ * Recommended model for an ingested item: the donor's model family when we
+ * sell it, else the modality default. Video i2v works through the paired
+ * `…/image-to-video` endpoint of the same family (all mapped video families
+ * have one); image i2i needs a model that takes references.
+ */
+export const recommendedModelFor = (
+  modality: Modality,
+  requiresImage: boolean,
+  sourceModel?: string | null,
+): string => {
+  const mapped = mapSourceModel(modality, sourceModel);
+  if (!mapped) return modality === 'video' && requiresImage ? I2V_RECOMMENDED_MODEL : DEFAULT_MODEL[modality];
+  if (modality === 'image' && requiresImage && !IMAGE_MODELS_WITH_REFERENCES.has(mapped))
+    return DEFAULT_MODEL.image;
+  return mapped;
+};
 
 // --- attribution ------------------------------------------------------------
 
