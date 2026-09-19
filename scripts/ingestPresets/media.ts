@@ -126,7 +126,10 @@ export const transcodeVideo = async (source: string, destination: string): Promi
     '5',
     '-an',
     '-vf',
-    'scale=640:-2:flags=lanczos,fps=24',
+    // `format=yuv420p`: sources in yuv444p / 10-bit (8 of ~500 clips in the
+    // first week) make libx264 refuse the High profile — "Error setting
+    // profile high" — and the clip was lost. Force the universal pixel format.
+    'scale=640:-2:flags=lanczos,fps=24,format=yuv420p',
     '-c:v',
     'libx264',
     '-profile:v',
