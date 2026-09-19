@@ -617,6 +617,10 @@ Spec: `docs/superpowers/specs/2026-09-06-preset-platform-design.md`.
   params to model defaults). Image (i2i) hits stay queued (`requires-image-i2i-pending`) — no
   image-side gate yet. Pre-Ф5 queued video rows: `scripts/ingestPresets/activateI2v.ts` (dry run;
   `--apply` writes) re-runs current filters and activates only rows that would publish today.
+- **Thin categories (2026-09-19):** `--fill=cat,…` + `--fill-min-likes=N` relax only the like floor for
+  the listed categories (README «Thin categories»). Whole donor archive walked that day (video feed
+  exhausted at 81 pages) → 627 video / 505 image active, every category ≥ 10 except image `landscape`
+  (7: donor has no attributed landscapes). `activateI2v` author cap is per run, not global — don't loop it.
 
 ## Phase 18: Post-payment path + funnel analytics (2026-09-13, `canary@e7b8db712e`)
 
