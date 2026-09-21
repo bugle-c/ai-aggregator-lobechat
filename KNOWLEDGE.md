@@ -145,6 +145,11 @@ Fork of LobeChat (`lobehub/lobe-chat`) customized for ask.gptweb.ru with YooKass
 - **SOCIAL_URL values** — MUST be strings (not undefined), \~10 components expect string href
 - **Dev lock file** — `rm -f .next/dev/lock` if dev server won't start
 - **Port 3100** — taken by Docker network, use 3300 for dev
+- **HEIC uploads (2026-09-21)** — browser uploads straight to S3 (presigned), so the only server hook is `file.createFile`; `services/file/heic.ts` re-encodes HEIC→JPEG there (sharp, EXIF rotate). Providers reject `image/heic` outright.
+- **Veo 3.1 = 1080p only at 8 s** — WaveSpeed rule, not expressible in param-meta; `business/server/video-generation/normalizeVideoParams.ts` coerces to 720p BEFORE `chargeBeforeGenerate`. Add other "upstream rejects this combo" rules there.
+- **Every `*/image-to-video` and `*/edit` card must be `enabled:false` AND paired in `pairedEndpoint.ts`** — a visible unpaired i2v card (was `veo3.1-lite`) yields `field "image" is required` for users without a photo.
+- **Customer-facing error text goes through `business/utils/friendlyError.ts`** — never render `error.body` / `body.detail` raw (chat `Conversation/Error`, image `ErrorState`, video `VideoErrorItem`). Raw payload stays in `messages.error` / `async_tasks.error`.
+- **ResourceManager view default lives in TWO places** — store (`masonry`) and `Explorer/hooks/useViewMode.ts` `?view=` sync; the hook writes its default into the store on mount, so both must match (was `list` → «Мои генерации» opened as a table).
 
 ## Build & Deploy
 
@@ -229,6 +234,7 @@ curl -X POST http://localhost:3210/api/billing/webhook \
 ### Credit economics
 
 - **Recommended model follows the donor's (2026-09-19).** The feed labels each item with `model` («Seedance», «GPT Image», «Nanobanana Pro», «Midjourney», «other»; per-id endpoint uses slugs like «nanobanana»). `derive.mapSourceModel` maps by keyword to the card we sell (GPT → `gpt-image-2.5-sunburst`, Midjourney → `midjourney/text-to-image`, Veo → `veo3.1-fast`, Kling → `kling-v3.0-pro`, Wan → `wan-2.7`); unknown → modality default; an i2i style on a model without references (Midjourney) falls back to Nano Banana Pro. Stored in `presets.source_model` (0111). Back-fill of older rows: `scripts/ingestPresets/relabelModels.ts` (images via `/api/images/<id>`, videos by walking the feed). Before this every import was pinned to Seedance Fast / Nano Banana Pro regardless of the original.
+
 - **Video references (2026-09-12, plan п.4).** Seedance 2.0 **Mini and full** take `reference_images` (≤ 9) and `reference_videos` (≤ 3, ≤ 15 s combined) on the _text-to-video_ endpoint; Fast does not. Standard video schema gained `imageUrls`, `videoUrls`, `referenceSeconds`; `resolveVideoEndpoint` swaps to i2v on a START frame only (`imageUrl`), never on `imageUrls`. Billing: the provider bills normalized reference-video seconds at the output rate → `referenceSecondsFor()` (client-measured via `<video>.duration`, each clip ≥ 2 s, ceil, cap 15; videos present but no measurement → 15) is added to `videoSeconds` in quote / precharge / after-charge. UI: `ReferenceImagesUpload` (reuses the image flow's `MultiImagesUpload`) and `ReferenceVideosUpload` (own uploader, `uploadWithProgress` + `skipCheckFileType`) in the video advanced panel; under a text style references stay free, only start/end frames are locked (`styleLockFor(…, 'video')`).
 
 - **Worktree trap (2026-09-12):** `ln -s $MAIN/node_modules` made all 72 workspace links resolve into the MAIN tree, so `packages/*` edits in a worktree were invisible to its `next build`/`tsgo` (prod stayed correct only because the VPS builds from the main checkout). Use `cp -al` for root and per-package `node_modules` (relative links then resolve into the worktree) — recipe in memory `worktree_monorepo_node_modules`.
