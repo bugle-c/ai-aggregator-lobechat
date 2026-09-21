@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { ActionButtons } from '@/app/[variants]/(main)/image/features/GenerationFeed/GenerationItem/ActionButtons';
 import { styles } from '@/app/[variants]/(main)/image/features/GenerationFeed/GenerationItem/styles';
+import { friendlyGenerationError } from '@/business/utils/friendlyError';
 import type { Generation } from '@/types/generation';
 
 interface VideoErrorItemProps {
@@ -51,7 +52,9 @@ const VideoErrorItem = memo<VideoErrorItemProps>(
         }
       }
 
-      return errorBody || error.name || 'Unknown error';
+      // Raw upstream text (WaveSpeed `400 {...}`, tRPC detail) never reaches
+      // the customer — collapse to one sentence. See business/utils/friendlyError.
+      return friendlyGenerationError(errorBody || error.name);
     }, [generation.task.error, tError]);
 
     return (

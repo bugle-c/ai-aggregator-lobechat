@@ -19,7 +19,12 @@ export const useViewMode = (): [ViewMode, (mode: ViewMode) => void] => {
   // Sync view mode with URL query parameter
   const [viewModeFromUrl, setViewModeInUrl] = useQueryState(
     'view',
-    parseAsStringEnum(['list', 'masonry'] as const).withDefault('list'),
+    // Default MUST match the store default (initialState.viewMode = 'masonry'):
+    // this hook writes the URL value back into the store on mount, so a
+    // 'list' default here silently overrode the masonry default and every
+    // "Мои генерации" tab opened as a text list (2026-09-21). Grid is what
+    // image/video generations need; users can still flip via the toolbar.
+    parseAsStringEnum(['list', 'masonry'] as const).withDefault('masonry'),
   );
 
   useEffect(() => {

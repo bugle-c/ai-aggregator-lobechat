@@ -13,6 +13,7 @@ import { appEnv } from '@/envs/app';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
+import { convertHeicToJpeg, isHeic } from '@/server/services/file/heic';
 import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
 import { type FileListItem } from '@/types/files';
 import { QueryFileListSchema, UploadFileSchema } from '@/types/files';
@@ -88,19 +89,47 @@ export const fileRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'File size cannot be negative' });
       }
 
+      // HEIC/HEIF (iPhone) → JPEG. Providers reject HEIC outright, so the
+      // stored record must point at a JPEG. See services/file/heic.ts.
+      let stored = {
+        fileType: input.fileType,
+        hash: input.hash,
+        isExist,
+        name: input.name,
+        size: actualSize,
+        url: input.url,
+      };
+      if (isHeic(input.fileType, input.name)) {
+        const converted = await convertHeicToJpeg(ctx.fileService, {
+          key: input.url,
+          name: input.name,
+        });
+        if (converted) {
+          const { isExist: jpegExists } = await ctx.fileModel.checkHash(converted.hash);
+          stored = {
+            fileType: converted.fileType,
+            hash: converted.hash,
+            isExist: jpegExists,
+            name: converted.name,
+            size: converted.size,
+            url: converted.key,
+          };
+        }
+      }
+
       const { id } = await ctx.fileModel.create(
         {
-          fileHash: input.hash,
-          fileType: input.fileType,
+          fileHash: stored.hash,
+          fileType: stored.fileType,
           knowledgeBaseId: input.knowledgeBaseId,
           metadata: input.metadata,
-          name: input.name,
+          name: stored.name,
           parentId: resolvedParentId,
-          size: actualSize,
-          url: input.url,
+          size: stored.size,
+          url: stored.url,
         },
         // if the file is not exist in global file, create a new one
-        !isExist,
+        !stored.isExist,
       );
 
       return { id, url: getFileProxyUrl(id) };

@@ -30,6 +30,7 @@ const PAIRED_VIDEO_ENDPOINTS: Record<string, string> = {
   'bytedance/seedance-2.0-mini/text-to-video': 'bytedance/seedance-2.0-mini/image-to-video',
   'bytedance/seedance-2.0/text-to-video': 'bytedance/seedance-2.0/image-to-video',
   'google/veo3.1-fast/text-to-video': 'google/veo3.1-fast/image-to-video',
+  'google/veo3.1-lite/text-to-video': 'google/veo3.1-lite/image-to-video',
   'google/veo3.1/text-to-video': 'google/veo3.1/image-to-video',
   'kwaivgi/kling-v2.6-pro/text-to-video': 'kwaivgi/kling-v2.6-pro/image-to-video',
   'kwaivgi/kling-v3.0-pro/text-to-video': 'kwaivgi/kling-v3.0-pro/image-to-video',

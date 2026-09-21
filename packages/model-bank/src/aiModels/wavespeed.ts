@@ -878,7 +878,12 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
   {
     description: 'Google Veo 3.1 Lite — image-to-video variant of the cheapest Veo tier.',
     displayName: 'Veo 3.1 Lite (I2V)',
-    enabled: true,
+    // Auto-routed: a reference image attached to the matching `/text-to-video`
+    // card transparently routes here at the wavespeed runtime layer. See
+    // providers/wavespeed/utils/pairedEndpoint.ts. Hidden from the picker so
+    // the user only sees one card per family — this was the only visible i2v
+    // card and users picked it without an image (`field "image" is required`).
+    enabled: false,
     id: 'google/veo3.1-lite/image-to-video',
     parameters: veo31Params,
     pricing: {

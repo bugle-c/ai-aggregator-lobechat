@@ -7,6 +7,8 @@ import { ImageOffIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { friendlyGenerationError } from '@/business/utils/friendlyError';
+
 import { ActionButtons } from './ActionButtons';
 import { styles } from './styles';
 import { type ErrorStateProps } from './types';
@@ -54,7 +56,9 @@ export const ErrorState = memo<ErrorStateProps>(
       }
 
       // Fallback to original error message
-      return errorBody || error.name || 'Unknown error';
+      // Raw upstream text (WaveSpeed `400 {...}`, tRPC detail) never reaches
+      // the customer — collapse to one sentence. See business/utils/friendlyError.
+      return friendlyGenerationError(errorBody || error.name);
     }, [generation.task.error, generationBatch.provider, tError]);
 
     return (

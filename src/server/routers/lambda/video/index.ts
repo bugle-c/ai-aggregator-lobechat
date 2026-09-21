@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
 import { chargeBeforeGenerate } from '@/business/server/video-generation/chargeBeforeGenerate';
 import { getVideoFreeQuota } from '@/business/server/video-generation/getVideoFreeQuota';
+import { normalizeVideoParams } from '@/business/server/video-generation/normalizeVideoParams';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import {
   asyncTasks,
@@ -72,9 +73,17 @@ export type CreateVideoServicePayload = z.infer<typeof createVideoInputSchema>;
 export const videoRouter = router({
   createVideo: videoProcedure.input(createVideoInputSchema).mutation(async ({ input, ctx }) => {
     const { userId, serverDB, asyncTaskModel, fileService } = ctx;
-    const { generationTopicId, provider, model, params } = input;
+    const { generationTopicId, provider, model, params: rawParams } = input;
 
     log('Starting video creation process, input: %O', input);
+
+    // Reconcile picker-built combos upstream rejects (e.g. Veo 3.1 1080p at
+    // 6 s). Must precede the hold/precharge so billing matches what is sent.
+    const normalized = normalizeVideoParams(model, rawParams);
+    const params = normalized.params;
+    if (normalized.changed.length > 0) {
+      log('Normalized video params for %s: %s', model, normalized.changed.join('; '));
+    }
 
     // Normalize image URLs to S3 keys for database storage
     let configForDatabase = { ...params };

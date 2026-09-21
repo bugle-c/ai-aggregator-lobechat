@@ -5,13 +5,14 @@ import { type ChatMessageError, type ErrorType } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { type IPluginErrorType } from '@lobehub/chat-plugin-sdk';
 import { type AlertProps } from '@lobehub/ui';
-import { Block, Highlighter, Skeleton } from '@lobehub/ui';
+import { Block, Skeleton } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import useBusinessErrorAlertConfig from '@/business/client/hooks/useBusinessErrorAlertConfig';
 import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorContent';
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
+import { friendlyChatError } from '@/business/utils/friendlyError';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
 import { useProviderName } from '@/hooks/useProviderName';
 import dynamic from '@/libs/next/dynamic';
@@ -91,10 +92,7 @@ export const useErrorContent = (error: any) => {
   const { t } = useTranslation('error');
   const providerName = useProviderName(error?.body?.provider || '');
   const businessAlertConfig = useBusinessErrorAlertConfig(error?.type);
-  const { errorType: businessErrorType, hideMessage } = useBusinessErrorContent(
-    error?.type,
-    error,
-  );
+  const { errorType: businessErrorType, hideMessage } = useBusinessErrorContent(error?.type, error);
 
   return useMemo<AlertProps | undefined>(() => {
     if (!error) return;
@@ -152,20 +150,19 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
     return <ChatInvalidAPIKey id={data.id} provider={data.error?.body?.provider} />;
   }
 
+  // Never show the raw provider payload to customers (2026-09-21: a HEIC
+  // attachment produced a 40-line OpenRouter JSON dump in the bubble).
+  // Collapse it to one actionable sentence; the raw body stays in the DB
+  // (`messages.error`) for support.
   return (
     <ErrorContent
       id={data.id}
       error={{
         ...alertError,
         extra: data.error?.body ? (
-          <Highlighter
-            actionIconSize={'small'}
-            language={'json'}
-            padding={8}
-            variant={'borderless'}
-          >
-            {JSON.stringify(data.error?.body, null, 2)}
-          </Highlighter>
+          <div style={{ fontSize: 13, opacity: 0.85, paddingBlock: 4 }}>
+            {friendlyChatError(data.error.body)}
+          </div>
         ) : undefined,
       }}
     />
