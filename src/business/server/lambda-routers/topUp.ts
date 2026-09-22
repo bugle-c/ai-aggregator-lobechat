@@ -60,10 +60,18 @@ export const topUpRouter = router({
       // send the payer straight back there instead of /settings/billing.
       // The mandatory `payment=success` marker is appended as an extra
       // query param (the path may already carry ?topic=...).
+      //
+      // `topUpFor=<local payment id>` rides along so the landing page can
+      // look the true status up server-side instead of trusting the static
+      // marker: YooKassa uses ONE return_url for both the paid and the
+      // abandoned path, so `payment=success` alone is not evidence of a
+      // payment. See TopUpReturnHandler (mirrors `recoveryFor` on
+      // subscription.createPayment).
       const appUrl = process.env.APP_URL || 'https://ask.gptweb.ru';
+      const successMarker = `payment=success&topUpFor=${payment.id}`;
       const returnUrl = input.returnPath
-        ? `${appUrl}${input.returnPath}${input.returnPath.includes('?') ? '&' : '?'}payment=success`
-        : `${appUrl}/settings/billing?payment=success`;
+        ? `${appUrl}${input.returnPath}${input.returnPath.includes('?') ? '&' : '?'}${successMarker}`
+        : `${appUrl}/settings/billing?${successMarker}`;
 
       const user = await UserModel.findById(ctx.serverDB, ctx.userId);
 

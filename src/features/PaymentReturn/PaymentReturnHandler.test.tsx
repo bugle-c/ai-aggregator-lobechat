@@ -91,6 +91,9 @@ const row = (status: string) => ({
 describe('PaymentReturnHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // `payment_success` is deduped per payment id in sessionStorage — every
+    // test here reuses `pay-1`, so the guard must start empty.
+    sessionStorage.clear();
     queryState = { data: undefined, dataUpdatedAt: 0 };
   });
 
