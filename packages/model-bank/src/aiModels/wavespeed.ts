@@ -577,7 +577,7 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     id: 'google/veo3.1-fast/text-to-video',
     parameters: veo31Params,
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.12, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
     },
     type: 'video',
   },
@@ -793,7 +793,7 @@ export const wavespeedVideoModels: AIVideoModelCard[] = [
     enabled: false,
     id: 'google/veo3.1-fast/image-to-video',
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.12, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
     },
     type: 'video',
   },

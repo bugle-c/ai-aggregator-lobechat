@@ -67,6 +67,8 @@ export type Usage = ChatUsage | ImageUsage | VideoUsage;
  */
 export const RESOLUTION_PRICE_FACTORS: Record<string, Record<string, number>> = {
   'bytedance/seedance-2.0': { '1080p': 2.5, '480p': 0.5, '4k': 5, '720p': 1 },
+  // Veo 3.1 Lite: WaveSpeed $0.05/s at 720p, $0.08/s at 1080p (verified 2026-09-23).
+  'google/veo3.1-lite': { '1080p': 1.6, '720p': 1 },
 };
 
 /** Provider cap on the combined (normalized) reference-video input, seconds. */

@@ -77,6 +77,18 @@ interface ExistingRate {
   pricing_unit: 'tokens' | 'image' | 'second';
 }
 
+/**
+ * WaveSpeed's `unit_price` is the average cost per RUN. That equals our
+ * `per_unit` only when the row is priced per run (`image`). For per-second
+ * rows (video) a run is `seconds × per_unit × resolution factor`, so copying
+ * the per-run average into `per_unit` inflates the rate by the clip length
+ * (2026-05-31: Veo 3.1 Fast $0.12/s → $1.20/s = 8 s × 0.15; Lite 0.0375 →
+ * 0.30). Those rows are reported for manual review instead of overwritten.
+ */
+export function isSyncablePricingUnit(unit: ExistingRate['pricing_unit']): boolean {
+  return unit === 'image';
+}
+
 interface UpdateResult {
   modelId: string;
   newPerUnit: number;
@@ -181,6 +193,8 @@ export async function POST(req: Request) {
   const missing: WaveSpeedUsageRow[] = [];
   const inSync: string[] = [];
   const errors: { modelId: string; reason: string }[] = [];
+  /** Per-second (video) rows whose per-run average diverged — review by hand. */
+  const perRunOnly: { modelId: string; perRunAvg: number; perUnit: number }[] = [];
 
   for (const wsRow of wsRows) {
     const row = existingByModelId.get(wsRow.model_uuid);
@@ -190,6 +204,18 @@ export async function POST(req: Request) {
     }
     const oldPerUnit = Number(row.per_unit ?? 0);
     const newPerUnit = wsRow.unit_price;
+    if (!isSyncablePricingUnit(row.pricing_unit)) {
+      // Per-run average vs per-second rate are different units — never
+      // overwrite; surface only when the run average is far from what the
+      // stored rate would predict for a typical clip (≥ 2× either way).
+      const ratio = oldPerUnit > 0 ? newPerUnit / oldPerUnit : 0;
+      if (ratio < 2 || ratio > 40) {
+        perRunOnly.push({ modelId: wsRow.model_uuid, perRunAvg: newPerUnit, perUnit: oldPerUnit });
+      } else {
+        inSync.push(wsRow.model_uuid);
+      }
+      continue;
+    }
     if (oldPerUnit === 0) {
       // Old was zero → any nonzero is by definition a 100% jump. Skip
       // silently so manually-zeroed rates (free models) stay zero.
@@ -248,8 +274,20 @@ export async function POST(req: Request) {
   }
 
   // 6) Telegram summary — only if something happened.
-  if (updates.length > 0 || missing.length > 0 || errors.length > 0) {
+  if (updates.length > 0 || missing.length > 0 || errors.length > 0 || perRunOnly.length > 0) {
     const bodyLines: string[] = [];
+
+    if (perRunOnly.length > 0) {
+      bodyLines.push(
+        `⚠ ${perRunOnly.length} per-second (video) rows look off — check by hand, NOT auto-updated:`,
+      );
+      for (const r of perRunOnly.slice(0, 10)) {
+        bodyLines.push(
+          `  ${r.modelId}: stored $${r.perUnit.toFixed(4)}/s, WaveSpeed avg $${r.perRunAvg.toFixed(4)}/run`,
+        );
+      }
+      bodyLines.push('');
+    }
 
     if (updates.length > 0) {
       bodyLines.push(`✔ updated ${updates.length} prices:`);
