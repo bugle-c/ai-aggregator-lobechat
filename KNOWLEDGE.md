@@ -145,6 +145,7 @@ Fork of LobeChat (`lobehub/lobe-chat`) customized for ask.gptweb.ru with YooKass
 - **SOCIAL_URL values** — MUST be strings (not undefined), \~10 components expect string href
 - **Dev lock file** — `rm -f .next/dev/lock` if dev server won't start
 - **Port 3100** — taken by Docker network, use 3300 for dev
+- **WaveSpeed rate auto-sync ≠ per-second rates (2026-09-23)** — `usage_stats.unit_price` is a per-RUN average; `sync-wavespeed-rates` only overwrites `pricing_unit='image'` rows now (`wavespeed-sync-guard.ts`); per-second (video) rows are reported in the TG summary for manual review. Veo Fast = $0.15/s with audio, Lite = $0.05/s 720p (×1.6 for 1080p in `RESOLUTION_PRICE_FACTORS`).
 - **HEIC uploads (2026-09-21)** — browser uploads straight to S3 (presigned), so the only server hook is `file.createFile`; `services/file/heic.ts` re-encodes HEIC→JPEG there (sharp, EXIF rotate). Providers reject `image/heic` outright.
 - **Veo 3.1 = 1080p only at 8 s** — WaveSpeed rule, not expressible in param-meta; `business/server/video-generation/normalizeVideoParams.ts` coerces to 720p BEFORE `chargeBeforeGenerate`. Add other "upstream rejects this combo" rules there.
 - **Every `*/image-to-video` and `*/edit` card must be `enabled:false` AND paired in `pairedEndpoint.ts`** — a visible unpaired i2v card (was `veo3.1-lite`) yields `field "image" is required` for users without a photo.
