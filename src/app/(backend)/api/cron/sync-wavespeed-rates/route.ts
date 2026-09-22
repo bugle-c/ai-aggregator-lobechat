@@ -32,6 +32,7 @@
  * Auth: Bearer CRON_SECRET header.
  */
 import { invalidateRatesCache } from '@/server/modules/billing/model-tiers';
+import { isSyncablePricingUnit } from '@/server/modules/billing/wavespeed-sync-guard';
 import { sendAlert } from '@/server/services/alerts';
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
@@ -75,18 +76,6 @@ interface ExistingRate {
   model_id: string;
   per_unit: number | string | null;
   pricing_unit: 'tokens' | 'image' | 'second';
-}
-
-/**
- * WaveSpeed's `unit_price` is the average cost per RUN. That equals our
- * `per_unit` only when the row is priced per run (`image`). For per-second
- * rows (video) a run is `seconds × per_unit × resolution factor`, so copying
- * the per-run average into `per_unit` inflates the rate by the clip length
- * (2026-05-31: Veo 3.1 Fast $0.12/s → $1.20/s = 8 s × 0.15; Lite 0.0375 →
- * 0.30). Those rows are reported for manual review instead of overwritten.
- */
-export function isSyncablePricingUnit(unit: ExistingRate['pricing_unit']): boolean {
-  return unit === 'image';
 }
 
 interface UpdateResult {

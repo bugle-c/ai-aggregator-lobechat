@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { isSyncablePricingUnit } from './route';
+import { isSyncablePricingUnit } from '../wavespeed-sync-guard';
 
-describe('sync-wavespeed-rates guard', () => {
+describe('wavespeed-sync-guard', () => {
   it('syncs per-image rows (WaveSpeed unit_price is a per-run average)', () => {
     expect(isSyncablePricingUnit('image')).toBe(true);
   });
