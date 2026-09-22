@@ -3,7 +3,6 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { reachGoal } from '@/business/client/analytics/ym';
 import { SubscriptionActivatedModal } from '@/features/SubscriptionActivatedModal';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { lambdaQuery } from '@/libs/trpc/client';
@@ -17,6 +16,7 @@ import {
   POLL_INTERVAL_MS,
   recoveryPlansPath,
 } from './paymentReturn';
+import { firePaymentSuccessOnce } from './paymentSuccessGoal';
 
 interface Activated {
   agentId: string | null;
@@ -97,7 +97,7 @@ const PaymentReturnHandler = memo(() => {
     handledRef.current = recoveryForId;
 
     if (decision.kind === 'succeeded') {
-      reachGoal('payment_success', { kind: 'subscribe' });
+      firePaymentSuccessOnce(recoveryForId, 'subscribe');
       void utils.subscription.getBillingState.invalidate();
       void utils.spend.invalidate();
       setActivated({
