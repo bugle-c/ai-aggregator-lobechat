@@ -28,11 +28,11 @@
 - **Хрупкость, по журналу:** с 11.09 по 22.09 пул был мёртв целиком (Flow переехал на flow\.google.com, сессии протухли, 1 165 «DEAD» за 10 дней). Аккаунты — **купленные** (`purchased:true`, «владение» 0/6 шагов), прогрев каждые 2 ч, смерть аккаунта видна в панели. Это не API, это подписочная автоматизация Google — она будет ломаться и дальше, дизайн обязан это переживать (§3.6).
 - Роутер **не логирует** видео-вызовы в свою `usageHistory` (0 строк с `video`) — единственный учёт будет наш `usage_logs`.
 
-### 1.2 Картинки в роутере — Nano Banana там **нет**
+### 1.2 Картинки в роутере — `flow/nano-banana` (поднята владельцем 23.09)
 
-- Единственная картиночная линия: комбо **`cf-image` = `cx/gpt-5.5-image`** (подписка ChatGPT Plus, Codex; **1 аккаунт, 100 запросов в неделю на всё вместе с чатом content-farm**) → fallback **`openrouter/openai/gpt-image-1` — платные кредиты OpenRouter роутера**. `ag/*-image` («antigravity does not support image generation»), `flow/imagen`, `gc/imagen-4`, `nanobanana` — без кредов/мертвы (`KNOWLEDGE.md` §Картинки, 06.09).
-- **В `flow-veo` есть клиент картинок Flow** (`flowApi.js IMAGE_MODELS`: `GEM_PIX_2` = Gemini-картинки, тот самый класс Nano Banana; `IMAGEN_3_5`; `NARWHAL`; эндпоинт `flowMedia:batchGenerateImages`; `generate.js#generateImage`) — **но ни одного HTTP-маршрута к нему нет**: ни в `flow-veo/server.js` (`/generate` только видео), ни в роутере. Т.е. «нанобанана из видеопула» технически возможна на тех же аккаунтах, но это **новая фича в репо llm-router**, со своими правилами и измерением цены в кредитах Flow.
-- Вывод: пункт 4 задачи (дефолт Nano Banana новичкам «бесплатно») сегодня выполнить **нечем**. Варианты — §3.4.
+- `GET /v1/images/generations` теперь описывает пул Flow: **`POST /v1/images/generations { model:"flow/nano-banana" (алиасы `nano-banana`, `banana`), prompt, aspect:'1:1'|'16:9'|'9:16' (default 1:1), size? (только ориентация), async? }`** → `{ created, data:[{ b64_json }], meta:{ model, aspect, account, contentType } }`, JPEG \~1024px, **одна картинка на запрос** (`n` игнорируется), заявлено \~25–30 с, «бесплатно для подписочных аккаунтов, без лимита по кредитам» (т.е. картинки **не конкурируют с видео за кредиты Flow**). `async:true` → `202 { job_id }`, опрос `GET /v1/videos/generations/<job_id>` (общее хранилище задач Flow, \~30 мин). Реализация — `flow-veo /image` (Gemini image `GEM_PIX_2`), упавший аккаунт сменяется следующим.
+- **Пробы 23.09 (без расхода кредитов):** синхронный запрос — 120 с без ответа при занятом `acc3`; асинхронный — `pending → running` \~60 с, затем `404 job_not_found` (хранилище задач in-memory; в это время `flow-veo` перезапускался и рендерил чужое видео на `acc4`). Время и надёжность **не измерены** → Ф0 обязательна, вместе с владельцем, когда пул свободен. Дизайн-следствия уже учтены: клиент агрегатора ходит **только `async:true`** с опросом, таймаут 90 с, `404` по job_id = outcome `upstream` (fallback WaveSpeed).
+- Старая линия `cf-image` = `cx/gpt-5.5-image` (ChatGPT Plus, 100/нед, платный fallback на OpenRouter) — **не используем**.
 
 ### 1.3 Агрегатор — как сейчас идёт генерация
 
@@ -99,7 +99,7 @@
 
 - **Дефолт модели** — клиент `initializeImageConfig`: явный `lastSelectedImageModel` → иначе (`newcomer && imagesGenerated < 3`) → `google/nano-banana-2/text-to-image` → иначе `DEFAULT_AI_IMAGE_MODEL` (flux-schnell). Дефолт новичка **не пишется** в `lastSelected`, после 3-й картинки сам возвращается flux. `NEWBIE_IMAGE_THRESHOLD = 3` в `packages/const/src/settings/image.ts`. Сервер отдаёт `newcomer: {active, imagesGenerated, videoLeft, videoAvailable}` в `spend.getCreditState`.
 - **Списание** — без изменений: `chargeBeforeGenerate` держит 126 кредитов по каталожной модели.
-- **Исполнение** — в `async/image.ts` **перед** веткой WaveSpeed: `if (newcomerRouteFor(model, params, billing))` → `routerGenerateImage({model: LLM_ROUTER_IMAGE_MODEL, prompt, aspect})` (таймаут 60 с) → `data:` URI → существующий sync-путь (transform → upload → asset) → `chargeAfterGenerate({served:{provider:'llm-router', providerCostUsd:0}})`. Условия: модель nano-banana-2 t2i, `imageNum=1`, нет референсов, ratio ∈ поддерживаемых пулом (замер Ф0), новичок, дневной лимит не выбран, breaker не в паузе.
+- **Исполнение** — в `async/image.ts` **перед** веткой WaveSpeed: `if (newcomerRouteFor(model, params, billing))` → `submitRouterImage({model:'flow/nano-banana', prompt, aspect, async:true})` → `job_id` → опрос каждые 5 с до 90 с (`404 job_not_found`/`error`/дедлайн = fallback) → `b64_json` → `data:` URI → существующий sync-путь (transform → upload → asset) → `chargeAfterGenerate({served:{provider:'llm-router', providerCostUsd:0}})`. Ratio: наш пикер nano-banana-2 → `1:1|16:9|9:16` (остальные → WaveSpeed). Условия: модель nano-banana-2 t2i, `imageNum=1`, нет референсов, ratio ∈ поддерживаемых пулом (замер Ф0), новичок, дневной лимит не выбран, breaker не в паузе.
 - **Fallback** (429/5xx/таймаут): существующий путь WaveSpeed nano-banana-2 (наш расход 6,3 ₽), в пределах `NEWCOMER_FALLBACK_IMAGES_PER_DAY=10` (≤ 63 ₽/день); сверх — тоже WaveSpeed? Нет: сверх бюджета картинка всё равно нужна юзеру, а он за неё заплатил кредитами → **WaveSpeed без ограничения** (клиент платит, наш расход 6 ₽ — «на лёгком»). Бюджет нужен только как алерт «пул не тянет».
 - **Учёт**: `usage_logs`: `credits_charged=126` (как всегда), `provider='llm-router'`, `provider_cost_rub=0`, `is_newcomer=true`; при fallback `provider='wavespeed'`, cost реальный.
 
@@ -133,7 +133,7 @@
 ```
 LLM_ROUTER_URL=http://172.21.0.1:3300
 LLM_ROUTER_API_KEY=sk-…                  # отдельный ключ «webgpt», ограниченный veo + картинка
-LLM_ROUTER_IMAGE_MODEL=flow/gemini-image # как назовёт владелец
+LLM_ROUTER_IMAGE_MODEL=flow/nano-banana  # поднята 23.09
 NEWCOMER_MODE=1
 NEWCOMER_WINDOW_DAYS=7  NEWCOMER_IMAGE_THRESHOLD=3  NEWCOMER_VIDEOS_PER_USER=1
 NEWCOMER_IMAGES_PER_DAY=20  NEWCOMER_VIDEOS_PER_DAY=3  NEWCOMER_VIDEOS_PER_MONTH=60
@@ -144,13 +144,13 @@ NEWCOMER_BREAKER_FAILS=3  NEWCOMER_BREAKER_COOLDOWN_MS=900000
 
 ## 4. Риски и вопросы владельцу
 
-1. **Новичок** = Free, без платежей, ≤ 7 дней с регистрации — ок? (Активация «после первого сообщения» теперь не нужна: юзер платит кредитами, лимитирует пул.)
-2. **Видео новичка = «оживить картинку» (i2v, 4 с, 720p)**, а не текст→видео: в 5 раз дешевле пулу, и по текущим ставкам t2v Free не потянул бы вовсе. Ок?
-3. **Fallback**: картинки — WaveSpeed всегда (клиент заплатил, наш расход 6 ₽); видео — 1 в день на WaveSpeed, сверх — «попробуйте позже» с сохранением права. Ок?
-4. **Лимиты**: 3 видео/день, 60/мес, 20 картинок/день через пул ≈ 25 % ёмкости Veo. Ок?
-5. **Ставка Veo Fast t2v $1.2/с** vs i2v $0.12 в `model_rates` — опечатка ×10? Влияет на все цены Veo Fast, не только на новичков.
-6. **Nano Banana в роутере** — жду id модели и подтверждение, что `POST /v1/images/generations` отдаёт `b64_json`; цену в кредитах Flow померим в Ф0.
-7. **`acc1` (личный)** — исключить из ротации для клиентских генераций.
+1. **Новичок** = Free, без платежей, ≤ 7 дней с регистрации — не подтверждено явно; принимаю как рабочее.
+2. ~~Видео новичка = i2v~~ — **утверждено владельцем 23.09**.
+3. ~~Fallback~~ — **утверждено 23.09** (картинки — WaveSpeed всегда; видео — 1/день, сверх — «попробуйте позже»).
+4. **Лимиты** 3 видео/день, 60/мес, 20 картинок/день — без ответа; принимаю как рабочие, меняются в env.
+5. ~~Ставка Veo Fast t2v $1.2/с~~ — **проверено и исправлено 23.09**: автосинк WaveSpeed писал среднюю цену за прогон в per-second; Fast → $0.15/с, Lite → $0.05/с (+×1.6 за 1080p), синк per-second строки больше не трогает (`wavespeed-sync-guard.ts`). Клиентов это не задело (единственные списания Veo с 31.05 — два ролика 19.09 до синка).
+6. **Nano Banana в роутере** — есть (`flow/nano-banana`, §1.2); осталось измерить время/надёжность в Ф0, когда пул свободен (мои пробы 23.09 не завершились из-за перезапуска сервиса).
+7. ~~`acc1` (личный)~~ — **сделано 23.09**: `paused:true` в `flow-veo/accounts.json` с причиной, `/health` показывает `paused`.
 
 ## 5. План (после отмашки; Ф1–Ф3 не ждут Nano Banana в роутере — картиночная ветка включится флагом, когда модель появится)
 
