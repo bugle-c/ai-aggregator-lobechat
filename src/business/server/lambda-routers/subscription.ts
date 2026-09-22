@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { buildConsentRecord,CONSENT_SURFACES } from '@/business/client/recurringDisclosure';
 import { UserModel } from '@/database/models/user';
 import { billingPayments, userBilling } from '@/database/schemas';
 import { CANCELLATION_REASON_CODES, cancellationSurveys } from '@/database/schemas/lifecycle';
@@ -8,7 +9,12 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { grantTgLinkBonus } from '@/server/modules/billing/grant-tg-link-bonus';
 import { parseDevice } from '@/server/modules/billing/parse-device';
+import {
+  buildCardRemovalPatch,
+  buildSubscriptionRefusalPatch,
+} from '@/server/modules/billing/recurringRefusal';
 import { createYookassaPayment } from '@/server/modules/billing/yookassa';
+import { notifySubscriptionCancelled } from '@/server/modules/lifecycle/notifySubscriptionCancelled';
 import { BillingService } from '@/server/services/billing';
 
 const billingProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
@@ -23,6 +29,21 @@ export const subscriptionRouter = router({
     .input(
       z.object({
         planId: z.number(),
+        // ФЗ 376 / ст. 16.1 ЗПП — evidence that this exact user agreed to
+        // recurring charges at the moment of payment. The client says WHICH
+        // surface rendered the consent and WHICH wording version it had; the
+        // exact text is rebuilt server-side from the server-known plan price
+        // (see buildConsentRecord) so the record cannot be forged.
+        //
+        // Optional on purpose: a stale cached bundle must not fail checkout.
+        // Missing → recorded as surface 'unknown' + version 'pre-consent',
+        // which is itself the audit signal.
+        consent: z
+          .object({
+            surface: z.enum(CONSENT_SURFACES),
+            version: z.string().max(64),
+          })
+          .optional(),
         // Contextual paywall: chat path the user was on when credits ran
         // out. Whitelisted to in-app routes so return_url can't be abused
         // as an open redirect; no fragment — `recoveryFor` is appended as
@@ -55,6 +76,13 @@ export const subscriptionRouter = router({
           // SBP can't save a token for recurring renewals.
           card_preselected: true,
           device: parseDevice(ctx.userAgent),
+          // ФЗ 376: auditable proof of consent to auto-renewal — the exact
+          // wording the payer saw, its version, the surface and the moment.
+          recurring_consent: buildConsentRecord({
+            priceRub: plan.priceRub,
+            surface: input.consent?.surface ?? 'unknown',
+            version: input.consent?.version ?? 'pre-consent',
+          }),
           tg_user_id: tgChatId,
         },
         planId: plan.id,
@@ -231,17 +259,28 @@ export const subscriptionRouter = router({
     }),
 
   /**
-   * User-initiated subscription cancellation.
+   * User-initiated subscription cancellation — the one-step electronic
+   * refusal ФЗ 376 / ст. 16.1 ЗПП requires (no support contact, no phone
+   * call, no form to fill in beyond the reason radio).
    *
-   * Flips `auto_renew=false` and stamps `cancelled_at` / `cancel_reason_code`
-   * on `user_billing`. Subscription stays active until
-   * `subscription_expires_at` — the user keeps everything they paid for
-   * through that date. The renew-due-subscriptions cron skips this row
-   * because of the `auto_renew=true` filter, so no further charges.
+   * Flips `auto_renew=false`, stamps `cancelled_at` / `cancel_reason_code`
+   * AND — critically — DELETES the saved card token
+   * (`payment_method_id = NULL`). The law forbids USING the payment details
+   * after refusal, so keeping the token around "just in case" is not an
+   * option; `auto_renew=false` alone left a usable token on the row.
+   * A new subscription simply saves a fresh token on its own checkout.
+   *
+   * Subscription stays active until `subscription_expires_at` — the user
+   * keeps everything they paid for through that date. The
+   * renew-due-subscriptions cron then skips this row three times over:
+   * `auto_renew=true`, `payment_method_id IS NOT NULL` and
+   * `cancelled_at IS NULL` all fail.
    *
    * Also writes the cancellation_surveys row in the same call so we have
-   * one explicit "user clicked cancel" event with reason. Re-subscribing
-   * by paying again clears these flags via fulfillPayment().
+   * one explicit "user clicked cancel" event with reason, and sends a
+   * written confirmation (email and/or Telegram) that no further money will
+   * be taken. Re-subscribing by paying again clears these flags via
+   * fulfillPayment().
    */
   cancelSubscription: billingProcedure
     .input(
@@ -263,13 +302,13 @@ export const subscriptionRouter = router({
 
       const fromPlan = await ctx.billingService.getPlanById(billing.planId);
 
+      // ФЗ 376: stop USING the card details after refusal — not merely stop
+      // the cron. `buildSubscriptionRefusalPatch` owns that guarantee (and is
+      // unit-tested for it); `subscription_expires_at` is deliberately NOT in
+      // the patch — a refusal is not a forfeit of what was already paid for.
       await ctx.serverDB
         .update(userBilling)
-        .set({
-          autoRenew: false,
-          cancelledAt: new Date(),
-          cancelReasonCode: input.reasonCode,
-        })
+        .set(buildSubscriptionRefusalPatch({ reasonCode: input.reasonCode }))
         .where(eq(userBilling.userId, ctx.userId));
 
       await ctx.serverDB.insert(cancellationSurveys).values({
@@ -297,9 +336,25 @@ export const subscriptionRouter = router({
         paymentId: null,
       });
 
+      // Written confirmation that no further charges will occur — required
+      // by ст. 16.1 ЗПП, and it must reach the user off-screen too (the
+      // on-screen toast is not "in writing"). Best-effort: a mail/bot
+      // outage must never make the refusal itself fail.
+      let confirmation = { email: false, telegram: false };
+      try {
+        confirmation = await notifySubscriptionCancelled(ctx.serverDB, {
+          activeUntil: billing.subscriptionExpiresAt ?? null,
+          planName: fromPlan?.name ?? 'WebGPT',
+          userId: ctx.userId,
+        });
+      } catch (err) {
+        console.error('[subscription.cancelSubscription] confirmation failed:', err);
+      }
+
       return {
         ok: true,
         activeUntil: billing.subscriptionExpiresAt,
+        confirmationSent: confirmation,
       };
     }),
 
@@ -323,10 +378,7 @@ export const subscriptionRouter = router({
 
     await ctx.serverDB
       .update(userBilling)
-      .set({
-        paymentMethodId: null,
-        autoRenew: false,
-      })
+      .set(buildCardRemovalPatch())
       .where(eq(userBilling.userId, ctx.userId));
 
     return { ok: true };

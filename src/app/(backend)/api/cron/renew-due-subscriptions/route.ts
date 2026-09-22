@@ -8,11 +8,15 @@
  *
  * Flow:
  *   1. Find user_billing rows where auto_renew=true,
- *      payment_method_id IS NOT NULL and subscription_expires_at falls in
- *      the −RENEW_LEAD_DAYS…+DUNNING_TAIL_DAYS window. plan_id is NOT
+ *      payment_method_id IS NOT NULL, cancelled_at IS NULL and
+ *      subscription_expires_at falls in the
+ *      −RENEW_LEAD_DAYS…+DUNNING_TAIL_DAYS window. plan_id is NOT
  *      filtered: expireSubscriptions downgrades a lapsed-but-still-dunning
  *      row to the free plan while keeping auto_renew and the expiry, so the
  *      post-expiry retries can keep running.
+ *      Then, per row, `canAutoChargeStoredMethod` is the ФЗ-376 gate: no
+ *      refusal, a real token, and a channel the mandatory T-3 pre-charge
+ *      notice could actually have reached.
  *   2. Resolve the tier and the price from the user's last SUCCEEDED
  *      subscription payment (plan_id + amount_rub). The amount is the price
  *      lock — an admin editing the tariff must not re-price an existing
@@ -39,10 +43,11 @@
  */
 import crypto from 'node:crypto';
 
-import { and, eq, gte, isNotNull, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 
 import { billingPayments, userBilling, users } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import { canAutoChargeStoredMethod } from '@/server/modules/billing/recurringRefusal';
 import {
   fetchLastSubscriptionPayment,
   resolveRenewalAmount,
@@ -96,6 +101,8 @@ export async function POST(req: Request) {
     .select({
       userId: userBilling.userId,
       planId: userBilling.planId,
+      autoRenew: userBilling.autoRenew,
+      cancelledAt: userBilling.cancelledAt,
       paymentMethodId: userBilling.paymentMethodId,
       expiresAt: userBilling.subscriptionExpiresAt,
       email: users.email,
@@ -107,6 +114,11 @@ export async function POST(req: Request) {
       and(
         eq(userBilling.autoRenew, true),
         isNotNull(userBilling.paymentMethodId),
+        // ФЗ 376 / ст. 16.1 ЗПП — the payment details must not be USED after
+        // a refusal. cancelSubscription already nulls payment_method_id, so
+        // this is belt-and-braces against any path that leaves a token on a
+        // cancelled row (a manual DB fix, a future partial-cancel flow).
+        isNull(userBilling.cancelledAt),
         isNotNull(userBilling.subscriptionExpiresAt),
         // due window: from RENEW_LEAD_DAYS before expiry through the dunning
         // tail (DUNNING_TAIL_DAYS after). Per-row cadence is enforced below.
@@ -120,6 +132,20 @@ export async function POST(req: Request) {
 
   for (const row of due) {
     if (!row.paymentMethodId || !row.expiresAt) continue;
+
+    // ФЗ 376 gate, per row. The SQL above is the coarse filter; this is the
+    // single tested predicate that decides whether the stored card may be
+    // used at all — refusal, missing token, and "no channel the mandatory
+    // T-3 pre-charge notice could reach" all block the charge here.
+    if (!canAutoChargeStoredMethod(row)) {
+      results.push({
+        userId: row.userId,
+        planId: row.planId,
+        outcome: 'skipped',
+        error: 'recurring charge not permitted (FZ-376 gate)',
+      });
+      continue;
+    }
 
     // What the user last actually paid for a subscription. Two jobs:
     //   1. plan resolution for dunning rows already downgraded to free —

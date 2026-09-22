@@ -85,6 +85,61 @@ export async function sendRenewalFailedTelegram(args: {
   });
 }
 
+/**
+ * Pre-charge notice, T-3, for an auto-renewing subscriber we cannot email
+ * (TG-native sign-up → synthetic address, or Brevo refused the send).
+ *
+ * ФЗ 376 requires this notice at least 3 days before the charge, naming the
+ * sum, the date and the way to refuse — a channel the user does not have is
+ * not an excuse to charge them silently. The renew cron refuses to charge
+ * anyone with no channel at all (see hasPreChargeChannel).
+ */
+export async function sendUpcomingChargeTelegram(args: {
+  amountRub: number;
+  chargeAt: Date;
+  chatId: number;
+  planName: string;
+}): Promise<SendTelegramNoticeResult> {
+  const dateStr = args.chargeAt.toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+  });
+  const text = escapeMarkdownV2(
+    `Подписка «${args.planName}» продлевается автоматически: ${dateStr} спишем ${args.amountRub} ₽ с привязанной карты. Если продление больше не нужно — отмените его в настройках, доступ сохранится до конца оплаченного периода.`,
+  );
+  return sendBroadcast({
+    button: { label: 'Настройки подписки', url: PLANS_URL },
+    chatId: args.chatId,
+    text,
+  });
+}
+
+/**
+ * Written confirmation of a refusal for users we cannot email. Says the two
+ * things ст. 16.1 ЗПП wants in writing: no further charges, and the card
+ * details are gone.
+ */
+export async function sendCancellationConfirmedTelegram(args: {
+  activeUntil: Date | null;
+  chatId: number;
+  planName: string;
+}): Promise<SendTelegramNoticeResult> {
+  const dateStr = args.activeUntil
+    ? args.activeUntil.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+    : null;
+  const text = escapeMarkdownV2(
+    `Автоматическое продление отключено — списаний больше не будет. Сохранённая карта удалена. ` +
+      (dateStr
+        ? `Доступ к тарифу «${args.planName}» сохраняется до ${dateStr}, после этой даты аккаунт перейдёт на бесплатный тариф.`
+        : `Аккаунт переведён на бесплатный тариф.`),
+  );
+  return sendBroadcast({
+    button: { label: 'Настройки подписки', url: PLANS_URL },
+    chatId: args.chatId,
+    text,
+  });
+}
+
 export async function sendSubscriptionExpiredTelegram(args: {
   chatId: number;
   expiredAt: Date;

@@ -242,6 +242,57 @@ export function buildSubscriptionExpiredEmail(input: SubscriptionExpiredInput): 
   return { subject, html, textBody };
 }
 
+export interface CancellationConfirmedInput {
+  /** Paid-through date; access is kept until then. Null = already lapsed. */
+  activeUntil: Date | string | null;
+  planName: string;
+}
+
+/**
+ * Written confirmation of a subscription refusal — ФЗ 376 / ст. 16.1 ЗПП.
+ *
+ * Three facts, in this order, because these are the three the law and the
+ * Роспотребнадзор practice care about:
+ *   1. auto-renewal is OFF and NO further money will be taken;
+ *   2. the saved card has been deleted (we stopped USING the details);
+ *   3. paid access continues to `activeUntil` — a refusal is not a forfeit.
+ */
+export function buildCancellationConfirmedEmail(input: CancellationConfirmedInput): {
+  subject: string;
+  html: string;
+  textBody: string;
+} {
+  const subject = 'Подписка WebGPT отменена — списаний больше не будет';
+  const dateStr = fmtDateRu(input.activeUntil);
+  const accessLine = dateStr
+    ? `Доступ к тарифу «${input.planName}» сохраняется до ${dateStr} — вы получаете всё, что уже оплатили. После этой даты аккаунт перейдёт на бесплатный тариф.`
+    : `Аккаунт переведён на бесплатный тариф.`;
+  const html = `
+    <div style="${BASE_STYLE}">
+      <p>Здравствуйте!</p>
+      <p><strong>Автоматическое продление подписки отключено. Списаний больше не будет.</strong></p>
+      <p>Сохранённая карта удалена — мы больше не используем её платёжные данные.</p>
+      <p>${escapeHtml(accessLine)}</p>
+      <p>Если передумаете — подписку можно оформить заново в любой момент:</p>
+      <p>
+        <a href="${PLANS_URL}" style="${CTA_STYLE}">Настройки подписки</a>
+      </p>
+      <p>Если у вас есть вопросы — напишите в поддержку в Telegram: <a href="${SUPPORT_URL}">@gptwebrubot</a>.</p>
+      <div style="${FOOTER_STYLE}">
+        WebGPT · ask.gptweb.ru<br />
+        Это подтверждение вашего отказа от автоматического продления подписки.
+      </div>
+    </div>
+  `;
+  const textBody = [
+    'Автоматическое продление подписки отключено. Списаний больше не будет.',
+    'Сохранённая карта удалена — мы больше не используем её платёжные данные.',
+    accessLine,
+    `Настройки подписки: ${PLANS_URL}`,
+  ].join('\n\n');
+  return { subject, html, textBody };
+}
+
 function escapeHtml(s: string): string {
   return s
     .replaceAll('&', '&amp;')

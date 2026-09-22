@@ -3,7 +3,7 @@
 import { memo, useEffect } from 'react';
 
 import { reachGoal } from '@/business/client/analytics/ym';
-import { recurringDisclosure } from '@/business/client/recurringDisclosure';
+import { RECURRING_PERIOD_DAYS } from '@/business/client/recurringDisclosure';
 
 interface Props {
   paymentUrl: string;
@@ -35,10 +35,14 @@ const CheckoutRedirect = memo<Props>(({ paymentUrl, priceRub }) => {
       style={{ fontFamily: 'sans-serif', margin: '80px auto', maxWidth: 480, padding: '0 16px' }}
     >
       <p>Переходим к оплате…</p>
-      {/* Recurring disclosure — this deeplink starts a subscription checkout
-          that saves the card for off-session renewal charges. */}
+      {/* Recap of what was just consented to on the gate — the consent
+          itself lives on ConsentGate.tsx, which is where the payment is
+          authorised. */}
       {priceRub != null && priceRub > 0 && (
-        <p style={{ color: '#888', fontSize: 13 }}>{recurringDisclosure(priceRub)}</p>
+        <p style={{ color: '#888', fontSize: 13 }}>
+          Подписка продлевается автоматически по {priceRub} ₽ каждые {RECURRING_PERIOD_DAYS} дней.
+          Отменить можно в любой момент в настройках.
+        </p>
       )}
     </div>
   );

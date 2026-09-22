@@ -47,6 +47,11 @@ export interface ExpiringSubscriptionRow {
   planName: string;
   planPriceRub: number;
   subscriptionExpiresAt: Date;
+  /**
+   * TG-native signups have a synthetic email nobody reads — the bot DM is
+   * their only channel, and ФЗ 376 still owes them the pre-charge notice.
+   */
+  tgBotChatId: number | null;
   userId: string;
 }
 
@@ -78,6 +83,7 @@ export async function listExpiringSubscriptions(
       subscriptionExpiresAt: userBilling.subscriptionExpiresAt,
       autoRenew: userBilling.autoRenew,
       paymentMethodId: userBilling.paymentMethodId,
+      tgBotChatId: userBilling.tgBotChatId,
     })
     .from(userBilling)
     .innerJoin(users, eq(users.id, userBilling.userId))
@@ -107,6 +113,7 @@ export async function listExpiringSubscriptions(
       subscriptionExpiresAt: r.subscriptionExpiresAt as Date,
       autoRenew: r.autoRenew,
       hasSavedPaymentMethod: !!r.paymentMethodId,
+      tgBotChatId: r.tgBotChatId,
     }));
 }
 
@@ -210,6 +217,27 @@ const SYNTHETIC_EMAIL_PATTERNS = [/@bot\.gptweb\.ru$/i, /@telegram/i, /@wechat\.
 export function isSyntheticEmail(email: string | null | undefined): boolean {
   if (!email) return true;
   return SYNTHETIC_EMAIL_PATTERNS.some((re) => re.test(email));
+}
+
+/**
+ * Is there ANY channel through which the mandatory T-3 pre-charge notice can
+ * reach this user? (ФЗ 376 / ст. 16.1 ЗПП: the charge must be preceded by a
+ * notice naming the sum, the date and the way to refuse, at least 3 days
+ * ahead.)
+ *
+ * `renew-due-subscriptions` refuses to charge a row for which this is false.
+ * The alternative — charging anyway and showing an in-app banner afterwards —
+ * was rejected: a banner is not a notice sent 3 days BEFORE the debit, we
+ * cannot prove the user ever opened the app, and an unlawful charge costs a
+ * refund plus a fine while a skipped charge costs one cycle of MRR from a
+ * cohort of a few accounts. Those users keep access to
+ * `subscription_expires_at` and can re-subscribe manually at any time.
+ */
+export function hasPreChargeChannel(row: {
+  email: string | null;
+  tgBotChatId: number | null;
+}): boolean {
+  return !isSyntheticEmail(row.email) || row.tgBotChatId != null;
 }
 
 /**

@@ -14,6 +14,10 @@ import { and, eq, isNotNull } from 'drizzle-orm';
 
 import { billingPayments, userBilling } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import {
+  fetchLastSubscriptionPayment,
+  resolveRenewalAmount,
+} from '@/server/modules/billing/renewalAmount';
 import { fetchPlanById } from '@/server/services/billing/plans-source';
 
 const BOT_BASE_URL = process.env.BOT_INTERNAL_URL ?? 'http://127.0.0.1:8081';
@@ -124,6 +128,11 @@ export async function GET(req: Request) {
       notifyType: userBilling.botNotifyType,
       tgBotChatId: userBilling.tgBotChatId,
       planId: userBilling.planId,
+      // ФЗ 376 — the `subscription_expiring` DM must branch on whether the
+      // card will actually be charged. See the formatter in bot/src/server.ts.
+      autoRenew: userBilling.autoRenew,
+      cancelledAt: userBilling.cancelledAt,
+      paymentMethodId: userBilling.paymentMethodId,
       subscriptionExpiresAt: userBilling.subscriptionExpiresAt,
       tokenBalance: userBilling.tokenBalance,
       tokensUsedMonth: userBilling.tokensUsedMonth,
@@ -139,9 +148,29 @@ export async function GET(req: Request) {
 
     switch (row.notifyType) {
       case 'subscription_expiring': {
+        // ФЗ 376: for a subscriber whose card is on file nothing "expires" —
+        // we are about to TAKE money, and the DM has to say so, with the sum.
+        // «Продлите заранее: /upgrade» was simply false for them.
+        //
+        // Deliberately NOT a new botNotifyType: the bot 400s on an unknown
+        // type and the row would stay pending forever (see the `default`
+        // branch below). Instead the existing `subscription_expiring`
+        // formatter branches on these two extra payload fields, which the
+        // bot's payload bag already accepts.
+        const autoRenew = row.autoRenew && !!row.paymentMethodId && !row.cancelledAt;
         payload = {
-          planName: plan?.name ?? '?',
+          autoRenew,
           expiresAt: row.subscriptionExpiresAt?.toISOString() ?? new Date().toISOString(),
+          planName: plan?.name ?? '?',
+          ...(autoRenew
+            ? {
+                amountRub: resolveRenewalAmount(
+                  await fetchLastSubscriptionPayment(db, row.userId),
+                  row.planId,
+                  plan?.priceRub ?? 0,
+                ),
+              }
+            : {}),
         };
         break;
       }

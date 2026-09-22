@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   markReminderSent: vi.fn(async () => undefined),
   sendLifecycleEmail: vi.fn(async () => ({ ok: true, messageId: 'm' })),
   sendTelegram: vi.fn(async () => ({ ok: true })),
+  sendUpcomingChargeTg: vi.fn(async () => ({ ok: true })),
   fetchLastPaid: vi.fn(async (): Promise<any> => null),
 }));
 
@@ -22,7 +23,10 @@ vi.mock('../expiringSubscriptions', async (importOriginal) => {
   };
 });
 vi.mock('../email', () => ({ sendLifecycleEmail: mocks.sendLifecycleEmail }));
-vi.mock('../telegram', () => ({ sendSubscriptionExpiredTelegram: mocks.sendTelegram }));
+vi.mock('../telegram', () => ({
+  sendSubscriptionExpiredTelegram: mocks.sendTelegram,
+  sendUpcomingChargeTelegram: mocks.sendUpcomingChargeTg,
+}));
 vi.mock('@/server/modules/billing/renewalAmount', () => ({
   fetchLastSubscriptionPayment: mocks.fetchLastPaid,
   resolveRenewalAmount: (lastPaid: any, planId: number, current: number) =>
@@ -39,6 +43,7 @@ const expiringRow = (over: Partial<Record<string, unknown>> = {}) => ({
   planName: 'Pro',
   planPriceRub: 990,
   subscriptionExpiresAt: new Date(NOW.getTime() + 2.5 * DAY),
+  tgBotChatId: null,
   userId: 'u-expiring',
   ...over,
 });
@@ -60,6 +65,7 @@ describe('runExpiryReminders', () => {
     mocks.listExpiring.mockResolvedValue([]);
     mocks.sendLifecycleEmail.mockResolvedValue({ ok: true, messageId: 'm' });
     mocks.sendTelegram.mockResolvedValue({ ok: true });
+    mocks.sendUpcomingChargeTg.mockResolvedValue({ ok: true });
     mocks.fetchLastPaid.mockResolvedValue(null);
   });
 
@@ -249,5 +255,70 @@ describe('runExpiryReminders', () => {
 
     expect(summary.expiring).toMatchObject({ due: 1, emailSent: 1, failed: 0 });
     expect(mocks.markReminderSent).toHaveBeenCalledTimes(1);
+  });
+
+  // =========================================================================
+  // ФЗ 376: the pre-charge notice may not be skipped for an auto-renewing
+  // user just because they have no real email address.
+  // =========================================================================
+
+  it('T-3: TG-native auto-renewer (synthetic email) gets the pre-charge DM', async () => {
+    mocks.listExpiring.mockResolvedValue([
+      autoRenewingRow({ email: 'tg_55@bot.gptweb.ru', tgBotChatId: 55 }),
+    ]);
+
+    const summary = await runExpiryReminders(db);
+
+    expect(mocks.sendLifecycleEmail).not.toHaveBeenCalled();
+    expect(mocks.sendUpcomingChargeTg).toHaveBeenCalledWith(
+      expect.objectContaining({ amountRub: 990, chatId: 55, planName: 'Pro' }),
+    );
+    expect(summary.expiring).toMatchObject({ tgSent: 1, skippedNoChannel: 0, failed: 0 });
+    expect(mocks.markReminderSent).toHaveBeenCalledWith(db, 'u-expiring');
+  });
+
+  it('T-3: does NOT double-notify — no DM when the email went out', async () => {
+    mocks.listExpiring.mockResolvedValue([autoRenewingRow({ tgBotChatId: 55 })]);
+
+    await runExpiryReminders(db);
+
+    expect(mocks.sendLifecycleEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.sendUpcomingChargeTg).not.toHaveBeenCalled();
+  });
+
+  it('T-3: falls back to the DM when the pre-charge email fails', async () => {
+    mocks.listExpiring.mockResolvedValue([autoRenewingRow({ tgBotChatId: 55 })]);
+    mocks.sendLifecycleEmail.mockResolvedValue({ ok: false, error: 'HTTP 503' } as any);
+
+    const summary = await runExpiryReminders(db);
+
+    expect(mocks.sendUpcomingChargeTg).toHaveBeenCalledTimes(1);
+    expect(summary.expiring).toMatchObject({ emailSent: 0, tgSent: 1, failed: 0 });
+    expect(mocks.markReminderSent).toHaveBeenCalledWith(db, 'u-expiring');
+  });
+
+  it('T-3: bot transiently down → left unstamped so the next tick retries', async () => {
+    mocks.listExpiring.mockResolvedValue([
+      autoRenewingRow({ email: 'tg_55@bot.gptweb.ru', tgBotChatId: 55 }),
+    ]);
+    mocks.sendUpcomingChargeTg.mockResolvedValue({ ok: false, error: 'fetch failed' } as any);
+
+    const summary = await runExpiryReminders(db);
+
+    expect(summary.expiring).toMatchObject({ failed: 1 });
+    expect(mocks.markReminderSent).not.toHaveBeenCalled();
+  });
+
+  it('T-3: a NON-auto-renewing synthetic-email user is still just skipped', async () => {
+    // The manual-renewal reminder is a courtesy, not a legal obligation —
+    // no DM fallback, and nothing charges them either.
+    mocks.listExpiring.mockResolvedValue([
+      expiringRow({ email: 'tg_55@bot.gptweb.ru', tgBotChatId: 55 }),
+    ]);
+
+    const summary = await runExpiryReminders(db);
+
+    expect(mocks.sendUpcomingChargeTg).not.toHaveBeenCalled();
+    expect(summary.expiring).toMatchObject({ skippedNoChannel: 1 });
   });
 });

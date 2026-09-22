@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildCancellationConfirmedEmail,
   buildExpiryReminderEmail,
   buildRenewalFailedEmail,
   buildSubscriptionConfirmationEmail,
@@ -127,5 +128,67 @@ describe('buildExpiryReminderEmail (unchanged manual-renewal path)', () => {
     const { subject, html } = buildExpiryReminderEmail({ expiresAt: EXPIRES, planName: 'Pro' });
     expect(subject).toContain('истекает');
     expect(html).toContain('Продлить подписку');
+  });
+});
+
+// ФЗ 376 / ст. 16.1 ЗПП — the refusal has to be confirmed in writing, and the
+// confirmation has to say that no further money will be taken.
+describe('buildCancellationConfirmedEmail', () => {
+  const ACTIVE_UNTIL = new Date('2026-10-20T00:00:00Z');
+
+  it('states that no further charges will occur', () => {
+    const { subject, html, textBody } = buildCancellationConfirmedEmail({
+      activeUntil: ACTIVE_UNTIL,
+      planName: 'Pro',
+    });
+    expect(subject).toContain('списаний больше не будет');
+    expect(html).toContain('Списаний больше не будет');
+    expect(textBody).toContain('Списаний больше не будет');
+  });
+
+  it('states that the stored card details are gone', () => {
+    const { textBody } = buildCancellationConfirmedEmail({
+      activeUntil: ACTIVE_UNTIL,
+      planName: 'Pro',
+    });
+    expect(textBody).toContain('Сохранённая карта удалена');
+  });
+
+  it('keeps the paid-through date — a refusal is not a forfeit', () => {
+    const { textBody } = buildCancellationConfirmedEmail({
+      activeUntil: ACTIVE_UNTIL,
+      planName: 'Pro',
+    });
+    expect(textBody).toContain('20 октября 2026');
+    expect(textBody).toContain('сохраняется до');
+  });
+
+  it('drops the date line when the plan has already lapsed', () => {
+    const { textBody } = buildCancellationConfirmedEmail({ activeUntil: null, planName: 'Pro' });
+    expect(textBody).toContain('бесплатный тариф');
+    expect(textBody).not.toContain('сохраняется до');
+  });
+
+  it('escapes the plan name', () => {
+    const { html } = buildCancellationConfirmedEmail({
+      activeUntil: ACTIVE_UNTIL,
+      planName: '<b>Pro</b>',
+    });
+    expect(html).toContain('&lt;b&gt;Pro&lt;/b&gt;');
+  });
+});
+
+// ФЗ 376: the pre-charge notice must name the sum, the date and the way out.
+describe('buildUpcomingChargeEmail (ФЗ 376 minimum content)', () => {
+  it('names the exact sum, the exact date and the cancel path', () => {
+    const { html, textBody } = buildUpcomingChargeEmail({
+      amountRub: 490,
+      chargeAt: new Date('2026-10-03T09:00:00Z'),
+      planName: 'Pro',
+    });
+    expect(textBody).toContain('490 ₽');
+    expect(textBody).toContain('03 октября 2026');
+    expect(textBody).toContain('отменить можно в настройках');
+    expect(html).toContain('/settings/plans');
   });
 });
