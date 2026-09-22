@@ -22,7 +22,11 @@ import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHead
 import { reachGoal } from '@/business/client/analytics/ym';
 import { FREE_DAILY_MESSAGE_QUOTA_HINT, freeQuotaOf } from '@/business/client/balanceView';
 import IntroOfferBanner from '@/business/client/IntroOffer/IntroOfferBanner';
-import { recurringDisclosure } from '@/business/client/recurringDisclosure';
+import {
+  RECURRING_CONSENT_VERSION,
+  RECURRING_PAY_LABEL,
+  recurringConsentText,
+} from '@/business/client/recurringDisclosure';
 import { creditsToHuman } from '@/business/utils/creditsToHuman';
 import PaymentTrustBadges from '@/components/PaymentTrustBadges';
 import { SubscriptionActivatedModal } from '@/features/SubscriptionActivatedModal';
@@ -353,11 +357,26 @@ const Plans = memo(() => {
     const reasonText = (reasonTextArg ?? cancelText).trim() || undefined;
     setCancelling(true);
     try {
-      await lambdaClient.subscription.cancelSubscription.mutate({
+      const res = await lambdaClient.subscription.cancelSubscription.mutate({
         reasonCode: reasonCode as any,
         reasonText,
       });
-      message.success('Подписка будет активна до окончания оплаченного периода');
+      // ФЗ 376 / ст. 16.1 ЗПП — the refusal must be confirmed in writing and
+      // must say that no further money will be taken. The server also sends
+      // the same confirmation by email / Telegram (notifySubscriptionCancelled).
+      const until = res?.activeUntil
+        ? new Date(res.activeUntil).toLocaleDateString('ru-RU')
+        : null;
+      message.success({
+        content: [
+          'Автопродление отключено — списаний больше не будет.',
+          'Сохранённая карта удалена.',
+          until ? `Доступ сохраняется до ${until}.` : null,
+        ]
+          .filter(Boolean)
+          .join(' '),
+        duration: 8,
+      });
       setCancelOpen(false);
       setCancelText('');
       // Refresh billing state so the banner re-renders with cancelled flag.
@@ -392,7 +411,16 @@ const Plans = memo(() => {
       plan: plan?.slug ?? planId,
       source: 'plans_page',
     });
-    subscribeMutation.mutate({ planId });
+    // ФЗ 376: which surface rendered the consent statement and which wording
+    // version it was. The server rebuilds the exact text from the plan price
+    // and stores it on the payment row (see buildConsentRecord).
+    subscribeMutation.mutate({
+      consent: {
+        surface: isMobile ? 'plans_mobile' : 'plans_desktop',
+        version: RECURRING_CONSENT_VERSION,
+      },
+      planId,
+    });
   };
 
   const startTopUp = (amountRub: number) => {
@@ -623,7 +651,8 @@ const Plans = memo(() => {
             {billing?.cancelledAt ? (
               <Flexbox horizontal align="center" gap={12} justify="space-between">
                 <Text type="warning">
-                  Подписка отменена. Доступ сохраняется до{' '}
+                  Подписка отменена — списаний больше не будет, сохранённая карта удалена. Доступ
+                  сохраняется до{' '}
                   {billing.subscriptionExpiresAt
                     ? new Date(billing.subscriptionExpiresAt).toLocaleDateString('ru-RU')
                     : '—'}
@@ -702,6 +731,7 @@ const Plans = memo(() => {
         onOk={() => handleCancelSubmit()}
       >
         <Text type="secondary">
+          Автопродление будет отключено, сохранённая карта — удалена, списаний больше не будет.
           Доступ к платным функциям сохранится до{' '}
           {billing?.subscriptionExpiresAt
             ? new Date(billing.subscriptionExpiresAt).toLocaleDateString('ru-RU')
@@ -821,16 +851,18 @@ const Plans = memo(() => {
                         type={isPopular ? 'primary' : 'default'}
                         onClick={() => startSubscribe(plan.id)}
                       >
-                        {t('plans.subscribe')}
+                        {RECURRING_PAY_LABEL}
                       </Button>
-                      {/* Recurring disclosure — the checkout saves the card and
-                          the renew cron charges it off-session; say so BEFORE
-                          the user pays, not only on the post-purchase card. */}
+                      {/* ФЗ 376 / ст. 16.1 ЗПП — consent tied to the action,
+                          not a decorative disclosure. The text quotes the
+                          button label verbatim; `startSubscribe` sends the
+                          surface + version so the consent is persisted on the
+                          payment row. */}
                       <Text
                         style={{ display: 'block', fontSize: 11, marginTop: 6 }}
                         type="secondary"
                       >
-                        {recurringDisclosure(plan.priceRub)}
+                        {recurringConsentText(plan.priceRub)}
                       </Text>
                     </>
                   ) : null}

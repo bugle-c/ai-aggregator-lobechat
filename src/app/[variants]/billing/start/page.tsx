@@ -1,24 +1,39 @@
 /**
- * /billing/start?plan=<id>
+ * /billing/start?plan=<id>[&consent=<version>]
  *
- * Bot deeplink landing page. Auto-creates a YooKassa payment for the given
- * plan and immediately redirects the user to the hosted payment page.
+ * Bot deeplink landing page, in TWO steps since ФЗ 376:
+ *
+ *   1. no `consent` param → render the consent gate (plan, price, period and
+ *      an UNTICKED checkbox). Nothing is charged, nothing is created.
+ *   2. `consent=<current version>` → create the YooKassa payment, stamping
+ *      the consent record onto the payment row, and redirect to the hosted
+ *      payment page.
+ *
+ * It used to do step 2 unconditionally on first load: the user tapped a
+ * button inside Telegram and the next thing they saw was a payment form for
+ * a subscription that saves their card — no consent to recurring charges
+ * anywhere in the flow. See ConsentGate.tsx for why this surface gets a
+ * checkbox while the in-app plans screens use statement-on-action.
+ *
  * Requires an active session — unauthenticated visitors are sent to /login.
  */
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { type FC } from 'react';
 
+import { RECURRING_CONSENT_VERSION } from '@/business/client/recurringDisclosure';
+
 import CheckoutRedirect from './CheckoutRedirect';
+import ConsentGate from './ConsentGate';
 
 export const dynamic = 'force-dynamic';
 
 interface Props {
-  searchParams: Promise<{ plan?: string }>;
+  searchParams: Promise<{ consent?: string; plan?: string }>;
 }
 
 const BillingStartPage: FC<Props> = async ({ searchParams }) => {
-  const { plan: planParam } = await searchParams;
+  const { consent: consentParam, plan: planParam } = await searchParams;
 
   // --- Auth ---
   const { auth } = await import('@/auth');
@@ -44,7 +59,29 @@ const BillingStartPage: FC<Props> = async ({ searchParams }) => {
     );
   }
 
-  // --- Create payment server-side via the subscription router ---
+  // --- Plan lookup (needed by both the gate and the disclosure) ---
+  // Best-effort: a lookup failure must never block a checkout, so the gate
+  // falls through to the old behaviour only when we genuinely cannot price
+  // the plan — and then createPayment itself rejects an unknown plan.
+  let priceRub: number | null = null;
+  let planName = 'Подписка';
+  try {
+    const { fetchPlanById } = await import('@/server/services/billing/plans-source');
+    const found = await fetchPlanById(planId);
+    priceRub = found?.priceRub ?? null;
+    planName = found?.name ?? planName;
+  } catch {
+    priceRub = null;
+  }
+
+  // --- Step 1: consent gate (ФЗ 376) ---
+  // No payment exists until the user ticks the box and comes back with the
+  // current consent version. An old/forged version falls back to the gate.
+  if (consentParam !== RECURRING_CONSENT_VERSION && priceRub != null && priceRub > 0) {
+    return <ConsentGate planId={planId} planName={planName} priceRub={priceRub} />;
+  }
+
+  // --- Step 2: create payment server-side via the subscription router ---
   // The redirect to YooKassa is done client-side (CheckoutRedirect) so the
   // Metrika `checkout_start` goal can be fired first.
   try {
@@ -56,19 +93,14 @@ const BillingStartPage: FC<Props> = async ({ searchParams }) => {
     const createCaller = createCallerFactory(lambdaRouter);
     const caller = createCaller({ userId, serverDB: db } as any);
 
-    const { paymentUrl } = await caller.subscription.createPayment({ planId });
+    const { paymentUrl } = await caller.subscription.createPayment({
+      // ФЗ 376: the checkbox on the gate is the consent; record which surface
+      // and wording version it was. The server rebuilds the exact text.
+      consent: { surface: 'billing_start', version: RECURRING_CONSENT_VERSION },
+      planId,
+    });
 
     if (!paymentUrl) throw new Error('Payment URL missing');
-
-    // Price for the recurring disclosure on the interstitial. Best-effort:
-    // a lookup failure must never block a checkout that already exists.
-    let priceRub: number | null = null;
-    try {
-      const { fetchPlanById } = await import('@/server/services/billing/plans-source');
-      priceRub = (await fetchPlanById(planId))?.priceRub ?? null;
-    } catch {
-      priceRub = null;
-    }
 
     return <CheckoutRedirect paymentUrl={paymentUrl} priceRub={priceRub} />;
   } catch (err) {

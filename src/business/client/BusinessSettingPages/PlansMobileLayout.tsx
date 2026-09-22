@@ -7,7 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FREE_DAILY_MESSAGE_QUOTA_HINT, type FreeQuota } from '@/business/client/balanceView';
-import { recurringDisclosure } from '@/business/client/recurringDisclosure';
+import { RECURRING_PAY_LABEL, recurringConsentText } from '@/business/client/recurringDisclosure';
 
 import FreeQuotaSummary from './FreeQuotaSummary';
 
@@ -181,13 +181,18 @@ const PlansMobileLayout = memo<Props>(
                 type={isHighlighted && !isCurrent ? 'primary' : 'default'}
                 onClick={() => onSelect(plan.id)}
               >
-                {isCurrent ? 'Текущий тариф' : plan.priceRub === 0 ? 'Бесплатно' : 'Выбрать'}
+                {isCurrent
+                  ? 'Текущий тариф'
+                  : plan.priceRub === 0
+                    ? 'Бесплатно'
+                    : RECURRING_PAY_LABEL}
               </Button>
-              {/* Recurring disclosure — the checkout saves the card and the
-                  renew cron charges it off-session; say so BEFORE paying. */}
+              {/* ФЗ 376 / ст. 16.1 ЗПП — consent tied to the action. The
+                  statement quotes the button label verbatim; «Выбрать» used
+                  to hide that the tap takes money and saves the card. */}
               {plan.priceRub > 0 && !isCurrent && (
                 <Text style={{ fontSize: 11, marginTop: 6 }} type="secondary">
-                  {recurringDisclosure(plan.priceRub)}
+                  {recurringConsentText(plan.priceRub)}
                 </Text>
               )}
             </Block>

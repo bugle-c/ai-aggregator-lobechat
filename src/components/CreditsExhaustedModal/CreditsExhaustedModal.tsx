@@ -10,7 +10,11 @@ import { useTranslation } from 'react-i18next';
 import { reachGoal } from '@/business/client/analytics/ym';
 import { type CreditsExhaustedReason } from '@/business/client/creditsExhausted';
 import IntroOfferBanner from '@/business/client/IntroOffer/IntroOfferBanner';
-import { recurringDisclosure } from '@/business/client/recurringDisclosure';
+import {
+  RECURRING_CONSENT_VERSION,
+  RECURRING_PAY_LABEL,
+  recurringConsentText,
+} from '@/business/client/recurringDisclosure';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -103,7 +107,12 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
         reason,
         source: 'credits_exhausted',
       });
-      subscribeMutation.mutate({ planId: plan.id, returnPath });
+      // ФЗ 376: record which surface showed the consent statement.
+      subscribeMutation.mutate({
+        consent: { surface: 'credits_exhausted', version: RECURRING_CONSENT_VERSION },
+        planId: plan.id,
+        returnPath,
+      });
     };
 
     return (
@@ -143,15 +152,13 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
                 type="primary"
                 onClick={() => subscribeTo(recommendedPlan)}
               >
-                {t('modal.exhausted.daily.upgrade', {
-                  plan: recommendedPlan.name,
-                  price: recommendedPlan.priceRub,
-                })}
+                {RECURRING_PAY_LABEL} · {recommendedPlan.name}, {recommendedPlan.priceRub} ₽
               </Button>
-              {/* Recurring disclosure — this button starts a checkout that
-                  saves the card for off-session renewal charges. */}
+              {/* ФЗ 376 / ст. 16.1 ЗПП — consent tied to the action; this
+                  button starts a checkout that saves the card for
+                  off-session renewal charges. */}
               <Text style={{ fontSize: 11 }} type="secondary">
-                {recurringDisclosure(recommendedPlan.priceRub)}
+                {recurringConsentText(recommendedPlan.priceRub)}
               </Text>
             </Flexbox>
           )}
@@ -205,11 +212,13 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
                       // there (success modal / hand-off to the plans recovery).
                       onClick={() => subscribeTo(plan)}
                     >
-                      {isRecommended ? 'Продолжить общение' : t('modal.exhausted.select')}
+                      {RECURRING_PAY_LABEL}
                     </Button>
-                    {/* Recurring disclosure — see recurringDisclosure.ts. */}
+                    {/* ФЗ 376 — consent tied to the action; the statement
+                        quotes the button label verbatim. «Продолжить
+                        общение» hid that the tap takes money. */}
                     <Text style={{ fontSize: 11 }} type="secondary">
-                      {recurringDisclosure(plan.priceRub)}
+                      {recurringConsentText(plan.priceRub)}
                     </Text>
                   </Flexbox>
                 </Card>

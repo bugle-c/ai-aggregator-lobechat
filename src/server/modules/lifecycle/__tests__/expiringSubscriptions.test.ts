@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   EXPIRED_BANNER_WINDOW_DAYS,
   EXPIRED_EMAIL_WINDOW_DAYS,
+  hasPreChargeChannel,
   isAutoRenewing,
   isExpiredNoticeDue,
   isExpiringWithinWindow,
@@ -280,5 +281,22 @@ describe('isAutoRenewing', () => {
 
   it('is false for a plain free/lapsed row', () => {
     expect(isAutoRenewing({ autoRenew: false, hasSavedPaymentMethod: false })).toBe(false);
+  });
+});
+
+// ФЗ 376: a charge may not happen without a notice, so "can we notify at all"
+// is a hard precondition for charging — see canAutoChargeStoredMethod.
+describe('hasPreChargeChannel', () => {
+  it('true for a real email address', () => {
+    expect(hasPreChargeChannel({ email: 'real@example.com', tgBotChatId: null })).toBe(true);
+  });
+
+  it('true for a TG-native user with a bot chat, synthetic email and all', () => {
+    expect(hasPreChargeChannel({ email: 'tg_1@bot.gptweb.ru', tgBotChatId: 1 })).toBe(true);
+  });
+
+  it('false when the only address is synthetic and there is no bot chat', () => {
+    expect(hasPreChargeChannel({ email: 'tg_1@bot.gptweb.ru', tgBotChatId: null })).toBe(false);
+    expect(hasPreChargeChannel({ email: null, tgBotChatId: null })).toBe(false);
   });
 });
