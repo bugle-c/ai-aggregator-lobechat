@@ -4,6 +4,7 @@ import { App } from 'antd';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { selectBalanceView } from '@/business/client/balanceView';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -57,15 +58,20 @@ const FirstMessageToast = memo(() => {
     // Detect first transition where credits were spent.
     if (used > prev) {
       firedRef.current = true;
-      const remaining = Math.max(0, credit.totalAvailable - used);
       const charged = Math.max(1, used - prev);
+      // EXP-003: a free user's first message must not be answered with
+      // «осталось 2499 из 2500» — their real allowance is 5 a day.
+      const view = selectBalanceView(credit);
 
       notification.open({
-        description: t('toast.body', {
-          charged,
-          remaining,
-          total: credit.totalAvailable,
-        }),
+        description:
+          view.kind === 'daily'
+            ? t('toast.bodyDaily', { quota: view.quota, remaining: view.remaining })
+            : t('toast.body', {
+                charged,
+                remaining: view.remaining,
+                total: credit.totalAvailable,
+              }),
         duration: 6,
         message: t('toast.title'),
         placement: 'topRight',

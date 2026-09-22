@@ -6,6 +6,7 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { selectBalanceView } from '@/business/client/balanceView';
 import { creditsToHuman } from '@/business/utils/creditsToHuman';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
@@ -49,19 +50,41 @@ const LowBalanceWarning = memo(() => {
 
   if (!data || dismissed) return null;
 
-  const { creditsUsed, totalAvailable, usagePercent } = data;
-  const remaining = totalAvailable - creditsUsed;
+  const view = selectBalanceView(data);
 
+  // EXP-003: on the free plan the binding limit is the daily message quota —
+  // the monthly pool is a safety cap and must not drive the hint. Free users
+  // whose purchased credits lift the gate get no hint: the badge shows the
+  // exact remainder, and once it is spent the daily hint takes over.
+  if (view.kind === 'purchased') return null;
+
+  const isDaily = view.kind === 'daily';
+  if (isDaily && view.remaining > 1) return null;
+
+  const { usagePercent } = data;
+  const remaining = view.remaining;
   // Soft heads-up from 50% (info), real warning from 80%; 0 case is handled by
   // the exhausted modal.
-  if (usagePercent < 50 || remaining <= 0) return null;
-  const isSoft = usagePercent < 80;
+  if (!isDaily && (usagePercent < 50 || remaining <= 0)) return null;
+  const isSoft = !isDaily && usagePercent < 80;
 
+  // A cheaper model does not stretch a per-message quota — offer it only
+  // when credits are the constraint.
   const isOnMini = currentModel === WEBGPT_MINI.model;
+  const showSwitchMini = !isDaily && !isOnMini;
+
   const human = creditsToHuman(remaining);
   // Russian plural agreement for «картинка/картинки/картинок».
   const imgWord = pluralRu(human.images, ['картинка', 'картинки', 'картинок']);
   const humanStr = `≈ ${human.images} ${imgWord}`;
+
+  const title = isDaily
+    ? remaining === 0
+      ? t('warning.dailyEmpty', { time: view.resetTime })
+      : t('warning.dailyLast', { time: view.resetTime })
+    : isSoft
+      ? t('warning.halfUsed', { human: humanStr, remaining })
+      : t('warning.lowBalance', { remaining });
 
   return (
     <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
@@ -82,7 +105,7 @@ const LowBalanceWarning = memo(() => {
                 {t('warning.upgrade')}
               </Button>
             </Flexbox>
-            {!isOnMini && (
+            {showSwitchMini && (
               <Button
                 size="small"
                 style={{ height: 'auto', padding: 0, textAlign: 'start' }}
@@ -94,11 +117,7 @@ const LowBalanceWarning = memo(() => {
             )}
           </Flexbox>
         }
-        message={
-          isSoft
-            ? t('warning.halfUsed', { human: humanStr, remaining })
-            : t('warning.lowBalance', { remaining })
-        }
+        message={title}
         onClose={handleDismiss}
       />
     </Flexbox>

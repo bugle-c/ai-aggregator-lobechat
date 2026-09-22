@@ -75,16 +75,23 @@ export default {
   'username.title3': 'That way, we can chat more naturally from now on~',
 
   // ============ Onboarding flow (welcome modal, balance badge, etc.) ============
+  'balance.daily': '{{quota}} messages a day · {{remaining}} left',
+  'balance.dailyEmptyTooltip':
+    'No messages left today — they refill at {{time}} MSK. Paid plans have no daily limit',
+  'balance.dailyShort': '{{remaining}} of {{quota}} today',
+  'balance.dailyTooltip': 'Refills at {{time}} MSK',
   'balance.empty': '💰 0 credits',
   'balance.emptyTooltip': 'Credits run out — top up to keep chatting',
   'balance.human': '≈ {{images}} картинок или {{answers}} ответов',
   'balance.label': '💰 {{count}} credits',
   'balance.lowTooltip': 'Running low on credits — want to top up?',
+  'balance.purchased': '💰 {{count}} credits · no daily limit',
   'suggested.hint': 'Try one of these prompts to get started',
   'suggested.prompt1': '✍️ Help me write a work email',
   'suggested.prompt2': '📚 Explain a complex term in simple words',
   'suggested.prompt3': '💡 Help me brainstorm an idea for a project',
   'toast.body': 'Charged {{charged}} credits. {{remaining}} of {{total}} left.',
+  'toast.bodyDaily': '{{remaining}} of {{quota}} messages left today.',
   'toast.title': 'Message sent',
   'uiMode.light': 'Beginner',
   'uiMode.pro': 'Pro',

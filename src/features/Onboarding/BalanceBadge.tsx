@@ -5,6 +5,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { selectBalanceView } from '@/business/client/balanceView';
 import { creditsToHuman } from '@/business/utils/creditsToHuman';
 import BalanceExplainSheet from '@/features/MobileGlobalHeader/BalanceExplainSheet';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -17,11 +18,13 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 /**
  * Top-bar balance badge.
  *
- * Shows remaining credits = (creditLimit - creditsUsed + creditBalance).
- * Colors:
- *   green  -> plenty of credits
- *   orange -> ≤ 5 remaining (tooltip nudges top-up)
- *   red    -> 0 remaining (clicks to /settings/plans)
+ * Variant comes from `selectBalanceView` (EXP-003):
+ *   daily     — free plan: «5 сообщений в день · осталось N» (short «N из 5
+ *               сегодня» on mobile); orange at 1 left, red at 0
+ *   purchased — free plan with purchased credits lifting the daily gate:
+ *               «N кредитов · без дневного лимита»
+ *   credits   — paid plans: remaining monthly credits, orange ≤ 5, red at 0
+ * Click: mobile opens the explainer sheet, desktop goes to /settings/plans.
  */
 const BalanceBadge = memo(() => {
   const { t } = useTranslation('onboarding');
@@ -49,9 +52,7 @@ const BalanceBadge = memo(() => {
 
   if (!isLogin || !data) return null;
 
-  const remaining = Math.max(0, data.totalAvailable - data.creditsUsed);
-  const isLow = remaining > 0 && remaining <= 5;
-  const isEmpty = remaining <= 0;
+  const view = selectBalanceView(data);
 
   const handleClick = () => {
     // Mobile: open the credit-explainer bottom-sheet (offers context +
@@ -64,49 +65,64 @@ const BalanceBadge = memo(() => {
     navigate('/settings/plans');
   };
 
+  let isEmpty: boolean;
+  let isLow: boolean;
+  let label: string;
+  let tooltip: string;
+
+  if (view.kind === 'daily') {
+    const { quota, remaining, resetTime } = view;
+    isEmpty = remaining <= 0;
+    isLow = remaining === 1;
+    label = isMobile
+      ? t('balance.dailyShort', { quota, remaining })
+      : t('balance.daily', { quota, remaining });
+    tooltip = isEmpty
+      ? t('balance.dailyEmptyTooltip', { time: resetTime })
+      : t('balance.dailyTooltip', { time: resetTime });
+  } else {
+    const { remaining } = view;
+    isEmpty = remaining <= 0;
+    isLow = remaining > 0 && remaining <= 5;
+    label =
+      view.kind === 'purchased'
+        ? t('balance.purchased', { count: remaining })
+        : isEmpty
+          ? t('balance.empty')
+          : t('balance.label', { count: remaining });
+    // Human-work equivalent so users reason in «картинки и ответы», not credits.
+    const human = creditsToHuman(remaining);
+    const humanLine = t('balance.human', { answers: human.answers, images: human.images });
+    tooltip = isEmpty
+      ? t('balance.emptyTooltip')
+      : isLow
+        ? `${t('balance.lowTooltip')} ${humanLine}`
+        : humanLine;
+  }
+
   const color = isEmpty ? 'red' : isLow ? 'orange' : 'green';
-  const label = isEmpty ? t('balance.empty') : t('balance.label', { count: remaining });
-
-  const tag = (
-    <Tag
-      color={color}
-      style={{
-        borderRadius: 12,
-        cursor: 'pointer',
-        fontSize: 12,
-        fontWeight: 500,
-        marginInlineEnd: 0,
-        paddingBlock: 2,
-        paddingInline: 10,
-      }}
-      onClick={handleClick}
-    >
-      {label}
-    </Tag>
-  );
-
-  // Human-work equivalent so users reason in «картинки и ответы», not credits.
-  const human = creditsToHuman(remaining);
-  const humanLine = t('balance.human', { answers: human.answers, images: human.images });
-
-  const wrapped = isEmpty ? (
-    <Tooltip title={t('balance.emptyTooltip')}>{tag}</Tooltip>
-  ) : isLow ? (
-    <Tooltip title={`${t('balance.lowTooltip')} ${humanLine}`}>{tag}</Tooltip>
-  ) : (
-    <Tooltip title={humanLine}>{tag}</Tooltip>
-  );
 
   return (
     <>
-      {wrapped}
+      <Tooltip title={tooltip}>
+        <Tag
+          color={color}
+          style={{
+            borderRadius: 12,
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 500,
+            marginInlineEnd: 0,
+            paddingBlock: 2,
+            paddingInline: 10,
+          }}
+          onClick={handleClick}
+        >
+          {label}
+        </Tag>
+      </Tooltip>
       {isMobile && (
-        <BalanceExplainSheet
-          monthlyResetDate={null}
-          open={sheetOpen}
-          remainingCredits={remaining}
-          onClose={() => setSheetOpen(false)}
-        />
+        <BalanceExplainSheet open={sheetOpen} view={view} onClose={() => setSheetOpen(false)} />
       )}
     </>
   );

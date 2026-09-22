@@ -486,5 +486,15 @@
   "zarinpal.infoModal.phone.placeholder": "Введите номер телефона",
   "zarinpal.infoModal.phone.rule": "Введите корректный номер телефона",
   "zarinpal.infoModal.submit": "Купить",
-  "zarinpal.infoModal.title": "Заполните обязательную информацию"
+  "zarinpal.infoModal.title": "Заполните обязательную информацию",
+  "widget.dailyTitle": "{{plan}} · {{quota}} сообщений в день",
+  "widget.purchased": "{{count}} кредитов · без дневного лимита",
+  "freeQuota.bonus": "Бонус: {{count}} кредитов до {{date}}",
+  "freeQuota.planCard": "{{quota}} сообщений в день",
+  "freeQuota.purchased": "Купленные кредиты: {{count}} · без дневного лимита",
+  "freeQuota.today": "Сегодня: {{remaining}} из {{quota}} сообщений · обновится в {{time}} МСК",
+  "freeQuota.welcome": "{{plan}} · сегодня: {{remaining}} из {{quota}} сообщений",
+  "freeQuota.welcomePurchased": "{{plan}}: {{count}} кредитов · без дневного лимита",
+  "warning.dailyEmpty": "Сообщения на сегодня закончились — обновятся в {{time}} МСК",
+  "warning.dailyLast": "Осталось 1 сообщение на сегодня — обновится в {{time}} МСК"
 }

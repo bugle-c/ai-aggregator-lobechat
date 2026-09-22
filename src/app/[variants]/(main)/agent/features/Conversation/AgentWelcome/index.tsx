@@ -7,6 +7,7 @@ import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { selectBalanceView } from '@/business/client/balanceView';
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { lambdaQuery } from '@/libs/trpc/client';
@@ -20,7 +21,7 @@ import OpeningQuestions from './OpeningQuestions';
 import ToolAuthAlert from './ToolAuthAlert';
 
 const InboxWelcome = memo(() => {
-  const { t } = useTranslation(['welcome', 'chat']);
+  const { t } = useTranslation(['welcome', 'chat', 'subscription']);
   const mobile = useIsMobile();
   const isLogin = useUserStore(authSelectors.isLogin);
   const { data: creditState } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
@@ -44,6 +45,33 @@ const InboxWelcome = memo(() => {
   }, [openingMessage, agentSystemRoleMsg, meta.description]);
 
   const displayTitle = isInbox ? 'WebGPT' : meta.title || t('defaultSession', { ns: 'common' });
+
+  // EXP-003: free users see today's message allowance, not «2464 / 2500
+  // кредитов» — the monthly cap is a safety net they never get to spend.
+  const balance = creditState ? selectBalanceView(creditState) : null;
+  const balanceLine =
+    balance && creditState
+      ? balance.kind === 'daily'
+        ? t('freeQuota.welcome', {
+            ns: 'subscription',
+            plan: creditState.planName,
+            quota: balance.quota,
+            remaining: balance.remaining,
+          })
+        : balance.kind === 'purchased'
+          ? t('freeQuota.welcomePurchased', {
+              count: balance.remaining,
+              ns: 'subscription',
+              plan: creditState.planName,
+            })
+          : `${creditState.planName}: ${balance.remaining} / ${balance.total} кредитов`
+      : null;
+  const balancePercent =
+    balance?.kind === 'daily'
+      ? Math.round((balance.used / balance.quota) * 100)
+      : balance?.kind === 'credits'
+        ? creditState!.usagePercent
+        : null;
 
   return (
     <>
@@ -80,24 +108,18 @@ const InboxWelcome = memo(() => {
             }}
           >
             <Flexbox horizontal align="center" justify="space-between">
-              <Text style={{ fontSize: 13 }}>
-                {creditState.planName}:{' '}
-                {Math.max(0, creditState.totalAvailable - creditState.creditsUsed)} /{' '}
-                {creditState.totalAvailable} кредитов
-              </Text>
+              <Text style={{ fontSize: 13 }}>{balanceLine}</Text>
             </Flexbox>
-            <Progress
-              percent={creditState.usagePercent}
-              showInfo={false}
-              size="small"
-              strokeColor={
-                creditState.usagePercent > 90
-                  ? '#ff4d4f'
-                  : creditState.usagePercent > 70
-                    ? '#faad14'
-                    : '#1677ff'
-              }
-            />
+            {balancePercent !== null && (
+              <Progress
+                percent={balancePercent}
+                showInfo={false}
+                size="small"
+                strokeColor={
+                  balancePercent > 90 ? '#ff4d4f' : balancePercent > 70 ? '#faad14' : '#1677ff'
+                }
+              />
+            )}
             {creditState.nextPlanName && (
               <Flexbox horizontal align="center" gap={8}>
                 <Text style={{ fontSize: 12 }} type="secondary">

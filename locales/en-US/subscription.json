@@ -388,7 +388,6 @@
   "referrals.yourLink": "Your link",
   "sessionCard.title": "Ready to leave the free plan? Upgrade to enjoy premium features.",
   "sidebar.referral": "Invite",
-
   "summary.desc": "This amount only includes subscription service expenses.",
   "summary.dueBy": "Due on {{date}}",
   "summary.nextPayment": "Your Next Payment",
@@ -443,5 +442,15 @@
   "zarinpal.infoModal.phone.placeholder": "Please enter phone number",
   "zarinpal.infoModal.phone.rule": "Please enter a valid phone number",
   "zarinpal.infoModal.submit": "Purchase",
-  "zarinpal.infoModal.title": "Fill in Required Information"
+  "zarinpal.infoModal.title": "Fill in Required Information",
+  "widget.dailyTitle": "{{plan}} · {{quota}} messages a day",
+  "widget.purchased": "{{count}} credits · no daily limit",
+  "freeQuota.bonus": "Bonus: {{count}} credits until {{date}}",
+  "freeQuota.planCard": "{{quota}} messages a day",
+  "freeQuota.purchased": "Purchased credits: {{count}} · no daily limit",
+  "freeQuota.today": "Today: {{remaining}} of {{quota}} messages · refills at {{time}} MSK",
+  "freeQuota.welcome": "{{plan}} · today: {{remaining}} of {{quota}} messages",
+  "freeQuota.welcomePurchased": "{{plan}}: {{count}} credits · no daily limit",
+  "warning.dailyEmpty": "No messages left today — they refill at {{time}} MSK",
+  "warning.dailyLast": "1 message left today — refills at {{time}} MSK"
 }

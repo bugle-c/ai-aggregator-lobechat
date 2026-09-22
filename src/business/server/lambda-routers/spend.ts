@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { activeBonusFor } from '@/server/modules/billing/active-bonus';
+import { decideUsageLimit } from '@/server/modules/billing/checkUsageLimit';
 import {
   countUserMessagesSince,
   FREE_DAILY_MESSAGE_QUOTA,
@@ -10,6 +11,7 @@ import {
   moscowDayStart,
   nextMoscowDayStart,
 } from '@/server/modules/billing/daily-quota';
+import { paidBonusFor } from '@/server/modules/billing/intro-offer';
 import {
   getRequiredPlanForModelAsync,
   isModelAllowedForPlanAsync,
@@ -76,10 +78,36 @@ export const spendRouter = router({
       ? await countUserMessagesSince(ctx.serverDB, ctx.userId, moscowDayStart(now))
       : null;
 
+    // Is the daily gate currently lifted by purchased credits (top-up or the
+    // MAGIC48 paid bonus)? The rule lives in `decideUsageLimit` only — we ask
+    // the gate itself with a probe one message past the quota, so the UI can
+    // never drift from what the chat route enforces. `purchasedRemaining` is
+    // the same budget the gate spends: purchase minus this month's usage.
+    const bonus = activeBonusFor(billing);
+    const paidBonus = isFree ? await paidBonusFor(ctx.serverDB, ctx.userId, billing, now) : 0;
+    const dailyGateBypassed =
+      isFree &&
+      decideUsageLimit({
+        bonus,
+        creditLimit,
+        dailyUsed: FREE_DAILY_MESSAGE_QUOTA + 1,
+        kind: 'chat',
+        paidBonus,
+        planSlug: plan?.slug,
+        tokenBalance: billing.tokenBalance,
+        tokensUsedMonth: billing.tokensUsedMonth,
+      }).allowed;
+    const purchasedRemaining = dailyGateBypassed
+      ? Math.max(0, billing.tokenBalance + paidBonus - billing.tokensUsedMonth)
+      : 0;
+
     return {
+      bonusActive: bonus,
+      bonusExpiresAt: bonus > 0 ? (billing.bonusBalanceExpiresAt?.toISOString() ?? null) : null,
       creditBalance: billing.tokenBalance,
       creditLimit,
       creditsUsed: billing.tokensUsedMonth,
+      dailyGateBypassed,
       dailyQuota: isFree ? FREE_DAILY_MESSAGE_QUOTA : null,
       dailyRemaining: dailyUsed === null ? null : Math.max(0, FREE_DAILY_MESSAGE_QUOTA - dailyUsed),
       dailyResetAt: isFree ? nextMoscowDayStart(now).toISOString() : null,
@@ -89,6 +117,7 @@ export const spendRouter = router({
       nextPlanPrice: nextPlan?.priceRub ?? null,
       planName: plan?.name || 'Free',
       planSlug: plan?.slug || 'free',
+      purchasedRemaining,
       totalAvailable,
       usagePercent: Math.min(usagePercent, 100),
     };
