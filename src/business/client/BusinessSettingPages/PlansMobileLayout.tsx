@@ -6,6 +6,10 @@ import { Check } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { FREE_DAILY_MESSAGE_QUOTA_HINT, type FreeQuota } from '@/business/client/balanceView';
+
+import FreeQuotaSummary from './FreeQuotaSummary';
+
 const { Text, Title } = Typography;
 
 interface Plan {
@@ -39,6 +43,8 @@ interface Props {
   currentPlan?: CurrentPlan | null;
   /** Codes/labels per plan slug — caller passes their localized list. */
   features?: Record<string, string[]>;
+  /** EXP-003: free-plan daily allowance; replaces the credit bar when set. */
+  freeQuota?: FreeQuota | null;
   /** ID of the slug we want to highlight as the recommended plan. */
   highlightedSlug?: string;
   loading?: boolean;
@@ -69,6 +75,7 @@ const PlansMobileLayout = memo<Props>(
     billing,
     currentPlan,
     features = {},
+    freeQuota,
     highlightedSlug = 'pro',
     loading,
     plans,
@@ -99,14 +106,22 @@ const PlansMobileLayout = memo<Props>(
               <Text type="secondary">до {formatDate(billing.subscriptionExpiresAt)}</Text>
             )}
           </Flexbox>
-          <Progress
-            format={() => `${billing.creditsUsed} / ${totalAvailable} кредитов`}
-            percent={Math.min(usagePercent, 100)}
-            strokeColor={usagePercent > 90 ? '#ff4d4f' : usagePercent > 70 ? '#faad14' : undefined}
-          />
-          <Text style={{ marginTop: 4 }} type="secondary">
-            План: {billing.creditLimit} кредитов | Пополнения: {billing.creditBalance} кредитов
-          </Text>
+          {freeQuota ? (
+            <FreeQuotaSummary {...freeQuota} />
+          ) : (
+            <>
+              <Progress
+                format={() => `${billing.creditsUsed} / ${totalAvailable} кредитов`}
+                percent={Math.min(usagePercent, 100)}
+                strokeColor={
+                  usagePercent > 90 ? '#ff4d4f' : usagePercent > 70 ? '#faad14' : undefined
+                }
+              />
+              <Text style={{ marginTop: 4 }} type="secondary">
+                План: {billing.creditLimit} кредитов | Пополнения: {billing.creditBalance} кредитов
+              </Text>
+            </>
+          )}
         </Block>
 
         {plans.map((plan) => {
@@ -142,7 +157,11 @@ const PlansMobileLayout = memo<Props>(
                 )}
               </Title>
 
-              <Text strong>{plan.tokenLimit} кредитов в месяц</Text>
+              <Text strong>
+                {plan.priceRub === 0
+                  ? t('freeQuota.planCard', { quota: FREE_DAILY_MESSAGE_QUOTA_HINT })
+                  : `${plan.tokenLimit} кредитов в месяц`}
+              </Text>
 
               <Flexbox gap={6} paddingBlock={12}>
                 {planFeatures.map((featureKey) => (

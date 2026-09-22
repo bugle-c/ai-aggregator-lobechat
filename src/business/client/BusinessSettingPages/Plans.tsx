@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
 import { reachGoal } from '@/business/client/analytics/ym';
+import { FREE_DAILY_MESSAGE_QUOTA_HINT, freeQuotaOf } from '@/business/client/balanceView';
 import IntroOfferBanner from '@/business/client/IntroOffer/IntroOfferBanner';
 import { creditsToHuman } from '@/business/utils/creditsToHuman';
 import PaymentTrustBadges from '@/components/PaymentTrustBadges';
@@ -31,6 +32,7 @@ import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
+import FreeQuotaSummary from './FreeQuotaSummary';
 import PlansMobileLayout from './PlansMobileLayout';
 
 const CANCEL_REASONS: { code: string; label: string }[] = [
@@ -44,10 +46,10 @@ const CANCEL_REASONS: { code: string; label: string }[] = [
 
 const { Text, Title } = Typography;
 
-// Approximate messages per credit (1 credit ≈ 1 message)
+// Approximate messages per credit (1 credit ≈ 1 message). The free card
+// states its daily quota outright (EXP-003), so it carries no hint.
 const MESSAGES_HINT: Record<string, string> = {
   basic: '~33 сообщений/день',
-  free: '~50 сообщений',
   pro: '~330 сообщений/день',
 };
 
@@ -116,6 +118,11 @@ const Plans = memo(() => {
   const { data: billing, isLoading: billingLoading } =
     lambdaQuery.subscription.getBillingState.useQuery(undefined, { enabled: isLogin });
   const { data: packages } = lambdaQuery.topUp.getPackages.useQuery(undefined, {
+    enabled: isLogin,
+  });
+  // EXP-003: free users see today's message allowance, not the monthly
+  // credit cap. Same query the header badge keeps warm (shared cache).
+  const { data: creditState } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
     enabled: isLogin,
   });
 
@@ -411,6 +418,7 @@ const Plans = memo(() => {
   const creditBalance = billing?.creditBalance || 0;
   const totalAvailable = creditLimit + creditBalance;
   const usagePercent = totalAvailable > 0 ? Math.round((creditsUsed / totalAvailable) * 100) : 0;
+  const freeQuota = creditState ? freeQuotaOf(creditState) : null;
 
   // Post-payment success modal, shared by both render branches. Mounted
   // only after a success so its recent-topics fetch doesn't run on every
@@ -508,6 +516,7 @@ const Plans = memo(() => {
         <IntroOfferBanner />
         <PlansMobileLayout
           features={PLAN_FEATURES}
+          freeQuota={freeQuota}
           subscribePending={subscribeMutation.isPending}
           topUpPending={topUpMutation.isPending}
           billing={{
@@ -590,14 +599,22 @@ const Plans = memo(() => {
             </Text>
           )}
         </Flexbox>
-        <Progress
-          format={() => `${creditsUsed} / ${totalAvailable} кредитов`}
-          percent={Math.min(usagePercent, 100)}
-          strokeColor={usagePercent > 90 ? '#ff4d4f' : usagePercent > 70 ? '#faad14' : undefined}
-        />
-        <Text style={{ marginTop: 4 }} type="secondary">
-          План: {creditLimit} кредитов | Пополнения: {creditBalance} кредитов
-        </Text>
+        {freeQuota ? (
+          <FreeQuotaSummary {...freeQuota} />
+        ) : (
+          <>
+            <Progress
+              format={() => `${creditsUsed} / ${totalAvailable} кредитов`}
+              percent={Math.min(usagePercent, 100)}
+              strokeColor={
+                usagePercent > 90 ? '#ff4d4f' : usagePercent > 70 ? '#faad14' : undefined
+              }
+            />
+            <Text style={{ marginTop: 4 }} type="secondary">
+              План: {creditLimit} кредитов | Пополнения: {creditBalance} кредитов
+            </Text>
+          </>
+        )}
 
         {currentPlan && currentPlan.priceRub > 0 && (
           <>
@@ -764,11 +781,19 @@ const Plans = memo(() => {
                   </Text>
                 )}
                 <Divider style={{ margin: '4px 0' }} />
-                <Text strong>{plan.tokenLimit} кредитов/мес</Text>
-                <Text style={{ fontSize: 12, marginTop: -2 }} type="secondary">
-                  ≈ {creditsToHuman(plan.tokenLimit).answers} ответов или{' '}
-                  {creditsToHuman(plan.tokenLimit).images} картинок
-                </Text>
+                {plan.priceRub === 0 ? (
+                  <Text strong>
+                    {t('freeQuota.planCard', { quota: FREE_DAILY_MESSAGE_QUOTA_HINT })}
+                  </Text>
+                ) : (
+                  <>
+                    <Text strong>{plan.tokenLimit} кредитов/мес</Text>
+                    <Text style={{ fontSize: 12, marginTop: -2 }} type="secondary">
+                      ≈ {creditsToHuman(plan.tokenLimit).answers} ответов или{' '}
+                      {creditsToHuman(plan.tokenLimit).images} картинок
+                    </Text>
+                  </>
+                )}
                 {hint && (
                   <Text style={{ fontSize: 12 }} type="secondary">
                     {hint}

@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { memo } from 'react';
 
+import { selectBalanceView } from '@/business/client/balanceView';
 import { SuggestedPrompts } from '@/features/Onboarding';
 import MobileUpgradePill from '@/features/Upsell/MobileUpgradePill';
 import { lambdaQuery } from '@/libs/trpc/client';
@@ -30,9 +31,11 @@ const MobileHome = memo<Props>(({ onSelectPrompt }) => {
 
   useMobileAutofocus({ enabled: firstVisit });
 
-  // The pill renders only for free users who've used >50% of their
-  // monthly quota — read from the same `getCreditState` endpoint that
-  // BalanceBadge uses, so we don't add another query.
+  // The pill renders only for free users running low — read from the same
+  // `getCreditState` endpoint that BalanceBadge uses, so we don't add
+  // another query. EXP-003: under the daily gate «low» means ≤ 1 message
+  // left today (the monthly pool is a safety cap free users never reach);
+  // with purchased credits lifting the gate the old >50 % monthly rule holds.
   const { data: creditState } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
     enabled: isLogin,
     refetchInterval: 60_000,
@@ -43,11 +46,14 @@ const MobileHome = memo<Props>(({ onSelectPrompt }) => {
     staleTime: 60_000,
   });
   const isFreePlan = billingState?.plan?.priceRub === 0 || billingState?.plan?.slug === 'free';
-  const usagePctOver50 =
-    creditState != null &&
-    creditState.totalAvailable > 0 &&
-    creditState.creditsUsed / creditState.totalAvailable > 0.5;
-  const showUpgradePill = !!isFreePlan && usagePctOver50;
+  const balance = creditState ? selectBalanceView(creditState) : null;
+  const runningLow =
+    balance?.kind === 'daily'
+      ? balance.remaining <= 1
+      : creditState != null &&
+        creditState.totalAvailable > 0 &&
+        creditState.creditsUsed / creditState.totalAvailable > 0.5;
+  const showUpgradePill = !!isFreePlan && runningLow;
 
   return (
     <Flexbox gap={16} paddingBlock={8}>

@@ -3,15 +3,17 @@
 import { Flexbox } from '@lobehub/ui';
 import { Button, Drawer, Typography } from 'antd';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+
+import { type BalanceView } from '@/business/client/balanceView';
 
 const { Text, Title } = Typography;
 
 interface Props {
-  monthlyResetDate?: string | null;
   onClose: () => void;
   open: boolean;
-  remainingCredits: number;
+  view: BalanceView;
 }
 
 /**
@@ -23,12 +25,27 @@ interface Props {
  * paths to top up: ad-hoc (Купить ещё → /settings/funds) or upgrade
  * (Перейти на Pro → /settings/plans).
  *
+ * The «what you have» line follows the badge variant (EXP-003): free users
+ * see today's message allowance, not the monthly credit cap.
+ *
  * Caller controls open state (typically the BalanceBadge wrapper). On
  * first dismiss, the badge can persist a `balance_explained_seen` cookie
  * to avoid auto-opening on subsequent visits — that's caller's concern.
  */
-const BalanceExplainSheet = memo<Props>(({ monthlyResetDate, onClose, open, remainingCredits }) => {
+const BalanceExplainSheet = memo<Props>(({ onClose, open, view }) => {
+  const { t } = useTranslation('subscription');
   const navigate = useNavigate();
+
+  const status =
+    view.kind === 'daily'
+      ? t('freeQuota.today', {
+          quota: view.quota,
+          remaining: view.remaining,
+          time: view.resetTime,
+        })
+      : view.kind === 'purchased'
+        ? t('freeQuota.purchased', { count: view.remaining })
+        : `У вас ${view.remaining} кредитов.`;
 
   return (
     <Drawer
@@ -46,10 +63,7 @@ const BalanceExplainSheet = memo<Props>(({ monthlyResetDate, onClose, open, rema
         <Text type="secondary">5 кредитов = 1 картинка Flux</Text>
         <Text type="secondary">50 кредитов = 1 картинка Nano Banana Pro</Text>
         <Text type="secondary">200 кредитов = 1 минута видео Seedance</Text>
-        <Text style={{ marginBlockStart: 12 }}>У вас {remainingCredits} кредитов.</Text>
-        {monthlyResetDate && (
-          <Text type="secondary">Бесплатные кредиты обновятся {monthlyResetDate}.</Text>
-        )}
+        <Text style={{ marginBlockStart: 12 }}>{status}</Text>
         <Button
           block
           type="default"

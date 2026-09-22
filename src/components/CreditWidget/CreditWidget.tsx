@@ -7,12 +7,22 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { selectBalanceView } from '@/business/client/balanceView';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 const { Text } = Typography;
 
+const strokeFor = (percent: number) =>
+  percent > 90 ? '#ff4d4f' : percent > 70 ? '#faad14' : '#1677ff';
+
+/**
+ * Sidebar plan card. Free plan (EXP-003) shows «Старт · 5 сообщений в день»
+ * with today's usage as the bar; with purchased credits lifting the daily
+ * gate it shows the purchased remainder and no bar (the monthly pool is a
+ * safety cap, not a budget). Paid plans keep the monthly credit bar.
+ */
 const CreditWidget = memo(() => {
   const { t } = useTranslation('subscription');
   const navigate = useNavigate();
@@ -27,10 +37,23 @@ const CreditWidget = memo(() => {
 
   if (isLoading || !data) return null;
 
-  const { planName, creditsUsed, totalAvailable, usagePercent, planSlug } = data;
-  const remaining = Math.max(0, totalAvailable - creditsUsed);
+  const { planName, usagePercent, planSlug } = data;
+  const view = selectBalanceView(data);
 
-  const strokeColor = usagePercent > 90 ? '#ff4d4f' : usagePercent > 70 ? '#faad14' : '#1677ff';
+  const title =
+    view.kind === 'daily' ? t('widget.dailyTitle', { plan: planName, quota: view.quota }) : planName;
+  const counter =
+    view.kind === 'daily'
+      ? `${view.used} / ${view.quota}`
+      : view.kind === 'purchased'
+        ? t('widget.purchased', { count: view.remaining })
+        : `${view.remaining} / ${view.total}`;
+  const percent =
+    view.kind === 'daily'
+      ? Math.round((view.used / view.quota) * 100)
+      : view.kind === 'credits'
+        ? usagePercent
+        : null;
 
   return (
     <Flexbox
@@ -47,14 +70,16 @@ const CreditWidget = memo(() => {
         <Flexbox horizontal align="center" gap={4}>
           <Icon icon={Zap} size={14} />
           <Text style={{ fontSize: 12 }} type="secondary">
-            {planName}
+            {title}
           </Text>
         </Flexbox>
         <Text style={{ fontSize: 12 }} type="secondary">
-          {remaining} / {totalAvailable}
+          {counter}
         </Text>
       </Flexbox>
-      <Progress percent={usagePercent} showInfo={false} size="small" strokeColor={strokeColor} />
+      {percent !== null && (
+        <Progress percent={percent} showInfo={false} size="small" strokeColor={strokeFor(percent)} />
+      )}
       {planSlug !== 'pro' && (
         <Text style={{ fontSize: 11 }} type="secondary">
           {t('widget.upgrade')}

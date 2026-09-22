@@ -433,9 +433,22 @@ export default {
   'zarinpal.infoModal.title': 'Fill in Required Information',
 
   // Credit widget (sidebar)
+  'widget.dailyTitle': '{{plan}} · {{quota}} сообщений в день',
+  'widget.purchased': '{{count}} кредитов · без дневного лимита',
   'widget.upgrade': 'Улучшить план →',
 
+  // Free plan (EXP-003): daily quota instead of the monthly credit pool —
+  // shared by /settings/plans, the usage page and the chat welcome card
+  'freeQuota.bonus': 'Бонус: {{count}} кредитов до {{date}}',
+  'freeQuota.planCard': '{{quota}} сообщений в день',
+  'freeQuota.purchased': 'Купленные кредиты: {{count}} · без дневного лимита',
+  'freeQuota.today': 'Сегодня: {{remaining}} из {{quota}} сообщений · обновится в {{time}} МСК',
+  'freeQuota.welcome': '{{plan}} · сегодня: {{remaining}} из {{quota}} сообщений',
+  'freeQuota.welcomePurchased': '{{plan}}: {{count}} кредитов · без дневного лимита',
+
   // Low balance warning
+  'warning.dailyEmpty': 'Сообщения на сегодня закончились — обновятся в {{time}} МСК',
+  'warning.dailyLast': 'Осталось 1 сообщение на сегодня — обновится в {{time}} МСК',
   'warning.halfUsed': 'Израсходована половина лимита — осталось {{remaining}} кредитов ({{human}})',
   'warning.lowBalance': 'Осталось {{remaining}} кредитов',
   'warning.switchMini': 'Перейти на дешёвую WebGPT Mini',

@@ -6,7 +6,12 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
+import { freeQuotaOf } from '@/business/client/balanceView';
 import { lambdaQuery } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
+
+import FreeQuotaSummary from './FreeQuotaSummary';
 
 const { Text, Title } = Typography;
 
@@ -18,8 +23,14 @@ const formatTokens = (n: number) => {
 
 const Usage = memo(() => {
   const { t } = useTranslation('subscription');
+  const isLogin = useUserStore(authSelectors.isLogin);
 
   const { data, isLoading } = lambdaQuery.spend.getUsageSummary.useQuery();
+  // EXP-003: free users get today's message allowance instead of the
+  // «36 / 2500» monthly bar; the monthly cap is a safety net, not a budget.
+  const { data: creditState } = lambdaQuery.spend.getCreditState.useQuery(undefined, {
+    enabled: isLogin,
+  });
 
   if (isLoading) {
     return (
@@ -38,6 +49,7 @@ const Usage = memo(() => {
   const creditsUsed = data?.creditsUsed || 0;
   const totalAvailable = data?.totalAvailable || 0;
   const usagePercent = data?.usagePercent || 0;
+  const freeQuota = creditState ? freeQuotaOf(creditState) : null;
 
   return (
     <>
@@ -48,19 +60,27 @@ const Usage = memo(() => {
           {t('usage.credit.title')}
         </Title>
 
-        <Progress
-          format={() => `${formatTokens(creditsUsed)} / ${formatTokens(totalAvailable)}`}
-          percent={usagePercent}
-          strokeColor={usagePercent > 90 ? '#ff4d4f' : usagePercent > 70 ? '#faad14' : undefined}
-          style={{ marginBottom: 24 }}
-        />
+        {freeQuota ? (
+          <div style={{ marginBottom: 24 }}>
+            <FreeQuotaSummary {...freeQuota} />
+          </div>
+        ) : (
+          <Progress
+            format={() => `${formatTokens(creditsUsed)} / ${formatTokens(totalAvailable)}`}
+            percent={usagePercent}
+            strokeColor={usagePercent > 90 ? '#ff4d4f' : usagePercent > 70 ? '#faad14' : undefined}
+            style={{ marginBottom: 24 }}
+          />
+        )}
 
         <Flexbox horizontal gap={16} wrap="wrap">
           <Statistic title={t('currentPlan.title')} value={plan} />
-          <Statistic
-            title={t('usage.credit.subscription.used')}
-            value={formatTokens(creditLimit)}
-          />
+          {!freeQuota && (
+            <Statistic
+              title={t('usage.credit.subscription.used')}
+              value={formatTokens(creditLimit)}
+            />
+          )}
           <Statistic title={t('usage.credit.addon.used')} value={formatTokens(creditBalance)} />
           <Statistic title={t('usage.used')} value={formatTokens(creditsUsed)} />
         </Flexbox>
