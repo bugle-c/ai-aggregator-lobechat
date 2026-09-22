@@ -255,4 +255,100 @@ describe('expireSubscriptions', () => {
     expect(mocks.writeSubscriptionEventMock).toHaveBeenCalledTimes(1);
     expect(mocks.writeSubscriptionEventMock.mock.calls[0][1].userId).toBe('user-a');
   });
+  // =========================================================================
+  // Dunning preservation — the downgrade must not kill the retry window
+  // =========================================================================
+
+  const downgradeUpdate = (db: any) => db._updateCalls.find((c: any) => c.setArgs.planId === 1);
+
+  it('KEEPS subscription_expires_at and auto_renew for a row still in dunning', async () => {
+    // auto_renew + a saved card = the user has not cancelled; their renewal
+    // charge just has not landed yet. Nulling the expiry here used to drop
+    // them out of renew-due-subscriptions' -2d..+50d window on day one.
+    const db = makeMockDb({
+      expiredSubscriptions: [
+        {
+          userId: 'user-dunning',
+          planId: 2,
+          expiresAt: new Date('2026-01-01T00:00:00Z'),
+          autoRenew: true,
+          paymentMethodId: 'pm_live_123',
+        },
+      ],
+      cancelledEventsByUser: { 'user-dunning': [] },
+    });
+
+    await expireSubscriptions(db);
+
+    const update = downgradeUpdate(db);
+    expect(update).toBeDefined();
+    // Access is still revoked...
+    expect(update.setArgs.planId).toBe(1);
+    // ...but the dunning state survives.
+    expect(update.setArgs).not.toHaveProperty('subscriptionExpiresAt');
+    expect(update.setArgs).not.toHaveProperty('autoRenew');
+  });
+
+  it('clears expiry and auto_renew when the user cancelled (auto_renew=false)', async () => {
+    const db = makeMockDb({
+      expiredSubscriptions: [
+        {
+          userId: 'user-cancelled',
+          planId: 2,
+          expiresAt: new Date('2026-01-01T00:00:00Z'),
+          autoRenew: false,
+          paymentMethodId: 'pm_live_123',
+        },
+      ],
+      cancelledEventsByUser: { 'user-cancelled': [] },
+    });
+
+    await expireSubscriptions(db);
+
+    const update = downgradeUpdate(db);
+    expect(update.setArgs.planId).toBe(1);
+    expect(update.setArgs.subscriptionExpiresAt).toBeNull();
+    expect(update.setArgs.autoRenew).toBe(false);
+  });
+
+  it('clears expiry and auto_renew when there is no saved card to charge', async () => {
+    const db = makeMockDb({
+      expiredSubscriptions: [
+        {
+          userId: 'user-nocard',
+          planId: 2,
+          expiresAt: new Date('2026-01-01T00:00:00Z'),
+          autoRenew: true,
+          paymentMethodId: null,
+        },
+      ],
+      cancelledEventsByUser: { 'user-nocard': [] },
+    });
+
+    await expireSubscriptions(db);
+
+    const update = downgradeUpdate(db);
+    expect(update.setArgs.planId).toBe(1);
+    expect(update.setArgs.subscriptionExpiresAt).toBeNull();
+    expect(update.setArgs.autoRenew).toBe(false);
+  });
+
+  it('still writes the cancelled analytics event for a dunning row', async () => {
+    const db = makeMockDb({
+      expiredSubscriptions: [
+        {
+          userId: 'user-dunning',
+          planId: 2,
+          expiresAt: new Date('2026-01-01T00:00:00Z'),
+          autoRenew: true,
+          paymentMethodId: 'pm_live_123',
+        },
+      ],
+      cancelledEventsByUser: { 'user-dunning': [] },
+    });
+
+    const written = await expireSubscriptions(db);
+    expect(written).toBe(1);
+    expect(mocks.writeSubscriptionEventMock.mock.calls[0][1].toPlanId).toBe(1);
+  });
 });

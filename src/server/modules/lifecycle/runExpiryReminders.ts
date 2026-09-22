@@ -1,9 +1,14 @@
 /**
  * Orchestrator behind `/api/cron/expiry-reminders`.
  *
- *   T-3 leg — email «подписка истекает через 3 дня». Telegram for this leg
- *             is already covered by `expireSubscriptions.flagExpiringSubscriptions`
- *             (T-4, delivered by notify-bot-pending), so we don't double-DM.
+ *   T-3 leg — email. Branches on whether the card is on file: auto-renewing
+ *             subscribers get the pre-charge notice («{дата} спишем {N} ₽»),
+ *             everyone else the «истекает через 3 дня, продлите» reminder.
+ *             Telegram for this leg is covered by
+ *             `expireSubscriptions.flagExpiringSubscriptions` (T-4,
+ *             delivered by notify-bot-pending), so we don't double-DM — note
+ *             that DM still uses the manual-renewal wording, see the bot's
+ *             `subscription_expiring` formatter.
  *   T0  leg — email «тариф закончился» + Telegram DM where a bot chat exists.
  *
  * Cheap by construction: two indexed SELECTs, then `return` when both are
@@ -14,16 +19,25 @@
  * cannot reach is not re-selected every 6 hours.
  */
 import { type LobeChatDatabase } from '@/database/type';
+import {
+  fetchLastSubscriptionPayment,
+  resolveRenewalAmount,
+} from '@/server/modules/billing/renewalAmount';
 
 import { sendLifecycleEmail } from './email';
 import {
+  isAutoRenewing,
   isSyntheticEmail,
   listExpiredSubscriptions,
   listExpiringSubscriptions,
   markReminderSent,
 } from './expiringSubscriptions';
 import { sendSubscriptionExpiredTelegram } from './telegram';
-import { buildExpiryReminderEmail, buildSubscriptionExpiredEmail } from './templates';
+import {
+  buildExpiryReminderEmail,
+  buildSubscriptionExpiredEmail,
+  buildUpcomingChargeEmail,
+} from './templates';
 
 export interface LegSummary {
   due: number;
@@ -65,10 +79,25 @@ export async function runExpiryReminders(db: LobeChatDatabase): Promise<ExpiryRe
       await markReminderSent(db, row.userId);
       continue;
     }
-    const tpl = buildExpiryReminderEmail({
-      expiresAt: row.subscriptionExpiresAt,
-      planName: row.planName,
-    });
+    // Two different facts, two different emails. A subscriber with a card on
+    // file is not about to lose access — we are about to take their money,
+    // and that is what the notice has to say (and for how much). Telling
+    // them to "продлить" was both wrong and the thing the public FAQ used to
+    // promise instead of auto-renewal.
+    const tpl = isAutoRenewing(row)
+      ? buildUpcomingChargeEmail({
+          amountRub: resolveRenewalAmount(
+            await fetchLastSubscriptionPayment(db, row.userId),
+            row.planId,
+            row.planPriceRub,
+          ),
+          chargeAt: row.subscriptionExpiresAt,
+          planName: row.planName,
+        })
+      : buildExpiryReminderEmail({
+          expiresAt: row.subscriptionExpiresAt,
+          planName: row.planName,
+        });
     const sent = await sendLifecycleEmail({ to: row.email!, ...tpl });
     if (sent.ok) {
       leg.emailSent++;

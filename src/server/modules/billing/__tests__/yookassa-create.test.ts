@@ -154,3 +154,51 @@ describe('createYookassaPayment paymentMethodType', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('createYookassaPayment Idempotence-Key', () => {
+  const okResponse = (id: string) =>
+    new Response(
+      JSON.stringify({ id, status: 'pending', confirmation: { confirmation_url: 'https://yk' } }),
+      { status: 200 },
+    );
+
+  it('sends the supplied idempotencyKey as the header', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse('pay-idem'));
+    await createYookassaPayment({
+      amountRub: 490,
+      description: 'Авто-продление',
+      idempotencyKey: 'abc123def456',
+      paymentMethodId: 'pm_1',
+      returnUrl: 'https://ask.gptweb.ru/',
+    });
+    const headers = (fetchMock.mock.calls[0][1] as any).headers;
+    expect(headers['Idempotence-Key']).toBe('abc123def456');
+  });
+
+  it('falls back to a random UUID when no key is supplied (user-driven checkout)', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse('pay-random'));
+    await createYookassaPayment({
+      amountRub: 490,
+      description: 'Подписка',
+      returnUrl: 'https://ask.gptweb.ru/',
+    });
+    const headers = (fetchMock.mock.calls[0][1] as any).headers;
+    expect(headers['Idempotence-Key']).toMatch(
+      /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/,
+    );
+  });
+
+  it('two calls without a key never share an idempotency key', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse('p1')).mockResolvedValueOnce(okResponse('p2'));
+    const args = {
+      amountRub: 490,
+      description: 'Подписка',
+      returnUrl: 'https://ask.gptweb.ru/',
+    } as const;
+    await createYookassaPayment({ ...args });
+    await createYookassaPayment({ ...args });
+    const k1 = (fetchMock.mock.calls[0][1] as any).headers['Idempotence-Key'];
+    const k2 = (fetchMock.mock.calls[1][1] as any).headers['Idempotence-Key'];
+    expect(k1).not.toBe(k2);
+  });
+});

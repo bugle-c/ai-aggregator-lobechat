@@ -14,10 +14,14 @@ import { sendLifecycleEmail } from './email';
 import { buildSubscriptionConfirmationEmail } from './templates';
 
 export interface SendSubscriptionConfirmationInput {
+  /** Card is on file and will be charged again at `expiresAt`. */
+  autoRenew?: boolean;
   /** Credit grant from the plan (planTokenLimit for monthly subscription). */
   creditAmount: number;
   expiresAt: Date | null;
   planName: string;
+  /** Amount of the next auto-charge, in rubles. */
+  priceRub?: number;
   userId: string;
 }
 
@@ -41,6 +45,8 @@ export async function sendSubscriptionConfirmation(
       planName: input.planName,
       expiresAt: input.expiresAt,
       creditAmount: input.creditAmount,
+      autoRenew: input.autoRenew,
+      priceRub: input.priceRub,
     });
 
     const result = await sendLifecycleEmail({ to: email, subject, html, textBody });

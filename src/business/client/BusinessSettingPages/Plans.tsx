@@ -22,6 +22,7 @@ import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHead
 import { reachGoal } from '@/business/client/analytics/ym';
 import { FREE_DAILY_MESSAGE_QUOTA_HINT, freeQuotaOf } from '@/business/client/balanceView';
 import IntroOfferBanner from '@/business/client/IntroOffer/IntroOfferBanner';
+import { recurringDisclosure } from '@/business/client/recurringDisclosure';
 import { creditsToHuman } from '@/business/utils/creditsToHuman';
 import PaymentTrustBadges from '@/components/PaymentTrustBadges';
 import { SubscriptionActivatedModal } from '@/features/SubscriptionActivatedModal';
@@ -813,14 +814,25 @@ const Plans = memo(() => {
                       {t('plans.current')}
                     </Button>
                   ) : plan.priceRub > 0 ? (
-                    <Button
-                      block
-                      loading={subscribeMutation.isPending}
-                      type={isPopular ? 'primary' : 'default'}
-                      onClick={() => startSubscribe(plan.id)}
-                    >
-                      {t('plans.subscribe')}
-                    </Button>
+                    <>
+                      <Button
+                        block
+                        loading={subscribeMutation.isPending}
+                        type={isPopular ? 'primary' : 'default'}
+                        onClick={() => startSubscribe(plan.id)}
+                      >
+                        {t('plans.subscribe')}
+                      </Button>
+                      {/* Recurring disclosure — the checkout saves the card and
+                          the renew cron charges it off-session; say so BEFORE
+                          the user pays, not only on the post-purchase card. */}
+                      <Text
+                        style={{ display: 'block', fontSize: 11, marginTop: 6 }}
+                        type="secondary"
+                      >
+                        {recurringDisclosure(plan.priceRub)}
+                      </Text>
+                    </>
                   ) : null}
                 </div>
               </Flexbox>

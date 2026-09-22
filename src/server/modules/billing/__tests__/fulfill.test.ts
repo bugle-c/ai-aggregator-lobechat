@@ -49,8 +49,9 @@ vi.mock('@/server/modules/analytics/writeSubscriptionEvent', () => ({
 vi.mock('@/server/modules/billing/intro-offer', () => ({
   maybeGrantIntroOffer: vi.fn(async () => undefined),
 }));
+const sendConfirmationMock = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
 vi.mock('@/server/modules/lifecycle/sendConfirmation', () => ({
-  sendSubscriptionConfirmation: vi.fn(async () => ({ ok: true })),
+  sendSubscriptionConfirmation: sendConfirmationMock,
 }));
 
 function makeDb() {
@@ -160,5 +161,100 @@ describe('fulfillPayment', () => {
 
     expect(mocks.updatePaymentStatus).not.toHaveBeenCalled();
     expect(mocks.updatePlan).not.toHaveBeenCalled();
+  });
+  // =========================================================================
+  // Confirmation email — recurring disclosure inputs
+  // =========================================================================
+
+  it('tells the confirmation email the card was saved, with the amount and next charge date', async () => {
+    mocks.getPaymentByYookassaId.mockResolvedValue({
+      id: 'p5',
+      userId: 'u1',
+      status: 'pending',
+      type: 'subscription',
+      planId: 2,
+      amountRub: 490,
+    });
+
+    await fulfillPayment(makeDb(), 'yk-5', { savedPaymentMethodId: 'pm_live_1' });
+
+    const arg = (sendConfirmationMock.mock.calls[0] as any[])[1];
+    expect(arg.autoRenew).toBe(true);
+    // The amount actually paid, not the current list price (990).
+    expect(arg.priceRub).toBe(490);
+    expect(arg.expiresAt.getTime()).toBe(NOW.getTime() + 30 * DAY);
+  });
+
+  it('does NOT claim auto-renewal when no card is on file (one-shot purchase)', async () => {
+    // YOOKASSA_RECURRING_ENABLED off, or YK refused save_payment_method.
+    mocks.getOrCreateUserBilling.mockResolvedValue({
+      userId: 'u1',
+      planId: 1,
+      subscriptionExpiresAt: null,
+      cancelledAt: null,
+      autoRenew: true,
+      paymentMethodId: null,
+      tokensUsedMonth: 0,
+    });
+    mocks.getPaymentByYookassaId.mockResolvedValue({
+      id: 'p6',
+      userId: 'u1',
+      status: 'pending',
+      type: 'subscription',
+      planId: 2,
+      amountRub: 490,
+    });
+
+    await fulfillPayment(makeDb(), 'yk-6');
+
+    expect((sendConfirmationMock.mock.calls[0] as any[])[1].autoRenew).toBe(false);
+  });
+
+  it('claims auto-renewal on a cron renewal charge (card already on file)', async () => {
+    mocks.getOrCreateUserBilling.mockResolvedValue({
+      userId: 'u1',
+      planId: 2,
+      subscriptionExpiresAt: new Date(NOW.getTime() + DAY),
+      cancelledAt: null,
+      autoRenew: true,
+      paymentMethodId: 'pm_live_1',
+      tokensUsedMonth: 0,
+    });
+    mocks.getPaymentByYookassaId.mockResolvedValue({
+      id: 'p7',
+      userId: 'u1',
+      status: 'pending',
+      type: 'subscription',
+      planId: 2,
+      amountRub: 490,
+    });
+
+    await fulfillPayment(makeDb(), 'yk-7');
+
+    expect((sendConfirmationMock.mock.calls[0] as any[])[1].autoRenew).toBe(true);
+  });
+
+  it('does not claim auto-renewal for a user who cancelled and has no card', async () => {
+    mocks.getOrCreateUserBilling.mockResolvedValue({
+      userId: 'u1',
+      planId: 2,
+      subscriptionExpiresAt: new Date(NOW.getTime() + DAY),
+      cancelledAt: new Date(NOW.getTime() - DAY),
+      autoRenew: false,
+      paymentMethodId: null,
+      tokensUsedMonth: 0,
+    });
+    mocks.getPaymentByYookassaId.mockResolvedValue({
+      id: 'p8',
+      userId: 'u1',
+      status: 'pending',
+      type: 'subscription',
+      planId: 2,
+      amountRub: 490,
+    });
+
+    await fulfillPayment(makeDb(), 'yk-8');
+
+    expect((sendConfirmationMock.mock.calls[0] as any[])[1].autoRenew).toBe(false);
   });
 });
