@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { reachGoal } from '@/business/client/analytics/ym';
 import { type CreditsExhaustedReason } from '@/business/client/creditsExhausted';
 import IntroOfferBanner from '@/business/client/IntroOffer/IntroOfferBanner';
+import { recurringDisclosure } from '@/business/client/recurringDisclosure';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -80,8 +81,7 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
     const planOrder = ['free', 'basic', 'pro', 'pro_max'];
     const currentIdx = planOrder.indexOf(planSlug || 'free');
     const recommendedSlug = planOrder[currentIdx + 1] || 'basic';
-    const recommendedPlan =
-      upgradePlans.find((p) => p.slug === recommendedSlug) ?? upgradePlans[0];
+    const recommendedPlan = upgradePlans.find((p) => p.slug === recommendedSlug) ?? upgradePlans[0];
     const recommendedId = recommendedPlan?.id;
 
     // "X× больше" — visual anchor for how much more value the upgrade gives.
@@ -136,17 +136,24 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
           <IntroOfferBanner />
 
           {isDaily && recommendedPlan && (
-            <Button
-              block
-              loading={subscribeMutation.isPending}
-              type="primary"
-              onClick={() => subscribeTo(recommendedPlan)}
-            >
-              {t('modal.exhausted.daily.upgrade', {
-                plan: recommendedPlan.name,
-                price: recommendedPlan.priceRub,
-              })}
-            </Button>
+            <Flexbox gap={4}>
+              <Button
+                block
+                loading={subscribeMutation.isPending}
+                type="primary"
+                onClick={() => subscribeTo(recommendedPlan)}
+              >
+                {t('modal.exhausted.daily.upgrade', {
+                  plan: recommendedPlan.name,
+                  price: recommendedPlan.priceRub,
+                })}
+              </Button>
+              {/* Recurring disclosure — this button starts a checkout that
+                  saves the card for off-session renewal charges. */}
+              <Text style={{ fontSize: 11 }} type="secondary">
+                {recurringDisclosure(recommendedPlan.priceRub)}
+              </Text>
+            </Flexbox>
           )}
 
           <Flexbox horizontal gap={12} style={isDaily ? { display: 'none' } : undefined}>
@@ -200,6 +207,10 @@ const CreditsExhaustedModal = memo<CreditsExhaustedModalProps>(
                     >
                       {isRecommended ? 'Продолжить общение' : t('modal.exhausted.select')}
                     </Button>
+                    {/* Recurring disclosure — see recurringDisclosure.ts. */}
+                    <Text style={{ fontSize: 11 }} type="secondary">
+                      {recurringDisclosure(plan.priceRub)}
+                    </Text>
                   </Flexbox>
                 </Card>
               );

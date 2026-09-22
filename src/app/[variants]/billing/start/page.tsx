@@ -59,7 +59,18 @@ const BillingStartPage: FC<Props> = async ({ searchParams }) => {
     const { paymentUrl } = await caller.subscription.createPayment({ planId });
 
     if (!paymentUrl) throw new Error('Payment URL missing');
-    return <CheckoutRedirect paymentUrl={paymentUrl} />;
+
+    // Price for the recurring disclosure on the interstitial. Best-effort:
+    // a lookup failure must never block a checkout that already exists.
+    let priceRub: number | null = null;
+    try {
+      const { fetchPlanById } = await import('@/server/services/billing/plans-source');
+      priceRub = (await fetchPlanById(planId))?.priceRub ?? null;
+    } catch {
+      priceRub = null;
+    }
+
+    return <CheckoutRedirect paymentUrl={paymentUrl} priceRub={priceRub} />;
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Неизвестная ошибка';
 

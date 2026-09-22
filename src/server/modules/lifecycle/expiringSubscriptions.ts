@@ -35,7 +35,14 @@ export const EXPIRED_BANNER_WINDOW_DAYS = 14;
 const FREE_PLAN_ID = 1;
 
 export interface ExpiringSubscriptionRow {
+  /**
+   * The card is on file and the renew cron will charge it at
+   * `subscriptionExpiresAt`. Nothing "expires" for these users — they must
+   * get a pre-charge notice, not a «продлите вручную» reminder.
+   */
+  autoRenew: boolean;
   email: string | null;
+  hasSavedPaymentMethod: boolean;
   planId: number;
   planName: string;
   planPriceRub: number;
@@ -69,6 +76,8 @@ export async function listExpiringSubscriptions(
       planName: billingPlans.name,
       planPriceRub: billingPlans.priceRub,
       subscriptionExpiresAt: userBilling.subscriptionExpiresAt,
+      autoRenew: userBilling.autoRenew,
+      paymentMethodId: userBilling.paymentMethodId,
     })
     .from(userBilling)
     .innerJoin(users, eq(users.id, userBilling.userId))
@@ -96,7 +105,21 @@ export async function listExpiringSubscriptions(
       planName: r.planName,
       planPriceRub: r.planPriceRub,
       subscriptionExpiresAt: r.subscriptionExpiresAt as Date,
+      autoRenew: r.autoRenew,
+      hasSavedPaymentMethod: !!r.paymentMethodId,
     }));
+}
+
+/**
+ * True when the subscription will be charged rather than lapse — the T-3
+ * email must then be the pre-charge notice («{дата} спишем {N} ₽»), not the
+ * «истекает, продлите» reminder, which is simply false for these users.
+ */
+export function isAutoRenewing(row: {
+  autoRenew: boolean;
+  hasSavedPaymentMethod: boolean;
+}): boolean {
+  return row.autoRenew && row.hasSavedPaymentMethod;
 }
 
 /**
@@ -131,6 +154,16 @@ export async function listExpiredSubscriptions(
         // cancel (auto-renew off) also writes `cancelled` while the plan is
         // still active; that one must wait for the real expiry.
         eq(userBilling.planId, FREE_PLAN_ID),
+        // …but NOT while dunning is still running. expireSubscriptions now
+        // keeps auto_renew + subscription_expires_at for rows with a card on
+        // file so the renew cron can retry; those users own a «не удалось
+        // продлить — обновите карту» notice from notifyRenewalFailed, and
+        // «тариф закончился, продлите» on top of it would contradict it.
+        or(
+          eq(userBilling.autoRenew, false),
+          isNull(userBilling.paymentMethodId),
+          isNull(userBilling.subscriptionExpiresAt),
+        ),
         or(
           isNull(userBilling.expiryReminderSentAt),
           lt(userBilling.expiryReminderSentAt, billingSubscriptionEvents.createdAt),

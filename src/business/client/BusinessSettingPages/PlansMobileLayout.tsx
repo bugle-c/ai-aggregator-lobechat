@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FREE_DAILY_MESSAGE_QUOTA_HINT, type FreeQuota } from '@/business/client/balanceView';
+import { recurringDisclosure } from '@/business/client/recurringDisclosure';
 
 import FreeQuotaSummary from './FreeQuotaSummary';
 
@@ -182,6 +183,13 @@ const PlansMobileLayout = memo<Props>(
               >
                 {isCurrent ? 'Текущий тариф' : plan.priceRub === 0 ? 'Бесплатно' : 'Выбрать'}
               </Button>
+              {/* Recurring disclosure — the checkout saves the card and the
+                  renew cron charges it off-session; say so BEFORE paying. */}
+              {plan.priceRub > 0 && !isCurrent && (
+                <Text style={{ fontSize: 11, marginTop: 6 }} type="secondary">
+                  {recurringDisclosure(plan.priceRub)}
+                </Text>
+              )}
             </Block>
           );
         })}

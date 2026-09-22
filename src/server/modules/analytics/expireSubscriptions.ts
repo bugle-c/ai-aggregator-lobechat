@@ -101,6 +101,8 @@ export async function expireSubscriptions(db: LobeChatDatabase): Promise<number>
       userId: userBilling.userId,
       planId: userBilling.planId,
       expiresAt: userBilling.subscriptionExpiresAt,
+      autoRenew: userBilling.autoRenew,
+      paymentMethodId: userBilling.paymentMethodId,
     })
     .from(userBilling)
     .where(
@@ -126,13 +128,28 @@ export async function expireSubscriptions(db: LobeChatDatabase): Promise<number>
     //
     // tokenBalance left untouched on purpose — separately-purchased
     // top-ups stay valid through plan downgrade.
+    //
+    // DUNNING EXCEPTION: a user who is still auto-renewing with a card on
+    // file has not cancelled — their renewal charge simply hasn't landed
+    // yet (bank decline, cron lag). Nulling `subscription_expires_at` and
+    // flipping `auto_renew=false` here used to drop them out of the
+    // −2d…+50d retry window in renew-due-subscriptions the very first
+    // morning after expiry, so the dunning schedule could never fire even
+    // once. Downgrade the access (plan_id → 1) but KEEP both columns so
+    // the retry loop continues; a successful late charge restores the plan
+    // via fulfillPayment.
+    const inDunning = row.autoRenew && !!row.paymentMethodId;
     await db
       .update(userBilling)
-      .set({
-        planId: 1,
-        subscriptionExpiresAt: null,
-        autoRenew: false,
-      })
+      .set(
+        inDunning
+          ? { planId: 1 }
+          : {
+              planId: 1,
+              subscriptionExpiresAt: null,
+              autoRenew: false,
+            },
+      )
       .where(eq(userBilling.userId, row.userId));
 
     // Now the analytics-event-dedup guard: only ONE `cancelled` event

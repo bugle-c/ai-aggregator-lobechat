@@ -70,9 +70,17 @@ export function buildExpiryReminderEmail(input: ExpiryReminderInput): {
 }
 
 export interface SubscriptionConfirmationInput {
+  /**
+   * The card was saved and the renew cron will charge it at `expiresAt`.
+   * False for one-shot purchases (YOOKASSA_RECURRING_ENABLED off, or the
+   * shop lacks recurring permission) — then no charge notice is shown.
+   */
+  autoRenew?: boolean;
   creditAmount: number;
   expiresAt: Date | string | null;
   planName: string;
+  /** Amount the next auto-charge will take, in rubles. */
+  priceRub?: number;
 }
 
 export function buildSubscriptionConfirmationEmail(input: SubscriptionConfirmationInput): {
@@ -82,11 +90,19 @@ export function buildSubscriptionConfirmationEmail(input: SubscriptionConfirmati
 } {
   const subject = 'Подписка WebGPT активирована — спасибо!';
   const dateStr = fmtDateRu(input.expiresAt);
+  // Recurring disclosure with the concrete next-charge date. Legally this is
+  // the receipt that tells the payer their card is on file — omit it only
+  // when there is genuinely no saved method to charge.
+  const showRenewal = !!input.autoRenew && !!input.priceRub && input.priceRub > 0 && !!dateStr;
+  const renewalLine = showRenewal
+    ? `Продлевается автоматически ${dateStr} по ${input.priceRub} ₽/мес, отменить можно в любой момент.`
+    : '';
   const html = `
     <div style="${BASE_STYLE}">
       <p>Здравствуйте!</p>
       <p>Подписка <strong>${escapeHtml(input.planName)}</strong> активна${dateStr ? ` до <strong>${dateStr}</strong>` : ''}.</p>
       <p>На баланс начислено <strong>${input.creditAmount.toLocaleString('ru-RU')}</strong> кредитов.</p>
+      ${renewalLine ? `<p>${escapeHtml(renewalLine)}</p>` : ''}
       <p>Спасибо, что выбрали WebGPT! Если возникнут вопросы — напишите в поддержку в Telegram: <a href="${SUPPORT_URL}">@gptwebrubot</a>.</p>
       <p>
         <a href="${APP_URL}" style="${CTA_STYLE}">Открыть WebGPT</a>
@@ -99,7 +115,93 @@ export function buildSubscriptionConfirmationEmail(input: SubscriptionConfirmati
   const textBody = [
     `Подписка ${input.planName} активирована${dateStr ? ` до ${dateStr}` : ''}.`,
     `На баланс начислено ${input.creditAmount} кредитов.`,
+    ...(renewalLine ? [renewalLine] : []),
     `Открыть WebGPT: ${APP_URL}`,
+  ].join('\n\n');
+  return { subject, html, textBody };
+}
+
+export interface UpcomingChargeInput {
+  /** Amount the card will actually be charged, in rubles. */
+  amountRub: number;
+  chargeAt: Date | string;
+  planName: string;
+}
+
+/**
+ * Pre-charge notice for auto-renewing subscribers. Replaces the «истекает,
+ * продлите» reminder, which is factually wrong for anyone whose card is on
+ * file — nothing expires, we take money.
+ */
+export function buildUpcomingChargeEmail(input: UpcomingChargeInput): {
+  subject: string;
+  html: string;
+  textBody: string;
+} {
+  const dateStr = fmtDateRu(input.chargeAt);
+  const subject = 'Скоро продлим вашу подписку WebGPT';
+  const notice = `${dateStr} спишем ${input.amountRub} ₽ — отменить можно в настройках.`;
+  const html = `
+    <div style="${BASE_STYLE}">
+      <p>Здравствуйте!</p>
+      <p>Подписка <strong>${escapeHtml(input.planName)}</strong> на WebGPT продлевается автоматически.</p>
+      <p><strong>${escapeHtml(notice)}</strong></p>
+      <p>Если продление больше не нужно — отключите его в настройках, доступ сохранится до конца оплаченного периода:</p>
+      <p>
+        <a href="${PLANS_URL}" style="${CTA_STYLE}">Настройки подписки</a>
+      </p>
+      <p>Если у вас есть вопросы — напишите в поддержку в Telegram: <a href="${SUPPORT_URL}">@gptwebrubot</a>.</p>
+      <div style="${FOOTER_STYLE}">
+        WebGPT · ask.gptweb.ru<br />
+        Это автоматическое уведомление о предстоящем списании по вашей подписке.
+      </div>
+    </div>
+  `;
+  const textBody = [
+    `Подписка ${input.planName} на WebGPT продлевается автоматически.`,
+    notice,
+    `Настройки подписки: ${PLANS_URL}`,
+  ].join('\n\n');
+  return { subject, html, textBody };
+}
+
+export interface RenewalFailedInput {
+  amountRub: number;
+  planName: string;
+}
+
+/**
+ * Off-session renewal charge was declined. This is NOT the checkout-recovery
+ * flow: the user never started a payment, so «вы не закончили оплату» would
+ * be a lie. Ask them to update the card instead.
+ */
+export function buildRenewalFailedEmail(input: RenewalFailedInput): {
+  subject: string;
+  html: string;
+  textBody: string;
+} {
+  const subject = 'Не удалось продлить подписку WebGPT — обновите карту';
+  const html = `
+    <div style="${BASE_STYLE}">
+      <p>Здравствуйте!</p>
+      <p>Не удалось продлить подписку <strong>${escapeHtml(input.planName)}</strong> — обновите карту.
+      Банк отклонил списание ${input.amountRub} ₽ с привязанной карты (недостаточно средств,
+      истёк срок действия или карта заблокирована).</p>
+      <p>Привяжите другую карту — мы повторим списание автоматически, и доступ восстановится:</p>
+      <p>
+        <a href="${PLANS_URL}" style="${CTA_STYLE}">Обновить карту</a>
+      </p>
+      <p>Если у вас есть вопросы — напишите в поддержку в Telegram: <a href="${SUPPORT_URL}">@gptwebrubot</a>.</p>
+      <div style="${FOOTER_STYLE}">
+        WebGPT · ask.gptweb.ru<br />
+        Это автоматическое уведомление о неудачном автопродлении подписки.
+      </div>
+    </div>
+  `;
+  const textBody = [
+    `Не удалось продлить подписку ${input.planName} — обновите карту.`,
+    `Банк отклонил списание ${input.amountRub} ₽ с привязанной карты.`,
+    `Обновить карту: ${PLANS_URL}`,
   ].join('\n\n');
   return { subject, html, textBody };
 }

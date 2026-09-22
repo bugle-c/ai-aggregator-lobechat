@@ -17,6 +17,13 @@
  *
  * Anti-spam: TG caps 1/24h + 3/7d per user; email cap 2/7d per user
  * (counting both stages).
+ *
+ * NOT covered here: `metadata->>'kind' = 'auto_renew'` rows. Those are
+ * off-session renewal charges the user never initiated, so every message in
+ * this flow («вы не закончили оплату», a repeat invoice) is factually wrong
+ * for them — they get the «не удалось продлить, обновите карту» notice from
+ * `server/modules/lifecycle/notifyRenewalFailed.ts` instead. All three
+ * queries below filter them out.
  */
 import { eq, sql } from 'drizzle-orm';
 
@@ -86,6 +93,7 @@ export async function GET(req: Request) {
     WHERE bp.status IN ('failed','canceled')
       AND bp.created_at > NOW() - INTERVAL '24 hours'
       AND bp.created_at < NOW() - INTERVAL '5 minutes'
+      AND COALESCE(bp.metadata->>'kind','') <> 'auto_renew'
       AND ub.tg_bot_chat_id IS NOT NULL
       AND (bp.metadata->>'tg_recovery_sent') IS NULL
       AND NOT EXISTS (
@@ -264,6 +272,7 @@ export async function GET(req: Request) {
     WHERE bp.status IN ('failed','canceled')
       AND bp.created_at > NOW() - INTERVAL '24 hours'
       AND bp.created_at < NOW() - INTERVAL '5 minutes'
+      AND COALESCE(bp.metadata->>'kind','') <> 'auto_renew'
       AND (bp.metadata->>'email_recovery_sent') IS NULL
       AND u.email IS NOT NULL
       AND u.email <> ''
@@ -389,6 +398,7 @@ export async function GET(req: Request) {
     JOIN users u ON u.id = bp.user_id
     WHERE bp.status IN ('failed','canceled')
       AND bp.created_at > NOW() - INTERVAL '7 days'
+      AND COALESCE(bp.metadata->>'kind','') <> 'auto_renew'
       AND (bp.metadata->>'email_recovery_sent') IS NOT NULL
       AND (bp.metadata->>'email_recovery_sent')::timestamptz < NOW() - INTERVAL '24 hours'
       AND (bp.metadata->>'email_recovery_followup_sent') IS NULL

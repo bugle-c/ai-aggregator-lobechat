@@ -8,6 +8,17 @@ interface CreatePaymentParams {
   amountRub: number;
   customerEmail?: string;
   description: string;
+  /**
+   * Stable Idempotence-Key. Pass it for server-initiated recurring charges:
+   * YooKassa then collapses a repeated request (cron fired twice, retry after
+   * a network timeout) into the SAME payment instead of taking the money
+   * again. Omit it for user-driven checkouts, where each click should create
+   * a fresh payment. Note the fallback retries below rebuild the body with
+   * different params — they only trigger on `paymentMethodType` /
+   * `savePaymentMethod`, neither of which a recurring charge passes, so the
+   * key is never reused across differing bodies.
+   */
+  idempotencyKey?: string;
   metadata?: Record<string, string>;
   /**
    * Recurring charge: when present, YooKassa attempts a no-redirect
@@ -112,7 +123,7 @@ export async function createYookassaPayment(
       headers: {
         'Authorization': `Basic ${auth}`,
         'Content-Type': 'application/json',
-        'Idempotence-Key': crypto.randomUUID(),
+        'Idempotence-Key': params.idempotencyKey || crypto.randomUUID(),
       },
       method: 'POST',
     });

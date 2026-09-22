@@ -102,11 +102,23 @@ export async function fulfillPayment(
     // Phase 2.3 — fire-and-forget confirmation email. Wrapped: email never
     // breaks fulfill.
     try {
+      // Will the card be charged again at `expiresAt`? A freshly saved
+      // method always opts in; otherwise the user keeps whatever they had
+      // (a payment after a cancellation re-opts in, see the block above).
+      const willAutoRenew = options.savedPaymentMethodId
+        ? true
+        : !!currentBilling.paymentMethodId &&
+          (currentBilling.autoRenew || !!currentBilling.cancelledAt);
+
       await sendSubscriptionConfirmation(db, {
         userId: payment.userId,
         planName: toPlan?.name ?? 'WebGPT',
         expiresAt,
         creditAmount: toPlan?.tokenLimit ?? 0,
+        autoRenew: willAutoRenew,
+        // What they actually paid now is what we'll take next cycle — see
+        // the price-lock in renew-due-subscriptions.
+        priceRub: payment.amountRub,
       });
     } catch (error) {
       console.error('[billing] subscription confirmation email error:', error);

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   EXPIRED_BANNER_WINDOW_DAYS,
   EXPIRED_EMAIL_WINDOW_DAYS,
+  isAutoRenewing,
   isExpiredNoticeDue,
   isExpiringWithinWindow,
   isSyntheticEmail,
@@ -259,5 +260,25 @@ describe('buildSubscriptionConfirmationEmail', () => {
     });
     expect(out.subject).toBeTruthy();
     expect(out.html).toContain('Pro');
+  });
+});
+
+describe('isAutoRenewing', () => {
+  it('is true only with BOTH auto_renew and a saved card', () => {
+    expect(isAutoRenewing({ autoRenew: true, hasSavedPaymentMethod: true })).toBe(true);
+  });
+
+  it('is false when the user cancelled', () => {
+    expect(isAutoRenewing({ autoRenew: false, hasSavedPaymentMethod: true })).toBe(false);
+  });
+
+  it('is false when there is no card to charge', () => {
+    // e.g. YOOKASSA_RECURRING_ENABLED was off when they paid, or they
+    // removed the card but left auto_renew on.
+    expect(isAutoRenewing({ autoRenew: true, hasSavedPaymentMethod: false })).toBe(false);
+  });
+
+  it('is false for a plain free/lapsed row', () => {
+    expect(isAutoRenewing({ autoRenew: false, hasSavedPaymentMethod: false })).toBe(false);
   });
 });

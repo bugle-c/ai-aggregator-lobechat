@@ -34,29 +34,22 @@ export interface SendTelegramNoticeResult {
 
 const PERMANENT_ERRORS = new Set(['blocked', 'deactivated']);
 
-export async function sendSubscriptionExpiredTelegram(args: {
+/** Shared transport for every lifecycle DM. Never throws. */
+async function sendBroadcast(args: {
+  button: { label: string; url: string };
   chatId: number;
-  expiredAt: Date;
-  planName: string;
+  text: string;
 }): Promise<SendTelegramNoticeResult> {
   const url = process.env.BOT_INTERNAL_URL ?? 'http://127.0.0.1:8082';
   const token = process.env.BOT_INTERNAL_TOKEN;
   if (!token) return { ok: false, error: 'no_internal_token' };
 
-  const dateStr = args.expiredAt.toLocaleDateString('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-  });
-  const text = escapeMarkdownV2(
-    `Тариф «${args.planName}» закончился ${dateStr}. Аккаунт переведён на бесплатный тариф — продлите подписку, и доступ к моделям вернётся сразу после оплаты.`,
-  );
-
   try {
     const res = await fetch(`${url}/internal/broadcast/send`, {
       body: JSON.stringify({
-        button: { label: 'Продлить подписку', url: PLANS_URL },
+        button: args.button,
         chat_id: args.chatId,
-        text,
+        text: args.text,
       }),
       headers: { 'Content-Type': 'application/json', 'X-Internal-Token': token },
       method: 'POST',
@@ -70,4 +63,43 @@ export async function sendSubscriptionExpiredTelegram(args: {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: msg };
   }
+}
+
+/**
+ * Off-session renewal charge declined. Deliberately NOT the checkout-recovery
+ * invoice («вы не закончили оплату») — the user started nothing; their saved
+ * card was refused.
+ */
+export async function sendRenewalFailedTelegram(args: {
+  amountRub: number;
+  chatId: number;
+  planName: string;
+}): Promise<SendTelegramNoticeResult> {
+  const text = escapeMarkdownV2(
+    `Не удалось продлить подписку «${args.planName}» — обновите карту. Банк отклонил списание ${args.amountRub} ₽. Привяжите другую карту, и мы повторим списание автоматически.`,
+  );
+  return sendBroadcast({
+    button: { label: 'Обновить карту', url: PLANS_URL },
+    chatId: args.chatId,
+    text,
+  });
+}
+
+export async function sendSubscriptionExpiredTelegram(args: {
+  chatId: number;
+  expiredAt: Date;
+  planName: string;
+}): Promise<SendTelegramNoticeResult> {
+  const dateStr = args.expiredAt.toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+  });
+  const text = escapeMarkdownV2(
+    `Тариф «${args.planName}» закончился ${dateStr}. Аккаунт переведён на бесплатный тариф — продлите подписку, и доступ к моделям вернётся сразу после оплаты.`,
+  );
+  return sendBroadcast({
+    button: { label: 'Продлить подписку', url: PLANS_URL },
+    chatId: args.chatId,
+    text,
+  });
 }
