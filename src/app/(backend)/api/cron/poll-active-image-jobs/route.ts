@@ -90,9 +90,15 @@ export async function GET(req: Request) {
 
   for (const row of rows) {
     try {
+      const meta = (row.metadata ?? {}) as {
+        pollUrl?: string;
+        precharge?: { amount: number; holdId: string };
+      };
       const pollUrl =
-        (row.metadata as { pollUrl?: string } | null)?.pollUrl ??
-        `https://api.wavespeed.ai/api/v3/predictions/${row.inferenceId}/result`;
+        meta.pollUrl ?? `https://api.wavespeed.ai/api/v3/predictions/${row.inferenceId}/result`;
+      // Exact hold share for this generation (tasks created after 2026-09-23);
+      // undefined → chargeAfterGenerate's legacy FIFO lookup.
+      const prechargeResult = meta.precharge?.holdId ? meta.precharge : undefined;
 
       const r = await checkWaveSpeedImage(pollUrl, { apiKey });
 
@@ -144,6 +150,7 @@ export async function GET(req: Request) {
               modelId: row.model,
               topicId: row.generationTopicId,
             },
+            prechargeResult,
             provider: row.provider,
             userId: row.userId,
           });
@@ -168,6 +175,7 @@ export async function GET(req: Request) {
               modelId: row.model,
               topicId: row.generationTopicId,
             },
+            prechargeResult,
             provider: row.provider,
             userId: row.userId,
           });

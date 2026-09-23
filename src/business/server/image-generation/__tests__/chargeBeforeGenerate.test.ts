@@ -154,7 +154,7 @@ describe('image chargeBeforeGenerate — Pkg2 precharge architecture', () => {
     ).rejects.toThrow(/Кредиты закончились/);
   });
 
-  it('inserts hold + atomically increments counter on success (router-compatible undefined return)', async () => {
+  it('inserts hold + atomically increments counter on success and returns the hold', async () => {
     fetchRateMock.mockResolvedValue(baseRate);
     getUserPlanSlugMock.mockResolvedValue('pro');
     isModelAllowedForPlanAsyncMock.mockResolvedValue(true);
@@ -176,9 +176,9 @@ describe('image chargeBeforeGenerate — Pkg2 precharge architecture', () => {
       userId: 'u1',
     } as any);
 
-    // Router compatibility: undefined means "proceed with generation".
-    // Truthy non-undefined (errorBatch) would short-circuit the request.
-    expect(r).toBeUndefined();
+    // The exact hold comes back so the lambda can thread it to every
+    // generation's after-charge (no more oldest-active-hold guessing).
+    expect(r).toEqual({ prechargeResult: { amount: 40, holdId: 'hold-abc' } });
     expect(incrementTokensUsedMock).toHaveBeenCalledWith(40, expect.anything(), { limit: 1100 });
   });
 });

@@ -1,5 +1,5 @@
 import { getServerDB } from '@/database/core/db-adaptor';
-import { creditHolds, type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
+import { creditHolds } from '@/database/schemas';
 import { activeBonusFor } from '@/server/modules/billing/active-bonus';
 import { checkUsageLimit } from '@/server/modules/billing/checkUsageLimit';
 import { calculateCreditsAsync } from '@/server/modules/billing/model-rates';
@@ -19,15 +19,19 @@ interface ChargeParams {
   userId: string;
 }
 
-type ChargeResult =
-  | undefined
-  | {
-      data: {
-        batch: NewGenerationBatch;
-        generations: NewGeneration[];
-      };
-      success: true;
-    };
+/**
+ * The hold taken for this batch. The lambda splits `amount` across the
+ * batch's generations and stores each share in the async task metadata so
+ * `chargeAfterGenerate` reconciles against THIS hold instead of guessing the
+ * oldest active one (which double-charged users when two generations
+ * overlapped, 2026-09-23).
+ */
+export interface ImagePrecharge {
+  amount: number;
+  holdId: string;
+}
+
+type ChargeResult = { prechargeResult: ImagePrecharge };
 
 /**
  * Pre-charge for image generation (Pkg2 — pre-charge architecture).
@@ -42,8 +46,9 @@ type ChargeResult =
  *    increment `tokens_used_month` with a `limit` guard. The conditional
  *    UPDATE means concurrent requests CANNOT both succeed past the cap.
  *
- * Returns `{ prechargeResult }` so the caller embeds it in async_tasks.metadata
- * and `chargeAfterGenerate` can reconcile against the held amount.
+ * Returns `{ prechargeResult: { holdId, amount } }`; the lambda splits the
+ * amount per generation and embeds it in each async task (metadata + the
+ * async call input) so `chargeAfterGenerate` reconciles against this hold.
  */
 export async function chargeBeforeGenerate(params: ChargeParams): Promise<ChargeResult> {
   const db = await getServerDB();
@@ -91,13 +96,18 @@ export async function chargeBeforeGenerate(params: ChargeParams): Promise<Charge
   const monthlyCap =
     (plan?.tokenLimit ?? 0) + (billing.tokenBalance ?? 0) + activeBonusFor(billing);
 
+  let holdId: string | null = null;
   try {
     await db.transaction(async (tx) => {
-      await tx.insert(creditHolds).values({
-        amount: maxCredits,
-        reason: 'image-gen',
-        userId: params.userId,
-      });
+      const [hold] = await tx
+        .insert(creditHolds)
+        .values({
+          amount: maxCredits,
+          reason: 'image-gen',
+          userId: params.userId,
+        })
+        .returning({ id: creditHolds.id });
+      holdId = hold?.id ?? null;
 
       await new BillingService(tx as any, params.userId).incrementTokensUsed(
         maxCredits,
@@ -114,9 +124,11 @@ export async function chargeBeforeGenerate(params: ChargeParams): Promise<Charge
     throw new Error('Кредиты закончились. Пополните баланс или обновите план.');
   }
 
-  // Image router does not pass prechargeResult downstream (signature is
-  // intentionally `undefined | errorBatch` for backward-compat); the
-  // `chargeAfterGenerate` for image instead looks up the oldest active
-  // hold for this user+reason at reconcile time. See chargeAfterGenerate.
-  return undefined;
+  if (!holdId) {
+    // Should not happen (RETURNING on a successful insert); keep the legacy
+    // FIFO reconcile path alive rather than blocking the generation.
+    console.warn(`[billing] image precharge: hold id missing for user=${params.userId}`);
+    return { prechargeResult: { amount: maxCredits, holdId: '' } };
+  }
+  return { prechargeResult: { amount: maxCredits, holdId } };
 }

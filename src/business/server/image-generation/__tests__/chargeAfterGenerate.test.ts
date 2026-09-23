@@ -29,6 +29,7 @@ vi.mock('@/server/services/billing', () => ({
 
 const updateSetWhereSpy = vi.fn(async () => undefined);
 let nextSelectRows: any[] = [];
+let selectCalls = 0;
 function makeFakeDb() {
   const tx: any = {
     update: () => ({ set: () => ({ where: updateSetWhereSpy }) }),
@@ -37,15 +38,18 @@ function makeFakeDb() {
     transaction: async (fn: (t: any) => Promise<any>) => fn(tx),
     update: () => ({ set: () => ({ where: updateSetWhereSpy }) }),
     // findOldestActiveHold lookup
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          orderBy: () => ({
-            limit: async () => nextSelectRows,
+    select: () => {
+      selectCalls += 1;
+      return {
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({
+              limit: async () => nextSelectRows,
+            }),
           }),
         }),
-      }),
-    }),
+      };
+    },
   };
   return db;
 }
@@ -57,6 +61,7 @@ beforeEach(() => {
   writeUsageLogMock.mockReset().mockResolvedValue(undefined);
   updateSetWhereSpy.mockClear();
   nextSelectRows = [];
+  selectCalls = 0;
 });
 
 afterEach(() => {
@@ -162,5 +167,23 @@ describe('image chargeAfterGenerate — reconcile against hold', () => {
     // diff = 7 - 10 = -3 (partial refund)
     expect(incrementTokensUsedMock).toHaveBeenCalledWith(-3, expect.anything());
     expect(updateSetWhereSpy).toHaveBeenCalled();
+  });
+
+  it('newer task fails while an older one is pending: refunds ITS OWN share, never the oldest hold', async () => {
+    const { chargeAfterGenerate } = await import('../chargeAfterGenerate');
+    // Older, still-running generation A holds 127 and would be the FIFO pick.
+    nextSelectRows = [{ id: 'hold-A', amount: 127 }];
+
+    await chargeAfterGenerate({
+      isError: true,
+      metadata: { asyncTaskId: 'task-B', generationBatchId: 'b2', modelId: 'dall-e-3' },
+      prechargeResult: { amount: 127, holdId: 'hold-B' },
+      provider: 'wavespeed',
+      userId: 'u1',
+    });
+
+    expect(selectCalls).toBe(0); // no oldest-hold guessing when the hold is known
+    expect(incrementTokensUsedMock).toHaveBeenCalledWith(-127, expect.anything());
+    expect(updateSetWhereSpy).toHaveBeenCalledTimes(1); // exactly one hold released
   });
 });

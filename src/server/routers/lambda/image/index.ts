@@ -62,6 +62,15 @@ const createImageInputSchema = z.object({
 });
 export type CreateImageServicePayload = z.infer<typeof createImageInputSchema>;
 
+/** Split a batch hold into per-generation shares; the remainder rides on the first. */
+export function splitHold(amount: number, parts: number): number[] {
+  const n = Math.max(1, Math.floor(parts));
+  const base = Math.floor(amount / n);
+  const shares = Array.from({ length: n }, () => base);
+  shares[0] += amount - base * n;
+  return shares;
+}
+
 export const imageRouter = router({
   createImage: imageProcedure.input(createImageInputSchema).mutation(async ({ input, ctx }) => {
     const { userId, serverDB, asyncTaskModel, fileService } = ctx;
@@ -145,7 +154,7 @@ export const imageRouter = router({
     // Defensive check: ensure no full URLs enter the database
     validateNoUrlsInConfig(configForDatabase, 'configForDatabase');
 
-    const chargeResult = await chargeBeforeGenerate({
+    const { prechargeResult } = await chargeBeforeGenerate({
       clientIp: ctx.clientIp,
       configForDatabase,
       generationParams,
@@ -155,9 +164,14 @@ export const imageRouter = router({
       provider,
       userId,
     });
-    if (chargeResult) {
-      return chargeResult;
-    }
+    // One hold covers the whole batch; each generation reconciles its share
+    // (remainder goes to the first) so N parallel completions/failures add up
+    // to exactly the held amount. Empty holdId = legacy FIFO reconcile.
+    const holdShares = splitHold(prechargeResult.amount, imageNum);
+    const prechargeFor = (index: number) =>
+      prechargeResult.holdId
+        ? { amount: holdShares[index] ?? 0, holdId: prechargeResult.holdId }
+        : undefined;
 
     // Step 1: Atomically create all database records in a transaction
     const { batch: createdBatch, generationsWithTasks } = await serverDB.transaction(async (tx) => {
@@ -201,11 +215,13 @@ export const imageRouter = router({
       // 3. Concurrently create asyncTask for each generation (within transaction)
       log('Creating async tasks for generations');
       const generationsWithTasks = await Promise.all(
-        createdGenerations.map(async (generation) => {
+        createdGenerations.map(async (generation, index) => {
           // Create asyncTask directly in transaction
+          const precharge = prechargeFor(index);
           const [createdAsyncTask] = await tx
             .insert(asyncTasks)
             .values({
+              ...(precharge ? { metadata: { precharge } } : {}),
               status: AsyncTaskStatus.Pending,
               type: AsyncTaskType.ImageGeneration,
               userId,
@@ -221,7 +237,7 @@ export const imageRouter = router({
             .set({ asyncTaskId })
             .where(and(eq(generations.id, generation.id), eq(generations.userId, userId)));
 
-          return { asyncTaskId, generation };
+          return { asyncTaskId, generation, precharge };
         }),
       );
       log('All async tasks created in transaction');
@@ -251,10 +267,11 @@ export const imageRouter = router({
       // Fire-and-forget: trigger async tasks without awaiting
       // These calls go to the async router which handles them independently
       // Do NOT use after() here as it would keep the lambda alive unnecessarily
-      generationsWithTasks.forEach(({ generation, asyncTaskId }) => {
+      generationsWithTasks.forEach(({ generation, asyncTaskId, precharge }) => {
         log('Starting background async task %s for generation %s', asyncTaskId, generation.id);
 
         asyncCaller.image.createImage({
+          ...(precharge ? { precharge } : {}),
           generationBatchId: createdBatch.id,
           generationId: generation.id,
           generationTopicId,

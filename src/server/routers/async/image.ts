@@ -65,6 +65,8 @@ const createImageInputSchema = z.object({
       width: z.number().optional(),
     })
     .passthrough(),
+  /** This generation's share of the batch credit hold (also in task metadata). */
+  precharge: z.object({ amount: z.number(), holdId: z.string() }).optional(),
   provider: z.string(),
   taskId: z.string(),
 });
@@ -215,6 +217,7 @@ export const imageRouter = router({
         provider,
         model,
         params,
+        precharge,
       } = input;
 
       log('Starting async image generation: %O', {
@@ -450,6 +453,7 @@ export const imageRouter = router({
                 topicId: generationTopicId,
               },
               modelUsage,
+              prechargeResult: precharge,
               provider,
               served: servedBy,
               userId: ctx.userId,
@@ -500,6 +504,27 @@ export const imageRouter = router({
         });
 
         log('Task status updated to Error: %s, errorType: %s', taskId, errorType);
+
+        // Refund this generation's share of the hold. Only with an explicit
+        // hold: the FIFO guess could release a sibling's / an older job's hold.
+        if (ENABLE_BUSINESS_FEATURES && precharge?.holdId) {
+          try {
+            await chargeAfterGenerate({
+              isError: true,
+              metadata: {
+                asyncTaskId: taskId,
+                generationBatchId,
+                modelId: model,
+                topicId: generationTopicId,
+              },
+              prechargeResult: precharge,
+              provider,
+              userId: ctx.userId,
+            });
+          } catch (refundError) {
+            console.error('[billing] image refund after sync failure:', refundError);
+          }
+        }
 
         return {
           message: `Image generation ${taskId} failed: ${errorMessage}`,
