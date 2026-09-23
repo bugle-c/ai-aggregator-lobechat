@@ -4,6 +4,7 @@ import { type ItemType } from 'antd/es/menu/interface';
 import {
   BookMinusIcon,
   BookPlusIcon,
+  Clapperboard,
   DownloadIcon,
   FolderInputIcon,
   LinkIcon,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { shallow } from 'zustand/shallow';
 
 import RepoIcon from '@/components/LibIcon';
@@ -54,6 +56,7 @@ export const useFileItemDropdown = ({
 }: UseFileItemDropdownParams): UseFileItemDropdownReturn => {
   const { t } = useTranslation(['components', 'common', 'knowledgeBase']);
   const { message, modal } = App.useApp();
+  const navigate = useNavigate();
   const appOrigin = useAppOrigin();
 
   const { deleteResource, moveResource, refreshFileList } = useFileStore(
@@ -78,6 +81,7 @@ export const useFileItemDropdown = ({
 
   const isInLibrary = !!libraryId;
   const isFolder = fileType === 'custom/folder';
+  const isImage = Boolean(fileType && fileType.toLowerCase().startsWith('image/'));
   // PDF and Office files should not be treated as pages
   const lowerFilename = filename?.toLowerCase();
   const isPDF = fileType?.toLowerCase() === 'pdf' || lowerFilename?.endsWith('.pdf');
@@ -203,6 +207,18 @@ export const useFileItemDropdown = ({
 
     return (
       [
+        // «Оживить картинку» — hand the image to /video as the start frame
+        // (Veo 3.1 Fast). On the free plan this is the one trial video.
+        isImage && {
+          icon: <Icon icon={Clapperboard} />,
+          key: 'animate',
+          label: 'Оживить картинку',
+          onClick: async ({ domEvent }) => {
+            domEvent.stopPropagation();
+            navigate(`/video?animate=${encodeURIComponent(url)}`);
+          },
+        },
+        isImage && { type: 'divider' },
         ...libraryRelatedActions,
         hasKnowledgeBaseActions && {
           type: 'divider',
@@ -347,6 +363,8 @@ export const useFileItemDropdown = ({
     removeFilesFromKnowledgeBase,
     t,
     url,
+    isImage,
+    navigate,
   ]);
 
   return { menuItems };
