@@ -8,6 +8,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
+import { friendlyGenerationError } from '@/business/utils/friendlyError';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
 import { revalidateResources } from '@/store/file/slices/resource/hooks';
@@ -229,7 +230,7 @@ const ActiveGenerationsStrip = memo(() => {
               </button>
             </div>
             <div className={styles.errorBody}>
-              {task.error?.body || task.error?.name || 'Не удалось сгенерировать'}
+              {friendlyGenerationError(task.error?.body || task.error?.name)}
             </div>
             <div className={styles.errorRefund}>Кредиты возвращены</div>
           </div>
