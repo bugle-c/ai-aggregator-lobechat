@@ -125,6 +125,13 @@ export async function POST(req: Request) {
         typeof meta.routerDeadlineAt === 'string'
           ? Date.parse(meta.routerDeadlineAt)
           : task.createdAt.getTime() + 9 * 60 * 1000;
+      // The async procedure polls in-process until routerDeadlineAt; while it
+      // may still be alive we must not touch the task (2026-09-23: cron and
+      // procedure finished the same task 3 s apart → double refund).
+      if (jobId && now < deadlineAt + 60_000) {
+        results.push({ action: 'router-attempt', status: 'running', taskId: task.id });
+        continue;
+      }
       if (!jobId) {
         await failRouterVideo(db, ref, {
           baseMeta,
@@ -148,7 +155,7 @@ export async function POST(req: Request) {
           taskCreatedAt: task.createdAt,
         });
         results.push({ action: 'router-finished', taskId: task.id });
-      } else if (r.outcome === 'timeout' && now < deadlineAt + 2 * 60 * 1000) {
+      } else if (r.outcome === 'timeout' && now < deadlineAt + 3 * 60 * 1000) {
         results.push({ action: 'router-attempt', status: 'running', taskId: task.id });
       } else {
         await failRouterVideo(db, ref, {

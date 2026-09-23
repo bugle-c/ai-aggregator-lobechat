@@ -28,9 +28,15 @@ vi.mock('@/server/services/billing', () => ({
 }));
 
 const updateSetWhereSpy = vi.fn(async () => undefined);
+// Rows the release-once UPDATE … RETURNING hands back: [] = hold already released.
+let nextReleaseRows: any[] = [{ id: 'hold' }];
+const whereWithReturning = (...args: any[]) => {
+  void updateSetWhereSpy(...(args as []));
+  return { returning: async () => nextReleaseRows };
+};
 function makeFakeDb() {
   const tx: any = {
-    update: () => ({ set: () => ({ where: updateSetWhereSpy }) }),
+    update: () => ({ set: () => ({ where: whereWithReturning }) }),
   };
   const db: any = {
     transaction: async (fn: (t: any) => Promise<any>) => fn(tx),
@@ -44,6 +50,7 @@ beforeEach(() => {
   incrementTokensUsedMock.mockReset().mockResolvedValue({ committed: 0 });
   writeUsageLogMock.mockReset().mockResolvedValue(undefined);
   updateSetWhereSpy.mockClear();
+  nextReleaseRows = [{ id: 'hold' }];
 });
 
 afterEach(() => {

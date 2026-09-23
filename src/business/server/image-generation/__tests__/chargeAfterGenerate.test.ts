@@ -28,15 +28,21 @@ vi.mock('@/server/services/billing', () => ({
 }));
 
 const updateSetWhereSpy = vi.fn(async () => undefined);
+// Rows the release-once UPDATE … RETURNING hands back: [] = hold already released.
+let nextReleaseRows: any[] = [{ id: 'hold' }];
+const whereWithReturning = (...args: any[]) => {
+  void updateSetWhereSpy(...(args as []));
+  return { returning: async () => nextReleaseRows };
+};
 let nextSelectRows: any[] = [];
 let selectCalls = 0;
 function makeFakeDb() {
   const tx: any = {
-    update: () => ({ set: () => ({ where: updateSetWhereSpy }) }),
+    update: () => ({ set: () => ({ where: whereWithReturning }) }),
   };
   const db: any = {
     transaction: async (fn: (t: any) => Promise<any>) => fn(tx),
-    update: () => ({ set: () => ({ where: updateSetWhereSpy }) }),
+    update: () => ({ set: () => ({ where: whereWithReturning }) }),
     // findOldestActiveHold lookup
     select: () => {
       selectCalls += 1;
@@ -60,6 +66,7 @@ beforeEach(() => {
   incrementTokensUsedMock.mockReset().mockResolvedValue({ committed: 0 });
   writeUsageLogMock.mockReset().mockResolvedValue(undefined);
   updateSetWhereSpy.mockClear();
+  nextReleaseRows = [{ id: 'hold' }];
   nextSelectRows = [];
   selectCalls = 0;
 });
@@ -185,5 +192,18 @@ describe('image chargeAfterGenerate — reconcile against hold', () => {
     expect(selectCalls).toBe(0); // no oldest-hold guessing when the hold is known
     expect(incrementTokensUsedMock).toHaveBeenCalledWith(-127, expect.anything());
     expect(updateSetWhereSpy).toHaveBeenCalledTimes(1); // exactly one hold released
+  });
+
+  it('a second isError for the same hold refunds nothing (release-once gate)', async () => {
+    const { chargeAfterGenerate } = await import('../chargeAfterGenerate');
+    nextReleaseRows = []; // the hold was already released by the first finisher
+    await chargeAfterGenerate({
+      isError: true,
+      metadata: { asyncTaskId: 't', generationBatchId: 'b', modelId: 'dall-e-3' },
+      prechargeResult: { amount: 127, holdId: 'hold-B' },
+      provider: 'wavespeed',
+      userId: 'u1',
+    });
+    expect(incrementTokensUsedMock).not.toHaveBeenCalled();
   });
 });

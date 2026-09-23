@@ -1,8 +1,6 @@
-import { eq } from 'drizzle-orm';
-
 import { getServerDB } from '@/database/core/db-adaptor';
-import { creditHolds } from '@/database/schemas';
 import { writeUsageLog } from '@/server/modules/analytics/writeUsageLog';
+import { releaseHoldIfActive } from '@/server/modules/billing/hold-release';
 import { calculateCreditsAsync } from '@/server/modules/billing/model-rates';
 import { BillingService } from '@/server/services/billing';
 import { fetchRate } from '@/server/services/billing/rates-source';
@@ -57,20 +55,20 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
   if (params.isError) {
     if (heldAmount > 0) {
       try {
-        await db.transaction(async (tx) => {
+        const refunded = await db.transaction(async (tx) => {
+          // Release-once gate: a second finisher (cron vs procedure) must not
+          // refund the same hold again.
+          if (holdId && !(await releaseHoldIfActive(tx, holdId))) return false;
           await new BillingService(tx as any, params.userId).incrementTokensUsed(
             -heldAmount,
             tx as any,
           );
-          if (holdId) {
-            await tx
-              .update(creditHolds)
-              .set({ releasedAt: new Date() })
-              .where(eq(creditHolds.id, holdId));
-          }
+          return true;
         });
         console.info(
-          `[billing] video refund ${heldAmount} credits on error: user=${params.userId}`,
+          refunded
+            ? `[billing] video refund ${heldAmount} credits on error: user=${params.userId}`
+            : `[billing] video refund skipped — hold ${holdId} already released: user=${params.userId}`,
         );
       } catch (err) {
         const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
@@ -90,14 +88,11 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
     if (holdId && heldAmount > 0) {
       try {
         await db.transaction(async (tx) => {
+          if (!(await releaseHoldIfActive(tx, holdId))) return;
           await new BillingService(tx as any, params.userId).incrementTokensUsed(
             -heldAmount,
             tx as any,
           );
-          await tx
-            .update(creditHolds)
-            .set({ releasedAt: new Date() })
-            .where(eq(creditHolds.id, holdId));
         });
       } catch (err) {
         console.error(
@@ -131,14 +126,16 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
   try {
     await db.transaction(async (tx) => {
       const billingService = new BillingService(tx as any, params.userId);
+      if (holdId && !(await releaseHoldIfActive(tx, holdId))) {
+        // Someone already settled this hold (refund or charge) — a second
+        // settlement would double-bill or double-refund. Nothing to do.
+        console.warn(
+          `[billing] video charge skipped — hold ${holdId} already released: user=${params.userId}`,
+        );
+        return;
+      }
       if (diff !== 0) {
         await billingService.incrementTokensUsed(diff, tx as any);
-      }
-      if (holdId) {
-        await tx
-          .update(creditHolds)
-          .set({ releasedAt: new Date() })
-          .where(eq(creditHolds.id, holdId));
       }
       await writeUsageLog(tx, {
         creditsCharged: credits,

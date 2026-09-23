@@ -144,6 +144,16 @@ export const videoRouter = router({
     }
     releaseVideoSlot();
 
+    // Someone else (the poll cron after a restart) may have settled the task
+    // while we were polling — never finish it twice.
+    const fresh = await ctx.serverDB.query.asyncTasks.findFirst({
+      where: eq(asyncTasks.id, asyncTaskId),
+    });
+    if (fresh?.status !== AsyncTaskStatus.Processing) {
+      console.warn(`[media-router] task ${asyncTaskId} already ${fresh?.status}; skipping`);
+      return { success: false, servedBy: 'none' };
+    }
+
     if (result.outcome === 'ok' && result.buffer && looksLikeMp4(result.buffer)) {
       recordRouterOutcome('video', 'ok');
       try {
