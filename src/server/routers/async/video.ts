@@ -23,9 +23,18 @@ import {
   releaseVideoSlot,
   tryReserveTrialFallbackSlot,
 } from '@/business/server/media-router/budget';
-import { looksLikeMp4, submitRouterVideo } from '@/business/server/media-router/client';
+import {
+  looksLikeMp4,
+  pollRouterJob,
+  type RouterResult,
+  submitRouterVideo,
+} from '@/business/server/media-router/client';
 import { getMediaRouterConfig, ROUTER_PROVIDER_ID } from '@/business/server/media-router/config';
 import { type VideoRoute } from '@/business/server/media-router/eligibility';
+import {
+  failRouterVideo,
+  finalizeRouterVideoSuccess,
+} from '@/business/server/media-router/finalizeVideo';
 import { FREE_VIDEO_QUEUE_MESSAGE } from '@/business/server/media-router/newcomer';
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
@@ -119,7 +128,9 @@ export const videoRouter = router({
     // this container is recreated mid-poll), then poll until the deadline.
     const submitted = await submitRouterVideo(route as VideoRoute, params.prompt);
     let result: RouterResult;
-    if ('jobId' in submitted) {
+    let routerJobId: string | undefined;
+    if (!('outcome' in submitted)) {
+      routerJobId = submitted.jobId;
       await ctx.asyncTaskModel.update(asyncTaskId, {
         metadata: {
           ...baseMeta,
@@ -127,7 +138,7 @@ export const videoRouter = router({
           servedBy: `${ROUTER_PROVIDER_ID}-attempt`,
         },
       });
-      result = await pollRouterJob(submitted.jobId, videoDeadlineMs);
+      result = await pollRouterJob(routerJobId, videoDeadlineMs);
     } else {
       result = submitted;
     }
@@ -139,7 +150,7 @@ export const videoRouter = router({
         await finalizeRouterVideoSuccess(ctx.serverDB, ref, {
           baseMeta,
           buffer: result.buffer,
-          jobId: result.jobId ?? submitted.jobId,
+          jobId: result.jobId ?? routerJobId,
           requestedSeconds: route.seconds,
           taskCreatedAt: new Date(task.createdAt),
         });
