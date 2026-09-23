@@ -24,7 +24,15 @@ export const ErrorState = memo<ErrorStateProps>(
       if (!generation.task.error) return '';
 
       const error = generation.task.error;
-      const errorBody = typeof error.body === 'string' ? error.body : error.body?.detail;
+      // Only ever hand React a string: `body.detail` can itself be an object
+      // (tRPC / WaveSpeed envelopes), which crashed the whole feed with React
+      // error #31 (2026-09-23). Non-string bodies go through friendlyGenerationError.
+      const errorBody =
+        typeof error.body === 'string'
+          ? error.body
+          : typeof error.body?.detail === 'string'
+            ? error.body.detail
+            : undefined;
 
       // Try to translate based on error type if it matches known AgentRuntimeErrorType
       if (errorBody) {
@@ -58,7 +66,7 @@ export const ErrorState = memo<ErrorStateProps>(
       // Fallback to original error message
       // Raw upstream text (WaveSpeed `400 {...}`, tRPC detail) never reaches
       // the customer — collapse to one sentence. See business/utils/friendlyError.
-      return friendlyGenerationError(errorBody || error.name);
+      return friendlyGenerationError(errorBody || error.body || error.name);
     }, [generation.task.error, generationBatch.provider, tError]);
 
     return (
