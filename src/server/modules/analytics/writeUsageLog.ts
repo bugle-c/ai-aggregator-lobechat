@@ -21,9 +21,12 @@ export interface WriteUsageLogInput {
   provider: string;
   /**
    * Provider-reported cost in USD (e.g. OpenRouter `response.usage.cost`).
-   * When present, threaded through to computeCostUsdFromRate for chat usage
-   * so usage_logs.cost_usd reflects the actual provider charge × markup
-   * rather than a re-derivation from token counts.
+   * Chat: threaded through to computeCostUsdFromRate so usage_logs.cost_usd
+   * reflects the actual provider charge × markup rather than a re-derivation
+   * from token counts.
+   * Image/video: overrides `provider_cost_rub` only — what the user is charged
+   * (`cost_usd`/`cost_rub`) still follows the catalog rate. Pass `0` for
+   * results served by our llm-router subscription pool.
    */
   providerCostUsd?: number;
   userId: string;
@@ -62,7 +65,12 @@ export async function computeUsageLogRow(input: WriteUsageLogInput) {
   // Economics page reads this for true gross-margin math; cost_rub
   // stays the "charged value" reported to the user. Local Ollama
   // models (rate present but per_unit=0) naturally land at 0.
-  const providerCostUsd = rate ? computeBaseCostUsdFromRate(rate, usage) : 0;
+  const providerCostUsd =
+    input.kind !== 'chat' && typeof input.providerCostUsd === 'number' && input.providerCostUsd >= 0
+      ? input.providerCostUsd
+      : rate
+        ? computeBaseCostUsdFromRate(rate, usage)
+        : 0;
   const providerCostRub = providerCostUsd * USD_TO_RUB;
 
   return {

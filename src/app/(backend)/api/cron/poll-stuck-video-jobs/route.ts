@@ -35,7 +35,12 @@ const POLL_WINDOW_MIN_AGE_MS = 5 * 60 * 1000; // 5 min
 const POLL_WINDOW_MAX_AGE_MS = 60 * 60 * 1000; // 1 h
 
 interface PollResult {
-  action: 'replayed-webhook' | 'still-running' | 'unsupported-provider' | 'error';
+  action:
+    | 'replayed-webhook'
+    | 'router-attempt'
+    | 'still-running'
+    | 'unsupported-provider'
+    | 'error';
   error?: string;
   status?: string;
   taskId: string;
@@ -86,6 +91,16 @@ export async function POST(req: Request) {
     const meta = (task.metadata ?? {}) as Record<string, unknown>;
     const provider = task.provider;
     const webhookToken = typeof meta.webhookToken === 'string' ? meta.webhookToken : undefined;
+
+    // Router-first attempts are polled by the async video procedure itself
+    // (and fall back to WaveSpeed with a real inferenceId); nothing to do here.
+    if (
+      (typeof meta.servedBy === 'string' && meta.servedBy.startsWith('llm-router')) ||
+      (task.inferenceId ?? '').startsWith('llm-router:')
+    ) {
+      results.push({ action: 'router-attempt', taskId: task.id });
+      continue;
+    }
 
     if (!task.inferenceId || !provider) {
       results.push({ action: 'error', error: 'missing inferenceId or provider', taskId: task.id });

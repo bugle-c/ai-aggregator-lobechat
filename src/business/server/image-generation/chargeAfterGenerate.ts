@@ -49,6 +49,13 @@ interface ChargeParams {
   modelUsage?: ModelUsage;
   prechargeResult?: { amount: number; holdId: string } | Record<string, unknown>;
   provider: string;
+  /**
+   * Who actually rendered the image when it was not the catalog provider —
+   * e.g. `{ provider: 'llm-router', providerCostUsd: 0 }` for the subscription
+   * pool. Drives `usage_logs.provider` / `provider_cost_rub`; the credits the
+   * user pays are unchanged.
+   */
+  served?: { provider: string; providerCostUsd: number };
   userId: string;
 }
 
@@ -161,7 +168,8 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
         kind: 'image',
         model: params.metadata.modelId,
         outputTokens: 0,
-        provider: params.provider || 'unknown',
+        provider: params.served?.provider ?? (params.provider || 'unknown'),
+        providerCostUsd: params.served?.providerCostUsd,
         userId: params.userId,
       });
     });

@@ -24,6 +24,8 @@ interface ChargeParams {
   referenceSeconds?: number;
   /** Requested output resolution (from the batch config) — per-resolution families bill by it. */
   resolution?: string | null;
+  /** Actual renderer when not the catalog provider (llm-router pool → providerCostUsd 0). */
+  served?: { provider: string; providerCostUsd: number };
   // Video: use durationSeconds from provider webhook if available, else fall back
   // to duration in modelUsage, else 0 (no charge, but we log it).
   usage?: { completionTokens: number; durationSeconds?: number; totalTokens: number };
@@ -144,7 +146,8 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
         kind: 'video',
         model: params.metadata.modelId,
         outputTokens: 0,
-        provider: params.provider || 'unknown',
+        provider: params.served?.provider ?? (params.provider || 'unknown'),
+        providerCostUsd: params.served?.providerCostUsd,
         userId: params.userId,
         videoSeconds: seconds,
       });

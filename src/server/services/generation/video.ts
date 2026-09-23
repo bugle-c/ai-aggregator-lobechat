@@ -55,14 +55,30 @@ export class VideoGenerationService {
   /**
    * Download video, extract metadata, generate cover/thumbnail, upload all to S3
    */
-  async processVideoForGeneration(videoUrl: string): Promise<VideoProcessResult> {
-    log('Processing video from URL: %s', videoUrl);
+  /**
+   * Process a generated video into S3 assets. Accepts either an https URL
+   * (provider webhooks) or an in-memory MP4 buffer (results our llm-router
+   * pool returns as base64 — there is no URL to download from).
+   */
+  async processVideoForGeneration(
+    video: string | { buffer: Buffer; ext?: string },
+  ): Promise<VideoProcessResult> {
+    const videoUrl = typeof video === 'string' ? video : null;
+    const inMemory = typeof video === 'string' ? null : video;
+    log('Processing video from %s', videoUrl ?? `buffer (${inMemory!.buffer.length} bytes)`);
 
     let tempVideoPath: string | null = null;
     let tempCoverPath: string | null = null;
 
     try {
-      tempVideoPath = await this.downloadVideo(videoUrl);
+      if (videoUrl) {
+        tempVideoPath = await this.downloadVideo(videoUrl);
+      } else {
+        const buf = inMemory!.buffer;
+        const bufExt = inMemory!.ext ?? '.mp4';
+        tempVideoPath = path.join(os.tmpdir(), `lobe-video-${nanoid()}${bufExt}`);
+        await fs.writeFile(tempVideoPath, buf);
+      }
 
       const [metadata, videoBuffer] = await Promise.all([
         this.getVideoMetadata(tempVideoPath),
@@ -75,7 +91,9 @@ export class VideoGenerationService {
       const fileSize = videoBuffer.length;
 
       // Determine MIME type from URL or default to mp4
-      const ext = path.extname(new URL(videoUrl).pathname).toLowerCase();
+      const ext = videoUrl
+        ? path.extname(new URL(videoUrl).pathname).toLowerCase()
+        : path.extname(tempVideoPath).toLowerCase();
       const mimeType = ext === '.webm' ? 'video/webm' : 'video/mp4';
       const videoExt = ext || '.mp4';
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { getNewcomerState } from '@/business/server/media-router/newcomer';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { activeBonusFor } from '@/server/modules/billing/active-bonus';
@@ -78,6 +79,11 @@ export const spendRouter = router({
       ? await countUserMessagesSince(ctx.serverDB, ctx.userId, moscowDayStart(now))
       : null;
 
+    // Newcomer mode (2026-09-22): free users in their first week default the
+    // image picker to Nano Banana until they have 3 pictures. The picker reads
+    // this from the credit state it already fetches.
+    const newcomer = await getNewcomerState(ctx.serverDB, ctx.userId, plan?.slug, now);
+
     // Is the daily gate currently lifted by purchased credits (top-up or the
     // MAGIC48 paid bonus)? The rule lives in `decideUsageLimit` only — we ask
     // the gate itself with a probe one message past the quota, so the UI can
@@ -112,6 +118,7 @@ export const spendRouter = router({
       dailyRemaining: dailyUsed === null ? null : Math.max(0, FREE_DAILY_MESSAGE_QUOTA - dailyUsed),
       dailyResetAt: isFree ? nextMoscowDayStart(now).toISOString() : null,
       daysUntilReset,
+      newcomer,
       nextPlanCredits: nextPlan?.tokenLimit ?? null,
       nextPlanName: nextPlan?.name ?? null,
       nextPlanPrice: nextPlan?.priceRub ?? null,

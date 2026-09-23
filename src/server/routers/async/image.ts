@@ -8,6 +8,19 @@ import { type RuntimeImageGenParams } from 'model-bank';
 import { z } from 'zod';
 
 import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
+import { isRouterPaused, recordRouterOutcome } from '@/business/server/media-router/breaker';
+import {
+  generateViaRouter,
+  isPngOrJpeg,
+  submitRouterImage,
+} from '@/business/server/media-router/client';
+import {
+  getMediaRouterConfig,
+  isRouterFirstEnabled,
+  ROUTER_PROVIDER_ID,
+} from '@/business/server/media-router/config';
+import { imageRouteFor } from '@/business/server/media-router/eligibility';
+import { isNewcomerUser } from '@/business/server/media-router/newcomer';
 import { createImageBusinessMiddleware } from '@/business/server/trpc-middlewares/async';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
@@ -240,8 +253,47 @@ export const imageRouter = router({
       // underlying image runtime is wavespeed. Try the async submit
       // whenever WAVESPEED_API_KEY is set — the legacy sync path
       // remains a fallback if submit fails (non-wavespeed model, etc.).
+      // Router-first (2026-09-22): eligible Nano Banana renders go to our
+      // llm-router subscription pool first (zero provider cost, same credits
+      // for the user). Any failure falls through to WaveSpeed below.
+      let routerResponse: { height?: number; imageUrl: string; width?: number } | null = null;
+      let servedBy: { provider: string; providerCostUsd: number } | undefined;
+      const routerRoute = imageRouteFor(model, params as any, 1);
+      if (routerRoute && isRouterFirstEnabled('image') && !isRouterPaused('image')) {
+        const { imageDeadlineMs, imageScope } = getMediaRouterConfig();
+        let inScope = true;
+        if (imageScope === 'newcomers') {
+          inScope = await isNewcomerUser(ctx.serverDB, ctx.userId).catch(() => false);
+        }
+        if (inScope) {
+          const r = await generateViaRouter(
+            () => submitRouterImage(routerRoute, params.prompt),
+            imageDeadlineMs,
+          );
+          const mime = r.buffer ? isPngOrJpeg(r.buffer) : null;
+          if (r.outcome === 'ok' && r.buffer && mime) {
+            recordRouterOutcome('image', 'ok');
+            routerResponse = { imageUrl: `data:${mime};base64,${r.buffer.toString('base64')}` };
+            servedBy = { provider: ROUTER_PROVIDER_ID, providerCostUsd: 0 };
+            await ctx.asyncTaskModel.update(taskId, {
+              metadata: { routerJobId: r.jobId, servedBy: ROUTER_PROVIDER_ID },
+            });
+            log('Router image OK: task=%s job=%s', taskId, r.jobId);
+          } else {
+            recordRouterOutcome(
+              'image',
+              r.outcome === 'ok' ? 'upstream' : r.outcome,
+              r.retryAfterMs,
+            );
+            console.warn(
+              `[media-router] image fallback task=${taskId} reason=${r.outcome} ${r.error ?? ''}`,
+            );
+          }
+        }
+      }
+
       const wavespeedApiKey = process.env.WAVESPEED_API_KEY;
-      if (wavespeedApiKey) {
+      if (wavespeedApiKey && !routerResponse) {
         try {
           const { inferenceId, pollUrl } = await submitWaveSpeedImage(
             { model, params: params as unknown as RuntimeImageGenParams },
@@ -271,18 +323,31 @@ export const imageRouter = router({
 
       try {
         const imageGenerationPromise = async (signal: AbortSignal) => {
-          log('Initializing agent runtime for provider: %s', provider);
+          let modelRuntime: Awaited<ReturnType<typeof initModelRuntimeFromDB>> | undefined;
+          let response:
+            | {
+                height?: number;
+                imageUrl: string;
+                modelUsage?: any;
+                width?: number;
+              }
+            | undefined;
+          if (routerResponse) {
+            response = routerResponse;
+          } else {
+            log('Initializing agent runtime for provider: %s', provider);
 
-          // Read user's provider config from database
-          const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
+            // Read user's provider config from database
+            modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
 
-          // Check if operation has been cancelled
-          checkAbortSignal(signal);
-          log('Agent runtime initialized, calling createImage');
-          const response = await modelRuntime.createImage!({
-            model,
-            params: params as unknown as RuntimeImageGenParams,
-          });
+            // Check if operation has been cancelled
+            checkAbortSignal(signal);
+            log('Agent runtime initialized, calling createImage');
+            response = await modelRuntime.createImage!({
+              model,
+              params: params as unknown as RuntimeImageGenParams,
+            });
+          }
 
           if (!response) {
             log('Create image response is empty');
@@ -314,7 +379,7 @@ export const imageRouter = router({
 
           // Extract ComfyUI authentication headers if provider is ComfyUI
           let authHeaders: Record<string, string> | undefined;
-          if (provider === 'comfyui') {
+          if (provider === 'comfyui' && modelRuntime) {
             // Use the public interface method to get auth headers
             // This avoids accessing private members and exposing credentials
             authHeaders = modelRuntime.getAuthHeaders();
@@ -386,6 +451,7 @@ export const imageRouter = router({
               },
               modelUsage,
               provider,
+              served: servedBy,
               userId: ctx.userId,
             });
           }

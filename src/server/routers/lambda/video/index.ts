@@ -4,6 +4,10 @@ import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { isRouterPaused } from '@/business/server/media-router/breaker';
+import { tryReserveVideoSlot } from '@/business/server/media-router/budget';
+import { getMediaRouterConfig, isRouterFirstEnabled } from '@/business/server/media-router/config';
+import { videoRouteFor } from '@/business/server/media-router/eligibility';
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
 import { chargeBeforeGenerate } from '@/business/server/video-generation/chargeBeforeGenerate';
 import { getVideoFreeQuota } from '@/business/server/video-generation/getVideoFreeQuota';
@@ -20,6 +24,8 @@ import { appEnv } from '@/envs/app';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { keyVaults, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { createAsyncCaller } from '@/server/routers/async/caller';
+import { BillingService } from '@/server/services/billing';
 import { FileService } from '@/server/services/file';
 import {
   AsyncTaskError,
@@ -230,6 +236,46 @@ export const videoRouter = router({
     });
 
     log('Database transaction completed. Calling model runtime for video generation.');
+
+    // Step 1.5: Router-first (2026-09-22). Eligible Veo Fast/Lite clips are
+    // rendered by our llm-router subscription pool (zero provider cost, same
+    // credits for the user); the async procedure polls the router and falls
+    // back to the regular WaveSpeed submission on any failure.
+    if (isRouterFirstEnabled('video') && !isRouterPaused('video')) {
+      try {
+        const planSlug = await new BillingService(serverDB, userId).getUserPlanSlug();
+        const route = videoRouteFor(
+          model,
+          generationParams as any,
+          planSlug,
+          getMediaRouterConfig().videoPlans,
+        );
+        if (route && (await tryReserveVideoSlot(serverDB))) {
+          const asyncCaller = await createAsyncCaller({ userId });
+          asyncCaller.video
+            .createViaRouter({
+              asyncTaskId,
+              generationBatchId: createdBatch.id,
+              generationId: createdGeneration.id,
+              generationTopicId,
+              model,
+              params: generationParams as any,
+              prechargeResult: prechargeResult as any,
+              provider,
+              route,
+              webhookToken,
+            })
+            .catch((e: unknown) => console.error('[media-router] createViaRouter call failed:', e));
+          log('Video handed to the router pool: task=%s', asyncTaskId);
+          return {
+            data: { batch: createdBatch, generations: [createdGeneration] },
+            success: true,
+          };
+        }
+      } catch (e) {
+        console.error('[media-router] eligibility check failed, using WaveSpeed:', e);
+      }
+    }
 
     // Step 2: Call model runtime to submit video generation task
     try {
