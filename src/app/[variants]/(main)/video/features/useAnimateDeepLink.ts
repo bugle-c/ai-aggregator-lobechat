@@ -9,6 +9,9 @@ import { useVideoStore } from '@/store/video';
 /** The model «Оживить картинку» lands on — the pool-rendered Veo 3.1 Fast (image→video via pairing). */
 export const ANIMATE_MODEL_ID = 'google/veo3.1-fast/text-to-video';
 
+export const ANIMATE_DEFAULT_PROMPT =
+  'Оживи эту картинку: лёгкое естественное движение, камера почти неподвижна, без резких смен кадра.';
+
 /**
  * `/video?animate=<imageUrl>` — opened from the «Оживить картинку» action on
  * an image card. Once the video config store is initialised, switch to Veo
@@ -37,6 +40,12 @@ export const useAnimateDeepLink = () => {
       setParamOnInput('imageUrl', animate);
       setParamOnInput('duration', 4);
       setParamOnInput('resolution', '720p');
+      // The store refuses an empty prompt; a newcomer should be able to just
+      // press «Сгенерировать». They can still rewrite it.
+      const current = useVideoStore.getState().parameters?.prompt;
+      if (!current || !String(current).trim()) {
+        setParamOnInput('prompt', ANIMATE_DEFAULT_PROMPT);
+      }
     } catch (error) {
       console.warn('[animate] could not prefill the video config:', error);
     }
