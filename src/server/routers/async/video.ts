@@ -12,14 +12,7 @@
  *
  * Design: docs/superpowers/specs/2026-09-22-router-first-media-routing-design.md
  */
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import {
-  AsyncTaskError,
-  AsyncTaskErrorType,
-  AsyncTaskStatus,
-  FileSource,
-  type VideoGenerationAsset,
-} from '@lobechat/types';
+import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
 import debug from 'debug';
 import { eq } from 'drizzle-orm';
 import { type RuntimeVideoGenParams } from 'model-bank';
@@ -30,25 +23,16 @@ import {
   releaseVideoSlot,
   tryReserveTrialFallbackSlot,
 } from '@/business/server/media-router/budget';
-import {
-  generateViaRouter,
-  looksLikeMp4,
-  submitRouterVideo,
-} from '@/business/server/media-router/client';
+import { looksLikeMp4, submitRouterVideo } from '@/business/server/media-router/client';
 import { getMediaRouterConfig, ROUTER_PROVIDER_ID } from '@/business/server/media-router/config';
 import { type VideoRoute } from '@/business/server/media-router/eligibility';
 import { FREE_VIDEO_QUEUE_MESSAGE } from '@/business/server/media-router/newcomer';
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
-import { GenerationModel } from '@/database/models/generation';
-import { GenerationBatchModel } from '@/database/models/generationBatch';
 import { asyncTasks } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
-import { referenceSecondsFor } from '@/server/modules/billing/compute-cost';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
-import { VideoGenerationService } from '@/server/services/generation/video';
-import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 const log = debug('lobe-video:async:router');
 
@@ -57,8 +41,6 @@ const videoProcedure = asyncAuthedProcedure.use(async (opts) => {
   return opts.next({
     ctx: {
       asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
-      generationBatchModel: new GenerationBatchModel(ctx.serverDB, ctx.userId),
-      generationModel: new GenerationModel(ctx.serverDB, ctx.userId),
     },
   });
 });
@@ -104,11 +86,17 @@ export const videoRouter = router({
       where: eq(asyncTasks.id, asyncTaskId),
     });
     if (!task) return { success: false };
-    const baseMeta = (task.metadata ?? {}) as Record<string, unknown>;
+    const baseMeta = {
+      ...((task.metadata ?? {}) as Record<string, unknown>),
+      route,
+      routerDeadlineAt: new Date(startedAt + videoDeadlineMs).toISOString(),
+      routerStartedAt: new Date(startedAt).toISOString(),
+    };
 
     await ctx.asyncTaskModel.update(asyncTaskId, {
       metadata: {
         ...baseMeta,
+        route,
         routerDeadlineAt: new Date(startedAt + videoDeadlineMs).toISOString(),
         routerStartedAt: new Date(startedAt).toISOString(),
         servedBy: `${ROUTER_PROVIDER_ID}-attempt`,
@@ -116,79 +104,45 @@ export const videoRouter = router({
       status: AsyncTaskStatus.Processing,
     });
 
-    const result = await generateViaRouter(
-      () => submitRouterVideo(route as VideoRoute, params.prompt),
-      videoDeadlineMs,
-    );
+    const ref = {
+      asyncTaskId,
+      generationBatchId,
+      generationId,
+      generationTopicId,
+      model,
+      prechargeResult: prechargeResult as Record<string, unknown> | undefined,
+      provider,
+      userId: ctx.userId,
+    };
+
+    // Submit, remember the router job id (so the poll cron can take over if
+    // this container is recreated mid-poll), then poll until the deadline.
+    const submitted = await submitRouterVideo(route as VideoRoute, params.prompt);
+    let result: RouterResult;
+    if ('jobId' in submitted) {
+      await ctx.asyncTaskModel.update(asyncTaskId, {
+        metadata: {
+          ...baseMeta,
+          routerJobId: submitted.jobId,
+          servedBy: `${ROUTER_PROVIDER_ID}-attempt`,
+        },
+      });
+      result = await pollRouterJob(submitted.jobId, videoDeadlineMs);
+    } else {
+      result = submitted;
+    }
     releaseVideoSlot();
 
     if (result.outcome === 'ok' && result.buffer && looksLikeMp4(result.buffer)) {
       recordRouterOutcome('video', 'ok');
       try {
-        const videoService = new VideoGenerationService(ctx.serverDB, ctx.userId);
-        const processed = await videoService.processVideoForGeneration({ buffer: result.buffer });
-        const batch = await ctx.generationBatchModel.findById(generationBatchId);
-        const asset: VideoGenerationAsset = {
-          coverUrl: processed.coverKey,
-          duration: processed.duration,
-          height: processed.height,
-          originalUrl: processed.videoKey,
-          thumbnailUrl: processed.thumbnailKey,
-          type: 'video',
-          url: processed.videoKey,
-          width: processed.width,
-        };
-        await ctx.generationModel.createAssetAndFile(
-          generationId,
-          asset,
-          {
-            fileHash: processed.fileHash,
-            fileType: processed.mimeType,
-            name: `${sanitizeFileName(batch?.prompt ?? params.prompt, generationId)}.mp4`,
-            size: processed.fileSize,
-            url: processed.videoKey,
-          },
-          FileSource.VideoGeneration,
-        );
-        const duration = Date.now() - new Date(task.createdAt).getTime();
-        await ctx.asyncTaskModel.update(asyncTaskId, {
-          duration,
-          metadata: {
-            ...baseMeta,
-            actualSeconds: processed.duration,
-            routerJobId: result.jobId,
-            servedBy: ROUTER_PROVIDER_ID,
-          },
-          status: AsyncTaskStatus.Success,
+        await finalizeRouterVideoSuccess(ctx.serverDB, ref, {
+          baseMeta,
+          buffer: result.buffer,
+          jobId: result.jobId ?? submitted.jobId,
+          requestedSeconds: route.seconds,
+          taskCreatedAt: new Date(task.createdAt),
         });
-
-        if (ENABLE_BUSINESS_FEATURES) {
-          const batchConfig = (batch?.config ?? {}) as RuntimeVideoGenParams;
-          // Never charge more than requested: the hold was taken for
-          // `route.seconds`; a longer clip from the pool is a gift, not a bill.
-          const billedSeconds = Math.min(route.seconds, processed.duration || route.seconds);
-          await chargeAfterGenerate({
-            computePriceParams: { generateAudio: batchConfig.generateAudio },
-            latency: duration,
-            metadata: {
-              asyncTaskId,
-              generationBatchId,
-              modelId: model,
-              topicId: generationTopicId,
-            },
-            model,
-            prechargeResult: prechargeResult as any,
-            provider,
-            referenceSeconds: referenceSecondsFor(
-              (batchConfig ?? {}) as { referenceSeconds?: number; videoUrls?: unknown[] },
-            ),
-            resolution:
-              typeof batchConfig.resolution === 'string' ? batchConfig.resolution : undefined,
-            served: { provider: ROUTER_PROVIDER_ID, providerCostUsd: 0 },
-            usage: { completionTokens: 0, durationSeconds: billedSeconds, totalTokens: 0 },
-            userId: ctx.userId,
-          });
-        }
         log(
           'router video done task=%s job=%s in %dms',
           asyncTaskId,
@@ -213,34 +167,11 @@ export const videoRouter = router({
       console.warn(
         `[media-router] free-trial video ${asyncTaskId}: pool failed, fallback budget spent`,
       );
-      await ctx.asyncTaskModel.update(asyncTaskId, {
-        error: new AsyncTaskError(AsyncTaskErrorType.ServerError, FREE_VIDEO_QUEUE_MESSAGE),
-        metadata: {
-          ...baseMeta,
-          routerFallbackReason: result.error ?? result.outcome,
-          servedBy: 'none',
-        },
-        status: AsyncTaskStatus.Error,
+      await failRouterVideo(ctx.serverDB, ref, {
+        baseMeta,
+        message: FREE_VIDEO_QUEUE_MESSAGE,
+        reason: result.error ?? result.outcome,
       });
-      if (prechargeResult) {
-        try {
-          await chargeAfterGenerate({
-            isError: true,
-            metadata: {
-              asyncTaskId,
-              generationBatchId,
-              modelId: model,
-              topicId: generationTopicId,
-            },
-            model,
-            prechargeResult: prechargeResult as any,
-            provider,
-            userId: ctx.userId,
-          });
-        } catch (chargeError) {
-          console.error('[media-router] refund after trial pool failure:', chargeError);
-        }
-      }
       return { success: false, servedBy: 'none' };
     }
 

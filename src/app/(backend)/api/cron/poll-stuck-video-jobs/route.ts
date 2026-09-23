@@ -20,6 +20,12 @@
 import { AsyncTaskStatus } from '@lobechat/types';
 import { and, eq, gt, inArray, lt } from 'drizzle-orm';
 
+import { looksLikeMp4, pollRouterJob } from '@/business/server/media-router/client';
+import {
+  failRouterVideo,
+  finalizeRouterVideoSuccess,
+  ROUTER_VIDEO_FAILED_MESSAGE,
+} from '@/business/server/media-router/finalizeVideo';
 import { asyncTasks, generationBatches, generations } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 
@@ -38,6 +44,8 @@ interface PollResult {
   action:
     | 'replayed-webhook'
     | 'router-attempt'
+    | 'router-finished'
+    | 'router-failed'
     | 'still-running'
     | 'unsupported-provider'
     | 'error';
@@ -67,11 +75,16 @@ export async function POST(req: Request) {
   const stuck = await db
     .select({
       createdAt: asyncTasks.createdAt,
+      generationBatchId: generations.generationBatchId,
+      generationId: generations.id,
+      generationTopicId: generationBatches.generationTopicId,
       id: asyncTasks.id,
       inferenceId: asyncTasks.inferenceId,
       metadata: asyncTasks.metadata,
+      model: generationBatches.model,
       provider: generationBatches.provider,
       status: asyncTasks.status,
+      userId: asyncTasks.userId,
     })
     .from(asyncTasks)
     .innerJoin(generations, eq(generations.asyncTaskId, asyncTasks.id))
@@ -92,13 +105,59 @@ export async function POST(req: Request) {
     const provider = task.provider;
     const webhookToken = typeof meta.webhookToken === 'string' ? meta.webhookToken : undefined;
 
-    // Router-first attempts are polled by the async video procedure itself
-    // (and fall back to WaveSpeed with a real inferenceId); nothing to do here.
-    if (
-      (typeof meta.servedBy === 'string' && meta.servedBy.startsWith('llm-router')) ||
-      (task.inferenceId ?? '').startsWith('llm-router:')
-    ) {
-      results.push({ action: 'router-attempt', taskId: task.id });
+    // Router-first attempt whose async procedure is gone (container recreated
+    // mid-poll — deploys do that): poll the router job ourselves and finish
+    // or fail the task; never leave it for the 1 h timeout.
+    if (meta.servedBy === 'llm-router-attempt') {
+      const ref = {
+        asyncTaskId: task.id,
+        generationBatchId: task.generationBatchId,
+        generationId: task.generationId,
+        generationTopicId: task.generationTopicId ?? undefined,
+        model: task.model,
+        prechargeResult: meta.precharge as Record<string, unknown> | undefined,
+        provider: task.provider,
+        userId: task.userId,
+      };
+      const baseMeta = meta;
+      const jobId = typeof meta.routerJobId === 'string' ? meta.routerJobId : undefined;
+      const deadlineAt =
+        typeof meta.routerDeadlineAt === 'string'
+          ? Date.parse(meta.routerDeadlineAt)
+          : task.createdAt.getTime() + 9 * 60 * 1000;
+      if (!jobId) {
+        await failRouterVideo(db, ref, {
+          baseMeta,
+          message: ROUTER_VIDEO_FAILED_MESSAGE,
+          reason: 'no routerJobId (lost before submit)',
+        });
+        results.push({ action: 'router-failed', error: 'no routerJobId', taskId: task.id });
+        continue;
+      }
+      const r = await pollRouterJob(jobId, 12_000);
+      if (r.outcome === 'ok' && r.buffer && looksLikeMp4(r.buffer)) {
+        const requested =
+          typeof (meta.route as { seconds?: number } | undefined)?.seconds === 'number'
+            ? (meta.route as { seconds: number }).seconds
+            : 8;
+        await finalizeRouterVideoSuccess(db, ref, {
+          baseMeta,
+          buffer: r.buffer,
+          jobId,
+          requestedSeconds: requested,
+          taskCreatedAt: task.createdAt,
+        });
+        results.push({ action: 'router-finished', taskId: task.id });
+      } else if (r.outcome === 'timeout' && now < deadlineAt + 2 * 60 * 1000) {
+        results.push({ action: 'router-attempt', status: 'running', taskId: task.id });
+      } else {
+        await failRouterVideo(db, ref, {
+          baseMeta,
+          message: ROUTER_VIDEO_FAILED_MESSAGE,
+          reason: r.error ?? r.outcome,
+        });
+        results.push({ action: 'router-failed', error: r.error ?? r.outcome, taskId: task.id });
+      }
       continue;
     }
 
