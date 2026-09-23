@@ -35,9 +35,54 @@ const PlanGateBanner = memo(() => {
     staleTime: 5 * 60 * 1000,
   });
   const planSlug = data?.planSlug;
+  const freeVideo = data?.freeVideo;
 
   // Wait for the plan to load — don't flash the banner for paid users.
   if (!planSlug || planSlug !== 'free') return null;
+
+  // «Одно видео на Free»: while the trial is unused, the page is not a dead
+  // end — the user animates one of their pictures (rendered by our router
+  // pool, paid in credits as usual). When the pool is busy the copy says so
+  // and the trial stays intact.
+  if (freeVideo && freeVideo.left > 0) {
+    return (
+      <Flexbox
+        horizontal
+        align="center"
+        gap={16}
+        justify="space-between"
+        style={{
+          background: 'linear-gradient(90deg, rgba(16,185,129,0.12), rgba(99,102,241,0.12))',
+          border: '1px solid rgba(16,185,129,0.3)',
+          borderRadius: 12,
+          margin: '12px 16px',
+          padding: '14px 18px',
+        }}
+      >
+        <Flexbox horizontal align="center" gap={12}>
+          <Sparkles color="#34d399" size={22} />
+          <Flexbox gap={2}>
+            <Typography.Text strong style={{ fontSize: 15 }}>
+              Одно видео на «Старт» — оживите свою картинку
+            </Typography.Text>
+            <Typography.Text style={{ fontSize: 13, opacity: 0.85 }}>
+              {freeVideo.available
+                ? 'Veo 3.1 Fast превратит вашу картинку в ролик до 8 секунд в 720p. Откройте картинку в «Мои генерации» и нажмите «Оживить картинку». Списание кредитами как обычно.'
+                : 'Сейчас очередь на видео — попробуйте через 10–15 минут. Ваше бесплатное видео никуда не денется.'}
+            </Typography.Text>
+          </Flexbox>
+        </Flexbox>
+        <Button
+          disabled={!freeVideo.available}
+          size="middle"
+          type="primary"
+          onClick={() => navigate('/image?tab=feed')}
+        >
+          Выбрать картинку
+        </Button>
+      </Flexbox>
+    );
+  }
 
   return (
     <Flexbox

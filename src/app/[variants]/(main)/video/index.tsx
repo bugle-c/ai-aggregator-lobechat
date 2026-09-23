@@ -19,6 +19,7 @@ import FlowSidebarControls from './features/FlowSidebarControls';
 import PlanGateBanner from './features/PlanGateBanner';
 import PresetPromptPreview from './features/PresetPromptPreview';
 import PromptInput from './features/PromptInput';
+import { useAnimateDeepLink } from './features/useAnimateDeepLink';
 import VideoWorkspaceMobile from './VideoWorkspaceMobile';
 
 const VideoPage = memo(() => {
@@ -30,6 +31,8 @@ const VideoPage = memo(() => {
   // the first click of ⚙ — which then overwrote the model, params_lock,
   // prompt and photo of an already selected style.
   useFetchAiVideoConfig();
+  // /video?animate=<imageUrl> from «Оживить картинку» on an image card.
+  useAnimateDeepLink();
 
   const preset = useVideoStore(presetSelectors.currentPreset);
   const clearPreset = useVideoStore((s) => s.clearPreset);

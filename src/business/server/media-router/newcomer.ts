@@ -6,14 +6,18 @@
  * rule, 2026-09-22): the first pictures should come from the strongest cheap
  * model, and the router pool renders them at zero cost to us.
  */
-import { and, count, eq, isNotNull } from 'drizzle-orm';
+import { and, count, eq, inArray, isNotNull } from 'drizzle-orm';
 
+import { asyncTasks } from '@/database/schemas/asyncTask';
 import { billingPayments } from '@/database/schemas/billing';
 import { generations } from '@/database/schemas/generation';
 import { users } from '@/database/schemas/user';
 import { type LobeChatDatabase } from '@/database/type';
 import { FREE_PLAN_SLUG } from '@/server/modules/billing/daily-quota';
 import { BillingService } from '@/server/services/billing';
+
+import { isRouterVideoAvailable } from './budget';
+import { ROUTER_VIDEO_MODELS } from './eligibility';
 
 export const NEWCOMER_WINDOW_DAYS = Number(process.env.NEWCOMER_WINDOW_DAYS ?? 7);
 export const NEWCOMER_IMAGE_THRESHOLD = Number(process.env.NEWCOMER_IMAGE_THRESHOLD ?? 3);
@@ -75,4 +79,57 @@ export async function getNewcomerState(
 export async function isNewcomerUser(db: LobeChatDatabase, userId: string): Promise<boolean> {
   const planSlug = await new BillingService(db, userId).getUserPlanSlug();
   return (await getNewcomerState(db, userId, planSlug)).active;
+}
+
+/** Videos a free-plan account may start in total (owner: «одно видео на Free»). */
+export const FREE_VIDEO_TRIAL_PER_USER = Number(process.env.FREE_VIDEO_TRIAL_PER_USER ?? 1);
+
+/** Video models the trial may use — the ones our router pool renders (Veo 3.1 Fast/Lite). */
+export const FREE_VIDEO_TRIAL_MODELS = ROUTER_VIDEO_MODELS;
+
+export const FREE_VIDEO_QUEUE_MESSAGE =
+  'Видео сейчас в очереди — попробуйте через 10–15 минут. Ваше бесплатное видео сохранено.';
+
+export interface FreeVideoTrialState {
+  /** The pool can take a clip right now (flag, breaker, daily budget). */
+  available: boolean;
+  left: number;
+  used: number;
+}
+
+/**
+ * "Used" = video tasks that were accepted (pending/processing) or finished
+ * successfully. A failed attempt does not consume the trial, so a pool outage
+ * never eats the user's one video — no extra column needed.
+ */
+export async function countUserVideosStarted(
+  db: LobeChatDatabase,
+  userId: string,
+): Promise<number> {
+  const [row] = await db
+    .select({ n: count() })
+    .from(asyncTasks)
+    .where(
+      and(
+        eq(asyncTasks.userId, userId),
+        eq(asyncTasks.type, 'video_generation'),
+        inArray(asyncTasks.status, ['pending', 'processing', 'success']),
+      ),
+    );
+  return Number(row?.n ?? 0);
+}
+
+export async function getFreeVideoTrial(
+  db: LobeChatDatabase,
+  userId: string,
+  planSlug: string | undefined,
+  now = new Date(),
+): Promise<FreeVideoTrialState> {
+  if (planSlug !== FREE_PLAN_SLUG || FREE_VIDEO_TRIAL_PER_USER <= 0) {
+    return { available: false, left: 0, used: 0 };
+  }
+  const used = await countUserVideosStarted(db, userId);
+  const left = Math.max(0, FREE_VIDEO_TRIAL_PER_USER - used);
+  const available = left > 0 && (await isRouterVideoAvailable(db, now));
+  return { available, left, used };
 }

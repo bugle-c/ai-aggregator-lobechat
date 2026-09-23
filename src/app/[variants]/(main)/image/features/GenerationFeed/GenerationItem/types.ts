@@ -7,6 +7,8 @@ export interface GenerationItemProps {
 }
 
 export interface ActionButtonsProps {
+  /** «Оживить картинку» — open /video with this image as the start frame. */
+  onAnimate?: () => void;
   onCopySeed?: () => void;
   onDelete: () => void;
   onDownload?: () => void;
@@ -19,6 +21,7 @@ export interface SuccessStateProps {
   aspectRatio: string;
   generation: Generation;
   generationBatch: GenerationBatch;
+  onAnimate?: () => void;
   onCopySeed?: () => void;
   onDelete: () => void;
   onDownload: () => void;

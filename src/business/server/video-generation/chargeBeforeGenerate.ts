@@ -1,8 +1,16 @@
+import { getMediaRouterConfig } from '@/business/server/media-router/config';
+import { videoRouteFor } from '@/business/server/media-router/eligibility';
+import {
+  FREE_VIDEO_QUEUE_MESSAGE,
+  FREE_VIDEO_TRIAL_MODELS,
+  getFreeVideoTrial,
+} from '@/business/server/media-router/newcomer';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { creditHolds, type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
 import { activeBonusFor } from '@/server/modules/billing/active-bonus';
 import { checkUsageLimit } from '@/server/modules/billing/checkUsageLimit';
 import { referenceSecondsFor } from '@/server/modules/billing/compute-cost';
+import { FREE_PLAN_SLUG } from '@/server/modules/billing/daily-quota';
 import { calculateCreditsAsync } from '@/server/modules/billing/model-rates';
 import { isModelAllowedForPlanAsync } from '@/server/modules/billing/model-tiers';
 import type { CreateVideoServicePayload } from '@/server/routers/lambda/video';
@@ -27,6 +35,8 @@ interface ErrorBatch {
 
 interface ChargeBeforeResult {
   errorBatch?: ErrorBatch;
+  /** The free-plan «одно видео» trial admitted this request (must be pool-rendered). */
+  freeTrial?: boolean;
   prechargeResult?: { amount: number; holdId: string };
 }
 
@@ -61,7 +71,30 @@ export async function chargeBeforeGenerate(params: ChargeParams): Promise<Charge
   // H4 fix: tier-gating enforced server-side regardless of UI state.
   const billingService = new BillingService(db, params.userId);
   const planSlug = await billingService.getUserPlanSlug();
-  const allowed = await isModelAllowedForPlanAsync(params.model, planSlug);
+  let allowed = await isModelAllowedForPlanAsync(params.model, planSlug);
+  let freeTrial = false;
+  if (!allowed && planSlug === FREE_PLAN_SLUG && FREE_VIDEO_TRIAL_MODELS.has(params.model)) {
+    // «Одно видео на Free»: image→video on a pool model, paid in credits as
+    // usual, rendered by the router pool. Refused (before any hold) when the
+    // request is not pool-eligible or the pool cannot take it right now.
+    const trial = await getFreeVideoTrial(db, params.userId, planSlug);
+    if (trial.left > 0) {
+      const route = videoRouteFor(
+        params.model,
+        params.params as any,
+        planSlug,
+        getMediaRouterConfig().videoPlans,
+      );
+      if (!route || !route.image) {
+        throw new Error(
+          'Бесплатное видео на «Старт»: оживите свою картинку — Veo 3.1 Fast, 4–8 секунд, 720p, 16:9 или 9:16.',
+        );
+      }
+      if (!trial.available) throw new Error(FREE_VIDEO_QUEUE_MESSAGE);
+      allowed = true;
+      freeTrial = true;
+    }
+  }
   if (!allowed) {
     throw new Error(`Модель "${params.model}" не доступна на плане "${planSlug}". Обновите план.`);
   }
@@ -124,5 +157,5 @@ export async function chargeBeforeGenerate(params: ChargeParams): Promise<Charge
     throw new Error('Кредиты закончились. Пополните баланс или обновите план.');
   }
 
-  return { prechargeResult: { amount: maxCredits, holdId } };
+  return { freeTrial, prechargeResult: { amount: maxCredits, holdId } };
 }

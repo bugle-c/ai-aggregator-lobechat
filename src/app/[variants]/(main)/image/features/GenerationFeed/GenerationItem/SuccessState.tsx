@@ -17,6 +17,7 @@ export const SuccessState = memo<SuccessStateProps>(
     generationBatch,
     prompt,
     aspectRatio,
+    onAnimate,
     onDelete,
     onDownload,
     onCopySeed,
@@ -46,6 +47,7 @@ export const SuccessState = memo<SuccessStateProps>(
           showDownload
           seedTooltip={seedTooltip}
           showCopySeed={!!generation.seed}
+          onAnimate={onAnimate}
           onCopySeed={onCopySeed}
           onDelete={onDelete}
           onDownload={onDownload}

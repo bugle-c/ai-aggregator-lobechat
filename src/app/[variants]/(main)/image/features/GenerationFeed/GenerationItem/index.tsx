@@ -4,6 +4,7 @@ import { App } from 'antd';
 import dayjs from 'dayjs';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { useDownloadImage } from '@/hooks/useDownloadImage';
 import { useImageStore } from '@/store/image';
@@ -104,6 +105,16 @@ export const GenerationItem = memo<GenerationItemProps>(
       }
     }, [generation.task.error, message, t]);
 
+    // «Оживить картинку»: hand the finished image to /video as the start
+    // frame (Veo 3.1 Fast image→video). On the free plan this is the one
+    // trial video; on paid plans it is simply the fastest way to animate.
+    const navigate = useNavigate();
+    const assetUrl = generation.asset?.url;
+    const handleAnimate = useCallback(() => {
+      if (!assetUrl) return;
+      navigate(`/video?animate=${encodeURIComponent(assetUrl)}`);
+    }, [assetUrl, navigate]);
+
     // 根据状态渲染对应组件
     if (generation.task.status === AsyncTaskStatus.Success && generation.asset?.url) {
       const seedTooltip = isSupportSeed
@@ -117,6 +128,7 @@ export const GenerationItem = memo<GenerationItemProps>(
           generationBatch={generationBatch}
           prompt={prompt}
           seedTooltip={seedTooltip}
+          onAnimate={handleAnimate}
           onCopySeed={handleCopySeed}
           onDelete={handleDeleteGeneration}
           onDownload={handleDownloadImage}

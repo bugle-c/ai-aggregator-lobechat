@@ -28,7 +28,7 @@ const ROUTER_IMAGE_MODELS = new Set(['google/nano-banana-2/text-to-image']);
  * Fast itself and Lite (Fast ≥ Lite). `google/veo3.1/*` (quality) is better
  * than Fast → never routed.
  */
-const ROUTER_VIDEO_MODELS = new Set([
+export const ROUTER_VIDEO_MODELS = new Set([
   'google/veo3.1-fast/text-to-video',
   'google/veo3.1-fast/image-to-video',
   'google/veo3.1-lite/text-to-video',

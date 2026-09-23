@@ -2,7 +2,7 @@
 
 import { type ActionIconGroupProps, type ActionIconProps } from '@lobehub/ui';
 import { ActionIconGroup } from '@lobehub/ui';
-import { Dices, Download, Trash2 } from 'lucide-react';
+import { Clapperboard, Dices, Download, Trash2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,6 +15,7 @@ const actionIconProps: Partial<Omit<ActionIconProps, 'size' | 'ref' | 'icon'>> =
 // 操作按钮组件
 export const ActionButtons = memo<ActionButtonsProps>(
   ({
+    onAnimate,
     onDelete,
     onDownload,
     onCopySeed,
@@ -33,6 +34,12 @@ export const ActionButtons = memo<ActionButtonsProps>(
         items={useMemo(
           () =>
             [
+              Boolean(onAnimate) && {
+                icon: Clapperboard,
+                key: 'animate',
+                label: 'Оживить картинку',
+                onClick: onAnimate,
+              },
               Boolean(showDownload && onDownload) && {
                 icon: Download,
                 key: 'download',
@@ -53,7 +60,7 @@ export const ActionButtons = memo<ActionButtonsProps>(
                 onClick: onDelete,
               },
             ].filter(Boolean) as ActionIconGroupProps['items'],
-          [showDownload, onDownload, showCopySeed, onCopySeed, seedTooltip, onDelete],
+          [onAnimate, showDownload, onDownload, showCopySeed, onCopySeed, seedTooltip, onDelete],
         )}
       />
     );

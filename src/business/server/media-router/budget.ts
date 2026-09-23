@@ -13,6 +13,7 @@ import { usageLogs } from '@/database/schemas/analytics';
 import { type LobeChatDatabase } from '@/database/type';
 import { moscowDayStart } from '@/server/modules/billing/daily-quota';
 
+import { isRouterPaused } from './breaker';
 import { getMediaRouterConfig, ROUTER_PROVIDER_ID } from './config';
 
 let inFlight = 0;
@@ -56,4 +57,39 @@ export function releaseVideoSlot(): void {
 /** Test helper. */
 export function resetVideoBudget(): void {
   inFlight = 0;
+  fallbackDay = '';
+  fallbackUsed = 0;
+}
+
+/**
+ * Is the pool usable for a new video right now (flag on, breaker closed,
+ * today's budget not spent)? Used to decide whether the free-plan trial is
+ * offered at all — the trial must never silently cost us WaveSpeed money.
+ */
+export async function isRouterVideoAvailable(
+  db: LobeChatDatabase,
+  now = new Date(),
+): Promise<boolean> {
+  const { enabled, videoDailyBudget } = getMediaRouterConfig();
+  if (!enabled.has('video') || videoDailyBudget <= 0) return false;
+  if (isRouterPaused('video', now.getTime())) return false;
+  const used = await countRouterVideosToday(db, now);
+  return used + inFlight < videoDailyBudget;
+}
+
+// Free-trial WaveSpeed fallbacks per Moscow day (in-memory; a restart only
+// makes us slightly more generous, never stingier).
+let fallbackDay = '';
+let fallbackUsed = 0;
+
+export function tryReserveTrialFallbackSlot(now = new Date()): boolean {
+  const day = moscowDayStart(now).toISOString();
+  if (day !== fallbackDay) {
+    fallbackDay = day;
+    fallbackUsed = 0;
+  }
+  const { videoTrialFallbackPerDay } = getMediaRouterConfig();
+  if (fallbackUsed >= videoTrialFallbackPerDay) return false;
+  fallbackUsed += 1;
+  return true;
 }

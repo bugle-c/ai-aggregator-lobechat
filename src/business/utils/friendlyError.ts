@@ -13,6 +13,11 @@
  */
 const RULES: Array<{ re: RegExp; text: string }> = [
   {
+    // Our own free-video copy (media-router/newcomer.ts) — keep it verbatim.
+    re: /Видео сейчас в очереди/,
+    text: 'Видео сейчас в очереди — попробуйте через 10–15 минут. Ваше бесплатное видео сохранено.',
+  },
+  {
     re: /does not represent a valid image|invalid.*media_type|media_type|unsupported image|image.*(format|type)/i,
     text: 'Прикреплённый файл не распознан как изображение. Поддерживаются JPEG, PNG, WebP и GIF.',
   },

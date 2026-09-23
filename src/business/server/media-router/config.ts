@@ -40,6 +40,8 @@ export interface MediaRouterConfig {
   videoDailyBudget: number;
   videoDeadlineMs: number;
   videoPlans: Set<string>;
+  /** Free-trial clips allowed to fall back to WaveSpeed (our cost) per day. */
+  videoTrialFallbackPerDay: number;
 }
 
 /** Read lazily so tests can set env before the first call. */
@@ -61,6 +63,7 @@ export function getMediaRouterConfig(): MediaRouterConfig {
     imageScope: env.ROUTER_FIRST_IMAGE_SCOPE === 'newcomers' ? 'newcomers' : 'all',
     videoDailyBudget: num(env.ROUTER_FIRST_VIDEO_DAILY_BUDGET, 3),
     videoDeadlineMs: num(env.ROUTER_FIRST_VIDEO_DEADLINE_MS, 9 * 60_000),
+    videoTrialFallbackPerDay: num(env.ROUTER_FIRST_TRIAL_FALLBACK_PER_DAY, 1),
     videoPlans: new Set(csv(env.ROUTER_FIRST_VIDEO_PLANS ?? 'basic,pro,pro_max,free')),
   };
 }

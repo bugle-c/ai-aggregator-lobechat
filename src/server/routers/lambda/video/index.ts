@@ -165,7 +165,7 @@ export const videoRouter = router({
     }
 
     // Step 0: Pre-charge (atomic budget deduction to prevent concurrent abuse)
-    const { errorBatch, prechargeResult } = await chargeBeforeGenerate({
+    const { errorBatch, prechargeResult, freeTrial } = await chargeBeforeGenerate({
       generationTopicId,
       model,
       params,
@@ -241,7 +241,7 @@ export const videoRouter = router({
     // rendered by our llm-router subscription pool (zero provider cost, same
     // credits for the user); the async procedure polls the router and falls
     // back to the regular WaveSpeed submission on any failure.
-    if (isRouterFirstEnabled('video') && !isRouterPaused('video')) {
+    if (isRouterFirstEnabled('video') && (freeTrial || !isRouterPaused('video'))) {
       try {
         const planSlug = await new BillingService(serverDB, userId).getUserPlanSlug();
         const route = videoRouteFor(
@@ -250,11 +250,16 @@ export const videoRouter = router({
           planSlug,
           getMediaRouterConfig().videoPlans,
         );
-        if (route && (await tryReserveVideoSlot(serverDB))) {
+        // A free-trial clip goes to the pool even when the breaker is paused or the
+        // budget is spent — the async procedure applies the trial fallback policy
+        // (bounded WaveSpeed budget, else a friendly error + refund) instead of
+        // silently billing us for a free-plan render.
+        if (route && (freeTrial || (await tryReserveVideoSlot(serverDB)))) {
           const asyncCaller = await createAsyncCaller({ userId });
           asyncCaller.video
             .createViaRouter({
               asyncTaskId,
+              freeTrial: Boolean(freeTrial),
               generationBatchId: createdBatch.id,
               generationId: createdGeneration.id,
               generationTopicId,

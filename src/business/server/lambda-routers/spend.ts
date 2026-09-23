@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-import { getNewcomerState } from '@/business/server/media-router/newcomer';
+import {
+  FREE_VIDEO_TRIAL_MODELS,
+  getFreeVideoTrial,
+  getNewcomerState,
+} from '@/business/server/media-router/newcomer';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { activeBonusFor } from '@/server/modules/billing/active-bonus';
@@ -83,6 +87,8 @@ export const spendRouter = router({
     // image picker to Nano Banana until they have 3 pictures. The picker reads
     // this from the credit state it already fetches.
     const newcomer = await getNewcomerState(ctx.serverDB, ctx.userId, plan?.slug, now);
+    // «Одно видео на Free»: rendered by the router pool, paid in credits as usual.
+    const freeVideo = await getFreeVideoTrial(ctx.serverDB, ctx.userId, plan?.slug, now);
 
     // Is the daily gate currently lifted by purchased credits (top-up or the
     // MAGIC48 paid bonus)? The rule lives in `decideUsageLimit` only — we ask
@@ -118,6 +124,7 @@ export const spendRouter = router({
       dailyRemaining: dailyUsed === null ? null : Math.max(0, FREE_DAILY_MESSAGE_QUOTA - dailyUsed),
       dailyResetAt: isFree ? nextMoscowDayStart(now).toISOString() : null,
       daysUntilReset,
+      freeVideo,
       newcomer,
       nextPlanCredits: nextPlan?.tokenLimit ?? null,
       nextPlanName: nextPlan?.name ?? null,
@@ -141,6 +148,12 @@ export const spendRouter = router({
         const allowed = await isModelAllowedForPlanAsync(input.modelId, currentPlanSlug);
         if (allowed) {
           return { isLocked: false as const, requiredPlan: null };
+        }
+        // Free-plan video trial: the pool models are unlocked while the user
+        // still has their one video (the server gate re-checks params).
+        if (FREE_VIDEO_TRIAL_MODELS.has(input.modelId)) {
+          const trial = await getFreeVideoTrial(ctx.serverDB, ctx.userId, currentPlanSlug);
+          if (trial.left > 0) return { isLocked: false as const, requiredPlan: null };
         }
 
         const requiredPlanSlug = await getRequiredPlanForModelAsync(input.modelId);

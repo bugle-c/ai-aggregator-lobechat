@@ -26,7 +26,10 @@ import { type RuntimeVideoGenParams } from 'model-bank';
 import { z } from 'zod';
 
 import { recordRouterOutcome } from '@/business/server/media-router/breaker';
-import { releaseVideoSlot } from '@/business/server/media-router/budget';
+import {
+  releaseVideoSlot,
+  tryReserveTrialFallbackSlot,
+} from '@/business/server/media-router/budget';
 import {
   generateViaRouter,
   looksLikeMp4,
@@ -34,6 +37,7 @@ import {
 } from '@/business/server/media-router/client';
 import { getMediaRouterConfig, ROUTER_PROVIDER_ID } from '@/business/server/media-router/config';
 import { type VideoRoute } from '@/business/server/media-router/eligibility';
+import { FREE_VIDEO_QUEUE_MESSAGE } from '@/business/server/media-router/newcomer';
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
@@ -61,6 +65,8 @@ const videoProcedure = asyncAuthedProcedure.use(async (opts) => {
 
 const createViaRouterInput = z.object({
   asyncTaskId: z.string(),
+  /** Free-plan «одно видео» — never fall back to WaveSpeed beyond the daily trial budget. */
+  freeTrial: z.boolean().optional(),
   generationBatchId: z.string(),
   generationId: z.string(),
   generationTopicId: z.string(),
@@ -80,6 +86,7 @@ export const videoRouter = router({
   createViaRouter: videoProcedure.input(createViaRouterInput).mutation(async ({ input, ctx }) => {
     const {
       asyncTaskId,
+      freeTrial,
       generationBatchId,
       generationId,
       generationTopicId,
@@ -199,6 +206,42 @@ export const videoRouter = router({
       console.warn(
         `[media-router] video fallback task=${asyncTaskId} reason=${result.outcome} ${result.error ?? ''}`,
       );
+    }
+
+    // ---- Free trial: only a bounded number of WaveSpeed fallbacks per day ----
+    if (freeTrial && !tryReserveTrialFallbackSlot()) {
+      console.warn(
+        `[media-router] free-trial video ${asyncTaskId}: pool failed, fallback budget spent`,
+      );
+      await ctx.asyncTaskModel.update(asyncTaskId, {
+        error: new AsyncTaskError(AsyncTaskErrorType.ServerError, FREE_VIDEO_QUEUE_MESSAGE),
+        metadata: {
+          ...baseMeta,
+          routerFallbackReason: result.error ?? result.outcome,
+          servedBy: 'none',
+        },
+        status: AsyncTaskStatus.Error,
+      });
+      if (prechargeResult) {
+        try {
+          await chargeAfterGenerate({
+            isError: true,
+            metadata: {
+              asyncTaskId,
+              generationBatchId,
+              modelId: model,
+              topicId: generationTopicId,
+            },
+            model,
+            prechargeResult: prechargeResult as any,
+            provider,
+            userId: ctx.userId,
+          });
+        } catch (chargeError) {
+          console.error('[media-router] refund after trial pool failure:', chargeError);
+        }
+      }
+      return { success: false, servedBy: 'none' };
     }
 
     // ---- Fallback: the regular WaveSpeed submission (same task, same webhook token) ----

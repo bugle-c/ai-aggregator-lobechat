@@ -3,6 +3,7 @@
 import { App } from 'antd';
 import { useCallback } from 'react';
 
+import { friendlyGenerationError } from '@/business/utils/friendlyError';
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -38,7 +39,15 @@ export function useVideoGenerate() {
       }
       url.setTab('feed');
       message.success({ content: 'Генерация запущена', duration: 1.5 });
-      await createVideo();
+      try {
+        await createVideo();
+      } catch (error) {
+        // The precharge gate refuses with a Russian sentence (plan / free
+        // trial / credits); provider payloads get the friendly mapping.
+        const raw = error instanceof Error ? error.message : String(error ?? '');
+        const text = /\p{Script=Cyrillic}/u.test(raw) ? raw : friendlyGenerationError(raw);
+        message.error({ content: text, duration: 6 });
+      }
     },
     [createVideo, isLogin, message, url],
   );
