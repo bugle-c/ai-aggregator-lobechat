@@ -174,7 +174,7 @@ curl -X POST http://localhost:3210/api/billing/webhook \
   -d '{"type":"notification","event":"payment.succeeded","object":{"id":"test"}}'
 ```
 
-OIDC Machine registration (source-only, pending deployment): `machine` is a public web
+OIDC Machine registration (deployed and exercised 2026-10-11): `machine` is a public web
 authorization-code client with the sole redirect
 `https://machine.pashavin.ru/api/oidc/callback` and no client secret. Existing server
 policy requires PKCE; installed oidc-provider accepts only S256. Issuer is
@@ -185,9 +185,20 @@ The response collector preserves Koa's direct `statusCode` assignment so OAuth
 errors retain their intended HTTP status instead of being returned as HTTP 200.
 The adapter normalizes only discovery to the library's fixed root discovery route.
 Dynamic registration is disabled; no supported authenticated admin registration API
-was found. Deploy through the existing canary workflow only after explicit approval:
-it resets this checkout, rebuilds the complete image on the VPS, and recreates lobe.
-Do not treat a successful root-page smoke as proof of OIDC discovery readiness.
+was found. The verified image was deployed through the existing compose service,
+without pushing canary or triggering a second full build. Source is committed
+locally as `6fbc12ff4f`; do not push without explicit approval because the canary
+workflow resets this checkout, rebuilds the complete image, and recreates lobe.
+Actual discovery and JWKS returned HTTP 200; invalid token grants returned HTTP 400.
+A dedicated synthetic WebGPT credential completed real login, consent and code
+exchange into an isolated Machine database, explicitly linking a synthetic local
+account. All synthetic provider rows and the disposable Machine database were
+removed. Real-provider callback replay was not exercised. No owner login, email,
+model inference or production Machine identity mutation was performed.
+Modern Telegram/Yandex login entry redirects and root/static delivery matched live
+baseline; this is not proof of complete external sign-in or full-app regression.
+The image's migration files and launchers exactly matched live, with no pending
+database migrations. Do not treat root-page availability alone as OIDC readiness.
 
 ## Phase 9: Billing UI for Web (2026-03-01)
 
