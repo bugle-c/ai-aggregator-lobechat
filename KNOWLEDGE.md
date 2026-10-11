@@ -174,6 +174,21 @@ curl -X POST http://localhost:3210/api/billing/webhook \
   -d '{"type":"notification","event":"payment.succeeded","object":{"id":"test"}}'
 ```
 
+OIDC Machine registration (source-only, pending deployment): `machine` is a public web
+authorization-code client with the sole redirect
+`https://machine.pashavin.ru/api/oidc/callback` and no client secret. Existing server
+policy requires PKCE; installed oidc-provider accepts only S256. Issuer is
+`https://ask.gptweb.ru/oidc`; discovery is
+`https://ask.gptweb.ru/oidc/.well-known/openid-configuration`. Exact discovery and
+`/oidc/jwks` paths are public; authorization and interaction protection is unchanged.
+The response collector preserves Koa's direct `statusCode` assignment so OAuth
+errors retain their intended HTTP status instead of being returned as HTTP 200.
+The adapter normalizes only discovery to the library's fixed root discovery route.
+Dynamic registration is disabled; no supported authenticated admin registration API
+was found. Deploy through the existing canary workflow only after explicit approval:
+it resets this checkout, rebuilds the complete image on the VPS, and recreates lobe.
+Do not treat a successful root-page smoke as proof of OIDC discovery readiness.
+
 ## Phase 9: Billing UI for Web (2026-03-01)
 
 ### What was done

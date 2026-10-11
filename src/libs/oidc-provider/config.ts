@@ -71,6 +71,16 @@ export const defaultClients: ClientMetadata[] = [
     response_types: ['code'],
     token_endpoint_auth_method: 'none',
   },
+
+  {
+    application_type: 'web',
+    client_id: 'machine',
+    client_name: 'Machine',
+    grant_types: ['authorization_code'],
+    redirect_uris: ['https://machine.pashavin.ru/api/oidc/callback'],
+    response_types: ['code'],
+    token_endpoint_auth_method: 'none',
+  },
 ];
 
 /**

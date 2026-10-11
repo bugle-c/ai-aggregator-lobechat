@@ -263,6 +263,7 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
     routes: {
       authorization: '/oidc/auth',
       end_session: '/oidc/session/end',
+      jwks: '/oidc/jwks',
       token: '/oidc/token',
     },
     // 3. Scopes definition

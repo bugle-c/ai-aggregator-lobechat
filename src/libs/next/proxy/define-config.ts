@@ -269,6 +269,8 @@ export function defineConfig() {
     '/oauth/consent/(.*)',
     '/oidc/handoff',
     '/oidc/token',
+    '/oidc/.well-known/openid-configuration',
+    '/oidc/jwks',
     // market
     '/market-auth-callback',
     // public share pages

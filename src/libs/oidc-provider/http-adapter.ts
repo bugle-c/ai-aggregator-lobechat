@@ -30,6 +30,10 @@ export const createNodeRequest = async (req: NextRequest): Promise<IncomingMessa
 
   // Compute path relative to prefix
   let providerPath = url.pathname;
+  // Discovery routes are fixed at the library root; Next.js mounts them under /oidc.
+  if (providerPath === '/oidc/.well-known/openid-configuration') {
+    providerPath = '/.well-known/openid-configuration';
+  }
 
   // Ensure path always starts with /
   if (!providerPath.startsWith('/')) {
@@ -82,7 +86,11 @@ export const createNodeRequest = async (req: NextRequest): Promise<IncomingMessa
   }
   const nodeRequest = {
     // Basic properties
-    headers: convertHeadersToNodeHeaders(req.headers),
+    headers: {
+      ...convertHeadersToNodeHeaders(req.headers),
+      // Synthetic NextRequest instances need the same Host supplied by real HTTP requests.
+      host: req.headers.get('host') || url.host,
+    },
 
     method: req.method,
     // Simulate readable stream behavior (oidc-provider might not rely on this if body is pre-parsed)
@@ -171,6 +179,14 @@ export const createNodeResponse = (resolvePromise: () => void): ResponseCollecto
     },
 
     headersSent: false,
+
+    // Koa assigns res.statusCode directly rather than always calling writeHead.
+    get statusCode() {
+      return state.responseStatus;
+    },
+    set statusCode(status: number) {
+      state.responseStatus = status;
+    },
 
     removeHeader: (name: string) => {
       const lowerName = name.toLowerCase();
