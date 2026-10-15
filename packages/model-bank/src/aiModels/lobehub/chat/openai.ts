@@ -312,7 +312,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'The GPT-5 model used in ChatGPT, combining strong understanding and generation for conversational applications.',
     displayName: 'GPT-5 Chat',
-    enabled: true,
+    enabled: false,
     id: 'gpt-5-chat-latest',
     maxOutput: 128_000,
     pricing: {

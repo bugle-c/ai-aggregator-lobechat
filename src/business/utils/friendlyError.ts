@@ -43,7 +43,7 @@ const RULES: Array<{ re: RegExp; text: string }> = [
   },
   {
     re: /credit|insufficient|balance|quota exceeded/i,
-    text: 'Недостаточно кредитов для этой операции.',
+    text: 'На нашей стороне временные технические неполадки. Пожалуйста, вернитесь позже. Пополнять баланс не нужно.',
   },
   {
     re: /timed? ?out|ETIMEDOUT/i,

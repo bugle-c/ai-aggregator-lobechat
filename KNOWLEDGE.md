@@ -150,6 +150,8 @@ Fork of LobeChat (`lobehub/lobe-chat`) customized for ask.gptweb.ru with YooKass
 - **Veo 3.1 = 1080p only at 8 s** — WaveSpeed rule, not expressible in param-meta; `business/server/video-generation/normalizeVideoParams.ts` coerces to 720p BEFORE `chargeBeforeGenerate`. Add other "upstream rejects this combo" rules there.
 - **Every `*/image-to-video` and `*/edit` card must be `enabled:false` AND paired in `pairedEndpoint.ts`** — a visible unpaired i2v card (was `veo3.1-lite`) yields `field "image" is required` for users without a photo.
 - **Customer-facing error text goes through `business/utils/friendlyError.ts`** — never render `error.body` / `body.detail` raw (chat `Conversation/Error`, image `ErrorState`, video `VideoErrorItem`). Raw payload stays in `messages.error` / `async_tasks.error`.
+- **Provider credit errors (2026-10-15):** `friendlyError.ts` maps upstream credit/balance failures to a Russian temporary technical-issue message, not a request to top up the user's balance. OpenRouter 402 can reject the requested maximum output against its key budget even when the user has paid credits; user quota gates remain separate.
+- **Legacy GPT-5 Chat (2026-10-15):** disabled `gpt-5-chat-latest` in the LobeHub chat catalog: absent from both active billing rates and OpenRouter's public model list. Missing rates resolved to premium `__default__`, producing a misleading Pro Max upgrade requirement. Do not invent a cheap tier for an unavailable upstream ID.
 - **ResourceManager view default lives in TWO places** — store (`masonry`) and `Explorer/hooks/useViewMode.ts` `?view=` sync; the hook writes its default into the store on mount, so both must match (was `list` → «Мои генерации» opened as a table).
 
 ## Build & Deploy
