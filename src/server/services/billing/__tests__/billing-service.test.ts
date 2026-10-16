@@ -144,13 +144,16 @@ describe('BillingService.getOrResetUserBilling — period-based lazy reset', () 
     // boundaries the fast path used.
     expect(sql).toMatch(/plan_id = \$\d+ AND month_start < \$\d+/);
     expect(sql).toMatch(/plan_id <> \$\d+ AND month_start < \$\d+/);
+    expect(sql).toMatch(/THEN \$\d+::timestamptz ELSE \$\d+::timestamptz END/);
     expect(params).toContainEqual(new Date('2026-10-01T00:00:00Z')); // calendar boundary
     expect(params).toContainEqual(daysAgo(30)); // paid 30-day cutoff
   });
 
   it('paid user past the 30-day cycle issues the conditional reset', async () => {
     const db = makeFakeDb();
-    db._setSelectRows([{ userId: 'u1', planId: 2, monthStart: daysAgo(31), tokensUsedMonth: 90_000 }]);
+    db._setSelectRows([
+      { userId: 'u1', planId: 2, monthStart: daysAgo(31), tokensUsedMonth: 90_000 },
+    ]);
 
     await new BillingService(db, 'u1').getOrResetUserBilling();
 

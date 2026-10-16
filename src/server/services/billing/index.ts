@@ -102,11 +102,13 @@ export class BillingService {
     // Both boundaries come from the app clock (not now() in SQL) so they are
     // consistent with the fast-path check and deterministic under test.
     const { currentMonthStart, paidPeriodCutoff } = usagePeriodBoundaries(now);
+    // PostgreSQL resolves CASE's unknown parameters to text before applying
+    // the assignment's target type. Give both date branches their actual type.
 
     await this.db.execute(sql`
       UPDATE user_billing
       SET tokens_used_month = 0,
-          month_start = CASE WHEN plan_id = ${FREE_PLAN_ID} THEN ${currentMonthStart} ELSE ${now} END,
+          month_start = CASE WHEN plan_id = ${FREE_PLAN_ID} THEN ${currentMonthStart}::timestamptz ELSE ${now}::timestamptz END,
           updated_at = now()
       WHERE user_id = ${this.userId}
         AND (
