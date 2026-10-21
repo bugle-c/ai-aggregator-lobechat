@@ -18,6 +18,7 @@ import { type LobeChatDatabase } from '@/database/type';
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { normalizeBillingUsage } from '@/server/modules/billing/normalizeUsage';
 import { type ToolExecutionService } from '@/server/services/toolExecution';
 
 import { type IStreamEventManager } from './types';
@@ -509,31 +510,16 @@ export const createRuntimeExecutors = (
               // (audit found gpt-4o-mini through OpenRouter loses usage).
               // Truncated to first 400 chars to keep logs cheap.
               const usageDebug = JSON.stringify(currentStepUsage ?? null).slice(0, 400);
-              const inputTokens =
-                Number(u.prompt_tokens ?? u.input_tokens ?? u.inputTokens ?? 0) || 0;
-              const outputTokens =
-                Number(u.completion_tokens ?? u.output_tokens ?? u.outputTokens ?? 0) || 0;
-              const cacheWrite5m =
-                Number(
-                  u.cache_creation?.ephemeral_5m_input_tokens ??
-                    u.cache_creation_input_tokens ??
-                    u.cacheWrite5mTokens ??
-                    0,
-                ) || 0;
-              const cacheWrite1h =
-                Number(u.cache_creation?.ephemeral_1h_input_tokens ?? u.cacheWrite1hTokens ?? 0) ||
-                0;
-              const cacheRead =
-                Number(
-                  u.cache_read_input_tokens ??
-                    u.prompt_tokens_details?.cached_tokens ??
-                    u.cached_content_token_count ??
-                    u.cacheReadTokens ??
-                    0,
-                ) || 0;
-              const providerCostUsd = typeof u.cost === 'number' ? u.cost : undefined;
+              const {
+                input: inputTokens,
+                output: outputTokens,
+                cacheWrite5m,
+                cacheWrite1h,
+                cacheRead,
+                cost: providerCostUsd,
+              } = normalizeBillingUsage(u);
 
-              if (inputTokens === 0 && outputTokens === 0) {
+              if (inputTokens === 0 && outputTokens === 0 && cacheRead === 0 && cacheWrite5m === 0 && cacheWrite1h === 0 && providerCostUsd === undefined) {
                 console.info(
                   `[billing/runtime] skipping charge (no usage): user=${ctx.userId} model=${llmPayload.model} provider=${llmPayload.provider} usage_shape=${usageDebug}`,
                 );
@@ -557,6 +543,7 @@ export const createRuntimeExecutors = (
                   kind: 'chat',
                   provider: llmPayload.provider,
                   providerCostUsd,
+                  providerRequestId: typeof u.providerRequestId === 'string' ? u.providerRequestId : undefined,
                 },
               );
             } catch (err) {

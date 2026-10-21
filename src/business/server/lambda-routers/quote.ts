@@ -35,7 +35,7 @@ const billingProcedure = authedProcedure.use(serverDatabase).use(async (opts) =>
 });
 
 interface QuoteResult {
-  /** Sum of regular token_balance + active bonus_balance. */
+  /** Remaining ordinary credits plus unexpired refund credits. */
   balance: number;
   /** Total credits the request will cost (matches what the charge path bills). */
   credits: number;
@@ -45,17 +45,9 @@ interface QuoteResult {
 
 async function buildQuote(
   ctx: { billingService: BillingService },
-  modelId: string,
   credits: number,
 ): Promise<QuoteResult> {
-  const billing = await ctx.billingService.getOrResetUserBilling();
-  // Bonus pool can be consumed alongside the regular balance. Both
-  // contribute to "can the user afford this", matching the chargeBefore
-  // behaviour. Ignore bonus if it's already past its expiry.
-  const bonusActive =
-    !billing.bonusBalanceExpiresAt ||
-    new Date(billing.bonusBalanceExpiresAt).getTime() > Date.now();
-  const balance = (billing.tokenBalance ?? 0) + (bonusActive ? (billing.bonusBalance ?? 0) : 0);
+  const { creditsRemaining: balance } = await ctx.billingService.getCreditBalance();
   return {
     balance,
     credits,
@@ -85,7 +77,7 @@ export const quoteRouter = router({
     .query(async ({ ctx, input }) => {
       const images = input.params?.images ?? 1;
       const credits = await calculateCreditsAsync(input.model, { images, kind: 'image' });
-      return buildQuote(ctx, input.model, credits);
+      return buildQuote(ctx, credits);
     }),
 
   /**
@@ -112,6 +104,6 @@ export const quoteRouter = router({
         resolution: input.resolution,
         videoSeconds: input.durationSeconds + (input.referenceSeconds ?? 0),
       });
-      return buildQuote(ctx, input.model, credits);
+      return buildQuote(ctx, credits);
     }),
 });

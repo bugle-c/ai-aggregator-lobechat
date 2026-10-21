@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   bigint,
   bigserial,
   boolean,
@@ -9,10 +10,12 @@ import {
   serial,
   text,
   uuid,
+  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
 
 import { timestamps, timestamptz } from './_helpers';
+import { usageLogs } from './analytics';
 import { users } from './user';
 
 // ============ Billing Plans ============ //
@@ -121,6 +124,29 @@ export const userBilling = pgTable(
 
 export type UserBillingItem = typeof userBilling.$inferSelect;
 export type NewUserBilling = typeof userBilling.$inferInsert;
+
+/** Immutable grant expiry and independent remaining balance; never merged into bonuses. */
+export const refundCreditLots = pgTable('refund_credit_lots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  campaign: text('campaign').notNull(),
+  fixCutoff: timestamptz('fix_cutoff').notNull(),
+  granted: integer('granted').notNull(),
+  remaining: integer('remaining').notNull(),
+  expiresAt: timestamptz('expires_at').notNull(),
+  createdAt: timestamptz('created_at').defaultNow().notNull(),
+}, (t) => [index('refund_credit_lots_user_expiry_idx').on(t.userId, t.expiresAt)]);
+
+export const usageCreditCorrections = pgTable('usage_credit_corrections', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  usageId: uuid('usage_id').notNull().references((): AnyPgColumn => usageLogs.id),
+  lotId: uuid('lot_id').notNull().references(() => refundCreditLots.id),
+  campaign: text('campaign').notNull(),
+  originalCredits: integer('original_credits').notNull(),
+  correctedCredits: integer('corrected_credits').notNull(),
+  evidence: jsonb('evidence').$type<{ source: string; reference: string; pricing: string }>().notNull(),
+  createdAt: timestamptz('created_at').defaultNow().notNull(),
+}, (t) => [uniqueIndex('usage_credit_corrections_campaign_usage_idx').on(t.campaign, t.usageId)]);
 
 // ============ Promo Codes ============ //
 

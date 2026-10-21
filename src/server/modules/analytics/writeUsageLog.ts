@@ -3,9 +3,11 @@ import { type LobeChatDatabase, type Transaction } from '@/database/type';
 import {
   computeBaseCostUsdFromRate,
   computeCostUsdFromRate,
+  getTierMultiplierForRate,
   type Usage,
 } from '@/server/modules/billing/compute-cost';
-import { USD_TO_RUB } from '@/server/modules/billing/model-rates';
+import { CREDIT_VALUE_RUB, USD_TO_RUB } from '@/server/modules/billing/model-rates';
+import type { HistoricalPricing } from '@/server/modules/billing/historical-pricing';
 import { fetchRate } from '@/server/services/billing/rates-source';
 
 export interface WriteUsageLogInput {
@@ -29,6 +31,9 @@ export interface WriteUsageLogInput {
    * results served by our llm-router subscription pool.
    */
   providerCostUsd?: number;
+  providerRequestId?: string;
+  providerCostSource?: string;
+  providerCostEvidence?: Record<string, unknown>;
   userId: string;
   videoSeconds?: number;
 }
@@ -39,6 +44,10 @@ export interface WriteUsageLogInput {
  * unit-testable.
  */
 export async function computeUsageLogRow(input: WriteUsageLogInput) {
+  if (input.providerCostUsd !== undefined &&
+      (!Number.isFinite(input.providerCostUsd) || input.providerCostUsd < 0)) {
+    throw new Error('providerCostUsd must be a finite nonnegative upstream amount');
+  }
   const rate = await fetchRate(input.model);
   let usage: Usage;
   if (input.kind === 'image') {
@@ -60,11 +69,8 @@ export async function computeUsageLogRow(input: WriteUsageLogInput) {
   }
   const costUsd = rate ? computeCostUsdFromRate(rate, usage) : 0;
   const costRub = costUsd * USD_TO_RUB;
-  // provider_cost_rub stores what we actually pay the upstream API,
-  // BEFORE the tier markup we apply on top to compute credits. The
-  // Economics page reads this for true gross-margin math; cost_rub
-  // stays the "charged value" reported to the user. Local Ollama
-  // models (rate present but per_unit=0) naturally land at 0.
+  // Legacy RUB expense is an estimate unless actualProviderCostUsd is present.
+  // Financial reporting must use verified actual USD and show unresolved estimates separately.
   const providerCostUsd =
     input.kind !== 'chat' && typeof input.providerCostUsd === 'number' && input.providerCostUsd >= 0
       ? input.providerCostUsd
@@ -86,6 +92,29 @@ export async function computeUsageLogRow(input: WriteUsageLogInput) {
     costUsd: costUsd.toFixed(6),
     costRub: costRub.toFixed(4),
     providerCostRub: providerCostRub.toFixed(4),
+    actualProviderCostUsd: input.providerCostUsd === undefined ? null : String(input.providerCostUsd),
+    providerRequestId: input.providerRequestId ?? null,
+    providerCostStatus: input.providerCostUsd !== undefined ? 'verified' : input.providerRequestId ? 'pending' : 'unknown',
+    providerCostSource: input.providerCostUsd === undefined ? null : input.providerCostSource ?? 'upstream_usage',
+    providerCostEvidence: {
+      ...input.providerCostEvidence,
+      historicalPricing: input.providerCostEvidence?.historicalPricing ?? (rate ? {
+        source: 'usage_log_rate_snapshot',
+        sourceReference: `model_rates:${input.model}`,
+        capturedAt: new Date().toISOString(),
+        markup: getTierMultiplierForRate(rate),
+        exchangeRate: USD_TO_RUB,
+        creditValueRub: CREDIT_VALUE_RUB,
+        minimumCredits: 1,
+        zeroCostCredits: 0,
+        rounding: 'ceil',
+        rate,
+        loggedCreditsCharged: input.creditsCharged,
+        // A writer-time snapshot does not prove an earlier reservation used it.
+        captureStage: 'usage_log_write',
+      } satisfies HistoricalPricing & { rate: typeof rate; loggedCreditsCharged: number } : null),
+    },
+    providerCostReconciledAt: input.providerCostUsd === undefined ? null : new Date(),
     exchangeRate: USD_TO_RUB.toFixed(4),
     kind: input.kind,
   };
@@ -93,7 +122,7 @@ export async function computeUsageLogRow(input: WriteUsageLogInput) {
 
 /**
  * Insert a usage_logs row. Throws on failure — the caller MUST handle the
- * error (either by rolling back the sibling `incrementTokensUsed` via a
+ * error (either by rolling back the sibling credit allocation via a
  * shared transaction, or by explicitly deciding the log can be lost).
  *
  * Historical note: this function used to swallow insert errors so the chat

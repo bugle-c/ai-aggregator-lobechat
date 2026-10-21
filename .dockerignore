@@ -1,6 +1,8 @@
 Dockerfile
 .dockerignore
 node_modules
+**/node_modules
+tmp-billing-smoke.ts
 npm-debug.log
 .next
 .git

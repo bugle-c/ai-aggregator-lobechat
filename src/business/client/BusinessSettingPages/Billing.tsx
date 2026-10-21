@@ -17,10 +17,21 @@ const statusColorMap: Record<string, string> = {
   succeeded: 'green',
 };
 
+interface CreditHistoryRow {
+  amountRub?: number;
+  createdAt: Date | string;
+  credits?: number;
+  expiresAt?: Date | string;
+  id: string;
+  kind: 'payment' | 'refund';
+  status: string;
+  type?: string;
+}
+
 const Billing = memo(() => {
   const { t } = useTranslation('subscription');
 
-  const { data: payments, isLoading } = lambdaQuery.subscription.getPayments.useQuery();
+  const { data: payments, isLoading } = lambdaQuery.subscription.getCreditHistory.useQuery();
 
   const showSuccess = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -39,19 +50,29 @@ const Billing = memo(() => {
       {
         dataIndex: 'type',
         key: 'type',
-        render: (val: string) => (val === 'subscription' ? t('plans.subscribe') : t('funds.topUp.title')),
+        render: (val: string, row: CreditHistoryRow) => row.kind === 'refund'
+          ? <Flexbox gap={4}>
+              <Text>{t('billing.refund.description', { defaultValue: 'Возврат кредитов из-за технической ошибки' })}</Text>
+              <Text type="secondary">{t('billing.refund.expires', { defaultValue: 'Действуют до {{date}}', date: new Date(row.expiresAt!).toLocaleDateString('ru-RU') })}</Text>
+            </Flexbox>
+          : (val === 'subscription' ? t('plans.subscribe') : t('funds.topUp.title')),
         title: t('usage.overview.product'),
       },
       {
         dataIndex: 'amountRub',
         key: 'amountRub',
-        render: (val: number) => `${val} ₽`,
+        render: (val: number, row: CreditHistoryRow) => row.kind === 'refund'
+          ? t('billing.refund.credits', { defaultValue: '+{{credits}} кредитов', credits: row.credits }) : `${val} ₽`,
         title: t('billing.amount'),
       },
       {
         dataIndex: 'status',
         key: 'status',
-        render: (val: string) => (
+        render: (val: string, row: CreditHistoryRow) => row.kind === 'refund' ? (
+          <Tag color={val === 'expired' ? 'default' : 'green'}>
+            {t(val === 'expired' ? 'billing.refund.expired' : 'billing.refund.credited', { defaultValue: val === 'expired' ? 'Срок действия истёк' : 'Начислено' })}
+          </Tag>
+        ) : (
           <Tag color={statusColorMap[val] || 'default'}>{val === 'fulfilled' ? t('billing.paid') : val}</Tag>
         ),
         title: t('billing.status'),
@@ -96,7 +117,7 @@ const Billing = memo(() => {
             columns={columns}
             dataSource={payments}
             pagination={false}
-            rowKey="id"
+            rowKey={(row: CreditHistoryRow) => `${row.kind}:${row.id}`}
             size="small"
           />
         ) : (

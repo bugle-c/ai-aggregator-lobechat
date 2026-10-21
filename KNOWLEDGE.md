@@ -1,5 +1,17 @@
 # KNOWLEDGE.md — ai-aggregator-lobechat
 
+## Verified provider expense reconciliation (2026-10-21)
+
+`usage_logs.actual_provider_cost_usd` stores unrounded provider USD only; NULL is unknown, not zero. `provider_cost_status` distinguishes unknown/pending/verified, with exact `provider_request_id`, source, raw operation evidence and reconciliation time. Legacy `provider_cost_rub` remains a booked estimate, never independent invoice evidence. Charged cost/credits stay unchanged when actual expense arrives. Migration `20261021_provider_expense_provenance.sql` archives original and reconciled rows in mutation-protected `provider_expense_revisions`.
+
+`sync-invoices` reconciles WaveSpeed prediction IDs through paginated `/api/v3/billings/search` in batches of ten, deduplicating operation UUIDs and netting observed positive-price refunds against deductions. Unrecognized/reserved operations and ambiguous local identities remain unresolved. Verified rows are revisited for late refunds. This endpoint is organization-wide, not implicitly scoped to an inference key; never import its unrestricted total as application spend. OpenRouter activity currently requires authorized independent report access (HTTP403 with the inference key). No local usage sum is a substitute invoice; archived finance rows are not overwritten by missing provider data or API errors. Existing historical auto OpenRouter invoices remain unverified and must be excluded from actual invoice reporting until independently validated.
+
+Verified WaveSpeed operations are archived in `provider_expense_daily` under scope `exact_application_predictions`, grouped by original request UTC day. `actual_usd` is the sum of independent matched billing deductions less refunds, never local catalog estimates; `verified_requests`/`unresolved_requests` and `status=verified|partial` expose attribution coverage. Partial coverage is not a complete account invoice. Imports with degraded coverage do not overwrite archived totals. API responses are Zod-validated including nested prediction/order identity and settlement state.
+
+Refund corrections use separate `refund_credit_lots` and `usage_credit_corrections`; never merge into permanent top-ups/shared bonuses. Refunds spend earliest-expiry first; monthly counters track ordinary funding only, usage logs track committed total. Media holds persist funding allocations/period; multi-image batches split reservations before dispatch. Duplicate grants/settlements are no-ops. October reconciliation starts `2026-09-30T21:00:00Z`; active subscribers retain grant-time expiry, expired subscribers get 30 days. Historical apply requires exact verified provider identity and independently validated request-time pricing, never current rates or proportional estimates. `scripts/billing/reconcile-october.ts` defaults to dry run and lists omitted unresolved cohort rows.
+
+OpenAI-compatible normalized usage preserves `providerCostUsd` and `providerRequestId` independently of estimated UI `cost`. Both chat consumers share `normalizeBillingUsage`; cache misses are not cache writes, and reasoning output remains included. Zero-cost completions remain auditable. Backup and verification record: `/home/deploy/backups/billing-reconciliation-20261021/`; no historical refund was applied during implementation.
+
 ## Overview
 
 Fork of LobeChat (`lobehub/lobe-chat`) customized for ask.gptweb.ru with YooKassa billing and Russian market support.

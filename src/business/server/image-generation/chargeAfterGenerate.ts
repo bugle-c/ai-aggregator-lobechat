@@ -2,8 +2,8 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { creditHolds } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import { writeUsageLog } from '@/server/modules/analytics/writeUsageLog';
-import { releaseHoldIfActive } from '@/server/modules/billing/hold-release';
 import { calculateCreditsAsync } from '@/server/modules/billing/model-rates';
 import { BillingService } from '@/server/services/billing';
 import { fetchRate } from '@/server/services/billing/rates-source';
@@ -18,7 +18,7 @@ import { type ModelPerformance, type ModelUsage } from '@/types/index';
  * holds, but the user-level math stays consistent.
  */
 async function findOldestActiveHold(
-  db: any,
+  db: LobeChatDatabase,
   userId: string,
   reason: string,
 ): Promise<{ id: string; amount: number } | null> {
@@ -39,6 +39,7 @@ async function findOldestActiveHold(
 
 interface ChargeParams {
   imageNum?: number;
+  inferenceId?: string;
   isError?: boolean;
   metadata: {
     asyncTaskId: string;
@@ -60,19 +61,7 @@ interface ChargeParams {
   userId: string;
 }
 
-/**
- * Reconcile the image generation against any precharge hold (Pkg2).
- *
- * Three paths:
- * - `isError=true` + hold present: full refund (decrement counter by held
- *   amount, mark hold released).
- * - Success + hold present: compute actual cost, write the diff
- *   (`actual - held`), mark hold released, write usage_log.
- * - No hold present: legacy path (just commit actual cost + usage_log).
- *
- * All writes happen inside a single transaction so a usage_log insert
- * failure rolls back the counter delta — same guarantee as recordTokenUsage.
- */
+/** Settle source-aware reservations and record the actual funded debit. */
 export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
   const db = await getServerDB();
 
@@ -84,12 +73,12 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
   //    doesn't currently propagate the hold id, so this is the production
   //    path until Pkg3 ships the metadata threading.
   let heldAmount =
-    params.prechargeResult && typeof (params.prechargeResult as any).amount === 'number'
-      ? ((params.prechargeResult as any).amount as number)
+    params.prechargeResult && typeof params.prechargeResult.amount === 'number'
+      ? params.prechargeResult.amount
       : 0;
   let holdId =
-    params.prechargeResult && typeof (params.prechargeResult as any).holdId === 'string'
-      ? ((params.prechargeResult as any).holdId as string)
+    params.prechargeResult && typeof params.prechargeResult.holdId === 'string'
+      ? params.prechargeResult.holdId
       : null;
 
   if (!holdId && heldAmount === 0) {
@@ -105,12 +94,10 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
     if (heldAmount > 0) {
       try {
         const refunded = await db.transaction(async (tx) => {
-          if (holdId && !(await releaseHoldIfActive(tx, holdId))) return false;
-          await new BillingService(tx as any, params.userId).incrementTokensUsed(
-            -heldAmount,
-            tx as any,
-          );
-          return true;
+          if (!holdId) return false;
+          const result = await new BillingService(tx, params.userId)
+            .settleCreditHold(holdId, 0, tx);
+          return result.settled;
         });
         console.info(
           refunded
@@ -145,23 +132,16 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
     kind: 'image',
   });
 
-  // Reconcile against the hold if one exists; otherwise legacy commit.
-  const diff = heldAmount > 0 ? credits - heldAmount : credits;
-
   try {
     await db.transaction(async (tx) => {
-      const billingService = new BillingService(tx as any, params.userId);
-      if (holdId && !(await releaseHoldIfActive(tx, holdId))) {
-        console.warn(
-          `[billing] image charge skipped — hold ${holdId} already released: user=${params.userId}`,
-        );
-        return;
-      }
-      if (diff !== 0) {
-        await billingService.incrementTokensUsed(diff, tx as any);
-      }
+      const billingService = new BillingService(tx, params.userId);
+      const reservation = holdId
+        ? { id: holdId }
+        : await billingService.reserveCredits(credits, 'image-gen', params.metadata.asyncTaskId, tx);
+      const result = await billingService.settleCreditHold(reservation.id, credits, tx);
+      if (!result.settled) return;
       await writeUsageLog(tx, {
-        creditsCharged: credits,
+        creditsCharged: result.committed,
         images: imageNum,
         inputTokens: 0,
         kind: 'image',
@@ -169,6 +149,7 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
         outputTokens: 0,
         provider: params.served?.provider ?? (params.provider || 'unknown'),
         providerCostUsd: params.served?.providerCostUsd,
+        providerRequestId: params.inferenceId,
         userId: params.userId,
       });
     });
@@ -181,6 +162,6 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
   }
 
   console.info(
-    `[billing] image charged ${credits} credits${heldAmount > 0 ? ` (held ${heldAmount}, diff ${diff})` : ''}: user=${params.userId} model=${params.metadata.modelId} images=${imageNum}`,
+    `[billing] image settlement processed: user=${params.userId} model=${params.metadata.modelId} images=${imageNum}`,
   );
 }

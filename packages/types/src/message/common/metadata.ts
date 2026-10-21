@@ -68,6 +68,8 @@ export const ModelUsageSchema = z.object({
 
   // Cost
   cost: z.number().optional(),
+  providerCostUsd: z.number().finite().nonnegative().optional(),
+  providerRequestId: z.string().optional(),
 });
 
 export const ModelPerformanceSchema = z.object({
@@ -105,6 +107,9 @@ export interface ModelUsage extends ModelTokensUsage {
    * dollar
    */
   cost?: number;
+  /** Actual upstream-reported USD charge, independent of catalog estimates. */
+  providerCostUsd?: number;
+  providerRequestId?: string;
 }
 
 export interface ModelPerformance {

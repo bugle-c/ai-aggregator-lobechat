@@ -60,4 +60,38 @@ describe('computeUsageLogRow — provider cost override for media', () => {
     expect(router.creditsCharged).toBe(126);
     expect(router.provider).toBe('llm-router');
   });
+  it('keeps catalog estimates unknown and exact media identity pending', async () => {
+    const unknown = await computeUsageLogRow({ ...base, provider: 'wavespeed' });
+    expect(unknown.actualProviderCostUsd).toBeNull();
+    expect(unknown.providerCostStatus).toBe('unknown');
+    const pending = await computeUsageLogRow({ ...base, provider: 'wavespeed', providerRequestId: 'prediction-id' });
+    expect(pending.providerCostStatus).toBe('pending');
+    expect(pending.providerRequestId).toBe('prediction-id');
+    expect(pending.actualProviderCostUsd).toBeNull();
+  });
+
+  it('preserves raw precision, explicit zero, and upstream evidence independently of charges', async () => {
+    const evidence = { generation: 'exact-id' };
+    const row = await computeUsageLogRow({ ...base, provider: 'wavespeed', providerCostUsd: 0.000000012345, providerCostEvidence: evidence });
+    expect(Number(row.actualProviderCostUsd)).toBe(0.000000012345);
+    expect(row.providerCostStatus).toBe('verified');
+    expect(row.providerCostEvidence).toMatchObject(evidence);
+    expect(row.providerCostEvidence.historicalPricing).toMatchObject({
+      source: 'usage_log_rate_snapshot', markup: 3, exchangeRate: USD_TO_RUB,
+      creditValueRub: 0.15, minimumCredits: 1, rounding: 'ceil', captureStage: 'usage_log_write',
+    });
+    const zero = await computeUsageLogRow({ ...base, provider: 'wavespeed', providerCostUsd: 0 });
+    expect(zero.actualProviderCostUsd).toBe('0');
+    expect(zero.creditsCharged).toBe(base.creditsCharged);
+  });
+
+  it('retains caller request-time pricing rather than overwriting with a later lookup', async () => {
+    const historicalPricing = { markup: 2, source: 'request_reservation' };
+    const row = await computeUsageLogRow({ ...base, provider: 'wavespeed', providerCostEvidence: { historicalPricing } });
+    expect(row.providerCostEvidence.historicalPricing).toEqual(historicalPricing);
+  });
+
+  it.each([NaN, Infinity, -1])('rejects invalid actual USD %s', async (providerCostUsd) => {
+    await expect(computeUsageLogRow({ ...base, provider: 'wavespeed', providerCostUsd })).rejects.toThrow('finite nonnegative');
+  });
 });

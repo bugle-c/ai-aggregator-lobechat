@@ -161,51 +161,6 @@ describe('BillingService.getOrResetUserBilling — period-based lazy reset', () 
   });
 });
 
-describe('BillingService.incrementTokensUsed — atomic limit guard (C1)', () => {
-  it('runs a conditional UPDATE when limit option is present', async () => {
-    const db = makeFakeDb();
-    db._setExecRowCount(1);
-    const svc = new BillingService(db, 'u1');
-
-    const r = await svc.incrementTokensUsed(50, undefined as any, { limit: 100 });
-
-    expect(r.committed).toBe(50);
-    expect(db._execCalls().length).toBe(1);
-    // Plain (non-conditional) update is NOT used.
-    expect(db._updateCalls().length).toBe(0);
-  });
-
-  it('throws when conditional UPDATE returns 0 rows (would overshoot)', async () => {
-    const db = makeFakeDb();
-    db._setExecRowCount(0);
-    const svc = new BillingService(db, 'u1');
-
-    await expect(svc.incrementTokensUsed(50, undefined as any, { limit: 10 })).rejects.toThrow(
-      /Insufficient credits/,
-    );
-  });
-
-  it('falls back to plain UPDATE when no limit option (legacy callers)', async () => {
-    const db = makeFakeDb();
-    const svc = new BillingService(db, 'u1');
-
-    await svc.incrementTokensUsed(10);
-
-    expect(db._execCalls().length).toBe(0);
-    expect(db._updateCalls().length).toBe(1);
-  });
-
-  it('uses plain UPDATE for negative deltas (refunds bypass cap check)', async () => {
-    const db = makeFakeDb();
-    const svc = new BillingService(db, 'u1');
-
-    // Even with limit set, a refund (-10) cannot overshoot a positive cap.
-    await svc.incrementTokensUsed(-10, undefined as any, { limit: 100 });
-
-    expect(db._execCalls().length).toBe(0);
-    expect(db._updateCalls().length).toBe(1);
-  });
-});
 
 describe('BillingService.getOrResetUserBilling — atomic monthly reset (H1)', () => {
   it('issues a conditional UPDATE that only matches stale month_start', async () => {

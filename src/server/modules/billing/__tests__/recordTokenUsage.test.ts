@@ -1,122 +1,57 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { LobeChatDatabase, Transaction } from '@/database/type';
 import { writeUsageLog } from '@/server/modules/analytics/writeUsageLog';
 
 import { recordTokenUsage } from '../checkUsageLimit';
 
-// Mock writeUsageLog BEFORE importing checkUsageLimit, because recordTokenUsage
-// uses a dynamic import for writeUsageLog.
-vi.mock('@/server/modules/analytics/writeUsageLog', () => ({
-  writeUsageLog: vi.fn(),
-}));
+vi.mock('@/server/modules/analytics/writeUsageLog', () => ({ writeUsageLog: vi.fn() }));
+vi.mock('../model-rates', () => ({ calculateCreditsAsync: vi.fn(async () => 10) }));
+const { spendCredits } = vi.hoisted(() => ({ spendCredits: vi.fn() }));
+vi.mock('@/server/services/billing', () => ({ BillingService: vi.fn().mockImplementation(() => ({ spendCredits })) }));
 
-// Mock model-rates to avoid fetching remote pricing during tests.
-vi.mock('../model-rates', () => ({
-  calculateCreditsAsync: vi.fn(async () => 10),
-}));
-
-// Mock the BillingService so we can observe increment calls.
-const incrementTokensUsedMock = vi.fn();
-const getOrCreateUserBillingMock = vi.fn();
-const getPlanByIdMock = vi.fn();
-vi.mock('@/server/services/billing', () => ({
-  BillingService: vi.fn().mockImplementation(() => ({
-    getOrCreateUserBilling: getOrCreateUserBillingMock,
-    getPlanById: getPlanByIdMock,
-    incrementTokensUsed: incrementTokensUsedMock,
-  })),
-}));
-
-/**
- * Drizzle-like transaction: when `db.transaction(async (tx) => ...)` is called,
- * we invoke the callback with `tx` === the db object, and if it throws we
- * propagate (mimicking real rollback). State tracking is left to the mocks.
- */
-function makeFakeDb() {
-  const db: any = {
-    transaction: async (fn: (tx: any) => Promise<any>) => {
-      return fn(db);
-    },
-  };
-  return db;
+function fakeDb() {
+  // Only transaction is exercised; notification lookup failure is deliberately nonfatal.
+  const db = { transaction: vi.fn(async (fn: (tx: Transaction) => Promise<void>) => fn(db as unknown as Transaction)) };
+  return db as unknown as LobeChatDatabase & { transaction: typeof db.transaction };
 }
 
-beforeEach(() => {
-  getOrCreateUserBillingMock.mockReset();
-  getPlanByIdMock.mockReset();
-  incrementTokensUsedMock.mockReset();
-  (writeUsageLog as any).mockReset();
-  getOrCreateUserBillingMock.mockResolvedValue({ planId: 'pro', tokenBalance: 100 });
-  getPlanByIdMock.mockResolvedValue({ tokenLimit: 1000 });
-});
+beforeEach(() => { vi.clearAllMocks(); spendCredits.mockResolvedValue({ committed: 10 }); vi.mocked(writeUsageLog).mockResolvedValue(undefined); });
 
-afterEach(() => {
-  vi.clearAllMocks();
-});
-
-describe('recordTokenUsage — strict transaction', () => {
-  it('calls both incrementTokensUsed and writeUsageLog on the happy path', async () => {
-    const db = makeFakeDb();
-    incrementTokensUsedMock.mockResolvedValue(undefined);
-    (writeUsageLog as any).mockResolvedValue(undefined);
-
-    await recordTokenUsage(db, 'user_1', 1000, 'gpt-5-nano', 500, {
-      provider: 'openai',
-      kind: 'chat',
-    });
-
-    expect(incrementTokensUsedMock).toHaveBeenCalledTimes(1);
-    // Called as (credits, tx) — tx is whatever the db.transaction callback receives.
-    expect(incrementTokensUsedMock).toHaveBeenCalledWith(10, expect.anything(), { limit: 1100 });
-    expect(writeUsageLog).toHaveBeenCalledTimes(1);
+describe('recordTokenUsage source-aware atomic debit', () => {
+  it('spends and records full funded ordinary plus refund credits in one transaction', async () => {
+    const db = fakeDb();
+    await recordTokenUsage(db, 'u', 1000, 'model', 500, { provider: 'openrouter', providerRequestId: 'generation' });
+    expect(spendCredits).toHaveBeenCalledWith(10, db, { clamp: true });
+    expect(writeUsageLog).toHaveBeenCalledWith(db, expect.objectContaining({ creditsCharged: 10, providerRequestId: 'generation' }));
+    expect(db.transaction).toHaveBeenCalledTimes(1);
   });
-
-  it('does NOT commit increment when writeUsageLog throws (atomic rollback)', async () => {
-    // Simulate a real drizzle-style transaction that rolls back on throw:
-    // we track increment calls, but if the tx callback throws, the outer caller
-    // should see the error (rollback is implicit — we assert no "commit" signal).
-    const db: any = {
-      transaction: async (fn: (tx: any) => Promise<any>) => {
-        // If callback throws, propagate — mimics rollback (no COMMIT happens).
-        return fn(db);
-      },
-    };
-
-    incrementTokensUsedMock.mockResolvedValue(undefined);
-    (writeUsageLog as any).mockRejectedValue(new Error('numeric overflow'));
-
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    await recordTokenUsage(db, 'user_2', 1000, 'gpt-5-nano', 500, {
-      provider: 'openai',
-      kind: 'chat',
-    });
-
-    // writeUsageLog threw → error must be logged loudly (not swallowed silently)
-    expect(errorSpy).toHaveBeenCalled();
-    const logged = errorSpy.mock.calls.flat().join(' ');
-    expect(logged).toMatch(/numeric overflow|charge transaction failed|recordTokenUsage FAIL/);
-
-    // The key contract: increment and writeUsageLog must be invoked
-    // inside the same transaction call — if the log fails, the transaction
-    // is aborted as a whole.
-    expect(writeUsageLog).toHaveBeenCalledTimes(1);
-
-    errorSpy.mockRestore();
+  it('logs actual committed debit, not requested credits, at the boundary', async () => {
+    spendCredits.mockResolvedValue({ committed: 3 });
+    await recordTokenUsage(fakeDb(), 'u', 1000, 'model', 500);
+    expect(writeUsageLog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ creditsCharged: 3 }));
   });
-
-  it('uses db.transaction to wrap increment + log atomically', async () => {
-    const txSpy = vi.fn(async (fn: any) => fn({ transaction: vi.fn() }));
-    const db: any = { transaction: txSpy };
-
-    incrementTokensUsedMock.mockResolvedValue(undefined);
-    (writeUsageLog as any).mockResolvedValue(undefined);
-
-    await recordTokenUsage(db, 'user_3', 1000, 'gpt-5-nano', 500, {
-      provider: 'openai',
-      kind: 'chat',
-    });
-
-    expect(txSpy).toHaveBeenCalledTimes(1);
+  it('records upstream expense even when no credits remain', async () => {
+    spendCredits.mockResolvedValue({ committed: 0 });
+    await recordTokenUsage(fakeDb(), 'u', 1000, 'model', 500, { providerCostUsd: 0.0151 });
+    expect(writeUsageLog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ creditsCharged: 0, providerCostUsd: 0.0151 }));
+  });
+  it('bills cache-only usage and cost-only completions', async () => {
+    await recordTokenUsage(fakeDb(), 'u', 0, 'model', 0, { cacheReadTokens: 100 });
+    await recordTokenUsage(fakeDb(), 'u', 0, 'model', 0, { providerCostUsd: 0.01 });
+    expect(writeUsageLog).toHaveBeenCalledTimes(2);
+  });
+  it('keeps counter and usage failure inside one rollback boundary', async () => {
+    vi.mocked(writeUsageLog).mockRejectedValue(new Error('numeric overflow'));
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await recordTokenUsage(fakeDb(), 'u', 1000, 'model', 500);
+    expect(spy.mock.calls.flat().join(' ')).toContain('numeric overflow');
+    expect(spendCredits).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+  it('empty completions do not debit or log', async () => {
+    await recordTokenUsage(fakeDb(), 'u', 0, 'model', 0);
+    expect(spendCredits).not.toHaveBeenCalled();
+    expect(writeUsageLog).not.toHaveBeenCalled();
   });
 });

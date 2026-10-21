@@ -1,4 +1,4 @@
-import { index, integer, pgTable, text, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, pgTable, text, uuid } from 'drizzle-orm/pg-core';
 
 import { timestamptz } from './_helpers';
 import { users } from './user';
@@ -33,6 +33,10 @@ export const creditHolds = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     /** Credits reserved (worst-case upper bound for the request). */
     amount: integer('amount').notNull(),
+    /** NULL identifies legacy holds charged entirely against the ordinary counter. */
+    ordinaryAmount: integer('ordinary_amount'),
+    usagePeriod: timestamptz('usage_period'),
+    refundAllocations: jsonb('refund_allocations').$type<Array<{ lotId: string; amount: number }>>().notNull().default([]),
     /** Foreign key to async_tasks.id — the generation this hold is for. */
     asyncTaskId: uuid('async_task_id'),
     /** Free-form reason: 'image-gen', 'video-gen'. */

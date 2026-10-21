@@ -5,10 +5,12 @@ import { checkUsageLimit } from '../checkUsageLimit';
 // Mock the BillingService so we can control the failure / success path.
 const getOrResetUserBillingMock = vi.fn();
 const getPlanByIdMock = vi.fn();
+const getCreditBalanceMock = vi.fn();
 vi.mock('@/server/services/billing', () => ({
   BillingService: vi.fn().mockImplementation(() => ({
     getOrResetUserBilling: getOrResetUserBillingMock,
     getPlanById: getPlanByIdMock,
+    getCreditBalance: getCreditBalanceMock,
   })),
 }));
 
@@ -46,6 +48,8 @@ function makeCountDb(count: number) {
 beforeEach(() => {
   getOrResetUserBillingMock.mockReset();
   getPlanByIdMock.mockReset();
+  getCreditBalanceMock.mockReset();
+  getCreditBalanceMock.mockResolvedValue({ refundRemaining: 0 });
 });
 
 afterEach(() => {

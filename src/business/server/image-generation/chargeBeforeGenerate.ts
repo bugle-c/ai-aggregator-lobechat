@@ -1,6 +1,4 @@
 import { getServerDB } from '@/database/core/db-adaptor';
-import { creditHolds } from '@/database/schemas';
-import { activeBonusFor } from '@/server/modules/billing/active-bonus';
 import { checkUsageLimit } from '@/server/modules/billing/checkUsageLimit';
 import { calculateCreditsAsync } from '@/server/modules/billing/model-rates';
 import { isModelAllowedForPlanAsync } from '@/server/modules/billing/model-tiers';
@@ -41,10 +39,7 @@ type ChargeResult = { prechargeResult: ImagePrecharge };
  *    UI, can no longer use a model above its plan tier.
  * 3. Daily/monthly cap check via `checkUsageLimit` (informational — the
  *    monthly hard guard is enforced atomically below).
- * 4. Real reservation (C2 + C1 fix): we compute the worst-case credit cost
- *    for this request, INSERT a row in credit_holds, and atomically
- *    increment `tokens_used_month` with a `limit` guard. The conditional
- *    UPDATE means concurrent requests CANNOT both succeed past the cap.
+ * 4. Reserve credits atomically from expiring refunds and ordinary balance.
  *
  * Returns `{ prechargeResult: { holdId, amount } }`; the lambda splits the
  * amount per generation and embeds it in each async task (metadata + the
@@ -88,33 +83,10 @@ export async function chargeBeforeGenerate(params: ChargeParams): Promise<Charge
     kind: 'image',
   });
 
-  // Atomic precharge: hold + conditional increment. If the increment would
-  // overshoot the cap (concurrent requests racing past the cap), the
-  // transaction throws and rolls back the hold insert too.
-  const billing = await billingService.getOrResetUserBilling();
-  const plan = await billingService.getPlanById(billing.planId);
-  const monthlyCap =
-    (plan?.tokenLimit ?? 0) + (billing.tokenBalance ?? 0) + activeBonusFor(billing);
-
-  let holdId: string | null = null;
+  let holdId: string;
   try {
-    await db.transaction(async (tx) => {
-      const [hold] = await tx
-        .insert(creditHolds)
-        .values({
-          amount: maxCredits,
-          reason: 'image-gen',
-          userId: params.userId,
-        })
-        .returning({ id: creditHolds.id });
-      holdId = hold?.id ?? null;
-
-      await new BillingService(tx as any, params.userId).incrementTokensUsed(
-        maxCredits,
-        tx as any,
-        { limit: monthlyCap },
-      );
-    });
+    const hold = await billingService.reserveCredits(maxCredits, 'image-gen');
+    holdId = hold.id;
   } catch (err) {
     // Conditional UPDATE rejected — concurrent request bumped the counter
     // past the cap between checkUsageLimit and this transaction.
@@ -124,11 +96,6 @@ export async function chargeBeforeGenerate(params: ChargeParams): Promise<Charge
     throw new Error('Кредиты закончились. Пополните баланс или обновите план.');
   }
 
-  if (!holdId) {
-    // Should not happen (RETURNING on a successful insert); keep the legacy
-    // FIFO reconcile path alive rather than blocking the generation.
-    console.warn(`[billing] image precharge: hold id missing for user=${params.userId}`);
-    return { prechargeResult: { amount: maxCredits, holdId: '' } };
-  }
+  if (!holdId) throw new Error('Credit reservation did not return a hold');
   return { prechargeResult: { amount: maxCredits, holdId } };
 }

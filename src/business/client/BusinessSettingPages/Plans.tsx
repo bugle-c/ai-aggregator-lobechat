@@ -445,7 +445,7 @@ const Plans = memo(() => {
   const creditLimit = billing?.creditLimit || 0;
   const creditsUsed = billing?.creditsUsed || 0;
   const creditBalance = billing?.creditBalance || 0;
-  const totalAvailable = creditLimit + creditBalance;
+  const totalAvailable = billing?.totalAvailable ?? creditLimit + creditBalance;
   const usagePercent = totalAvailable > 0 ? Math.round((creditsUsed / totalAvailable) * 100) : 0;
   const freeQuota = creditState ? freeQuotaOf(creditState) : null;
 
@@ -552,6 +552,7 @@ const Plans = memo(() => {
             creditBalance,
             creditLimit,
             creditsUsed,
+            totalAvailable,
             subscriptionExpiresAt:
               billing?.subscriptionExpiresAt instanceof Date
                 ? billing.subscriptionExpiresAt.toISOString()

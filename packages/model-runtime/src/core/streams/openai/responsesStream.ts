@@ -159,7 +159,7 @@ const transformOpenAIStream = (
       case 'response.completed': {
         if (chunk.response.usage) {
           return {
-            data: convertOpenAIResponseUsage(chunk.response.usage, payload),
+            data: { ...convertOpenAIResponseUsage(chunk.response.usage, payload), providerRequestId: chunk.response.id },
             id: chunk.response.id,
             type: 'usage',
           };

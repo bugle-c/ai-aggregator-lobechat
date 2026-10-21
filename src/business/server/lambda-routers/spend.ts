@@ -33,10 +33,9 @@ const billingProcedure = authedProcedure.use(serverDatabase).use(async (opts) =>
 export const spendRouter = router({
   // Legacy endpoint — kept for backwards compat, now returns credit-based values
   getUsageSummary: billingProcedure.query(async ({ ctx }) => {
-    const billing = await ctx.billingService.getOrResetUserBilling();
-    const plan = await ctx.billingService.getPlanById(billing.planId);
+    const { billing, plan, refundRemaining, creditsRemaining, totalAvailable } =
+      await ctx.billingService.getCreditBalance();
     const creditLimit = plan?.tokenLimit || 50;
-    const totalAvailable = creditLimit + billing.tokenBalance + activeBonusFor(billing);
     const usagePercent =
       totalAvailable > 0 ? Math.round((billing.tokensUsedMonth / totalAvailable) * 100) : 0;
 
@@ -44,6 +43,8 @@ export const spendRouter = router({
       creditBalance: billing.tokenBalance,
       creditLimit,
       creditsUsed: billing.tokensUsedMonth,
+      creditsRemaining,
+      refundRemaining,
       plan: plan?.name || 'Free',
       totalAvailable,
       usagePercent: Math.min(usagePercent, 100),
@@ -51,11 +52,10 @@ export const spendRouter = router({
   }),
 
   getCreditState: billingProcedure.query(async ({ ctx }) => {
-    const billing = await ctx.billingService.getOrResetUserBilling();
-    const plan = await ctx.billingService.getPlanById(billing.planId);
+    const { billing, plan, refundRemaining, creditsRemaining, totalAvailable } =
+      await ctx.billingService.getCreditBalance();
     const plans = await ctx.billingService.getActivePlans();
     const creditLimit = plan?.tokenLimit || 50;
-    const totalAvailable = creditLimit + billing.tokenBalance + activeBonusFor(billing);
     const usagePercent =
       totalAvailable > 0 ? Math.round((billing.tokensUsedMonth / totalAvailable) * 100) : 0;
 
@@ -90,11 +90,8 @@ export const spendRouter = router({
     // «Одно видео на Free»: rendered by the router pool, paid in credits as usual.
     const freeVideo = await getFreeVideoTrial(ctx.serverDB, ctx.userId, plan?.slug, now);
 
-    // Is the daily gate currently lifted by purchased credits (top-up or the
-    // MAGIC48 paid bonus)? The rule lives in `decideUsageLimit` only — we ask
-    // the gate itself with a probe one message past the quota, so the UI can
-    // never drift from what the chat route enforces. `purchasedRemaining` is
-    // the same budget the gate spends: purchase minus this month's usage.
+    // Probe the shared gate beyond the daily quota so this display follows
+    // purchased-credit and refund bypasses without changing plan entitlement.
     const bonus = activeBonusFor(billing);
     const paidBonus = isFree ? await paidBonusFor(ctx.serverDB, ctx.userId, billing, now) : 0;
     const dailyGateBypassed =
@@ -106,11 +103,12 @@ export const spendRouter = router({
         kind: 'chat',
         paidBonus,
         planSlug: plan?.slug,
+        refundRemaining,
         tokenBalance: billing.tokenBalance,
         tokensUsedMonth: billing.tokensUsedMonth,
       }).allowed;
     const purchasedRemaining = dailyGateBypassed
-      ? Math.max(0, billing.tokenBalance + paidBonus - billing.tokensUsedMonth)
+      ? Math.max(0, billing.tokenBalance + paidBonus - billing.tokensUsedMonth) + refundRemaining
       : 0;
 
     return {
@@ -119,6 +117,8 @@ export const spendRouter = router({
       creditBalance: billing.tokenBalance,
       creditLimit,
       creditsUsed: billing.tokensUsedMonth,
+      creditsRemaining,
+      refundRemaining,
       dailyGateBypassed,
       dailyQuota: isFree ? FREE_DAILY_MESSAGE_QUOTA : null,
       dailyRemaining: dailyUsed === null ? null : Math.max(0, FREE_DAILY_MESSAGE_QUOTA - dailyUsed),

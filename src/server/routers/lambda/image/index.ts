@@ -10,6 +10,7 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { keyVaults, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createAsyncCaller } from '@/server/routers/async/caller';
 import { FileService } from '@/server/services/file';
+import { BillingService } from '@/server/services/billing';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,
@@ -164,18 +165,14 @@ export const imageRouter = router({
       provider,
       userId,
     });
-    // One hold covers the whole batch; each generation reconciles its share
-    // (remainder goes to the first) so N parallel completions/failures add up
-    // to exactly the held amount. Empty holdId = legacy FIFO reconcile.
     const holdShares = splitHold(prechargeResult.amount, imageNum);
-    const prechargeFor = (index: number) =>
-      prechargeResult.holdId
-        ? { amount: holdShares[index] ?? 0, holdId: prechargeResult.holdId }
-        : undefined;
 
     // Step 1: Atomically create all database records in a transaction
     const { batch: createdBatch, generationsWithTasks } = await serverDB.transaction(async (tx) => {
       log('Starting database transaction for image generation');
+      const childHolds = prechargeResult.holdId
+        ? await new BillingService(serverDB, userId).splitCreditHold(prechargeResult.holdId, holdShares, tx)
+        : [];
 
       // 1. Create generationBatch
       const newBatch: NewGenerationBatch = {
@@ -217,7 +214,8 @@ export const imageRouter = router({
       const generationsWithTasks = await Promise.all(
         createdGenerations.map(async (generation, index) => {
           // Create asyncTask directly in transaction
-          const precharge = prechargeFor(index);
+          const childHold = childHolds[index];
+          const precharge = childHold ? { amount: childHold.amount, holdId: childHold.id } : undefined;
           const [createdAsyncTask] = await tx
             .insert(asyncTasks)
             .values({

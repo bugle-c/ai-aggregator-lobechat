@@ -145,7 +145,7 @@ const transformOpenAIStream = (
     if (!Array.isArray(chunk.choices) || chunk.choices.length === 0) {
       if (chunk.usage) {
         const usage = chunk.usage;
-        return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
+        return { data: { ...convertOpenAIUsage(usage, payload), providerRequestId: chunk.id }, id: chunk.id, type: 'usage' };
       }
 
       return { data: chunk, id: chunk.id, type: 'data' };
@@ -334,7 +334,7 @@ const transformOpenAIStream = (
 
       if (chunk.usage) {
         const usage = chunk.usage;
-        return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
+        return { data: { ...convertOpenAIUsage(usage, payload), providerRequestId: chunk.id }, id: chunk.id, type: 'usage' };
       }
 
       // xAI Live Search feature returns citation sources
@@ -422,7 +422,7 @@ const transformOpenAIStream = (
         // If content is an empty string but chunk has usage, prioritize returning usage (e.g., Gemini image-preview eventually returns usage in a separate chunk)
         if (content === '' && chunk.usage) {
           const usage = chunk.usage;
-          return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
+          return { data: { ...convertOpenAIUsage(usage, payload), providerRequestId: chunk.id }, id: chunk.id, type: 'usage' };
         }
 
         // Handle special case with </think> tag: need to split content
@@ -537,7 +537,7 @@ const transformOpenAIStream = (
     // In litellm responses, there are cases where delta is empty but usage exists
     if (chunk.usage) {
       const usage = chunk.usage;
-      return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
+      return { data: { ...convertOpenAIUsage(usage, payload), providerRequestId: chunk.id }, id: chunk.id, type: 'usage' };
     }
 
     // In other cases, return delta and index

@@ -83,6 +83,8 @@ export interface UsageLimitInput {
    * (TG-link, referral, earned-magic) are never in here. Default 0.
    */
   paidBonus?: number;
+  /** Independently expiring paid correction credits; already net of consumption. */
+  refundRemaining?: number;
   planSlug: string | undefined;
   /** Top-up purchases (`user_billing.token_balance`). */
   tokenBalance: number;
@@ -120,22 +122,22 @@ export function decideUsageLimit(input: UsageLimitInput): UsageLimitResult {
   const { bonus, creditLimit, dailyUsed, kind, planSlug, tokenBalance, tokensUsedMonth } = input;
   const countsTowardQuota = input.countsTowardQuota ?? true;
   const paidBonus = input.paidBonus ?? 0;
-  const extraCredits = tokenBalance + bonus;
-  const totalAvailable = creditLimit + extraCredits;
+  const refundRemaining = input.refundRemaining ?? 0;
+  const extraCredits = tokenBalance + bonus + refundRemaining;
+  const creditsRemaining = Math.max(0, creditLimit + tokenBalance + bonus - tokensUsedMonth) + refundRemaining;
   const isFree = planSlug === FREE_PLAN_SLUG;
 
-  if (tokensUsedMonth >= totalAvailable) {
+  if (creditsRemaining <= 0) {
     const reason: UsageLimitReason = isFree && extraCredits <= 0 ? 'monthly_cap' : 'credits';
     return { allowed: false, creditsRemaining: 0, message: USAGE_LIMIT_MESSAGES[reason], reason };
   }
 
-  const creditsRemaining = totalAvailable - tokensUsedMonth;
   if (!isFree || kind !== 'chat' || !countsTowardQuota) return { allowed: true, creditsRemaining };
 
   const used = dailyUsed ?? 0;
   const dailyRemaining = Math.max(0, FREE_DAILY_MESSAGE_QUOTA - used);
   const purchased = tokenBalance + paidBonus;
-  const purchasedRemaining = purchased > 0 ? purchased - tokensUsedMonth : 0;
+  const purchasedRemaining = Math.max(0, purchased - tokensUsedMonth) + refundRemaining;
   if (used > FREE_DAILY_MESSAGE_QUOTA && purchasedRemaining <= 0) {
     return {
       allowed: false,
@@ -173,6 +175,7 @@ export async function checkUsageLimit(
     // Paid part of the bonus pool (MAGIC48) — one indexed lookup, free chat only.
     const paidBonus = quotaApplies ? await paidBonusFor(db, userId, billing) : 0;
 
+    const { refundRemaining } = await billingService.getCreditBalance();
     return decideUsageLimit({
       bonus: activeBonusFor(billing),
       countsTowardQuota,
@@ -180,6 +183,7 @@ export async function checkUsageLimit(
       dailyUsed,
       kind,
       paidBonus,
+      refundRemaining,
       planSlug: plan?.slug,
       tokenBalance: billing.tokenBalance,
       tokensUsedMonth: billing.tokensUsedMonth,
@@ -222,10 +226,8 @@ async function maybeFlagZeroCredits(db: LobeChatDatabase, userId: string): Promi
     if (!row || !row.tgBotChatId) return; // no bot registered — nothing to do
 
     const billingService = new BillingService(db, userId);
-    const plan = await billingService.getPlanById(row.planId);
-    const totalAvailable = (plan?.tokenLimit ?? 0) + row.tokenBalance + activeBonusFor(row);
-
-    if (row.tokensUsedMonth < totalAvailable) return; // still has credits
+    const { creditsRemaining } = await billingService.getCreditBalance();
+    if (creditsRemaining > 0) return;
 
     // Gate: one notification per UTC day maximum
     const todayUtc = new Date();
@@ -258,6 +260,7 @@ export interface RecordTokenUsageExtras {
    * deriving cost from token counts × per-model rates.
    */
   providerCostUsd?: number;
+  providerRequestId?: string;
 }
 
 export async function recordTokenUsage(
@@ -268,7 +271,9 @@ export async function recordTokenUsage(
   outputTokens?: number,
   opts?: RecordTokenUsageExtras,
 ): Promise<void> {
-  if (tokensUsed <= 0 && (!outputTokens || outputTokens <= 0)) return;
+  if (tokensUsed <= 0 && (outputTokens ?? 0) <= 0 && (opts?.cacheReadTokens ?? 0) <= 0 &&
+    (opts?.cacheWrite5mTokens ?? 0) <= 0 && (opts?.cacheWrite1hTokens ?? 0) <= 0 &&
+    opts?.providerCostUsd === undefined) return;
   try {
     const usage: Usage = {
       kind: 'chat',
@@ -287,36 +292,14 @@ export async function recordTokenUsage(
 
     const billingService = new BillingService(db, userId);
 
-    // Compute the cap so incrementTokensUsed can guard against TOCTOU.
-    // checkUsageLimit ran at request start; concurrent streams from the
-    // same user could each pass that check and then both bump
-    // tokensUsedMonth past the cap. The conditional-UPDATE guard inside
-    // incrementTokensUsed (`tokens_used_month + delta <= limit`) closes
-    // that window — but only when we tell it the cap. Image-charge
-    // already passes limit; chat-charge previously did not.
-    const billing = await billingService.getOrCreateUserBilling();
-    const plan = await billingService.getPlanById(billing.planId);
-    const limit = (plan?.tokenLimit ?? 0) + (billing.tokenBalance ?? 0) + activeBonusFor(billing);
-
-    // Clamp the charge to the credits actually left. Chat billing is
-    // post-completion — the answer already streamed. If the true cost would
-    // overshoot the cap, incrementTokensUsed's conditional guard THROWS and
-    // the whole charge (counter + usage_log) rolls back: the user gets the
-    // message free AND the counter never reaches the cap, so the next
-    // request's start-gate (`tokensUsedMonth >= totalAvailable`) never fires
-    // → free chat forever at the boundary. Charging exactly what remains
-    // drives the counter to the cap so the next message is blocked. The
-    // boundary message costs at most its remaining credits — acceptable.
-    const remainingCredits = Math.max(0, limit - (billing.tokensUsedMonth ?? 0));
-    const chargedCredits = Math.min(credits, remainingCredits);
-    if (chargedCredits <= 0) return; // already at cap — start-gate blocks next request
 
     // Atomic: increment monthly counter + insert usage_logs row. If either
     // fails, rollback — otherwise we end up with phantom credits (the counter
     // moves but no audit row exists). See writeUsageLog.ts for history.
     const { writeUsageLog } = await import('@/server/modules/analytics/writeUsageLog');
     await db.transaction(async (tx) => {
-      await billingService.incrementTokensUsed(chargedCredits, tx, { limit });
+      const { committed } = await billingService.spendCredits(credits, tx, { clamp: true });
+      // Preserve actual funded debit, including refund lots; still record upstream expense at zero balance.
       await writeUsageLog(tx, {
         userId,
         model: modelId || 'unknown',
@@ -326,14 +309,15 @@ export async function recordTokenUsage(
         cacheWrite5mTokens: opts?.cacheWrite5mTokens ?? 0,
         cacheWrite1hTokens: opts?.cacheWrite1hTokens ?? 0,
         cacheReadTokens: opts?.cacheReadTokens ?? 0,
-        creditsCharged: chargedCredits,
+        creditsCharged: committed,
         kind: opts?.kind || 'chat',
         providerCostUsd: opts?.providerCostUsd,
+        providerRequestId: opts?.providerRequestId,
       });
     });
 
     console.info(
-      `[billing] charged ${chargedCredits} credits: user=${userId} model=${modelId || 'unknown'} in=${tokensUsed} out=${outputTokens || 0} cw5m=${opts?.cacheWrite5mTokens ?? 0} cw1h=${opts?.cacheWrite1hTokens ?? 0} cr=${opts?.cacheReadTokens ?? 0}`,
+      `[billing] computed ${credits} credits: user=${userId} model=${modelId || 'unknown'} in=${tokensUsed} out=${outputTokens || 0} cw5m=${opts?.cacheWrite5mTokens ?? 0} cw1h=${opts?.cacheWrite1hTokens ?? 0} cr=${opts?.cacheReadTokens ?? 0}`,
     );
 
     // Post-transaction: flag user for zero_credits bot notification if applicable.

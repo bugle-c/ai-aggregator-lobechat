@@ -1,9 +1,10 @@
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, lt, sql } from 'drizzle-orm';
 
 import type { BillingPaymentItem, NewBillingPayment, UserBillingItem } from '@/database/schemas';
-import { billingPayments, userBilling } from '@/database/schemas';
+import { billingPayments, creditHolds, refundCreditLots, usageCreditCorrections, usageLogs, userBilling } from '@/database/schemas';
 import { type LobeChatDatabase, type Transaction } from '@/database/type';
 
+import { activeBonusFor } from '@/server/modules/billing/active-bonus';
 import { fetchActivePlans, fetchPlanById, type PlanView } from './plans-source';
 
 export type { PlanView };
@@ -164,56 +165,198 @@ export class BillingService {
       .where(eq(userBilling.userId, this.userId));
   };
 
-  /**
-   * Increment the user's monthly token counter. Pass a `tx` when this must
-   * commit/rollback atomically with a sibling write (e.g. usage_logs insert)
-   * — see recordTokenUsage and chargeAfterGenerate.
-   *
-   * `opts.limit` (Pkg2, C1 race fix): when set, the UPDATE is conditional —
-   * it only commits if `tokens_used_month + delta <= limit`. The DB's row
-   * lock + WHERE-evaluation guarantees concurrent callers can't both pass
-   * the limit check on stale reads. If 0 rows match (would overshoot, OR
-   * the user_billing row is missing), we throw and the caller's tx rolls back.
-   *
-   * `delta` may be negative (refund / reconcile under-charge → over-charge swap).
-   * The conditional clause skips negative-delta limit checks (a refund can
-   * never overshoot a positive cap).
-   */
-  incrementTokensUsed = async (
-    tokens: number,
-    tx?: Transaction,
-    opts?: { limit?: number },
-  ): Promise<{ committed: number }> => {
-    const client = tx ?? this.db;
-    if (opts?.limit != null && tokens > 0) {
-      const limit = opts.limit;
-      const result: any = await client.execute(sql`
-        UPDATE user_billing
-        SET tokens_used_month = tokens_used_month + ${tokens},
-            updated_at = now()
-        WHERE user_id = ${this.userId}
-          AND tokens_used_month + ${tokens} <= ${limit}
-      `);
-      // node-postgres + drizzle expose rowCount on the result; some
-      // drivers return rowsAffected. Probe both for safety. If the
-      // driver returns nothing, fall through (we still emitted the
-      // UPDATE; better to under-block than to falsely reject).
-      const rowCount = result?.rowCount ?? result?.rowsAffected ?? null;
-      if (rowCount === 0) {
-        throw new Error('Insufficient credits — would exceed monthly limit');
-      }
-      return { committed: tokens };
-    }
-    await client
-      .update(userBilling)
-      .set({
-        tokensUsedMonth: sql`${userBilling.tokensUsedMonth} + ${tokens}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(userBilling.userId, this.userId));
-    return { committed: tokens };
+
+  getCreditBalance = async () => {
+    const billing = await this.getOrResetUserBilling();
+    const plan = await this.getPlanById(billing.planId);
+    const lots = await this.db.select().from(refundCreditLots).where(and(
+      eq(refundCreditLots.userId, this.userId), gt(refundCreditLots.expiresAt, new Date()),
+      gt(refundCreditLots.remaining, 0),
+    ));
+    const refundRemaining = lots.reduce((sum, lot) => sum + lot.remaining, 0);
+    const ordinaryLimit = (plan?.tokenLimit ?? 0) + billing.tokenBalance + activeBonusFor(billing);
+    const ordinaryRemaining = Math.max(0, ordinaryLimit - billing.tokensUsedMonth);
+    return { billing, plan, refundRemaining, ordinaryRemaining,
+      creditsRemaining: ordinaryRemaining + refundRemaining,
+      totalAvailable: ordinaryLimit + refundRemaining };
   };
 
+  private lockBilling = async (tx: Transaction) => {
+    const [billing] = await tx.select().from(userBilling)
+      .where(eq(userBilling.userId, this.userId)).for('update');
+    if (!billing) throw new Error('Missing billing account');
+    const now = new Date();
+    if (!usagePeriodNeedsReset({ monthStart: billing.monthStart, now, planId: billing.planId })) return billing;
+    const monthStart = billing.planId === FREE_PLAN_ID ? usagePeriodBoundaries(now).currentMonthStart : now;
+    const [reset] = await tx.update(userBilling).set({ tokensUsedMonth: 0, monthStart, updatedAt: now })
+      .where(eq(userBilling.userId, this.userId)).returning();
+    return reset!;
+  };
+
+  private allocateCredits = async (amount: number, tx: Transaction, clamp = false) => {
+    if (!Number.isSafeInteger(amount) || amount < 0) throw new Error('Invalid credit amount');
+    const billing = await this.lockBilling(tx);
+    const lots = await tx.select().from(refundCreditLots).where(and(
+      eq(refundCreditLots.userId, this.userId), gt(refundCreditLots.expiresAt, new Date()),
+      gt(refundCreditLots.remaining, 0),
+    )).orderBy(asc(refundCreditLots.expiresAt), asc(refundCreditLots.id)).for('update');
+    const plan = await this.getPlanById(billing.planId);
+    const ordinaryRemaining = Math.max(0, (plan?.tokenLimit ?? 0) + billing.tokenBalance + activeBonusFor(billing) - billing.tokensUsedMonth);
+    const available = ordinaryRemaining + lots.reduce((sum, lot) => sum + lot.remaining, 0);
+    if (!clamp && amount > available) throw new Error('Insufficient credits');
+    const committed = Math.min(amount, available);
+    let pending = committed;
+    const refundAllocations: Array<{ lotId: string; amount: number }> = [];
+    for (const lot of lots) {
+      const used = Math.min(pending, lot.remaining);
+      if (!used) break;
+      await tx.update(refundCreditLots).set({ remaining: lot.remaining - used }).where(eq(refundCreditLots.id, lot.id));
+      refundAllocations.push({ lotId: lot.id, amount: used });
+      pending -= used;
+    }
+    if (pending) await tx.update(userBilling).set({ tokensUsedMonth: billing.tokensUsedMonth + pending, updatedAt: new Date() })
+      .where(eq(userBilling.userId, this.userId));
+    return { committed, ordinaryAmount: pending, usagePeriod: billing.monthStart, refundAllocations };
+  };
+
+  spendCredits = async (amount: number, tx: Transaction, opts: { clamp?: boolean } = {}) => {
+    return this.allocateCredits(amount, tx, opts.clamp);
+  };
+
+  reserveCredits = async (amount: number, reason: string, asyncTaskId?: string, tx?: Transaction) => {
+    const reserve = async (client: Transaction) => {
+      const allocation = await this.allocateCredits(amount, client);
+      const [hold] = await client.insert(creditHolds).values({ userId: this.userId, amount, reason,
+        asyncTaskId, ordinaryAmount: allocation.ordinaryAmount, usagePeriod: allocation.usagePeriod,
+        refundAllocations: allocation.refundAllocations }).returning();
+      return hold!;
+    };
+    return tx ? reserve(tx) : this.db.transaction(reserve);
+  };
+
+  splitCreditHold = async (holdId: string, amounts: number[], tx: Transaction) => {
+    await this.lockBilling(tx);
+    const [hold] = await tx.select().from(creditHolds).where(and(eq(creditHolds.id, holdId),
+      eq(creditHolds.userId, this.userId))).for('update');
+    if (!hold || hold.releasedAt || !amounts.length || amounts.some((amount) => !Number.isSafeInteger(amount) || amount < 0) ||
+      amounts.reduce((sum, amount) => sum + amount, 0) !== hold.amount) throw new Error('Invalid active hold split');
+    let ordinaryLeft = hold.ordinaryAmount ?? hold.amount;
+    const allocations = hold.refundAllocations.map((allocation) => ({ ...allocation }));
+    const children = [];
+    for (const amount of amounts) {
+      let pending = amount;
+      const refundAllocations: Array<{ lotId: string; amount: number }> = [];
+      for (const allocation of allocations) {
+        const used = Math.min(pending, allocation.amount);
+        if (used) refundAllocations.push({ lotId: allocation.lotId, amount: used });
+        allocation.amount -= used;
+        pending -= used;
+      }
+      if (pending > ordinaryLeft) throw new Error('Inconsistent hold funding');
+      ordinaryLeft -= pending;
+      const [child] = await tx.insert(creditHolds).values({ userId: this.userId, amount, reason: hold.reason,
+        ordinaryAmount: pending, usagePeriod: hold.usagePeriod, refundAllocations, createdAt: hold.createdAt }).returning();
+      children.push(child!);
+    }
+    if (ordinaryLeft || allocations.some((allocation) => allocation.amount)) throw new Error('Inconsistent hold funding');
+    // Transfer ownership, not money: do not restore sources or change captured expiries.
+    await tx.update(creditHolds).set({ releasedAt: new Date() }).where(eq(creditHolds.id, hold.id));
+    return children;
+  };
+
+  settleCreditHold = async (holdId: string, actualCredits: number, tx: Transaction) => {
+    if (!Number.isSafeInteger(actualCredits) || actualCredits < 0) throw new Error('Invalid credit amount');
+    const billing = await this.lockBilling(tx);
+    const [hold] = await tx.select().from(creditHolds).where(and(eq(creditHolds.id, holdId),
+      eq(creditHolds.userId, this.userId))).for('update');
+    if (!hold || hold.releasedAt) return { settled: false, committed: 0 };
+    // Keep the original source allocation for the settled portion; return excess in reverse order.
+    let excess = Math.max(0, hold.amount - actualCredits);
+    const ordinary = hold.ordinaryAmount ?? hold.amount;
+    const ordinaryReturn = Math.min(excess, ordinary);
+    const samePeriod = hold.usagePeriod
+      ? hold.usagePeriod.getTime() === billing.monthStart.getTime()
+      : hold.createdAt >= billing.monthStart;
+    if (ordinaryReturn && samePeriod) await tx.update(userBilling).set({
+      tokensUsedMonth: sql`GREATEST(0, ${userBilling.tokensUsedMonth} - ${ordinaryReturn})`, updatedAt: new Date(),
+    }).where(eq(userBilling.userId, this.userId));
+    excess -= ordinaryReturn;
+    for (const allocation of [...hold.refundAllocations].reverse()) {
+      const returned = Math.min(excess, allocation.amount);
+      if (!returned) break;
+      // Expiry is immutable: returning an expired lot never makes it spendable.
+      await tx.update(refundCreditLots).set({ remaining: sql`${refundCreditLots.remaining} + ${returned}` })
+        .where(and(eq(refundCreditLots.id, allocation.lotId), eq(refundCreditLots.userId, this.userId)));
+      excess -= returned;
+    }
+    if (actualCredits > hold.amount) await this.allocateCredits(actualCredits - hold.amount, tx);
+    await tx.update(creditHolds).set({ releasedAt: new Date() }).where(eq(creditHolds.id, hold.id));
+    return { settled: true, committed: actualCredits };
+  };
+
+  grantRefundCorrections = async (input: { campaign: string; fixCutoff: Date; corrections: Array<{
+    usageId: string; correctedCredits: number; evidence: { source: string; reference: string; pricing: string };
+  }> }) => {
+    const start = new Date('2026-09-30T21:00:00Z');
+    if (!input.campaign.trim() || !Number.isFinite(input.fixCutoff.getTime()) || input.fixCutoff <= start || input.fixCutoff > new Date()) {
+      throw new Error('Invalid reviewed reconciliation campaign');
+    }
+    await this.getOrCreateUserBilling();
+    return this.db.transaction(async (tx) => {
+      const billing = await this.lockBilling(tx);
+      const campaignLots = await tx.select({ fixCutoff: refundCreditLots.fixCutoff }).from(refundCreditLots)
+        .where(and(eq(refundCreditLots.userId, this.userId), eq(refundCreditLots.campaign, input.campaign)));
+      if (campaignLots.some((lot) => lot.fixCutoff.getTime() !== input.fixCutoff.getTime())) {
+        throw new Error('Campaign cutoff is immutable');
+      }
+      const [payment] = await tx.select({ id: billingPayments.id }).from(billingPayments).where(and(
+        eq(billingPayments.userId, this.userId), eq(billingPayments.status, 'succeeded'), gt(billingPayments.amountRub, 0),
+        inArray(billingPayments.type, ['subscription', 'topup']), gte(billingPayments.createdAt, start),
+        lt(billingPayments.createdAt, input.fixCutoff),
+      )).limit(1);
+      if (!payment) throw new Error('Not eligible for reconciliation');
+      const now = new Date();
+      const expiresAt = billing.planId !== FREE_PLAN_ID && billing.subscriptionExpiresAt && billing.subscriptionExpiresAt > now
+        ? billing.subscriptionExpiresAt : new Date(now.getTime() + 30 * 86_400_000);
+      // A lot is created only after all evidence validates; transaction rollback removes empty/failed grants.
+      const proposed: Array<{ usageId: string; originalCredits: number; correctedCredits: number;
+        evidence: { source: string; reference: string; pricing: string } }> = [];
+      for (const correction of input.corrections) {
+        if (!Number.isSafeInteger(correction.correctedCredits) || correction.correctedCredits < 0 ||
+          !correction.evidence.source.trim() || !correction.evidence.reference.trim() || !correction.evidence.pricing.trim()) throw new Error('Missing correction evidence');
+        const [usage] = await tx.select().from(usageLogs).where(and(eq(usageLogs.id, correction.usageId),
+          eq(usageLogs.userId, this.userId), gte(usageLogs.createdAt, start), lt(usageLogs.createdAt, input.fixCutoff)));
+        if (!usage || correction.correctedCredits >= usage.creditsCharged) throw new Error('Correction must be a positive evidenced overcharge');
+        if (usage.providerCostStatus !== 'verified' || usage.actualProviderCostUsd === null ||
+          usage.providerRequestId !== correction.evidence.reference || usage.providerCostSource !== correction.evidence.source) {
+          throw new Error('Correction evidence does not match verified original usage');
+        }
+        const [existing] = await tx.select({ id: usageCreditCorrections.id }).from(usageCreditCorrections).where(and(
+          eq(usageCreditCorrections.campaign, input.campaign), eq(usageCreditCorrections.usageId, usage.id)));
+        if (!existing && !proposed.some((row) => row.usageId === usage.id)) proposed.push({ ...correction, originalCredits: usage.creditsCharged });
+      }
+      const granted = proposed.reduce((sum, row) => sum + row.originalCredits - row.correctedCredits, 0);
+      if (!Number.isSafeInteger(granted) || granted > 2_147_483_647) throw new Error('Refund credit amount exceeds ledger range');
+      if (!granted) return { granted: 0, lotId: null };
+      const [lot] = await tx.insert(refundCreditLots).values({ userId: this.userId, campaign: input.campaign,
+        fixCutoff: input.fixCutoff, granted, remaining: granted, expiresAt }).returning();
+      await tx.insert(usageCreditCorrections).values(proposed.map((row) => ({ ...row, campaign: input.campaign, lotId: lot!.id })));
+      return { granted, lotId: lot!.id };
+    });
+  };
+
+  getUserHistory = async (limit = 20) => {
+    const [payments, refunds] = await Promise.all([
+      this.getUserPayments(limit),
+      this.db.select().from(refundCreditLots).where(eq(refundCreditLots.userId, this.userId))
+        .orderBy(desc(refundCreditLots.createdAt)).limit(limit),
+    ]);
+    return [...payments.map((payment) => ({ ...payment, kind: 'payment' as const })),
+      ...refunds.map((refund) => ({ ...refund, kind: 'refund' as const, credits: refund.granted,
+        status: refund.expiresAt > new Date() ? 'credited' as const : 'expired' as const,
+        description: 'Возврат кредитов из-за технической ошибки' }))]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
+  };
   // ============ Payments ============ //
 
   createPayment = async (data: Omit<NewBillingPayment, 'userId'>): Promise<BillingPaymentItem> => {

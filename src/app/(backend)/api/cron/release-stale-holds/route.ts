@@ -1,31 +1,23 @@
 /**
  * Daily cron — release credit_holds rows that never got resolved.
  *
- * `chargeBeforeGenerate` (image/video) atomically reserves credits via a
- * `credit_holds` row + `tokensUsedMonth` bump. The matching
- * `chargeAfterGenerate` resolves it on success (settles cost) or error
- * (refunds the reservation). If the worker process dies between those
- * two calls — container OOM, hard crash, kill -9 — the hold becomes
- * orphaned: `released_at IS NULL` and the user's reserved credits are
- * never returned. The audit found 1 such row already.
- *
- * Strategy: every hold older than 24 hours and still un-released is
- * almost certainly orphaned (real image/video gens finish in under 10
- * minutes). Refund by `incrementTokensUsed(-amount)` and stamp
- * `released_at`. Run daily.
+ * Media reservations preserve their ordinary/refund funding allocations.
+ * Orphaned holds older than 24 hours are settled at zero through the same
+ * guarded service as normal completion, restoring only eligible sources.
  *
  * Auth: shared CRON_SECRET. Triggered by /etc/systemd/system/release-stale-holds.timer.
  */
-import { and, eq, isNull, lt, sql } from 'drizzle-orm';
+import { and, isNull, lt } from 'drizzle-orm';
 
-import { creditHolds, userBilling } from '@/database/schemas';
+import { creditHolds } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import { BillingService } from '@/server/services/billing';
 
 interface ReleaseResult {
   amount: number;
   error?: string;
   holdId: string;
-  outcome: 'released' | 'failed';
+  outcome: 'released' | 'already-settled' | 'failed';
   userId: string;
 }
 
@@ -56,24 +48,15 @@ export async function POST(req: Request) {
 
   for (const row of stale) {
     try {
-      // Refund + mark released atomically.
-      await db.transaction(async (tx) => {
-        await tx
-          .update(userBilling)
-          .set({
-            tokensUsedMonth: sql`GREATEST(0, ${userBilling.tokensUsedMonth} - ${row.amount})`,
-            updatedAt: now,
-          })
-          .where(eq(userBilling.userId, row.userId));
-
-        await tx.update(creditHolds).set({ releasedAt: now }).where(eq(creditHolds.id, row.id));
-      });
+      const result = await db.transaction(async (tx) =>
+        new BillingService(tx, row.userId).settleCreditHold(row.id, 0, tx),
+      );
 
       results.push({
         holdId: row.id,
         userId: row.userId,
         amount: row.amount,
-        outcome: 'released',
+        outcome: result.settled ? 'released' : 'already-settled',
       });
       console.info(
         `[cron/release-stale-holds] released user=${row.userId} amount=${row.amount} created=${row.createdAt.toISOString()}`,

@@ -1,12 +1,12 @@
 import { getServerDB } from '@/database/core/db-adaptor';
 import { writeUsageLog } from '@/server/modules/analytics/writeUsageLog';
-import { releaseHoldIfActive } from '@/server/modules/billing/hold-release';
 import { calculateCreditsAsync } from '@/server/modules/billing/model-rates';
 import { BillingService } from '@/server/services/billing';
 import { fetchRate } from '@/server/services/billing/rates-source';
 
 interface ChargeParams {
   computePriceParams?: { generateAudio?: boolean };
+  inferenceId?: string;
   isError?: boolean;
   latency?: number;
   metadata: {
@@ -30,24 +30,15 @@ interface ChargeParams {
   userId: string;
 }
 
-/**
- * Reconcile video generation against precharge hold (Pkg2).
- *
- * - `isError=true` + hold present: refund the held amount in full.
- * - Success + hold present: compute actual seconds × per-second rate,
- *   write the diff (`actual - held`), mark hold released, write usage_log.
- * - No hold (legacy path): just commit actual cost + log.
- *
- * All in one transaction so a write failure rolls back the counter delta.
- */
+/** Settle source-aware reservations and record the actual funded debit. */
 export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
   const heldAmount =
-    params.prechargeResult && typeof (params.prechargeResult as any).amount === 'number'
-      ? ((params.prechargeResult as any).amount as number)
+    params.prechargeResult && typeof params.prechargeResult.amount === 'number'
+      ? params.prechargeResult.amount
       : 0;
   const holdId =
-    params.prechargeResult && typeof (params.prechargeResult as any).holdId === 'string'
-      ? ((params.prechargeResult as any).holdId as string)
+    params.prechargeResult && typeof params.prechargeResult.holdId === 'string'
+      ? params.prechargeResult.holdId
       : null;
 
   const db = await getServerDB();
@@ -56,14 +47,9 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
     if (heldAmount > 0) {
       try {
         const refunded = await db.transaction(async (tx) => {
-          // Release-once gate: a second finisher (cron vs procedure) must not
-          // refund the same hold again.
-          if (holdId && !(await releaseHoldIfActive(tx, holdId))) return false;
-          await new BillingService(tx as any, params.userId).incrementTokensUsed(
-            -heldAmount,
-            tx as any,
-          );
-          return true;
+          if (!holdId) return false;
+          const result = await new BillingService(tx, params.userId).settleCreditHold(holdId, 0, tx);
+          return result.settled;
         });
         console.info(
           refunded
@@ -88,11 +74,7 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
     if (holdId && heldAmount > 0) {
       try {
         await db.transaction(async (tx) => {
-          if (!(await releaseHoldIfActive(tx, holdId))) return;
-          await new BillingService(tx as any, params.userId).incrementTokensUsed(
-            -heldAmount,
-            tx as any,
-          );
+          await new BillingService(tx, params.userId).settleCreditHold(holdId, 0, tx);
         });
       } catch (err) {
         console.error(
@@ -121,30 +103,24 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
     videoSeconds: seconds + (params.referenceSeconds ?? 0),
   });
 
-  const diff = heldAmount > 0 ? credits - heldAmount : credits;
 
   try {
     await db.transaction(async (tx) => {
-      const billingService = new BillingService(tx as any, params.userId);
-      if (holdId && !(await releaseHoldIfActive(tx, holdId))) {
-        // Someone already settled this hold (refund or charge) — a second
-        // settlement would double-bill or double-refund. Nothing to do.
-        console.warn(
-          `[billing] video charge skipped — hold ${holdId} already released: user=${params.userId}`,
-        );
-        return;
-      }
-      if (diff !== 0) {
-        await billingService.incrementTokensUsed(diff, tx as any);
-      }
+      const billingService = new BillingService(tx, params.userId);
+      const reservation = holdId
+        ? { id: holdId }
+        : await billingService.reserveCredits(credits, 'video-gen', params.metadata.asyncTaskId, tx);
+      const result = await billingService.settleCreditHold(reservation.id, credits, tx);
+      if (!result.settled) return;
       await writeUsageLog(tx, {
-        creditsCharged: credits,
+        creditsCharged: result.committed,
         inputTokens: 0,
         kind: 'video',
         model: params.metadata.modelId,
         outputTokens: 0,
         provider: params.served?.provider ?? (params.provider || 'unknown'),
         providerCostUsd: params.served?.providerCostUsd,
+        providerRequestId: params.inferenceId,
         userId: params.userId,
         videoSeconds: seconds,
       });
@@ -158,6 +134,6 @@ export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {
   }
 
   console.info(
-    `[billing] video charged ${credits} credits${heldAmount > 0 ? ` (held ${heldAmount}, diff ${diff})` : ''}: user=${params.userId} model=${params.metadata.modelId} seconds=${seconds}`,
+    `[billing] video settlement processed: user=${params.userId} model=${params.metadata.modelId} seconds=${seconds}`,
   );
 }

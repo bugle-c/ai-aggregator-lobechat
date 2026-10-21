@@ -181,12 +181,15 @@ export const subscriptionRouter = router({
     }),
 
   getBillingState: billingProcedure.query(async ({ ctx }) => {
-    const billing = await ctx.billingService.getOrResetUserBilling();
-    const plan = await ctx.billingService.getPlanById(billing.planId);
+    const { billing, plan, refundRemaining, creditsRemaining, totalAvailable } =
+      await ctx.billingService.getCreditBalance();
     return {
       creditBalance: billing.tokenBalance,
       creditLimit: plan?.tokenLimit || 50,
       creditsUsed: billing.tokensUsedMonth,
+      creditsRemaining,
+      refundRemaining,
+      totalAvailable,
       plan: plan || null,
       subscriptionExpiresAt: billing.subscriptionExpiresAt,
       autoRenew: billing.autoRenew,
@@ -228,6 +231,10 @@ export const subscriptionRouter = router({
 
   getPayments: billingProcedure.query(async ({ ctx }) => {
     return ctx.billingService.getUserPayments();
+  }),
+
+  getCreditHistory: billingProcedure.query(async ({ ctx }) => {
+    return ctx.billingService.getUserHistory();
   }),
 
   /**

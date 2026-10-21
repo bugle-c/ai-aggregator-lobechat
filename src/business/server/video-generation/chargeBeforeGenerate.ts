@@ -6,8 +6,7 @@ import {
   getFreeVideoTrial,
 } from '@/business/server/media-router/newcomer';
 import { getServerDB } from '@/database/core/db-adaptor';
-import { creditHolds, type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
-import { activeBonusFor } from '@/server/modules/billing/active-bonus';
+import { type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
 import { checkUsageLimit } from '@/server/modules/billing/checkUsageLimit';
 import { referenceSecondsFor } from '@/server/modules/billing/compute-cost';
 import { FREE_PLAN_SLUG } from '@/server/modules/billing/daily-quota';
@@ -123,33 +122,10 @@ export async function chargeBeforeGenerate(params: ChargeParams): Promise<Charge
     videoSeconds: requestedDuration + referenceSeconds,
   });
 
-  // Atomic precharge: hold + conditional increment with monthly cap guard (C1).
-  const billing = await billingService.getOrResetUserBilling();
-  const plan = await billingService.getPlanById(billing.planId);
-  const monthlyCap =
-    (plan?.tokenLimit ?? 0) + (billing.tokenBalance ?? 0) + activeBonusFor(billing);
-
   let holdId: string;
   try {
-    holdId = await db.transaction(async (tx) => {
-      const inserted = await tx
-        .insert(creditHolds)
-        .values({
-          amount: maxCredits,
-          reason: 'video-gen',
-          userId: params.userId,
-        })
-        .returning({ id: creditHolds.id });
-      const newId = inserted[0]!.id;
-
-      await new BillingService(tx as any, params.userId).incrementTokensUsed(
-        maxCredits,
-        tx as any,
-        { limit: monthlyCap },
-      );
-
-      return newId;
-    });
+    const hold = await billingService.reserveCredits(maxCredits, 'video-gen');
+    holdId = hold.id;
   } catch (err) {
     console.warn(
       `[billing] Video precharge rejected for user=${params.userId} model=${params.model}: ${(err as Error).message}`,

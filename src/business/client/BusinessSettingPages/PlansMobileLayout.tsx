@@ -31,6 +31,7 @@ interface Billing {
   creditBalance: number;
   creditLimit: number;
   creditsUsed: number;
+  totalAvailable?: number;
   subscriptionExpiresAt?: string | null;
 }
 
@@ -87,7 +88,7 @@ const PlansMobileLayout = memo<Props>(
     onTopUp,
   }) => {
     const { t } = useTranslation('subscription');
-    const totalAvailable = billing.creditLimit + billing.creditBalance;
+    const totalAvailable = billing.totalAvailable ?? billing.creditLimit + billing.creditBalance;
     const usagePercent =
       totalAvailable > 0 ? Math.round((billing.creditsUsed / totalAvailable) * 100) : 0;
 

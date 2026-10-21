@@ -2,6 +2,7 @@ export interface StreamUsageData {
   cacheRead?: number;
   cacheWrite1h?: number;
   cacheWrite5m?: number;
+  cost?: number;
   input?: number;
   output?: number;
 }
@@ -34,7 +35,7 @@ export function decideChargeAfterStream(
   observedOutputChars: number,
   messages: unknown,
 ): ChargeDecision {
-  if (usageData.input || usageData.output) {
+  if (usageData.input || usageData.output || usageData.cacheRead || usageData.cacheWrite5m || usageData.cacheWrite1h || usageData.cost !== undefined) {
     return {
       skip: false,
       source: 'provider',

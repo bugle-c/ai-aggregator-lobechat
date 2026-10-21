@@ -15,6 +15,19 @@ import { timestamptz } from './_helpers';
 import { billingPayments, billingPlans } from './billing';
 import { users } from './user';
 
+// Independent financial operations, scoped by exact local request identity.
+export const providerExpenseDaily = pgTable('provider_expense_daily', {
+  provider: text('provider').notNull(),
+  day: date('day').notNull(),
+  scope: text('scope').notNull(),
+  actualUsd: numeric('actual_usd').notNull(),
+  status: text('status').notNull(),
+  verifiedRequests: integer('verified_requests').notNull(),
+  unresolvedRequests: integer('unresolved_requests').notNull(),
+  evidence: jsonb('evidence').$type<Record<string, unknown>>().notNull(),
+  updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+}, (table) => [primaryKey({ columns: [table.provider, table.day, table.scope] })]);
+
 // ============ Usage Logs (raw per-request cost log) ============ //
 
 export const usageLogs = pgTable(
@@ -37,13 +50,19 @@ export const usageLogs = pgTable(
     creditsCharged: integer('credits_charged').notNull(),
     costUsd: numeric('cost_usd', { precision: 10, scale: 6 }).notNull(),
     costRub: numeric('cost_rub', { precision: 10, scale: 4 }).notNull(),
-    // What we actually pay the upstream API (per_unit × usage), before
-    // the tier markup that becomes cost_rub. Lets the Economics page
-    // compute real gross margin without re-deriving from rate tables
-    // at query time. Added 2026-05-31; backfilled via SQL.
+    // Legacy booked estimate in RUB, retained unchanged for audit compatibility.
+    // This is NOT proof of actual upstream expense. Consumers must use
+    // actualProviderCostUsd + providerCostStatus for verified expense.
     providerCostRub: numeric('provider_cost_rub', { precision: 10, scale: 4 })
       .notNull()
       .default('0'),
+    // Verified upstream evidence; NULL means unknown, never free usage.
+    actualProviderCostUsd: numeric('actual_provider_cost_usd'),
+    providerRequestId: text('provider_request_id'),
+    providerCostStatus: text('provider_cost_status').notNull().default('unknown'),
+    providerCostSource: text('provider_cost_source'),
+    providerCostEvidence: jsonb('provider_cost_evidence').$type<Record<string, unknown>>(),
+    providerCostReconciledAt: timestamptz('provider_cost_reconciled_at'),
     exchangeRate: numeric('exchange_rate', { precision: 8, scale: 4 }).notNull(),
     kind: varchar('kind', { length: 16 }).notNull(),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
@@ -53,6 +72,7 @@ export const usageLogs = pgTable(
     index('usage_logs_created_idx').on(table.createdAt),
     index('usage_logs_model_idx').on(table.model),
     index('usage_logs_kind_idx').on(table.kind),
+    index('usage_logs_provider_request_idx').on(table.provider, table.providerRequestId),
   ],
 );
 

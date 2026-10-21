@@ -4,6 +4,7 @@ import { ChatErrorType } from '@lobechat/types';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
 import { createTraceOptions, initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { normalizeBillingUsage } from '@/server/modules/billing/normalizeUsage';
 import { type ChatStreamPayload } from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
 import { getTracePayload } from '@/utils/trace';
@@ -168,32 +169,7 @@ export const POST = checkAuth(
                 try {
                   const parsed = JSON.parse(jsonStr);
                   if (parsed.usage) {
-                    const u = parsed.usage;
-                    usageData = {
-                      input: u.prompt_tokens || u.input_tokens || 0,
-                      output: u.completion_tokens || u.output_tokens || 0,
-                      // Anthropic: cache_creation_input_tokens (5m default),
-                      // or detailed cache_creation.ephemeral_5m_input_tokens /
-                      // ephemeral_1h_input_tokens for explicit TTL.
-                      cacheWrite5m:
-                        u.cache_creation?.ephemeral_5m_input_tokens ??
-                        u.cache_creation_input_tokens ??
-                        0,
-                      cacheWrite1h: u.cache_creation?.ephemeral_1h_input_tokens ?? 0,
-                      // Anthropic: cache_read_input_tokens. OpenAI:
-                      // prompt_tokens_details.cached_tokens. Gemini:
-                      // usage_metadata.cached_content_token_count.
-                      cacheRead:
-                        u.cache_read_input_tokens ??
-                        u.prompt_tokens_details?.cached_tokens ??
-                        u.cached_content_token_count ??
-                        0,
-                      // OpenRouter emits `cost` in USD (pre-markup) covering
-                      // cached tokens, volume discounts, and actual upstream
-                      // provider routing. When present we prefer it over
-                      // token-rate math in computeCostUsdFromRate.
-                      cost: typeof u.cost === 'number' ? u.cost : undefined,
-                    };
+                    usageData = normalizeBillingUsage(parsed.usage);
                   }
                   // Observe streamed content to estimate output when upstream
                   // doesn't report usage (common for non-OpenAI compatible providers).
@@ -217,29 +193,7 @@ export const POST = checkAuth(
             // remain a fallback for runtimes whose callback path doesn't
             // surface usage (legacy custom providers).
             if (capturedUsage) {
-              const u = capturedUsage as Record<string, any>;
-              usageData = {
-                input: Number(u.prompt_tokens ?? u.input_tokens ?? u.inputTextTokens ?? 0) || 0,
-                output:
-                  Number(u.completion_tokens ?? u.output_tokens ?? u.outputTextTokens ?? 0) || 0,
-                cacheWrite5m:
-                  Number(
-                    u.cache_creation?.ephemeral_5m_input_tokens ??
-                      u.cache_creation_input_tokens ??
-                      u.inputCacheMissTokens ??
-                      0,
-                  ) || 0,
-                cacheWrite1h: Number(u.cache_creation?.ephemeral_1h_input_tokens ?? 0) || 0,
-                cacheRead:
-                  Number(
-                    u.cache_read_input_tokens ??
-                      u.prompt_tokens_details?.cached_tokens ??
-                      u.cached_content_token_count ??
-                      u.inputCachedTokens ??
-                      0,
-                  ) || 0,
-                cost: typeof u.cost === 'number' ? u.cost : undefined,
-              };
+              usageData = normalizeBillingUsage(capturedUsage as Record<string, unknown>);
             }
             // Always trust the runtime's text-length tally over our parser's
             // chunk inspection — it sees the post-transform text the user
@@ -274,6 +228,8 @@ export const POST = checkAuth(
                   cacheWrite1hTokens: decision.cacheWrite1hTokens,
                   cacheReadTokens: decision.cacheReadTokens,
                   providerCostUsd: usageData.cost,
+                  providerRequestId: typeof capturedUsage?.providerRequestId === 'string'
+                    ? capturedUsage.providerRequestId : undefined,
                 },
               );
             }

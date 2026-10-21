@@ -8,8 +8,20 @@ import { withUsageCost } from './utils/withUsageCost';
 
 const log = debug('lobe-cost:convertOpenAIUsage');
 
+interface ProviderCostUsage {
+  cost?: number;
+}
+
+interface OpenRouterUsage extends OpenAI.Completions.CompletionUsage, ProviderCostUsage {
+  prompt_cache_hit_tokens?: number;
+  prompt_cache_miss_tokens?: number;
+  prompt_tokens_details?: OpenAI.Completions.CompletionUsage['prompt_tokens_details'] & {
+    cache_write_tokens?: number;
+  };
+}
+
 export const convertOpenAIUsage = (
-  usage: OpenAI.Completions.CompletionUsage,
+  usage: OpenRouterUsage,
   payload?: ChatPayloadForTransformStream,
 ): ModelUsage => {
   // Currently only pplx has citation_tokens
@@ -17,11 +29,10 @@ export const convertOpenAIUsage = (
   const inputCitationTokens = (usage as any).citation_tokens || 0;
   const totalInputTokens = inputCitationTokens + inputTextTokens;
 
-  const cachedTokens =
-    (usage as any).prompt_cache_hit_tokens || usage.prompt_tokens_details?.cached_tokens;
-
+  const cachedTokens = usage.prompt_cache_hit_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0;
+  const writeTokens = usage.prompt_tokens_details?.cache_write_tokens ?? 0;
   const inputCacheMissTokens =
-    (usage as any).prompt_cache_miss_tokens || totalInputTokens - cachedTokens;
+    usage.prompt_cache_miss_tokens ?? Math.max(0, totalInputTokens - cachedTokens - writeTokens);
 
   const totalOutputTokens = usage.completion_tokens;
   const outputReasoning = usage.completion_tokens_details?.reasoning_tokens || 0;
@@ -43,6 +54,7 @@ export const convertOpenAIUsage = (
     inputAudioTokens: usage.prompt_tokens_details?.audio_tokens,
     inputCacheMissTokens: inputCacheMissTokens,
     inputCachedTokens: cachedTokens,
+    inputWriteCacheTokens: writeTokens,
     inputCitationTokens: inputCitationTokens,
     inputTextTokens: inputTextTokens,
     outputAudioTokens: outputAudioTokens,
@@ -55,14 +67,16 @@ export const convertOpenAIUsage = (
     totalTokens,
   } satisfies ModelTokensUsage;
 
-  const finalData = {};
+  const finalData: ModelUsage = { inputCacheMissTokens };
 
   Object.entries(data).forEach(([key, value]) => {
-    if (!!value) {
-      // @ts-ignore
-      finalData[key] = value;
+    if (value) {
+      finalData[key as keyof ModelTokensUsage] = value;
     }
   });
+  if (typeof usage.cost === 'number' && Number.isFinite(usage.cost) && usage.cost >= 0) {
+    finalData.providerCostUsd = usage.cost;
+  }
 
   log('convertOpenAIUsage data(completion-api): %O', finalData);
 
@@ -70,7 +84,7 @@ export const convertOpenAIUsage = (
 };
 
 export const convertOpenAIResponseUsage = (
-  usage: OpenAI.Responses.ResponseUsage,
+  usage: OpenAI.Responses.ResponseUsage & ProviderCostUsage,
   payload?: ChatPayloadForTransformStream,
 ): ModelUsage => {
   // 1. Extract and default primary values
@@ -113,7 +127,7 @@ export const convertOpenAIResponseUsage = (
   } satisfies ModelTokensUsage; // This helps ensure all keys of ModelTokensUsage are considered
 
   // 4. Filter out zero/falsy values, as done in the reference implementation
-  const finalData: Partial<ModelUsage> = {}; // Use Partial for type safety during construction
+  const finalData: Partial<ModelUsage> = { inputCacheMissTokens };
   Object.entries(data).forEach(([key, value]) => {
     if (
       value !== undefined &&
@@ -129,6 +143,9 @@ export const convertOpenAIResponseUsage = (
       finalData[key as keyof ModelUsage] = value as number;
     }
   });
+  if (typeof usage.cost === 'number' && Number.isFinite(usage.cost) && usage.cost >= 0) {
+    finalData.providerCostUsd = usage.cost;
+  }
 
   log('convertOpenAIResponseUsage data(response-api): %O', finalData);
 

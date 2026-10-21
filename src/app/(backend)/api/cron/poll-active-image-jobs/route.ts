@@ -144,6 +144,7 @@ export async function GET(req: Request) {
 
         if (ENABLE_BUSINESS_FEATURES) {
           await chargeAfterGenerate({
+            inferenceId: row.inferenceId ?? undefined,
             metadata: {
               asyncTaskId: row.taskId,
               generationBatchId: row.generationBatchId,

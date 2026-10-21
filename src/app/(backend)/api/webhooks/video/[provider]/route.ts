@@ -272,6 +272,7 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
       };
 
       await chargeAfterGenerate({
+        inferenceId: result.inferenceId,
         computePriceParams: {
           generateAudio: batchConfig?.generateAudio,
         },
