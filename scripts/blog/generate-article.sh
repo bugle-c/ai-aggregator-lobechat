@@ -15,6 +15,18 @@ API_URL="https://ask.gptweb.ru/admin"
 CRON_SECRET="${CRON_SECRET:-}"
 CLAUDE_CMD="${CLAUDE_CMD:-/home/deploy/projects/llm-router/bin/llm-router-claude-shim.py}"
 
+# Explicit writer calls return JSON only and never select/consume queue items or write to CMS.
+WRITER_ONLY=0
+if [[ $# -ne 0 ]]; then
+    if [[ $# -ne 3 || "$1" != --write-json || ! "$2" =~ ^[a-z0-9-]{2,40}$ || -z "${3//[[:space:]]/}" ]]; then
+        echo 'Usage: generate-article.sh [--write-json CATEGORY KEYWORD]' >&2
+        exit 2
+    fi
+    WRITER_ONLY=1
+    TARGET_CAT="$2"
+    KEYWORD="$3"
+fi
+
 # LLM router defaults. Keep these overridable by systemd drop-ins so quota incidents
 # can be remediated without editing the script. The temporary OmniRoute/Antigravity
 # experiment (127.0.0.1:20229 + agy/claude-sonnet-4-6) exhausted quota on 2026-08-25;
@@ -24,6 +36,7 @@ export LLM_ROUTER_MODEL="${LLM_ROUTER_MODEL:-cx/gpt-5.4}"
 export LLM_ROUTER_MAX_TOKENS="${LLM_ROUTER_MAX_TOKENS:-32000}"
 
 log() {
+    if (( WRITER_ONLY )); then printf '%s\n' "$*" >&2; return; fi
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
 }
 
@@ -57,9 +70,28 @@ print(raw.strip())
 source "${SCRIPT_DIR}/notify.sh"
 source "${SCRIPT_DIR}/lib/slot-parity.sh"
 source "${SCRIPT_DIR}/lib/vpn-guard.sh"
+is_valid_keyword() {
+    local kw="$1"
+    [[ -n "$kw" ]] || return 1
+    [[ ${#kw} -le 160 ]] || return 1
+    [[ ! "$kw" =~ ^[\{\[] ]] || return 1
+    [[ ! "$kw" =~ (превышен[[:space:]]+лимит[[:space:]]+запросов|retryaftersec|windowseconds|error|message) ]] || return 1
+    # RKN safety guard: hard-reject VPN / circumvention topics. Roskomnadzor
+    # asked us to take down VPN content; publishing more is a blocking risk for
+    # the whole gptweb.ru domain. Keyword-collection (Wordstat/SERP) silently
+    # re-introduces these, so this is the defense-in-depth net at generation
+    # time. The regex + brand list live in lib/vpn-guard.sh — the SAME source
+    # the producer uses, so the two can never drift (the 2026-06-10 incident:
+    # brand names like "дядя ваня" passed here because only the producer copy
+    # had been hardened). To block a new VPN brand, edit lib/vpn-guard.sh.
+    if is_vpn_keyword "$kw"; then
+        return 2
+    fi
+    return 0
+}
 
 # Rotate log
-if [[ -f "$LOG_FILE" ]] && (( $(wc -l < "$LOG_FILE") > 2000 )); then
+if (( ! WRITER_ONLY )) && [[ -f "$LOG_FILE" ]] && (( $(wc -l < "$LOG_FILE") > 2000 )); then
     tail -n 1000 "$LOG_FILE" > "${LOG_FILE}.tmp"
     mv "${LOG_FILE}.tmp" "$LOG_FILE"
 fi
@@ -71,10 +103,12 @@ if [[ -f "$BLOG_ENV_FILE" ]]; then
     set -a; source "$BLOG_ENV_FILE"; set +a
 fi
 
-for v in CRON_SECRET SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY; do
+REQUIRED_ENV=(SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY)
+if (( ! WRITER_ONLY )); then REQUIRED_ENV+=(CRON_SECRET); fi
+for v in "${REQUIRED_ENV[@]}"; do
     if [[ -z "${!v:-}" ]]; then
         log "ERROR: $v not set"
-        notify_failure "generate-article" "$v not set" "$LOG_FILE"
+        if (( ! WRITER_ONLY )); then notify_failure "generate-article" "$v not set" "$LOG_FILE"; fi
         exit 1
     fi
 done
@@ -83,6 +117,15 @@ done
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
 
 SUPA_HDRS=(-H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" -H "Accept-Profile: ai_aggregator")
+
+if (( WRITER_ONLY )); then
+    if ! is_valid_keyword "$KEYWORD"; then exit 2; fi
+    CATEGORY_JSON=$(curl -fsS "${SUPABASE_URL}/rest/v1/blog_categories?select=name,id&is_active=eq.true&slug=eq.${TARGET_CAT}" "${SUPA_HDRS[@]}") || exit 1
+    TARGET_CAT_NAME=$(jq -er 'if length == 1 then .[0].name else empty end' <<< "$CATEGORY_JSON") || exit 2
+    WRITER_CATEGORY_ID=$(jq -er '.[0].id' <<< "$CATEGORY_JSON") || exit 2
+    EXISTING_TITLES=$(curl -fsS --get "${SUPABASE_URL}/rest/v1/blog_posts" "${SUPA_HDRS[@]}" --data-urlencode 'select=title' --data-urlencode "category_id=eq.${WRITER_CATEGORY_ID}" --data-urlencode 'status=eq.published' --data-urlencode 'order=published_at.desc' --data-urlencode 'limit=60' | jq -er 'map(.title) | join("\n")') || exit 1
+    RELATED_LIST=''
+else
 
 # Step 0: Pick today's unfilled category — idempotent round-robin.
 TODAY_UTC=$(date -u +%Y-%m-%d)
@@ -224,25 +267,6 @@ mark_keyword_skipped() {
     rm -f "$body_file"
 }
 
-is_valid_keyword() {
-    local kw="$1"
-    [[ -n "$kw" ]] || return 1
-    [[ ${#kw} -le 160 ]] || return 1
-    [[ ! "$kw" =~ ^[\{\[] ]] || return 1
-    [[ ! "$kw" =~ (превышен[[:space:]]+лимит[[:space:]]+запросов|retryaftersec|windowseconds|error|message) ]] || return 1
-    # RKN safety guard: hard-reject VPN / circumvention topics. Roskomnadzor
-    # asked us to take down VPN content; publishing more is a blocking risk for
-    # the whole gptweb.ru domain. Keyword-collection (Wordstat/SERP) silently
-    # re-introduces these, so this is the defense-in-depth net at generation
-    # time. The regex + brand list live in lib/vpn-guard.sh — the SAME source
-    # the producer uses, so the two can never drift (the 2026-06-10 incident:
-    # brand names like "дядя ваня" passed here because only the producer copy
-    # had been hardened). To block a new VPN brand, edit lib/vpn-guard.sh.
-    if is_vpn_keyword "$kw"; then
-        return 2
-    fi
-    return 0
-}
 
 for attempt in $(seq 1 $MAX_KEYWORD_ATTEMPTS); do
     CANDIDATE_KEYWORD=""
@@ -403,6 +427,7 @@ if [[ -z "${KEYWORD:-}" ]]; then
     log "=== Article generation skipped (all candidates duplicates) ==="
     exit 0
 fi
+fi
 
 # Step 2: Generate article via Claude Code — category is FORCED to target.
 log "Generating article with Claude Code for category '$TARGET_CAT'..."
@@ -466,6 +491,10 @@ CRITICAL: Return ONLY a valid JSON object. No markdown code blocks, no extra tex
   \"meta_description\": \"SEO description ≤160 chars in Russian\",
   \"meta_keywords\": \"comma,separated,keywords,in,russian\"
 }"
+
+if (( WRITER_ONLY )); then
+    PROMPT+=$'\nEXPLICIT WRITER MODE supersedes the HTML and placeholder requirements above: content must be plain Markdown, with no H1, raw HTML, image placeholders, or invented links or statistics. Use real sources only. Return the same JSON fields; content is now the Markdown body.'
+fi
 
 # Try Claude CLI up to 3 times. Treat parser failures as retryable too: some
 # models occasionally return a truncated JSON object or add text around it even
@@ -559,11 +588,18 @@ done
 if [[ -z "$ARTICLE_JSON" ]]; then
     log "ERROR: Failed to obtain valid article JSON after ${MAX_CLAUDE_ATTEMPTS} attempts (last cli_exit=$CLI_EXIT, last parse_exit=$PARSE_EXIT)"
     FAILURE_DETAIL=$(claude_failure_detail "$RAW_OUTPUT" "$CLI_STDERR")
+    if (( WRITER_ONLY )); then exit 1; fi
     notify_failure "generate-article" "Claude failed after ${MAX_CLAUDE_ATTEMPTS} attempts (cli=$CLI_EXIT, parse=$PARSE_EXIT). Keyword: ${KEYWORD:-unknown}. Detail: ${FAILURE_DETAIL:0:200}" "$LOG_FILE"
     exit 1
 fi
 
 log "Article generated successfully"
+
+if (( WRITER_ONLY )); then
+    if is_vpn_keyword "$(jq -r '.title + " " + .slug' <<< "$ARTICLE_JSON")"; then exit 2; fi
+    jq -e 'select((.slug | test("^[a-z0-9-]{3,64}$")) and (.title | type == "string") and (.content | type == "string") and (.description | type == "string")) | {title,slug,category,description,body:.content,format:"markdown",meta:{title:(.meta_title // .title),keywords:((.meta_keywords // "") | split(",") | map(select(length > 0)))}}' <<< "$ARTICLE_JSON"
+    exit $?
+fi
 
 # Step 3: Send to API as DRAFT first. We pre-publish-audit the rendered
 # preview URL, and only flip to published when it passes the SEO gate.
