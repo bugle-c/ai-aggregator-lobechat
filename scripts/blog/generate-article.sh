@@ -18,13 +18,17 @@ CLAUDE_CMD="${CLAUDE_CMD:-/home/deploy/projects/llm-router/bin/llm-router-claude
 # Explicit writer calls return JSON only and never select/consume queue items or write to CMS.
 WRITER_ONLY=0
 if [[ $# -ne 0 ]]; then
-    if [[ $# -ne 3 || "$1" != --write-json || ! "$2" =~ ^[a-z0-9-]{2,40}$ || -z "${3//[[:space:]]/}" ]]; then
-        echo 'Usage: generate-article.sh [--write-json CATEGORY KEYWORD]' >&2
+    if [[ $# -lt 3 || $# -gt 4 || "$1" != --write-json || ! "$2" =~ ^[a-z0-9-]{2,40}$ || -z "${3//[[:space:]]/}" ]]; then
+        echo 'Usage: generate-article.sh [--write-json CATEGORY KEYWORD [CONTEXT]]' >&2
         exit 2
     fi
     WRITER_ONLY=1
     TARGET_CAT="$2"
     KEYWORD="$3"
+    WRITER_CONTEXT="${4:-}"
+    if [[ "$WRITER_CONTEXT" == - ]]; then
+        WRITER_CONTEXT=$(cat) || exit 1
+    fi
 fi
 
 # LLM router defaults. Keep these overridable by systemd drop-ins so quota incidents
@@ -102,6 +106,10 @@ log "=== Article generation started ==="
 if [[ -f "$BLOG_ENV_FILE" ]]; then
     set -a; source "$BLOG_ENV_FILE"; set +a
 fi
+if (( WRITER_ONLY )); then
+    # Keep Scheduler on the existing Codex subscription, independent of legacy cron defaults.
+    export LLM_ROUTER_MODEL=cx/gpt-6.2-sol
+fi
 
 REQUIRED_ENV=(SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY)
 if (( ! WRITER_ONLY )); then REQUIRED_ENV+=(CRON_SECRET); fi
@@ -120,10 +128,11 @@ SUPA_HDRS=(-H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" -H "Authorization: Bearer $
 
 if (( WRITER_ONLY )); then
     if ! is_valid_keyword "$KEYWORD"; then exit 2; fi
-    CATEGORY_JSON=$(curl -fsS "${SUPABASE_URL}/rest/v1/blog_categories?select=name,id&is_active=eq.true&slug=eq.${TARGET_CAT}" "${SUPA_HDRS[@]}") || exit 1
+    CATEGORY_JSON=$(curl -fsS --max-time 4 "${SUPABASE_URL}/rest/v1/blog_categories?select=name,id&is_active=eq.true&slug=eq.${TARGET_CAT}" "${SUPA_HDRS[@]}") || exit 1
     TARGET_CAT_NAME=$(jq -er 'if length == 1 then .[0].name else empty end' <<< "$CATEGORY_JSON") || exit 2
     WRITER_CATEGORY_ID=$(jq -er '.[0].id' <<< "$CATEGORY_JSON") || exit 2
-    EXISTING_TITLES=$(curl -fsS --get "${SUPABASE_URL}/rest/v1/blog_posts" "${SUPA_HDRS[@]}" --data-urlencode 'select=title' --data-urlencode "category_id=eq.${WRITER_CATEGORY_ID}" --data-urlencode 'status=eq.published' --data-urlencode 'order=published_at.desc' --data-urlencode 'limit=60' | jq -er 'map(.title) | join("\n")') || exit 1
+    TITLES_JSON=$(curl -fsS --max-time 4 --get "${SUPABASE_URL}/rest/v1/blog_posts" "${SUPA_HDRS[@]}" --data-urlencode 'select=title' --data-urlencode "category_id=eq.${WRITER_CATEGORY_ID}" --data-urlencode 'status=eq.published' --data-urlencode 'order=published_at.desc' --data-urlencode 'limit=60') || exit 1
+    EXISTING_TITLES=$(jq -er 'map(.title) | join("\n")' <<< "$TITLES_JSON") || exit 1
     RELATED_LIST=''
 else
 
@@ -493,7 +502,12 @@ CRITICAL: Return ONLY a valid JSON object. No markdown code blocks, no extra tex
 }"
 
 if (( WRITER_ONLY )); then
-    PROMPT+=$'\nEXPLICIT WRITER MODE supersedes the HTML and placeholder requirements above: content must be plain Markdown, with no H1, raw HTML, image placeholders, or invented links or statistics. Use real sources only. Return the same JSON fields; content is now the Markdown body.'
+    PROMPT="Write a Russian WebGPT article in category ${TARGET_CAT} about: ${KEYWORD}.
+Return one strict JSON object with title, slug, description, body (Markdown), category, and optional meta. If the editorial context requires an enclosing draft object, use that shape instead. No raw HTML, H1, invented claims, or placeholder links.
+Published titles in this category (avoid duplication):
+${EXISTING_TITLES}
+
+${WRITER_CONTEXT}"
 fi
 
 # Try Claude CLI up to 3 times. Treat parser failures as retryable too: some
@@ -506,11 +520,25 @@ CLI_EXIT=0
 PARSE_EXIT=0
 ARTICLE_JSON=""
 MAX_CLAUDE_ATTEMPTS=3
+if (( WRITER_ONLY )); then MAX_CLAUDE_ATTEMPTS=1; fi
 for try in $(seq 1 $MAX_CLAUDE_ATTEMPTS); do
     STDOUT_FILE=$(mktemp /tmp/claude-stdout-XXXXXX.txt)
     STDERR_FILE=$(mktemp /tmp/claude-stderr-XXXXXX.txt)
-    timeout 480 "$CLAUDE_CMD" --print -p "$PROMPT" --output-format json \
-        > "$STDOUT_FILE" 2> "$STDERR_FILE"
+    if (( WRITER_ONLY )); then
+        START_MS=$(date +%s%3N)
+        timeout --kill-after=2 74 "$CLAUDE_CMD" --print -p --output-format text \
+            <<< "$PROMPT" > "$STDOUT_FILE" 2> "$STDERR_FILE"
+        CLI_EXIT=$?
+        log "gptweb_native_model attempt=$try elapsed_ms=$(( $(date +%s%3N) - START_MS )) exit=$CLI_EXIT"
+        if (( CLI_EXIT == 0 )); then
+            RAW_OUTPUT=$(jq -Rs '{result:.}' "$STDOUT_FILE")
+            printf '%s' "$RAW_OUTPUT" > "$STDOUT_FILE"
+        fi
+        (exit "$CLI_EXIT")
+    else
+        timeout 480 "$CLAUDE_CMD" --print -p "$PROMPT" --output-format json \
+            > "$STDOUT_FILE" 2> "$STDERR_FILE"
+    fi
     CLI_EXIT=$?
     RAW_OUTPUT=$(cat "$STDOUT_FILE")
     CLI_STDERR=$(cat "$STDERR_FILE")
@@ -564,6 +592,17 @@ if article is None:
             break
 if article is None:
     print('ERROR: No complete article JSON object found in result', file=sys.stderr); sys.exit(1)
+if ${WRITER_ONLY}:
+    article = article.get('draft', article)
+    if not isinstance(article, dict):
+        sys.exit('ERROR: draft must be an object')
+    article['content'] = article.get('body', article.get('content'))
+    meta = article.get('meta')
+    if isinstance(meta, dict):
+        article['meta_title'] = meta.get('title') or article.get('title')
+        keywords = meta.get('keywords')
+        if isinstance(keywords, list):
+            article['meta_keywords'] = ','.join(k for k in keywords if isinstance(k, str))
 article['category'] = '${TARGET_CAT}'
 required = ['title', 'slug', 'content', 'category']
 missing = [f for f in required if not article.get(f)]
